@@ -1,3 +1,5 @@
+import { tDistPValue } from './statistics';
+
 export interface RegressionInput {
   X: number[][];
   y: number[];
@@ -17,6 +19,12 @@ export interface RegressionResult {
   yName: string;
   nObs: number;
   nFeatures: number;
+  // Phase 2 — statistical inference
+  stdErrors: number[];       // length k+1: [intercept, β₁, …, βₖ]
+  tStats: number[];
+  pValues: number[];
+  df: number;                // n − k − 1
+  sigma2: number;            // residual variance
 }
 
 export function transpose(A: number[][]): number[][] {
@@ -91,7 +99,10 @@ export function runOLS(input: RegressionInput): RegressionResult {
 
   const Xd = X.map(row => [1, ...row]);
   const Xt = transpose(Xd);
-  const beta = matVecMul(matInv(matMul(Xt, Xd)), matVecMul(Xt, y));
+  const XtX = matMul(Xt, Xd);
+  const XtXinv = matInv(XtX);
+  const Xty = matVecMul(Xt, y);
+  const beta = matVecMul(XtXinv, Xty);
 
   const intercept = beta[0];
   const coefficients = beta.slice(1);
@@ -102,7 +113,14 @@ export function runOLS(input: RegressionInput): RegressionResult {
   const ssTot = y.reduce((s, yi) => s + (yi - yMean) ** 2, 0);
   const ssRes = residuals.reduce((s, r) => s + r ** 2, 0);
   const rSquared = ssTot === 0 ? 0 : 1 - ssRes / ssTot;
-  const adjustedRSquared = 1 - (1 - rSquared) * (n - 1) / (n - k - 1);
+  const df = n - k - 1;
+  const adjustedRSquared = 1 - (1 - rSquared) * (n - 1) / df;
+  const sigma2 = df > 0 ? ssRes / df : 0;
+
+  // Standard errors: SE(βᵢ) = sqrt(σ² * (X'X)⁻¹ᵢᵢ)
+  const stdErrors = XtXinv.map((row, i) => Math.sqrt(Math.max(0, sigma2 * row[i])));
+  const tStats = beta.map((b, i) => stdErrors[i] > 1e-15 ? b / stdErrors[i] : Infinity);
+  const pValues = tStats.map(t => tDistPValue(t, df));
 
   const terms = coefficients
     .map(
@@ -124,5 +142,33 @@ export function runOLS(input: RegressionInput): RegressionResult {
     yName,
     nObs: n,
     nFeatures: k,
+    stdErrors,
+    tStats,
+    pValues,
+    df,
+    sigma2,
   };
+}
+
+// Variance Inflation Factor for each predictor in X (n×k matrix)
+export function computeVIF(X: number[][]): number[] {
+  const k = X[0]?.length ?? 0;
+  if (k <= 1) return new Array(k).fill(1);
+
+  return Array.from({ length: k }, (_, j) => {
+    const yVIF = X.map(row => row[j]);
+    const xOther = X.map(row => row.filter((_, c) => c !== j));
+    try {
+      const res = runOLS({
+        X: xOther,
+        y: yVIF,
+        featureNames: xOther[0].map((_, i) => `x${i}`),
+        yName: `x${j}`,
+      });
+      const r2 = Math.max(0, Math.min(0.9999, res.rSquared));
+      return 1 / (1 - r2);
+    } catch {
+      return 999;
+    }
+  });
 }
