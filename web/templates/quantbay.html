@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay · Quant Bay</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="wrap">
+    {% include 'alfa_banner.html' %}
+    <header class="masthead">
+      <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
+      <nav class="mainnav">
+        <a href="{{ url_for('dashboard') }}">Puerto</a><span class="sep">·</span>
+        <a href="{{ url_for('reports') }}">Bitácoras</a><span class="sep">·</span>
+        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
+        <a href="{{ url_for('heatmap') }}">Calor</a><span class="sep">·</span>
+        <a href="{{ url_for('guia') }}">Guía</a><span class="sep">·</span>
+        <strong>Quant</strong><span class="sep">·</span>
+        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
+        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
+      </nav>
+    </header>
+
+    <p class="catalog-title">— Quant Bay · Regresión OLS —</p>
+
+    <div id="qb-error" style="display:none;background:#fff0f0;border:1px solid #e8a8a8;padding:8px 12px;margin:8px 16px;color:#b00000;font-size:12px;font-family:Verdana,Arial,sans-serif"></div>
+
+    <!-- ① Cargar datos -->
+    <div class="qb-section">
+      <p class="qb-subtitle">① Cargar datos (CSV)</p>
+      <div class="qb-upload-row">
+        <label for="qb-file" class="btn-ink">&#9650; cargar CSV</label>
+        <input type="file" id="qb-file" accept=".csv" style="display:none">
+        <span id="qb-filename" class="muted" style="font-size:12px"></span>
+      </div>
+      <p class="muted" style="font-size:11px;margin:6px 0 0">El CSV debe tener encabezados en la primera fila. Las columnas numéricas se detectan automáticamente.</p>
+    </div>
+
+    <!-- ② Vista previa -->
+    <div class="qb-section" id="qb-preview" style="display:none">
+      <p class="qb-subtitle">② Vista previa del dataset</p>
+      <div id="qb-table-wrap"></div>
+    </div>
+
+    <!-- ③ Selección de variables -->
+    <div class="qb-section" id="qb-vars" style="display:none">
+      <p class="qb-subtitle">③ Selección de variables</p>
+      <div class="qb-vars-grid">
+        <div>
+          <label style="font-size:12px;font-weight:bold;display:block;margin-bottom:4px">Variable dependiente (Y):</label>
+          <select id="qb-y" style="font-family:Verdana,Arial,sans-serif;font-size:12px;padding:3px 6px;border:2px solid #7f9db9;width:100%"></select>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:bold;display:block;margin-bottom:4px">Variables independientes (X):</label>
+          <div id="qb-x-checks"></div>
+        </div>
+      </div>
+      <button class="btn-ink" id="qb-run">&gt; correr regresión OLS</button>
+    </div>
+
+    <!-- ④ Resultados -->
+    <div class="qb-section" id="qb-results" style="display:none">
+      <p class="qb-subtitle">④ Resultados</p>
+
+      <p style="font-size:11px;font-weight:bold;margin:8px 0 3px">Ecuación estimada:</p>
+      <div class="qb-eq" id="qb-equation"></div>
+
+      <div class="qb-results-grid">
+        <div>
+          <p style="font-size:11px;font-weight:bold;margin:0 0 4px">Coeficientes:</p>
+          <table class="ledger">
+            <thead><tr><th>Variable</th><th>Coeficiente</th></tr></thead>
+            <tbody id="qb-coef-body"></tbody>
+          </table>
+        </div>
+        <div>
+          <p style="font-size:11px;font-weight:bold;margin:0 0 4px">Estadísticos:</p>
+          <table class="ledger">
+            <thead><tr><th>Indicador</th><th>Valor</th></tr></thead>
+            <tbody id="qb-stats-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <p style="font-size:11px;font-weight:bold;margin:10px 0 4px">Real vs. Predicho:</p>
+      <canvas id="qb-chart" class="qb-chart"></canvas>
+
+      <p style="font-size:11px;font-weight:bold;margin:10px 0 4px">Interpretación:</p>
+      <div class="qb-interp" id="qb-interpretation"></div>
+
+      <details style="margin:10px 0">
+        <summary style="font-size:11px;cursor:pointer;color:#1b3a6b;font-weight:bold;user-select:none">▶ Tabla de predicciones y residuos</summary>
+        <div id="qb-pred-table" style="overflow-x:auto;margin-top:6px"></div>
+      </details>
+    </div>
+
+    <p class="colophon">Análisis estadístico educativo · No constituye asesoramiento financiero ni garantía de resultados.</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script src="{{ url_for('static', filename='js/quantbay.bundle.js') }}"></script>
+</body>
+</html>

@@ -321,3 +321,21 @@ code{font-family:"Courier New",monospace;background:#f0f0f0;padding:1px 4px;font
 .help-link{color:#b8860b;text-decoration:none;font-size:10px;vertical-align:super;margin-left:2px;font-weight:bold}
 .help-link:hover{text-decoration:underline;color:#cc3300}
 .help-link:visited{color:#b8860b}
+
+/* ===== Quant Bay ===== */
+.qb-section{margin:12px 16px}
+.qb-subtitle{font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;
+  color:#1b3a6b;margin:14px 0 6px;border-bottom:1px solid #d0d8ee;padding-bottom:3px}
+.qb-upload-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0}
+.qb-eq{font-family:"Courier New",Courier,monospace;font-size:12px;background:#f0f4ff;
+  border:1px solid #9aa7bd;padding:8px 12px;margin:4px 0 10px;word-break:break-all;line-height:1.5}
+.qb-vars-grid{display:grid;grid-template-columns:200px 1fr;gap:16px;margin:6px 0 12px;align-items:start}
+@media(max-width:520px){.qb-vars-grid{grid-template-columns:1fr}}
+.qb-x-check{display:block;margin:4px 0;font-size:12px;font-family:Verdana,Arial,sans-serif}
+.qb-table-scroll{overflow-x:auto}
+.qb-results-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}
+@media(max-width:520px){.qb-results-grid{grid-template-columns:1fr}}
+.qb-chart{width:100%;max-height:320px;border:1px solid #c4c4c4;margin:4px 0 10px;display:block}
+.qb-interp{background:#fffbe6;border:1px solid #b8860b;padding:10px 14px;
+  font-size:11px;line-height:1.75;white-space:pre-wrap;margin:4px 0 10px;color:#5c4500;
+  font-family:Verdana,Arial,sans-serif}
