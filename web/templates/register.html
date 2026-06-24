@@ -8,19 +8,25 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  {% include 'alfa_banner.html' %}
   <div class="login-wrap">
     <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
     <p class="tagline">Enrólate en la tripulación</p>
-    {% if error %}<div class="login-error">{{ error }}</div>{% endif %}
-    <form class="login-form" method="post">
-      <label>Nombre de capitán
-        <input type="text" name="username" required autofocus>
-      </label>
-      <label>Contraseña (mín. 6)
-        <input type="password" name="password" required>
-      </label>
-      <button type="submit">Enrolarse</button>
-    </form>
+    {% if registration_open %}
+      {% if error %}<div class="login-error">{{ error }}</div>{% endif %}
+      <form class="login-form" method="post">
+        <label>Nombre de capitán
+          <input type="text" name="username" required autofocus>
+        </label>
+        <label>Contraseña (mín. 6)
+          <input type="password" name="password" required>
+        </label>
+        <button type="submit">Enrolarse</button>
+      </form>
+    {% else %}
+      <p class="login-error" style="margin-top:20px">Registro cerrado durante la versión alfa.</p>
+      <p style="margin-top:8px;font-size:11px;color:#888">Volvé a intentarlo cuando el acceso esté habilitado.</p>
+    {% endif %}
     <p style="margin-top:16px;font-size:11px">¿Ya tienes cuenta? <a href="{{ url_for('login') }}">Entrar al puerto</a></p>
   </div>
 </body>

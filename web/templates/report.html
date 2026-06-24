@@ -10,6 +10,7 @@
 </head>
 <body>
   <div class="wrap">
+    {% include 'alfa_banner.html' %}
     <header class="masthead">
       <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
       <nav class="mainnav">
@@ -18,7 +19,7 @@
         <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
         <a href="{{ url_for('heatmap') }}">Calor</a><span class="sep">·</span>
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
-        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a><span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}
+        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
       </nav>
     </header>
     <hr class="rule">

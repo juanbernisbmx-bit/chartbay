@@ -43,6 +43,8 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-inseguro-cambiar")
 APP_USERNAME = os.environ.get("APP_USERNAME", "juan")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "cambia-esta-clave")
 
+REGISTRATION_OPEN = False  # cambiar a True para reabrir el registro
+
 
 # ----------------------------- arranque BD -----------------------------
 
@@ -59,6 +61,11 @@ def seed_owner():
 
 db.init_db()
 seed_owner()
+
+
+@app.context_processor
+def inject_globals():
+    return {"registration_open": REGISTRATION_OPEN}
 
 
 # ----------------------------- helpers -----------------------------
@@ -139,6 +146,8 @@ def login():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    if not REGISTRATION_OPEN:
+        return render_template("register.html", error=None)
     error = None
     if request.method == "POST":
         u = request.form.get("username", "").strip()
