@@ -23,7 +23,9 @@ from flask import (
 from werkzeug.security import generate_password_hash, check_password_hash
 
 ROOT = Path(__file__).resolve().parent.parent
+HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(HERE))  # permite 'import db' bajo gunicorn (web/ en el path)
 load_dotenv(ROOT / ".env")
 
 import config           # noqa: E402
