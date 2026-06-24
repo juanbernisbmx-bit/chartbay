@@ -1,0 +1,248 @@
+/* ===========================================================
+   ChartBay — estética retro "Pirate Bay 2006"
+   Verdana, fondo blanco, enlaces azules, botones biselados.
+   =========================================================== */
+
+*{box-sizing:border-box}
+
+body{margin:0;background:#ffffff;color:#000;
+  font-family:Verdana,Geneva,Tahoma,Arial,sans-serif;
+  font-size:12px;line-height:1.45;}
+
+a{color:#0033cc;text-decoration:underline}
+a:visited{color:#551a8b}
+a:hover{color:#cc3300}
+.muted{color:#666}
+.err{color:#b00000}
+
+/* contenedor central con marco fino, como sitio viejo */
+.wrap{max-width:800px;margin:14px auto;background:#fff;border:1px solid #b9b9b9;
+  padding:0 0 28px}
+
+/* ---------- cabecera ---------- */
+.masthead{text-align:center;padding:20px 16px 0}
+.ship{display:block;margin:0 auto 6px;width:120px;height:auto}
+.ship *{stroke:#161616;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ship .sail{fill:#f3ead6}
+.ship .hull{fill:#1c1c1c}
+.ship .flag{fill:#161616;stroke:#161616}
+.ship .chart{stroke:#0a7a0a;stroke-width:2.4}
+
+.wordmark{font-family:"Arial Black","Arial Bold",Impact,sans-serif;
+  font-size:46px;font-weight:900;letter-spacing:-1px;margin:0;color:#111;line-height:1}
+.wordmark .bay{color:#b8860b}
+.tagline{margin:4px 0 14px;font-size:11px;color:#555}
+
+/* barra de navegación azul marino (estilo menú 2006) */
+.mainnav{background:#1b3a6b;border-top:1px solid #2a5599;border-bottom:1px solid #0e2244;
+  text-align:center;padding:6px 4px;margin:6px 0 0}
+.mainnav a{color:#fff;text-decoration:none;font-size:11px;text-transform:uppercase;
+  letter-spacing:.04em;margin:0 4px;padding:2px 8px}
+.mainnav a:visited{color:#fff}
+.mainnav a:hover{color:#ffd34d;text-decoration:underline}
+.mainnav .sep{color:#3f6196}
+
+/* línea separadora */
+.rule{border:0;border-top:1px solid #cfcfcf;margin:0}
+
+/* ---------- buscador (caja + botón biselado) ---------- */
+.search{text-align:center;padding:20px 16px 6px}
+.search form{display:inline-flex;gap:6px;align-items:center}
+.search input{font-family:Verdana,Arial,sans-serif;font-size:13px;padding:4px 6px;
+  width:360px;max-width:70vw;border:2px solid;border-color:#7f9db9 #c8d3e0 #c8d3e0 #7f9db9;
+  background:#fff}
+.search input:focus{outline:1px dotted #1b3a6b}
+.btn-retro,.search button,.login-form button,.btn-ink{
+  font-family:Verdana,Arial,sans-serif;font-size:12px;font-weight:bold;cursor:pointer;
+  color:#000;background:#dcd8cf;padding:4px 14px;
+  border:2px solid;border-color:#ffffff #808080 #808080 #ffffff}
+.btn-retro:active,.search button:active,.login-form button:active,.btn-ink:active{
+  border-color:#808080 #ffffff #ffffff #808080}
+.sstatus{display:block;text-align:center;margin-top:8px;font-size:11px;min-height:16px}
+
+/* ---------- catálogo de mercados (tabla de enlaces) ---------- */
+.catalog-title{text-align:center;font-size:11px;font-weight:bold;text-transform:uppercase;
+  letter-spacing:.1em;color:#1b3a6b;margin:24px 0 6px}
+.catalog{list-style:none;padding:0;margin:0 16px;border:1px solid #c4c4c4}
+.catalog li{margin:0}
+.catalog li:nth-child(odd) a.entry{background:#eef2fb}
+.catalog a.entry{display:flex;align-items:baseline;gap:10px;padding:7px 10px;
+  text-decoration:none;color:#0033cc;border-bottom:1px solid #dcdcdc}
+.catalog li:last-child a.entry{border-bottom:0}
+.catalog a.entry:hover{background:#fff7df}
+.catalog .idx{color:#999;font-size:11px;width:26px;flex:none}
+.catalog .name{font-size:13px;font-weight:bold;text-decoration:underline}
+.catalog .leader{flex:1}
+.catalog .kind{color:#555;font-size:11px;flex:none}
+
+/* ---------- vista de resultado ---------- */
+.result{margin:18px 16px 0}
+.result-head{text-align:center;margin-bottom:8px}
+.result-head h2{font-family:"Arial Black",Arial,sans-serif;font-size:24px;margin:0;color:#111}
+.result-head .sub{color:#555;font-size:11px}
+.result-price{font-size:18px;font-weight:bold;margin-top:6px}
+.chg.up{color:#0a7a0a}
+.chg.down{color:#b00000}
+.trend{display:inline-block;margin-top:6px;font-size:11px;text-transform:uppercase;
+  letter-spacing:.05em;color:#1b3a6b;border:1px solid #1b3a6b;padding:1px 8px;background:#eef2fb}
+
+/* gráfico TradingView con marco simple */
+.tv-advanced{height:430px;margin:14px 0;border:1px solid #9aa7bd}
+.tv-advanced .tradingview-widget-container{height:100%}
+
+/* tabla de indicadores estilo planilla 2006 */
+.ledger{width:100%;border-collapse:collapse;margin:8px 0;border:1px solid #9aa7bd}
+.ledger th{background:#1b3a6b;color:#fff;text-align:left;font-size:11px;
+  text-transform:uppercase;letter-spacing:.04em;padding:5px 8px;font-weight:bold}
+.ledger td{padding:5px 8px;border-bottom:1px solid #e0e0e0;font-size:12px}
+.ledger tr:nth-child(even) td{background:#f2f5fb}
+.ledger td:last-child{text-align:right;font-weight:bold}
+
+.btn-ink{margin-top:14px;display:inline-block}
+.verdict{margin-top:16px;border-top:1px solid #cfcfcf;padding-top:12px;font-size:12px}
+.verdict h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#1b3a6b;margin:14px 0 4px}
+.verdict h2:first-child{margin-top:0}
+.verdict ul{margin:6px 0;padding-left:20px}
+.verdict p{margin:6px 0}
+
+.colophon{text-align:center;margin:34px 16px 0;color:#888;font-size:10px;
+  border-top:1px solid #e2e2e2;padding-top:12px}
+
+/* ---------- login ---------- */
+.login-wrap{max-width:340px;margin:60px auto;background:#fff;border:1px solid #b9b9b9;
+  padding:26px 24px;text-align:center}
+.login-wrap .ship{width:96px}
+.login-form{margin-top:16px;text-align:left}
+.login-form label{display:block;font-size:11px;font-weight:bold;color:#333;
+  text-transform:uppercase;letter-spacing:.04em;margin-top:14px}
+.login-form input{width:100%;margin-top:4px;font-family:Verdana,Arial,sans-serif;font-size:13px;
+  padding:4px 6px;border:2px solid;border-color:#7f9db9 #c8d3e0 #c8d3e0 #7f9db9}
+.login-form button{margin-top:20px;width:100%;padding:6px}
+.login-error{margin-top:14px;color:#b00000;font-size:11px}
+
+/* ---------- historial ---------- */
+.report-list{list-style:none;padding:0;margin:0 16px;border:1px solid #c4c4c4}
+.report-list li{padding:7px 10px;border-bottom:1px solid #dcdcdc}
+.report-list li:nth-child(odd){background:#eef2fb}
+.prose{margin:0 16px;font-size:12px;line-height:1.6}
+.prose h1{font-family:"Arial Black",Arial,sans-serif;font-size:20px}
+.prose h2{font-size:14px;color:#1b3a6b;text-transform:uppercase;letter-spacing:.03em}
+.prose hr{border:0;border-top:1px solid #cfcfcf;margin:22px 0}
+code{font-family:"Courier New",monospace;background:#f0f0f0;padding:1px 4px;font-size:11px}
+
+/* ===== Jolly Roger (calavera de candlesticks) en la bandera ===== */
+.ship .flagbg{fill:#161616;stroke:#161616}
+.ship .jolly{fill:#f3ead6;stroke:none}
+.ship .jolly-line{stroke:#f3ead6;fill:none;stroke-width:2.4;stroke-linecap:round}
+.ship .eye{fill:#161616;stroke:none}
+
+/* ===== Contador de visitas estilo 2006 ===== */
+.odometer{display:inline-block;margin:0 3px;padding:2px 3px;background:#000;border:1px solid #555;vertical-align:middle}
+.odometer span{display:inline-block;width:10px;font-family:"Courier New",monospace;
+  font-weight:bold;font-size:12px;color:#39ff7a;text-align:center}
+
+/* ===== Consola "modo hacker" ===== */
+.terminal{margin:10px 16px 0;border:1px solid #143a14;background:#05080a}
+.term-bar{background:#0d130d;border-bottom:1px solid #143a14;color:#7fae7f;
+  font-family:"Courier New",monospace;font-size:11px;padding:4px 8px;letter-spacing:.04em}
+.term-bar .d{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.term-bar .d.r{background:#ff5f56}
+.term-bar .d.y{background:#ffbd2e}
+.term-bar .d.g{background:#27c93f}
+.term-body{padding:12px 14px;color:#33ff70;font-family:"Courier New",Consolas,monospace;
+  font-size:12.5px;line-height:1.55;white-space:pre-wrap;min-height:42px;
+  text-shadow:0 0 3px rgba(51,255,112,.35);
+  background-image:repeating-linear-gradient(rgba(0,0,0,0) 0 2px, rgba(0,60,0,.07) 2px 3px)}
+.term-body .ok{color:#39ff7a}
+.term-body .warn{color:#ffd34d}
+.term-body .bad{color:#ff6b6b}
+.cursor{display:inline-block;color:#33ff70;animation:cbblink 1s steps(1) infinite}
+@keyframes cbblink{50%{opacity:0}}
+
+/* secuencia de arranque (boot) */
+.boot{position:fixed;inset:0;z-index:9999;background:#03050a;color:#33ff70;
+  font-family:"Courier New",Consolas,monospace;font-size:13px;line-height:1.6;padding:42px 30px;
+  text-shadow:0 0 3px rgba(51,255,112,.35);cursor:pointer;
+  background-image:repeating-linear-gradient(rgba(0,0,0,0) 0 2px, rgba(0,60,0,.06) 2px 3px)}
+.boot pre{margin:0;white-space:pre-wrap}
+.boot .skip{position:absolute;right:16px;bottom:14px;color:#3f6f3f;font-size:11px}
+.boot.hide{opacity:0;transition:opacity .45s ease}
+
+/* prompt verde delante del buscador */
+.search .prompt{font-family:"Courier New",monospace;color:#0a7a0a;font-weight:bold;font-size:14px}
+
+/* ===== Toques terminal en la portada (sin perder el 2006) ===== */
+.wordmark .tcursor{color:#0a7a0a;font-weight:400;margin-left:3px;
+  animation:cbblink 1s steps(1) infinite}
+.status{font-family:"Courier New",Consolas,monospace;color:#0a7a0a;font-size:11px;
+  text-align:center;margin:6px 0 0;min-height:15px;letter-spacing:.02em}
+.status .cursor{color:#0a7a0a}
+.tagline .tcursor{color:#0a7a0a;animation:cbblink 1s steps(1) infinite}
+
+/* ===== Catálogo editable + tendencia en vivo ===== */
+.catalog .erow{display:flex;align-items:stretch;border-bottom:1px solid #dcdcdc}
+.catalog li:last-child .erow{border-bottom:0}
+.catalog li:nth-child(odd) .erow{background:#eef2fb}
+.catalog .erow:hover{background:#fff7df}
+.catalog a.entry{flex:1;border-bottom:0;background:transparent !important}
+.catalog .tr{font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:.03em;
+  margin-left:10px;min-width:74px;text-align:right;flex:none}
+.catalog .tr.up{color:#0a7a0a}
+.catalog .tr.down{color:#b00000}
+.catalog .tr.flat{color:#888}
+.catalog .tr.load{color:#bbb;font-weight:normal}
+.catalog .rm{flex:none;border:0;background:transparent;color:#c2c2c2;cursor:pointer;
+  font-family:Verdana,Arial,sans-serif;font-size:12px;padding:0 12px}
+.catalog .erow:hover .rm{color:#b00000}
+
+.addcard{margin:8px 16px 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px}
+.addcard .prompt{color:#0a7a0a;font-weight:bold;font-family:"Courier New",monospace}
+.addcard input{font-family:Verdana,Arial,sans-serif;font-size:12px;padding:3px 6px;
+  border:2px solid;border-color:#7f9db9 #c8d3e0 #c8d3e0 #7f9db9}
+.addcard #addSym{width:170px}
+.addcard #addName{width:150px}
+.addcard #resetCat{margin-left:auto}
+.addcard #addMsg{color:#b00000}
+
+/* ===== Comunidad de bots ===== */
+.botgrid{margin:0 16px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:600px){.botgrid{grid-template-columns:1fr}}
+.botcard{display:block;border:1px solid #c4c4c4;background:#fff;padding:10px 12px;text-decoration:none;color:#000}
+.botcard:hover{background:#fff7df}
+.botname{font-weight:bold;font-size:14px;color:#0033cc;text-decoration:underline}
+.botmeta{color:#555;font-size:11px;margin:3px 0}
+.botdesc{font-size:12px;color:#222;min-height:30px}
+.botfoot{margin-top:6px;font-size:11px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.stars{color:#b8860b;font-weight:bold}
+.byline{color:#777}
+.botform{margin:0 16px}
+.botform label,.reviewform label{display:block;font-size:11px;font-weight:bold;color:#333;
+  text-transform:uppercase;letter-spacing:.03em;margin-top:12px}
+.botform input,.botform textarea,.reviewform textarea,.reviewform select{width:100%;margin-top:4px;
+  font-family:Verdana,Arial,sans-serif;font-size:13px;padding:5px 6px;
+  border:2px solid;border-color:#7f9db9 #c8d3e0 #c8d3e0 #7f9db9}
+.botform .row2{display:flex;gap:10px}
+.botform .row2 label{flex:1}
+.botdetail{margin:10px 16px 0}
+.botdetail h2{font-family:"Arial Black",Arial,sans-serif;font-size:22px;margin:0}
+.botdetail h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#1b3a6b;margin:14px 0 4px}
+.botdetail .pre{white-space:pre-wrap}
+.reviewform{margin:8px 16px 0;border:1px solid #dcdcdc;background:#f7f7f2;padding:10px 12px}
+.reviewlist{list-style:none;padding:0;margin:10px 16px 0;border:1px solid #c4c4c4}
+.reviewlist li{padding:8px 10px;border-bottom:1px solid #dcdcdc}
+.reviewlist li:last-child{border-bottom:0}
+.reviewlist li:nth-child(odd){background:#eef2fb}
+.rstars{color:#b8860b;font-weight:bold;font-size:13px}
+.rcomment{font-size:12px;margin-top:2px;color:#222}
+
+/* ===== Barra de filtros de la comunidad ===== */
+.filterbar{margin:16px 16px 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+  background:#eef2fb;border:1px solid #c4c4c4;padding:8px 10px}
+.filterbar input[type=text]{flex:1;min-width:180px;font-family:Verdana,Arial,sans-serif;font-size:12px;
+  padding:4px 6px;border:2px solid;border-color:#7f9db9 #c8d3e0 #c8d3e0 #7f9db9}
+.filterbar select{font-family:Verdana,Arial,sans-serif;font-size:12px;padding:3px 4px;
+  border:2px solid;border-color:#7f9db9 #c8d3e0 #c8d3e0 #7f9db9;background:#fff}
+.filterbar button{font-family:Verdana,Arial,sans-serif;font-size:12px;font-weight:bold;cursor:pointer;
+  color:#000;background:#dcd8cf;padding:4px 12px;border:2px solid;border-color:#fff #808080 #808080 #fff}
+.filterbar a{font-size:11px}
+.filterbar a.pub{margin-left:auto;font-weight:bold}

@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay · Análisis técnico</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <div id="boot" class="boot"><pre id="bootlog"></pre><span class="skip">[ clic para saltar ]</span></div>
+
+  <div class="wrap">
+
+    <header class="masthead">
+      <svg class="ship" viewBox="0 0 160 120" aria-hidden="true">
+        <path d="M10 104 q12 -7 24 0 t24 0 t24 0 t24 0 t24 0"/>
+        <path d="M10 112 q12 -7 24 0 t24 0 t24 0 t24 0 t24 0"/>
+        <path class="hull" d="M28 92 L132 92 L118 107 Q80 117 42 107 Z"/>
+        <line x1="80" y1="92" x2="80" y2="10"/>
+        <path class="flagbg" d="M80 8 L117 6 Q122 17 117 28 L80 30 Z"/>
+        <circle class="jolly" cx="98" cy="15" r="4"/>
+        <circle class="eye" cx="96.4" cy="14.6" r="0.9"/>
+        <circle class="eye" cx="99.6" cy="14.6" r="0.9"/>
+        <rect class="jolly" x="96" y="18" width="4" height="1.8"/>
+        <line class="jolly-line" x1="92" y1="27" x2="104" y2="20"/>
+        <line class="jolly-line" x1="92" y1="20" x2="104" y2="27"/>
+        <line x1="50" y1="40" x2="34" y2="90"/>
+        <line x1="110" y1="40" x2="126" y2="90"/>
+        <line x1="50" y1="40" x2="110" y2="40"/>
+        <path class="sail" d="M54 41 Q80 49 106 41 L101 80 Q80 88 59 80 Z"/>
+        <polyline class="chart" points="60 74 69 65 77 69 87 54 97 58"/>
+        <path class="chart" d="M97 58 l-7 0 m7 0 l0 7"/>
+      </svg>
+      <h1 class="wordmark">Chart<span class="bay">Bay</span><span class="tcursor">▮</span></h1>
+      <p class="tagline" id="tagline" data-full="El sitio de análisis técnico más resistente de la galaxia · {{ hoy }}"></p>
+
+      <nav class="mainnav">
+        <a href="#catalogo">Mercados</a><span class="sep">·</span>
+        <a href="{{ url_for('reports') }}">Bitácoras</a><span class="sep">·</span>
+        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
+        <a href="{{ url_for('logout') }}">Salir</a>
+      </nav>
+    </header>
+
+    <section class="search">
+      <form id="searchForm" autocomplete="off">
+        <span class="prompt">&gt;</span>
+        <input id="q" type="text" placeholder="scan AAPL · TSLA · BTC-USD · ^GSPC">
+        <button type="submit">Trazar carta</button>
+      </form>
+      <div class="status"><span id="statusTxt"></span><span class="cursor">▮</span></div>
+      <span id="sstatus" class="sstatus muted"></span>
+    </section>
+
+    <section id="result" class="result"></section>
+
+    <p id="catalogo" class="catalog-title">— Cartas disponibles —</p>
+    <ul class="catalog" id="catalog"></ul>
+
+    <form id="addForm" class="addcard" autocomplete="off">
+      <span class="prompt">+</span>
+      <input id="addSym" placeholder="símbolo (AMZN, DOGE-USD, ^RUT)">
+      <input id="addName" placeholder="nombre (opcional)">
+      <button type="submit">añadir carta</button>
+      <span id="addMsg"></span>
+      <a href="#" id="resetCat">restaurar lista</a>
+    </form>
+
+    <p class="colophon">
+      Visitas al puerto: <span class="odometer">{% for d in '%06d'|format(visits) %}<span>{{ d }}</span>{% endfor %}</span><br><br>
+      Análisis técnico educativo. No constituye asesoramiento financiero.
+    </p>
+  </div>
+
+  <script>
+    const NAMES = {{ nombres|tojson }};
+    const DEFAULT_MARKETS = [
+      { name:"Bitcoin",  sym:"BTC-USD",  kind:"Criptomoneda" },
+      { name:"Nasdaq",   sym:"^IXIC",    kind:"Índice" },
+      { name:"S&P 500",  sym:"^GSPC",    kind:"Índice" },
+      { name:"Gold",     sym:"GC=F",     kind:"Metal" },
+      { name:"EUR/USD",  sym:"EURUSD=X", kind:"Divisa" },
+      { name:"Nvidia",   sym:"NVDA",     kind:"Acción" },
+      { name:"Apple",    sym:"AAPL",     kind:"Acción" },
+      { name:"Tesla",    sym:"TSLA",     kind:"Acción" },
+    ];
+    const ROMAN = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV"];
+    const trendCache = {};
+
+    function loadMarkets(){
+      try{ const s=localStorage.getItem("cb_markets"); if(s){ const a=JSON.parse(s); if(Array.isArray(a)&&a.length) return a; } }catch(e){}
+      return DEFAULT_MARKETS.slice();
+    }
+    function saveMarkets(){ try{ localStorage.setItem("cb_markets", JSON.stringify(MERCADOS)); }catch(e){} }
+    let MERCADOS = loadMarkets();
+
+    function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+    const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+    async function typeLine(parent, text, cls, speed=8){
+      const div=document.createElement("div"); if(cls) div.className=cls; parent.appendChild(div);
+      for(let i=0;i<text.length;i++){ div.textContent+=text[i]; if(i%2===0) await sleep(speed); }
+      await sleep(70); return div;
+    }
+    async function typeInto(el, text, speed=18){
+      el.textContent=""; for(let i=0;i<text.length;i++){ el.textContent+=text[i]; await sleep(speed); }
+    }
+
+    async function boot(){
+      const el=document.getElementById("boot"); let done=false;
+      const kill=()=>{ if(done)return; done=true; el.classList.add("hide"); setTimeout(()=>el.remove(),480); };
+      el.addEventListener("click", kill);
+      let seen=false; try{ seen = sessionStorage.getItem("cb_boot")==="1"; }catch(e){}
+      if(seen){ el.remove(); return; }
+      try{ sessionStorage.setItem("cb_boot","1"); }catch(e){}
+      const log=document.getElementById("bootlog");
+      const lines=[
+        "ChartBay OS v0.6  ·  kernel retro-2006","",
+        "[ booting ] montando /mercados ............... ok",
+        "[ booting ] cargando indicadores tecnicos .... ok",
+        "[ booting ] enlace con TradingView ........... ok",
+        "[ booting ] motor de IA (oraculo) ............ standby",
+        "[ booting ] izando bandera pirata ............ ok","",
+        "acceso concedido, capitan. bienvenido a bordo.",
+      ];
+      for(const l of lines){ if(done) break; await typeLine(log,l,null,4); }
+      await sleep(550); kill();
+    }
+
+    async function landingFx(){
+      const tg=document.getElementById("tagline");
+      if(tg) await typeInto(tg, tg.dataset.full, 16);
+      const st=document.getElementById("statusTxt");
+      if(st) await typeInto(st, `> sistema en linea · ${MERCADOS.length} cartas montadas · oraculo IA en standby`, 12);
+    }
+
+    function applyTrend(el, t){
+      if(!t){ el.className="tr flat"; el.textContent="—"; return; }
+      if(t.includes("alcista")){ el.className="tr up"; el.textContent="▲ Alcista"; }
+      else if(t.includes("bajista")){ el.className="tr down"; el.textContent="▼ Bajista"; }
+      else { el.className="tr flat"; el.textContent="● Lateral"; }
+    }
+    function loadTrends(){
+      MERCADOS.forEach((m,i)=>{
+        const el=document.getElementById("tr-"+i); if(!el) return;
+        if(m.sym in trendCache){ applyTrend(el, trendCache[m.sym]); return; }
+        fetch("/api/lookup?ticker="+encodeURIComponent(m.sym)).then(r=>r.json()).then(d=>{
+          const t = d.ok ? d.snapshot.tendencia : null;
+          trendCache[m.sym]=t; applyTrend(el,t);
+        }).catch(()=>{ applyTrend(el,null); });
+      });
+    }
+
+    function renderCatalog(){
+      const ul=document.getElementById("catalog");
+      ul.innerHTML = MERCADOS.map((m,i)=>`
+        <li>
+          <div class="erow">
+            <a class="entry" href="#" data-i="${i}">
+              <span class="idx">${ROMAN[i]||(i+1)}</span>
+              <span class="name">${esc(m.name)}</span>
+              <span class="leader"></span>
+              <span class="kind">${esc(m.kind||"")}</span>
+              <span class="tr load" id="tr-${i}">···</span>
+            </a>
+            <button class="rm" data-i="${i}" title="Quitar de la lista">✕</button>
+          </div>
+        </li>`).join("");
+      ul.querySelectorAll(".entry").forEach(a=>a.addEventListener("click", e=>{
+        e.preventDefault(); const m=MERCADOS[+a.dataset.i]; loadSymbol(m.sym, m.name);
+      }));
+      ul.querySelectorAll(".rm").forEach(b=>b.addEventListener("click", e=>{
+        e.preventDefault(); MERCADOS.splice(+b.dataset.i,1); saveMarkets(); renderCatalog();
+      }));
+      loadTrends();
+    }
+
+    function addMarket(sym, name){
+      const msg=document.getElementById("addMsg");
+      sym=(sym||"").trim().toUpperCase();
+      if(!/^[A-Z0-9.^\-=]{1,15}$/.test(sym)){ msg.textContent="símbolo inválido"; return; }
+      if(MERCADOS.some(m=>m.sym===sym)){ msg.textContent="ya está en la lista"; return; }
+      msg.textContent="";
+      MERCADOS.push({ name:(name&&name.trim())||sym, sym, kind:"" });
+      saveMarkets(); renderCatalog();
+      document.getElementById("addSym").value=""; document.getElementById("addName").value="";
+    }
+
+    function mountAdvanced(el, sym){
+      const c=document.createElement("div"); c.className="tradingview-widget-container"; c.style.height="100%";
+      const w=document.createElement("div"); w.className="tradingview-widget-container__widget"; w.style.height="100%";
+      c.appendChild(w);
+      const s=document.createElement("script"); s.type="text/javascript"; s.async=true;
+      s.src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+      s.innerHTML=JSON.stringify({ symbol:sym, interval:"D", timezone:"Etc/UTC", theme:"light",
+        style:"2", locale:"es", allow_symbol_change:true, hide_side_toolbar:true, autosize:true });
+      c.appendChild(s); el.innerHTML=""; el.appendChild(c);
+    }
+
+    function payloadHtml(d, s){
+      const v=s.variacion_pct, chg=v["1d"], chgCls=chg>=0?"up":"down";
+      const titulo = d._label || d.nombre || d.ticker;
+      const rows=[
+        ["Precio", s.precio],
+        ["Variación 1d / 20d", `${v["1d"]}% · ${v["20d"]}%`],
+        ["RSI (14)", s.RSI14],
+        ["MACD histograma", s.MACD.histograma],
+        ["Volatilidad ATR", `${s.ATR14} (${s.ATR_pct_precio}%)`],
+        ["Media EMA 50", s.medias.EMA50],
+        ["Media EMA 200", s.medias.EMA200],
+        ["Soporte (20 sesiones)", s.soporte_20],
+        ["Resistencia (20 sesiones)", s.resistencia_20],
+        ["Volumen vs. media 20", s.volumen_relativo_vs_media20+"×"],
+      ];
+      return `
+        <div class="result-head">
+          <h2>${esc(titulo)}</h2>
+          <div class="sub">${esc(d.ticker)}${d.nombre && d.nombre!==d.ticker ? " · "+esc(d.nombre) : ""}</div>
+          <div class="result-price">${s.precio} <span class="chg ${chgCls}">${chg>=0?"+":""}${chg}%</span></div>
+          <div class="trend">${s.tendencia}</div>
+        </div>
+        <div class="tv-advanced" id="adv"></div>
+        <table class="ledger"><thead><tr><th>Indicador</th><th>Lectura</th></tr></thead>
+          <tbody>${rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("")}</tbody></table>
+        <button class="btn-ink" id="vone">&gt; pedir veredicto del oráculo (IA)</button>
+        <div class="verdict" id="vone-out"></div>`;
+    }
+
+    async function loadSymbol(sym, label){
+      const res=document.getElementById("result");
+      res.innerHTML=`
+        <div class="terminal">
+          <div class="term-bar"><i class="d r"></i><i class="d y"></i><i class="d g"></i> chartbay — consola</div>
+          <div class="term-body"><div id="conlog"></div><span class="cursor">▮</span></div>
+        </div>
+        <div id="payload"></div>`;
+      res.scrollIntoView({behavior:"smooth", block:"start"});
+      const log=document.getElementById("conlog");
+      await typeLine(log, `chartbay@puerto:~$ scan ${(label||sym)}`, null, 12);
+      await typeLine(log, "[+] estableciendo enlace con el feed de mercado...");
+      let d;
+      try{ d=await (await fetch("/api/lookup?ticker="+encodeURIComponent(sym))).json(); }
+      catch(e){ await typeLine(log,"[!] error de red", "bad"); return; }
+      if(!d.ok){ await typeLine(log,`[!] simbolo no encontrado: ${sym}`, "bad");
+        await typeLine(log,"[!] abortando.", "bad"); return; }
+      const s=d.snapshot; d._label=label;
+      trendCache[d.ticker]=s.tendencia;
+      await typeLine(log, "[+] descargando OHLCV (1 anio · diario) ........ OK", "ok");
+      await typeLine(log, "[+] calculando RSI · MACD · ATR · EMA50/200 .... OK", "ok");
+      await typeLine(log, `[+] tendencia detectada: ${s.tendencia.toUpperCase()}`);
+      await typeLine(log, `[+] precio ${s.precio} · rsi ${s.RSI14} · atr ${s.ATR_pct_precio}%`);
+      await typeLine(log, "[+] trazando carta de TradingView .............. OK", "ok");
+      await typeLine(log, "[*] analisis listo — desplegando carta.", "ok");
+      document.getElementById("payload").innerHTML = payloadHtml(d, s);
+      mountAdvanced(document.getElementById("adv"), d.tv);
+      document.getElementById("vone").onclick=()=>verdictOne(d.ticker);
+    }
+
+    async function verdictOne(t){
+      const out=document.getElementById("vone-out");
+      out.innerHTML='<div class="terminal"><div class="term-body"><div id="orlog"></div><span class="cursor">▮</span></div></div>';
+      const log=document.getElementById("orlog");
+      await typeLine(log, "[*] estableciendo canal cifrado con el oraculo (IA)...");
+      await typeLine(log, "[*] analizando la foto tecnica... esto puede tardar.");
+      const p=await (await fetch("/api/verdict_one?ticker="+encodeURIComponent(t),{method:"POST"})).json();
+      if(p.error){ out.innerHTML='<span class="err">⚠ '+p.error+'</span>'; return; }
+      out.innerHTML=marked.parse(p.veredicto);
+    }
+
+    document.getElementById("searchForm").addEventListener("submit", e=>{
+      e.preventDefault(); const q=document.getElementById("q").value.trim(); if(q) loadSymbol(q, "");
+    });
+    document.getElementById("addForm").addEventListener("submit", e=>{
+      e.preventDefault(); addMarket(document.getElementById("addSym").value, document.getElementById("addName").value);
+    });
+    document.getElementById("resetCat").addEventListener("click", e=>{
+      e.preventDefault(); MERCADOS=DEFAULT_MARKETS.slice(); saveMarkets(); document.getElementById("addMsg").textContent=""; renderCatalog();
+    });
+
+    renderCatalog();
+    boot().then(landingFx);
+  </script>
+</body>
+</html>

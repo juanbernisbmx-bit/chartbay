@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay · {{ name }}</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <header class="masthead">
+      <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
+      <nav class="mainnav">
+        <a href="{{ url_for('reports') }}">Bitácoras</a><span class="sep">·</span>
+        <a href="{{ url_for('dashboard') }}">Puerto</a><span class="sep">·</span>
+        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
+        <a href="{{ url_for('logout') }}">Salir</a>
+      </nav>
+    </header>
+    <hr class="rule">
+    <article id="md" class="prose"></article>
+    <script id="raw" type="text/plain">{{ content }}</script>
+    <script>
+      document.getElementById("md").innerHTML =
+        marked.parse(document.getElementById("raw").textContent);
+    </script>
+  </div>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay · Enrolarse</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="login-wrap">
+    <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
+    <p class="tagline">Enrólate en la tripulación</p>
+    {% if error %}<div class="login-error">{{ error }}</div>{% endif %}
+    <form class="login-form" method="post">
+      <label>Nombre de capitán
+        <input type="text" name="username" required autofocus>
+      </label>
+      <label>Contraseña (mín. 6)
+        <input type="password" name="password" required>
+      </label>
+      <button type="submit">Enrolarse</button>
+    </form>
+    <p style="margin-top:16px;font-size:11px">¿Ya tienes cuenta? <a href="{{ url_for('login') }}">Entrar al puerto</a></p>
+  </div>
+</body>
+</html>

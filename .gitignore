@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+web/cache/
+informes/
+.venv/
+venv/
+web/chartbay.db
+*.db

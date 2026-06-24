@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay · {{ bot.name }}</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="wrap">
+    <header class="masthead">
+      <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
+      <nav class="mainnav">
+        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
+        <a href="{{ url_for('dashboard') }}">Puerto</a><span class="sep">·</span>
+        <a href="{{ url_for('logout') }}">Salir</a>
+      </nav>
+    </header>
+
+    <div class="botdetail">
+      <h2>{{ bot.name }}</h2>
+      <div class="botmeta">por {{ bot.author }}
+        {% if bot.market %}· {{ bot.market }}{% endif %}
+        {% if bot.timeframe %}· {{ bot.timeframe }}{% endif %}
+        · <span class="stars">{% if avg %}{{ '★' * (avg|round|int) }}{{ '☆' * (5 - (avg|round|int)) }} {{ avg }} ({{ n }}){% else %}sin reseñas{% endif %}</span>
+      </div>
+
+      {% if bot.description %}<h3>Descripción</h3><p>{{ bot.description }}</p>{% endif %}
+      {% if bot.rules %}<h3>Reglas / indicadores</h3><p class="pre">{{ bot.rules }}</p>{% endif %}
+      {% if bot.backtest %}<h3>Resultados / backtest</h3><p class="pre">{{ bot.backtest }}</p>{% endif %}
+    </div>
+
+    <p class="catalog-title">— Reseñas de la tripulación —</p>
+
+    <form class="reviewform" method="post" action="{{ url_for('bot_review', bot_id=bot.id) }}">
+      <label>Tu calificación
+        <select name="stars">
+          <option value="5">★★★★★ (5)</option>
+          <option value="4">★★★★☆ (4)</option>
+          <option value="3">★★★☆☆ (3)</option>
+          <option value="2">★★☆☆☆ (2)</option>
+          <option value="1">★☆☆☆☆ (1)</option>
+        </select>
+      </label>
+      <textarea name="comment" maxlength="1000" rows="2" placeholder="Tu opinión sobre este bot…"></textarea>
+      <button type="submit" class="btn-ink">&gt; dejar reseña</button>
+    </form>
+
+    {% if reviews %}
+      <ul class="reviewlist">
+        {% for r in reviews %}
+        <li>
+          <div class="rstars">{{ '★' * r.stars }}{{ '☆' * (5 - r.stars) }} <span class="byline">{{ r.author }}</span></div>
+          {% if r.comment %}<div class="rcomment">{{ r.comment }}</div>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted" style="text-align:center;margin:14px 16px">Todavía nadie reseñó este bot.</p>
+    {% endif %}
+
+    <p class="colophon">Opiniones de usuarios. No constituyen asesoramiento financiero.</p>
+  </div>
+</body>
+</html>
