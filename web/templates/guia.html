@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay · Guía de indicadores</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="wrap">
+    {% include 'alfa_banner.html' %}
+    <header class="masthead">
+      <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
+      <nav class="mainnav">
+        <a href="{{ url_for('dashboard') }}">Puerto</a><span class="sep">·</span>
+        <a href="{{ url_for('reports') }}">Bitácoras</a><span class="sep">·</span>
+        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
+        <a href="{{ url_for('heatmap') }}">Calor</a><span class="sep">·</span>
+        <a href="{{ url_for('guia') }}">Guía</a><span class="sep">·</span>
+        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
+        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
+      </nav>
+    </header>
+
+    <p class="catalog-title">— Guía de indicadores —</p>
+
+    <div class="guia-wrap">
+
+      <div class="guia-entry" id="tendencia">
+        <h3 class="guia-nombre">Tendencia (medias EMA 20/50/200)</h3>
+        <p class="guia-que"><strong>Qué es:</strong> el rumbo general del precio según sus promedios.</p>
+        <p class="guia-como"><strong>Cómo leerlo:</strong> si la EMA50 está por encima de la EMA200 y el precio sobre ellas → tendencia alcista; al revés → bajista; entrelazadas → lateral (sin rumbo claro).</p>
+      </div>
+
+      <div class="guia-entry" id="rsi">
+        <h3 class="guia-nombre">RSI (Índice de Fuerza Relativa)</h3>
+        <p class="guia-que"><strong>Qué es:</strong> mide si el activo está "sobrecomprado" o "sobrevendido" (0 a 100).</p>
+        <p class="guia-como"><strong>Cómo leerlo:</strong> por encima de 70 suele estar caro/sobrecomprado (posible freno); por debajo de 30, barato/sobrevendido (posible rebote); ~50 es neutral.</p>
+      </div>
+
+      <div class="guia-entry" id="macd">
+        <h3 class="guia-nombre">MACD</h3>
+        <p class="guia-que"><strong>Qué es:</strong> compara dos medias para detectar cambios de impulso.</p>
+        <p class="guia-como"><strong>Cómo leerlo:</strong> si el histograma pasa de negativo a positivo (cruce al alza) → impulso comprador; de positivo a negativo → impulso vendedor.</p>
+      </div>
+
+      <div class="guia-entry" id="estocastico">
+        <h3 class="guia-nombre">Estocástico (%K / %D)</h3>
+        <p class="guia-que"><strong>Qué es:</strong> otro medidor de sobrecompra/sobreventa, más rápido que el RSI.</p>
+        <p class="guia-como"><strong>Cómo leerlo:</strong> arriba de 80 = sobrecomprado; abajo de 20 = sobrevendido. Un cruce de %K sobre %D en zona baja sugiere rebote; lo contrario en zona alta, caída.</p>
+      </div>
+
+      <div class="guia-entry" id="atr">
+        <h3 class="guia-nombre">ATR (volatilidad)</h3>
+        <p class="guia-que"><strong>Qué es:</strong> cuánto se mueve el precio en promedio (en valor y en % del precio).</p>
+        <p class="guia-como"><strong>Cómo leerlo:</strong> ATR alto = mucha volatilidad (movimientos grandes, más riesgo); bajo = mercado calmo. Sirve para dimensionar stops (ej. 1.5× ATR).</p>
+      </div>
+
+      <div class="guia-entry" id="bollinger">
+        <h3 class="guia-nombre">Bandas de Bollinger</h3>
+        <p class="guia-que"><strong>Qué es:</strong> una banda alrededor del precio según su volatilidad.</p>
+        <p class="guia-como"><strong>Cómo leerlo:</strong> tocar la banda superior = precio "estirado" arriba; la inferior, estirado abajo. Bandas muy juntas suelen anticipar un movimiento fuerte.</p>
+      </div>
+
+      <div class="guia-entry" id="soporte">
+        <h3 class="guia-nombre">Soporte y resistencia</h3>
+        <p class="guia-que"><strong>Qué es:</strong> niveles donde el precio suele frenar (soporte abajo, resistencia arriba).</p>
+        <p class="guia-como"><strong>Cómo leerlo:</strong> cerca del soporte puede rebotar; cerca de la resistencia puede frenar. Si los rompe con fuerza, suele seguir en esa dirección.</p>
+      </div>
+
+      <div class="guia-entry" id="volumen">
+        <h3 class="guia-nombre">Volumen relativo</h3>
+        <p class="guia-que"><strong>Qué es:</strong> el volumen de hoy comparado con su promedio de 20 sesiones.</p>
+        <p class="guia-como"><strong>Cómo leerlo:</strong> mayor a 1 = más actividad de lo normal (movimiento con convicción); menor a 1 = poco interés (movimientos menos confiables).</p>
+      </div>
+
+      <div class="guia-entry" id="obv">
+        <h3 class="guia-nombre">OBV (volumen en balance)</h3>
+        <p class="guia-que"><strong>Qué es:</strong> acumula el volumen según si el precio sube o baja.</p>
+        <p class="guia-como"><strong>Cómo leerlo:</strong> si el OBV sube junto con el precio, confirma la tendencia; si el precio sube pero el OBV baja, ojo: puede ser una señal débil (divergencia).</p>
+      </div>
+
+      <div class="guia-entry" id="ichimoku">
+        <h3 class="guia-nombre">Ichimoku (la "nube")</h3>
+        <p class="guia-que"><strong>Qué es:</strong> un sistema que muestra tendencia, soporte/resistencia y momentum juntos.</p>
+        <p class="guia-como"><strong>Cómo leerlo:</strong> precio por encima de la nube = contexto alcista; por debajo = bajista; dentro de la nube = indecisión.</p>
+      </div>
+
+      <div class="guia-entry" id="fibonacci">
+        <h3 class="guia-nombre">Fibonacci (retrocesos)</h3>
+        <p class="guia-que"><strong>Qué es:</strong> niveles donde un precio suele "descansar" tras un movimiento (0.236, 0.382, 0.5, 0.618, 0.786).</p>
+        <p class="guia-como"><strong>Cómo leerlo:</strong> en una subida, esos niveles actúan como posibles soportes donde el precio puede frenar la corrección; el 0.618 es el más vigilado.</p>
+      </div>
+
+    </div>
+
+    <p class="colophon">Esto es material educativo, no asesoramiento financiero. Ningún indicador acierta solo: se usan combinados y nunca garantizan resultados.</p>
+  </div>
+</body>
+</html>
