@@ -297,3 +297,12 @@ code{font-family:"Courier New",monospace;background:#f0f0f0;padding:1px 4px;font
 .heat-down .ht-chg{color:#b00000}
 .heat-flat .ht-chg{color:#555}
 .ht-trend{font-size:10px;color:#777;margin-top:3px;text-transform:uppercase;letter-spacing:.02em}
+
+/* ===== Guía de indicadores ===== */
+.guia-wrap{margin:0 16px}
+.guia-entry{border-left:3px solid #1b3a6b;margin:0 0 18px;padding:8px 12px;background:#f8f9fb}
+.guia-nombre{margin:0 0 6px;font-size:13px;color:#1b3a6b;font-family:"Arial Black","Arial Bold",Impact,sans-serif;font-weight:900}
+.guia-que,.guia-como{margin:4px 0 0;font-size:12px;line-height:1.55}
+.help-link{color:#b8860b;text-decoration:none;font-size:10px;vertical-align:super;margin-left:2px;font-weight:bold}
+.help-link:hover{text-decoration:underline;color:#cc3300}
+.help-link:visited{color:#b8860b}

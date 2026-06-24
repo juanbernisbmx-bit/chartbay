@@ -41,6 +41,7 @@
         <a href="{{ url_for('reports') }}">Bitácoras</a><span class="sep">·</span>
         <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
         <a href="{{ url_for('heatmap') }}">Calor</a><span class="sep">·</span>
+        <a href="{{ url_for('guia') }}">Guía</a><span class="sep">·</span>
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
         {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
       </nav>
@@ -215,18 +216,18 @@
       const rows=[
         ["Precio", s.precio],
         ["Variación 1d / 20d", `${v["1d"]}% · ${v["20d"]}%`],
-        ["RSI (14)", s.RSI14],
-        ["MACD histograma", s.MACD.histograma],
-        ["Volatilidad ATR", `${s.ATR14} (${s.ATR_pct_precio}%)`],
-        ["Media EMA 50", s.medias.EMA50],
-        ["Media EMA 200", s.medias.EMA200],
-        ["Soporte (20 sesiones)", s.soporte_20],
-        ["Resistencia (20 sesiones)", s.resistencia_20],
-        ["Volumen vs. media 20", s.volumen_relativo_vs_media20+"×"],
-        ["Estocástico %K / %D", `${s.estocastico.K} / ${s.estocastico.D}`],
-        ["OBV", s.OBV_tendencia],
-        ["Ichimoku nube", s.ichimoku.precio_vs_nube],
-        ["Fibonacci 38.2% / 61.8%", `${s.fibonacci.levels["0.382"]} / ${s.fibonacci.levels["0.618"]}`],
+        ["RSI (14)", s.RSI14, "rsi"],
+        ["MACD histograma", s.MACD.histograma, "macd"],
+        ["Volatilidad ATR", `${s.ATR14} (${s.ATR_pct_precio}%)`, "atr"],
+        ["Media EMA 50", s.medias.EMA50, "tendencia"],
+        ["Media EMA 200", s.medias.EMA200, "tendencia"],
+        ["Soporte (20 sesiones)", s.soporte_20, "soporte"],
+        ["Resistencia (20 sesiones)", s.resistencia_20, "soporte"],
+        ["Volumen vs. media 20", s.volumen_relativo_vs_media20+"×", "volumen"],
+        ["Estocástico %K / %D", `${s.estocastico.K} / ${s.estocastico.D}`, "estocastico"],
+        ["OBV", s.OBV_tendencia, "obv"],
+        ["Ichimoku nube", s.ichimoku.precio_vs_nube, "ichimoku"],
+        ["Fibonacci 38.2% / 61.8%", `${s.fibonacci.levels["0.382"]} / ${s.fibonacci.levels["0.618"]}`, "fibonacci"],
       ];
       return `
         <div class="result-head">
@@ -237,7 +238,7 @@
         </div>
         <div class="tv-advanced" id="adv"></div>
         <table class="ledger"><thead><tr><th>Indicador</th><th>Lectura</th></tr></thead>
-          <tbody>${rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("")}</tbody></table>
+          <tbody>${rows.map(r=>`<tr><td>${r[0]}${r[2]?` <a href="/guia#${r[2]}" class="help-link" title="Ver en guía">?</a>`:''}</td><td>${r[1]}</td></tr>`).join("")}</tbody></table>
         <button class="btn-ink" id="vone">&gt; pedir veredicto del oráculo (IA)</button>
         <div class="verdict" id="vone-out"></div>`;
     }
