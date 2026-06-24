@@ -14,7 +14,7 @@
       <nav class="mainnav">
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
         <a href="{{ url_for('dashboard') }}">Puerto</a><span class="sep">·</span>
-        <a href="{{ url_for('logout') }}">Salir</a>
+        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a><span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}
       </nav>
     </header>
 
@@ -33,6 +33,7 @@
 
     <p class="catalog-title">— Reseñas de la tripulación —</p>
 
+    {% if session.user %}
     <form class="reviewform" method="post" action="{{ url_for('bot_review', bot_id=bot.id) }}">
       <label>Tu calificación
         <select name="stars">
@@ -46,6 +47,9 @@
       <textarea name="comment" maxlength="1000" rows="2" placeholder="Tu opinión sobre este bot…"></textarea>
       <button type="submit" class="btn-ink">&gt; dejar reseña</button>
     </form>
+    {% else %}
+    <p class="muted" style="text-align:center;margin:14px 16px">→ <a href="{{ url_for('login') }}">Iniciá sesión</a> para dejar una reseña.</p>
+    {% endif %}
 
     {% if reviews %}
       <ul class="reviewlist">

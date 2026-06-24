@@ -14,7 +14,7 @@
       <nav class="mainnav">
         <a href="{{ url_for('dashboard') }}">Puerto</a><span class="sep">·</span>
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
-        <a href="{{ url_for('logout') }}">Salir</a>
+        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a><span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}
       </nav>
     </header>
     <hr class="rule">

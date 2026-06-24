@@ -105,6 +105,8 @@ def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if not session.get("user"):
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Sesión requerida", "login": True}), 401
             return redirect(url_for("login", next=request.path))
         return f(*args, **kwargs)
     return wrapper
@@ -165,7 +167,6 @@ def logout():
 # --------------------------- herramienta ---------------------------
 
 @app.route("/")
-@login_required
 def dashboard():
     return render_template(
         "dashboard.html",
@@ -179,7 +180,6 @@ def dashboard():
 
 
 @app.route("/reports")
-@login_required
 def reports():
     files = []
     if REPORTS_DIR.exists():
@@ -188,7 +188,6 @@ def reports():
 
 
 @app.route("/reports/<path:name>")
-@login_required
 def report_view(name):
     if not name.endswith(".md") or "/" in name or "\\" in name:
         abort(404)
@@ -201,7 +200,6 @@ def report_view(name):
 # --------------------------- comunidad ---------------------------
 
 @app.route("/community")
-@login_required
 def community():
     q = request.args.get("q", "").strip()
     market = request.args.get("market", "").strip()
@@ -270,7 +268,6 @@ def bot_new():
 
 
 @app.route("/community/bot/<int:bot_id>")
-@login_required
 def bot_detail(bot_id):
     conn = db.get_conn()
     bot = conn.execute(
@@ -315,7 +312,6 @@ def bot_review(bot_id):
 # --------------------------- API análisis ---------------------------
 
 @app.route("/api/snapshot")
-@login_required
 def api_snapshot():
     t = request.args.get("ticker", "").strip()
     if t not in config.TICKERS:
@@ -324,7 +320,6 @@ def api_snapshot():
 
 
 @app.route("/api/lookup")
-@login_required
 def api_lookup():
     t = sanitize_ticker(request.args.get("ticker", ""))
     if not t:
@@ -398,7 +393,6 @@ def api_verdict():
 
 
 @app.route("/api/verdict", methods=["GET"])
-@login_required
 def api_verdict_get():
     today = date.today().isoformat()
     cache_fp = CACHE_DIR / f"verdict_{today}.json"

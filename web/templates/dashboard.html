@@ -40,7 +40,7 @@
         <a href="#catalogo">Mercados</a><span class="sep">·</span>
         <a href="{{ url_for('reports') }}">Bitácoras</a><span class="sep">·</span>
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
-        <a href="{{ url_for('logout') }}">Salir</a>
+        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a><span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}
       </nav>
     </header>
 
@@ -264,7 +264,12 @@
       const log=document.getElementById("orlog");
       await typeLine(log, "[*] estableciendo canal cifrado con el oraculo (IA)...");
       await typeLine(log, "[*] analizando la foto tecnica... esto puede tardar.");
-      const p=await (await fetch("/api/verdict_one?ticker="+encodeURIComponent(t),{method:"POST"})).json();
+      const resp=await fetch("/api/verdict_one?ticker="+encodeURIComponent(t),{method:"POST"});
+      if(resp.status===401){
+        out.innerHTML='<p class="muted" style="text-align:center;margin:14px 0">→ <a href="/login">Iniciá sesión</a> para consultar el oráculo IA.</p>';
+        return;
+      }
+      const p=await resp.json();
       if(p.error){ out.innerHTML='<span class="err">⚠ '+p.error+'</span>'; return; }
       out.innerHTML=marked.parse(p.veredicto);
     }
