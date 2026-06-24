@@ -185,6 +185,78 @@
     });
   }
 
+  // ─── Binary target detection ──────────────────────────────────────────────────
+
+  function isBinaryTarget(y) {
+    return new Set(y).size === 2;
+  }
+
+  // ─── Logistic Regression (gradient descent, no external deps) ────────────────
+
+  function sigmoid(z) {
+    if (z > 500) return 1;
+    if (z < -500) return 0;
+    return 1 / (1 + Math.exp(-z));
+  }
+
+  function runLogistic({ X, y, featureNames, yName, maxIter = 1500, lr = 0.05 }) {
+    const n = y.length;
+    const yVals = [...new Set(y)].sort((a, b) => a - b);
+    const yBin = y.map(v => v === yVals[1] ? 1 : 0);
+    const Xd = X.map(row => [1, ...row]);
+    const p = Xd[0].length;
+
+    let beta = new Array(p).fill(0);
+    for (let iter = 0; iter < maxIter; iter++) {
+      const probs = Xd.map(row => sigmoid(dot(beta, row)));
+      const errors = probs.map((pi, i) => pi - yBin[i]);
+      const grad = Array.from({ length: p }, (_, j) =>
+        Xd.reduce((s, row, i) => s + row[j] * errors[i], 0) / n
+      );
+      beta = beta.map((b, j) => b - lr * grad[j]);
+    }
+
+    const probs = Xd.map(row => sigmoid(dot(beta, row)));
+    const eps = 1e-15;
+    const llModel = probs.reduce((s, pi, i) =>
+      s + yBin[i] * Math.log(Math.max(eps, pi)) + (1 - yBin[i]) * Math.log(Math.max(eps, 1 - pi)), 0);
+
+    const pMean = yBin.reduce((s, v) => s + v, 0) / n;
+    const llNull = n * (pMean * Math.log(Math.max(eps, pMean)) + (1 - pMean) * Math.log(Math.max(eps, 1 - pMean)));
+
+    const mcFaddenR2 = llNull !== 0 ? Math.max(0, 1 - llModel / llNull) : 0;
+    const predicted = probs.map(pi => pi >= 0.5 ? 1 : 0);
+    const accuracy = predicted.filter((p, i) => p === yBin[i]).length / n;
+
+    return {
+      intercept: beta[0],
+      coefficients: beta.slice(1),
+      oddsRatios: beta.slice(1).map(c => Math.exp(c)),
+      mcFaddenR2, accuracy, llModel, llNull,
+      featureNames, yName, yVals, n,
+    };
+  }
+
+  // ─── Data leakage detection ───────────────────────────────────────────────────
+
+  const LEAK_THRESHOLD = 0.95;
+
+  function detectLeakage(X, y, xNames, threshold = LEAK_THRESHOLD) {
+    const n = y.length;
+    const yMean = arrMean(y);
+    const yDev = y.map(v => v - yMean);
+    const yVar = yDev.reduce((s, d) => s + d * d, 0);
+    return xNames.map((name, j) => {
+      const xCol = X.map(row => row[j]);
+      const xMean = arrMean(xCol);
+      const xDev = xCol.map(v => v - xMean);
+      const num = xDev.reduce((s, d, i) => s + d * yDev[i], 0);
+      const denom = Math.sqrt(xDev.reduce((s, d) => s + d * d, 0) * yVar);
+      const r = denom === 0 ? 0 : num / denom;
+      return { name, r, abs: Math.abs(r) };
+    }).filter(d => d.abs >= threshold);
+  }
+
   // ─── CSV utilities ───────────────────────────────────────────────────────────
 
   function parseCSVFile(file) {
@@ -230,7 +302,7 @@
 
   // ─── Interpretation (Phase 2) ────────────────────────────────────────────────
 
-  function interpret({ rSquared, adjustedRSquared, featureNames, coefficients, yName, nObs, pValues }) {
+  function interpret({ rSquared, adjustedRSquared, featureNames, coefficients, yName, nObs, pValues, isBinary }) {
     const r2pct = (rSquared * 100).toFixed(1);
     const ar2pct = (adjustedRSquared * 100).toFixed(1);
     const quality = rSquared >= 0.8 ? 'muy bueno' : rSquared >= 0.5 ? 'moderado' : 'débil';
@@ -238,7 +310,7 @@
     const totalCoef = featureNames.length;
 
     const lines = [
-      `El modelo explica el ${r2pct}% de la variación en "${yName}" (R² = ${rSquared.toFixed(4)}).`,
+      `El modelo explica el ${r2pct}% de la variación en “${yName}” (R² = ${rSquared.toFixed(4)}).`,
       `El ajuste es ${quality} (R² ajustado = ${ar2pct}%, n = ${nObs} observaciones).`,
       '',
       pValues
@@ -249,21 +321,29 @@
             : `Significancia: ${sigCount} de ${totalCoef} variable(s) son estadísticamente significativas (p < 0.05).`)
         : '',
       '',
-      'Lectura de coeficientes (manteniendo el resto constante):',
+      isBinary
+        ? `Lectura de coeficientes OLS — Modelo de Probabilidad Lineal (¡limitado para 0/1!):`
+        : 'Lectura de coeficientes (manteniendo el resto constante):',
       ...featureNames.map((name, i) => {
         const c = coefficients[i];
-        const dir = c > 0 ? 'aumenta' : 'disminuye';
         const pSig = pValues && pValues[i + 1] >= 0.05 ? ' (no significativo estadísticamente)' : '';
+        if (isBinary) {
+          const pp = (Math.abs(c) * 100).toFixed(2);
+          const dir = c > 0 ? 'aumenta' : 'reduce';
+          return `  • Por cada unidad de aumento en “${name}”, el modelo ${dir} la probabilidad estimada de “${yName}=1” en ~${pp} pp (interpretación LPM, aproximada)${pSig}.`;
+        }
+        const dir = c > 0 ? 'aumenta' : 'disminuye';
         return `  • Por cada unidad de aumento en “${name}”, “${yName}” ${dir} en ${Math.abs(c).toFixed(4)} unidades${pSig}.`;
       }),
       '',
       rSquared < 0.3
         ? '⚠ El R² bajo sugiere que las variables seleccionadas explican poca variación. Considerá agregar más predictores o revisar los datos.'
         : rSquared > 0.95
-        ? '⚠ Un R² muy alto puede indicar sobreajuste o multicolinealidad. Verificá que las variables sean independientes entre sí.'
+        ? '⚠ Un R² muy alto puede indicar sobreajuste o multicolinealidad — o fuga de datos. Verificá los regresores.'
         : '',
       '',
       'Nota: OLS asume linealidad, homocedasticidad e independencia de los residuos. Verificá estos supuestos antes de usar el modelo.',
+      'Nota educativa: Un R² cercano a 1 casi siempre es señal de fuga de datos o sobreajuste, no de un buen modelo. Sospechá de los resultados demasiado perfectos.',
     ];
 
     return lines.filter((l, i, a) => !(l === '' && (i === 0 || a[i - 1] === ''))).join('\n');
@@ -279,6 +359,7 @@
   let lastCorr = null;
   let lastCorrCols = null;
   let lastVIF = null;
+  let lastLogit = null;
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
@@ -396,13 +477,20 @@
       const allColData = getAllNumericData(csvData.rows, csvData.numericColumns);
       const corrMatrix = pearsonMatrix(allColData);
       const vifValues = computeVIF(X);
+      const binary = isBinaryTarget(y);
+      const leaks = detectLeakage(X, y, xNames);
+      let logitResult = null;
+      if (binary) {
+        try { logitResult = runLogistic({ X, y, featureNames: xNames, yName }); } catch (_) {}
+      }
 
       lastResult = result;
       lastCorr = corrMatrix;
       lastCorrCols = csvData.numericColumns;
       lastVIF = vifValues;
+      lastLogit = logitResult;
 
-      renderResults(result, dropped, corrMatrix, csvData.numericColumns, vifValues);
+      renderResults(result, dropped, corrMatrix, csvData.numericColumns, vifValues, { binary, logitResult, leaks });
       const res = $('qb-results');
       if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
     } catch (err) {
@@ -412,19 +500,25 @@
 
   // ─── Results ─────────────────────────────────────────────────────────────────
 
-  function renderResults(result, dropped, corrMatrix, corrCols, vifValues) {
+  function renderResults(result, dropped, corrMatrix, corrCols, vifValues, checks = {}) {
+    const { binary = false, logitResult = null, leaks = [] } = checks;
+
+    renderBinaryWarn(binary, result.yName);
+    renderLeakageWarn(leaks);
+
     const eq = $('qb-equation');
     if (eq) eq.textContent = result.equation;
 
     renderCoefTable(result);
     renderStatsTable(result, dropped);
+    renderLogistic(logitResult);
     renderChart(result);
     renderCorrMatrix(corrMatrix, corrCols);
     renderVIF(vifValues, result.featureNames);
     renderResidDiag(result);
 
     const interp = $('qb-interpretation');
-    if (interp) interp.textContent = interpret(result);
+    if (interp) interp.textContent = interpret({ ...result, isBinary: binary });
 
     const actual = result.predictions.map((p, i) => p + result.residuals[i]);
     const predTable = $('qb-pred-table');
@@ -436,6 +530,83 @@
             `<tr><td>${i + 1}</td><td>${actual[i].toFixed(4)}</td><td>${p.toFixed(4)}</td><td>${result.residuals[i].toFixed(4)}</td></tr>`
           ).join('')}</tbody>
         </table>`;
+  }
+
+  // ─── Binary warning ───────────────────────────────────────────────────────────
+
+  function renderBinaryWarn(isBinary, yName) {
+    const el = $('qb-binary-warn');
+    if (!el) return;
+    if (!isBinary) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <div class="qb-warn-yellow">
+        <p><strong>⚠ La variable dependiente es binaria (0/1) — Modelo de Probabilidad Lineal</strong></p>
+        <p>Estás corriendo OLS sobre una variable 0/1. Esto se llama <em>Modelo de Probabilidad Lineal (MPL)</em>: técnicamente válido pero con limitaciones importantes:</p>
+        <ul style="margin:4px 0 0 16px;padding:0">
+          <li>Las predicciones pueden caer <strong>fuera de [0, 1]</strong> (probabilidades negativas o &gt; 1).</li>
+          <li>La interpretación "aumenta N unidades" <strong>NO aplica</strong> a una probabilidad; usá "aumenta ~N·100 puntos porcentuales (aprox.)".</li>
+          <li>Un R² alto en una regresión binaria puede ser engañoso.</li>
+          <li>Los residuos violan homocedasticidad por definición.</li>
+        </ul>
+        <p style="margin-top:6px">Para 0/1 lo correcto es una <strong>regresión LOGÍSTICA</strong>. Los resultados logísticos se muestran debajo de los coeficientes OLS.</p>
+      </div>`;
+  }
+
+  // ─── Leakage warning ──────────────────────────────────────────────────────────
+
+  function renderLeakageWarn(leaks) {
+    const el = $('qb-leak-warn');
+    if (!el) return;
+    if (!leaks || leaks.length === 0) { el.innerHTML = ''; return; }
+    const items = leaks.map(d =>
+      `<p>⚠ <strong>«${esc(d.name)}»</strong> correlaciona <strong>${d.r.toFixed(4)}</strong> (|r| = ${d.abs.toFixed(4)}) con el objetivo. Puede ser un regresor derivado de la respuesta (p. ej. una interacción o transformación que contiene la propia variable dependiente). Esto infla artificialmente el R² — el modelo no está "prediciendo" realmente. Revisá y/o quitá esa variable.</p>`
+    ).join('');
+    el.innerHTML = `
+      <div class="qb-warn-red">
+        <p><strong>🚨 POSIBLE FUGA DE DATOS (Data Leakage)</strong></p>
+        ${items}
+        <p style="margin-top:4px;font-style:italic">Umbral: |r| ≥ ${LEAK_THRESHOLD}.</p>
+      </div>`;
+  }
+
+  // ─── Logistic results ─────────────────────────────────────────────────────────
+
+  function renderLogistic(res) {
+    const wrap = $('qb-logit-wrap');
+    const content = $('qb-logit-content');
+    if (!wrap || !content) return;
+    if (!res) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+
+    const f4 = n => isFinite(n) ? n.toFixed(4) : '—';
+    const rows = res.featureNames.map((name, i) =>
+      `<tr><td>${esc(name)}</td><td>${f4(res.coefficients[i])}</td><td>${f4(res.oddsRatios[i])}</td></tr>`
+    ).join('');
+
+    content.innerHTML = `
+      <div style="overflow-x:auto">
+        <table class="ledger" style="margin-bottom:8px">
+          <thead><tr><th>Variable</th><th>Coef. logístico</th><th>Odds Ratio (exp β)</th></tr></thead>
+          <tbody>
+            <tr><td>Intercepto</td><td>${f4(res.intercept)}</td><td>${f4(Math.exp(res.intercept))}</td></tr>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+      <table class="ledger" style="width:auto">
+        <thead><tr><th>Indicador</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Pseudo R² (McFadden)</td><td>${res.mcFaddenR2.toFixed(4)}</td></tr>
+          <tr><td>Log-verosimilitud modelo</td><td>${res.llModel.toFixed(4)}</td></tr>
+          <tr><td>Log-verosimilitud nulo</td><td>${res.llNull.toFixed(4)}</td></tr>
+          <tr><td>Exactitud en muestra</td><td>${(res.accuracy * 100).toFixed(1)}%</td></tr>
+          <tr><td>n observaciones</td><td>${res.n}</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:10px;color:#666;margin:6px 0 0;font-family:Verdana,Arial,sans-serif">
+        Odds Ratio > 1: aumenta la probabilidad de ${esc(res.yName)}=1 &middot; OR &lt; 1: la reduce &middot;
+        Pseudo R² de McFadden: 0.2–0.4 se considera buen ajuste en logística.
+      </p>`;
   }
 
   function renderCoefTable(result) {
