@@ -15,6 +15,11 @@ a:hover{color:#cc3300}
 .muted{color:#666}
 .err{color:#b00000}
 
+/* barra de aviso alfa */
+.alfa-banner{background:#1b3a6b;color:#ffd34d;text-align:center;font-size:10px;
+  text-transform:uppercase;letter-spacing:.08em;padding:5px 16px;
+  border-bottom:2px solid #b8860b;font-family:Verdana,Arial,sans-serif}
+
 /* contenedor central con marco fino, como sitio viejo */
 .wrap{max-width:800px;margin:14px auto;background:#fff;border:1px solid #b9b9b9;
   padding:0 0 28px}

@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  {% include 'alfa_banner.html' %}
   <div class="login-wrap">
     <svg class="ship" viewBox="0 0 160 120" aria-hidden="true">
       <path d="M10 104 q12 -7 24 0 t24 0 t24 0 t24 0 t24 0"/>
@@ -42,7 +43,11 @@
       </label>
       <button type="submit">Izar velas</button>
     </form>
+    {% if registration_open %}
     <p style="margin-top:16px;font-size:11px">¿Aún sin cuenta? <a href="{{ url_for('register') }}">Enrólate en la tripulación</a></p>
+    {% else %}
+    <p style="margin-top:16px;font-size:11px;color:#888">Registro cerrado (versión alfa).</p>
+    {% endif %}
   </div>
 </body>
 </html>
