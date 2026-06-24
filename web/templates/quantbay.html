@@ -65,6 +65,10 @@
     <div class="qb-section" id="qb-results" style="display:none">
       <p class="qb-subtitle">④ Resultados</p>
 
+      <!-- Avisos de detección -->
+      <div id="qb-binary-warn"></div>
+      <div id="qb-leak-warn"></div>
+
       <!-- Ecuación -->
       <p style="font-size:11px;font-weight:bold;margin:8px 0 3px">Ecuación estimada:</p>
       <div class="qb-eq" id="qb-equation"></div>
@@ -89,6 +93,12 @@
         </div>
       </div>
       <p class="qb-sig-legend">*** p&lt;0.01 &nbsp;&middot;&nbsp; ** p&lt;0.05 &nbsp;&middot;&nbsp; * p&lt;0.10 &nbsp;&middot;&nbsp; n.s. no significativo</p>
+
+      <!-- Regresión logística (solo si target binario) -->
+      <div id="qb-logit-wrap" style="display:none">
+        <p class="qb-subtitle" style="margin-top:14px">Regresión Logística (recomendada para 0/1)</p>
+        <div id="qb-logit-content"></div>
+      </div>
 
       <!-- Real vs Predicho -->
       <p style="font-size:11px;font-weight:bold;margin:10px 0 4px">Real vs. Predicho:</p>
