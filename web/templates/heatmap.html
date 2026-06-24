@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay · Mapa de calor</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
+    <nav class="mainnav">
+      <a href="{{ url_for('dashboard') }}">Puerto</a><span class="sep">·</span>
+      <a href="{{ url_for('reports') }}">Bitácoras</a><span class="sep">·</span>
+      <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
+      <a href="{{ url_for('heatmap') }}">Calor</a><span class="sep">·</span>
+      <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
+      {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a><span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}
+    </nav>
+  </header>
+
+  <p class="catalog-title">— Mapa de calor · Variación diaria —</p>
+
+  <div class="heatmap" id="heatmap">
+    {% for t in tickers %}
+    <div class="heat-tile load" id="ht-{{ loop.index }}" data-sym="{{ t }}">
+      <div class="ht-sym">{{ nombres.get(t, t) }}</div>
+      <div class="ht-chg">···</div>
+      <div class="ht-trend"></div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <p class="colophon">Variación diaria y tendencia técnica. Análisis educativo, no asesoramiento financiero.</p>
+</div>
+
+<script>
+const tiles=document.querySelectorAll(".heat-tile");
+
+async function loadTile(tile){
+  const sym=tile.dataset.sym;
+  try{
+    const d=await (await fetch("/api/lookup?ticker="+encodeURIComponent(sym))).json();
+    if(!d.ok){ tile.classList.add("heat-err"); return; }
+    const s=d.snapshot, chg=s.variacion_pct["1d"], trend=s.tendencia;
+    tile.querySelector(".ht-sym").textContent=d.nombre||sym;
+    tile.querySelector(".ht-chg").textContent=(chg>=0?"+":"")+chg+"%";
+    tile.querySelector(".ht-trend").textContent=trend;
+    tile.classList.remove("load");
+    if(trend.includes("alcista"))  tile.classList.add("heat-up");
+    else if(trend.includes("bajista")) tile.classList.add("heat-down");
+    else tile.classList.add("heat-flat");
+    tile.style.cursor="pointer";
+    tile.title=sym;
+    tile.onclick=()=>{ window.location="{{ url_for('dashboard') }}?sym="+encodeURIComponent(sym); };
+  }catch(e){ tile.classList.add("heat-err"); }
+}
+
+tiles.forEach((t,i)=>setTimeout(()=>loadTile(t), i*200));
+</script>
+</body>
+</html>
