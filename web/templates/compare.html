@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay · Comparar activos</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="wrap" style="max-width:1020px">
+  <header class="masthead">
+    <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
+    <nav class="mainnav">
+      <a href="{{ url_for('dashboard') }}">Puerto</a><span class="sep">·</span>
+      <a href="{{ url_for('reports') }}">Bitácoras</a><span class="sep">·</span>
+      <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
+      <a href="{{ url_for('heatmap') }}">Calor</a><span class="sep">·</span>
+      <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
+      {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a><span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}
+    </nav>
+  </header>
+
+  <form class="compare-form" method="get" action="{{ url_for('compare_view') }}">
+    <span class="prompt">&gt;</span>
+    <input class="compare-input" name="a" value="{{ a }}" placeholder="Símbolo A (AAPL)" autocomplete="off">
+    <span class="compare-vs">vs</span>
+    <input class="compare-input" name="b" value="{{ b }}" placeholder="Símbolo B (MSFT)" autocomplete="off">
+    <button type="submit" class="btn-retro">Comparar</button>
+  </form>
+
+  <div class="compare-grid" id="cmp-grid">
+    {% if not a and not b %}
+    <p class="muted" style="text-align:center;margin:30px 16px;grid-column:1/-1">
+      Ingresá dos símbolos para comparar sus indicadores técnicos lado a lado.
+    </p>
+    {% endif %}
+    <div class="compare-col" id="col-a"></div>
+    <div class="compare-col" id="col-b"></div>
+  </div>
+
+  <p class="colophon">Comparación educativa. No constituye asesoramiento financiero.</p>
+</div>
+
+<script>
+const A = {{ a|tojson }};
+const B = {{ b|tojson }};
+
+function esc(s){ return String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function ledgerHtml(s){
+  const v=s.variacion_pct;
+  const rows=[
+    ["Precio", s.precio],
+    ["Var 1d / 20d", `${v["1d"]}% · ${v["20d"]}%`],
+    ["RSI (14)", s.RSI14],
+    ["MACD histograma", s.MACD.histograma],
+    ["Estocástico %K / %D", `${s.estocastico.K} / ${s.estocastico.D}`],
+    ["OBV", s.OBV_tendencia],
+    ["Ichimoku nube", s.ichimoku.precio_vs_nube],
+    ["Volatilidad ATR", `${s.ATR14} (${s.ATR_pct_precio}%)`],
+    ["EMA 50 / 200", `${s.medias.EMA50} / ${s.medias.EMA200}`],
+    ["Soporte / Resistencia", `${s.soporte_20} / ${s.resistencia_20}`],
+    ["Volumen relativo", `${s.volumen_relativo_vs_media20}×`],
+    ["Fibonacci 38.2% / 61.8%", `${s.fibonacci.levels["0.382"]} / ${s.fibonacci.levels["0.618"]}`],
+  ];
+  return `<table class="ledger"><thead><tr><th>Indicador</th><th>Lectura</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr><td>${r[0]}</td><td>${esc(String(r[1]??'—'))}</td></tr>`).join("")}</tbody></table>`;
+}
+
+function colHtml(d, suffix){
+  const s=d.snapshot, v=s.variacion_pct, chg=v["1d"];
+  return `
+    <div class="result-head">
+      <h2>${esc(d.nombre||d.ticker)}</h2>
+      <div class="sub">${esc(d.ticker)}</div>
+      <div class="result-price">${s.precio} <span class="chg ${chg>=0?'up':'down'}">${chg>=0?'+':''}${chg}%</span></div>
+      <div class="trend">${s.tendencia}</div>
+    </div>
+    <div class="cmp-chart" id="cmp-adv-${suffix}"></div>
+    ${ledgerHtml(s)}`;
+}
+
+function mountChart(id, sym, iv){
+  const el=document.getElementById(id); if(!el) return;
+  const c=document.createElement("div"); c.className="tradingview-widget-container"; c.style.height="100%";
+  const w=document.createElement("div"); w.className="tradingview-widget-container__widget"; w.style.height="100%";
+  c.appendChild(w);
+  const sc=document.createElement("script"); sc.type="text/javascript"; sc.async=true;
+  sc.src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+  sc.innerHTML=JSON.stringify({symbol:sym,interval:iv||"D",timezone:"Etc/UTC",theme:"light",
+    style:"2",locale:"es",allow_symbol_change:false,hide_side_toolbar:true,autosize:true});
+  c.appendChild(sc); el.innerHTML=""; el.appendChild(c);
+}
+
+async function loadCol(sym, colId, suffix){
+  if(!sym) return;
+  const col=document.getElementById(colId);
+  col.innerHTML=`<p class="muted" style="padding:20px;text-align:center">Cargando ${esc(sym)}…</p>`;
+  try{
+    const d=await (await fetch("/api/lookup?ticker="+encodeURIComponent(sym))).json();
+    if(!d.ok){ col.innerHTML=`<p class="err" style="padding:14px">⚠ ${esc(d.error||"Error: "+sym)}</p>`; return; }
+    col.innerHTML=colHtml(d, suffix);
+    mountChart("cmp-adv-"+suffix, d.tv, d.tv_interval||"D");
+  }catch(e){
+    col.innerHTML=`<p class="err" style="padding:14px">⚠ Error de red</p>`;
+  }
+}
+
+if(A) loadCol(A, "col-a", "a");
+if(B) loadCol(B, "col-b", "b");
+</script>
+</body>
+</html>
