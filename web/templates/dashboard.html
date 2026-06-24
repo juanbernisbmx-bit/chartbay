@@ -39,6 +39,8 @@
       <nav class="mainnav">
         <a href="#catalogo">Mercados</a><span class="sep">·</span>
         <a href="{{ url_for('reports') }}">Bitácoras</a><span class="sep">·</span>
+        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
+        <a href="{{ url_for('heatmap') }}">Calor</a><span class="sep">·</span>
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
         {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a><span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}
       </nav>
@@ -50,6 +52,12 @@
         <input id="q" type="text" placeholder="scan AAPL · TSLA · BTC-USD · ^GSPC">
         <button type="submit">Trazar carta</button>
       </form>
+      <div class="tf-bar">
+        <span class="tf-lbl">Marco:</span>
+        <button class="tf-btn active" data-iv="1d">Diario</button>
+        <button class="tf-btn" data-iv="1wk">Semanal</button>
+        <button class="tf-btn" data-iv="1h">1 hora</button>
+      </div>
       <div class="status"><span id="statusTxt"></span><span class="cursor">▮</span></div>
       <span id="sstatus" class="sstatus muted"></span>
     </section>
@@ -76,6 +84,8 @@
 
   <script>
     const NAMES = {{ nombres|tojson }};
+    let currentInterval = "1d";
+    let currentSym = null, currentLabel = null;
     const DEFAULT_MARKETS = [
       { name:"Bitcoin",  sym:"BTC-USD",  kind:"Criptomoneda" },
       { name:"Nasdaq",   sym:"^IXIC",    kind:"Índice" },
@@ -188,13 +198,13 @@
       document.getElementById("addSym").value=""; document.getElementById("addName").value="";
     }
 
-    function mountAdvanced(el, sym){
+    function mountAdvanced(el, sym, iv){
       const c=document.createElement("div"); c.className="tradingview-widget-container"; c.style.height="100%";
       const w=document.createElement("div"); w.className="tradingview-widget-container__widget"; w.style.height="100%";
       c.appendChild(w);
       const s=document.createElement("script"); s.type="text/javascript"; s.async=true;
       s.src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
-      s.innerHTML=JSON.stringify({ symbol:sym, interval:"D", timezone:"Etc/UTC", theme:"light",
+      s.innerHTML=JSON.stringify({ symbol:sym, interval:iv||"D", timezone:"Etc/UTC", theme:"light",
         style:"2", locale:"es", allow_symbol_change:true, hide_side_toolbar:true, autosize:true });
       c.appendChild(s); el.innerHTML=""; el.appendChild(c);
     }
@@ -213,6 +223,10 @@
         ["Soporte (20 sesiones)", s.soporte_20],
         ["Resistencia (20 sesiones)", s.resistencia_20],
         ["Volumen vs. media 20", s.volumen_relativo_vs_media20+"×"],
+        ["Estocástico %K / %D", `${s.estocastico.K} / ${s.estocastico.D}`],
+        ["OBV", s.OBV_tendencia],
+        ["Ichimoku nube", s.ichimoku.precio_vs_nube],
+        ["Fibonacci 38.2% / 61.8%", `${s.fibonacci.levels["0.382"]} / ${s.fibonacci.levels["0.618"]}`],
       ];
       return `
         <div class="result-head">
@@ -229,6 +243,7 @@
     }
 
     async function loadSymbol(sym, label){
+      currentSym = sym; currentLabel = label;
       const res=document.getElementById("result");
       res.innerHTML=`
         <div class="terminal">
@@ -241,21 +256,42 @@
       await typeLine(log, `chartbay@puerto:~$ scan ${(label||sym)}`, null, 12);
       await typeLine(log, "[+] estableciendo enlace con el feed de mercado...");
       let d;
-      try{ d=await (await fetch("/api/lookup?ticker="+encodeURIComponent(sym))).json(); }
+      try{ d=await (await fetch("/api/lookup?ticker="+encodeURIComponent(sym)+"&interval="+currentInterval)).json(); }
       catch(e){ await typeLine(log,"[!] error de red", "bad"); return; }
       if(!d.ok){ await typeLine(log,`[!] simbolo no encontrado: ${sym}`, "bad");
         await typeLine(log,"[!] abortando.", "bad"); return; }
       const s=d.snapshot; d._label=label;
       trendCache[d.ticker]=s.tendencia;
-      await typeLine(log, "[+] descargando OHLCV (1 anio · diario) ........ OK", "ok");
+      const ivLabel=currentInterval==="1wk"?"semanal":currentInterval==="1h"?"intradía 1h":"diario";
+      await typeLine(log, `[+] descargando OHLCV (${ivLabel}) ............. OK`, "ok");
       await typeLine(log, "[+] calculando RSI · MACD · ATR · EMA50/200 .... OK", "ok");
       await typeLine(log, `[+] tendencia detectada: ${s.tendencia.toUpperCase()}`);
       await typeLine(log, `[+] precio ${s.precio} · rsi ${s.RSI14} · atr ${s.ATR_pct_precio}%`);
       await typeLine(log, "[+] trazando carta de TradingView .............. OK", "ok");
       await typeLine(log, "[*] analisis listo — desplegando carta.", "ok");
-      document.getElementById("payload").innerHTML = payloadHtml(d, s);
-      mountAdvanced(document.getElementById("adv"), d.tv);
+      document.getElementById("payload").innerHTML = payloadHtml(d, s)+'<div id="news-box" class="news-section"></div>';
+      mountAdvanced(document.getElementById("adv"), d.tv, d.tv_interval||"D");
       document.getElementById("vone").onclick=()=>verdictOne(d.ticker);
+      loadNews(d.ticker);
+    }
+
+    async function loadNews(t){
+      const box=document.getElementById("news-box"); if(!box) return;
+      try{
+        const nd=await (await fetch("/api/news?ticker="+encodeURIComponent(t))).json();
+        if(!nd.ok||!nd.news||!nd.news.length) return;
+        box.innerHTML='<p class="catalog-title" style="margin-top:18px">— Últimas noticias —</p>'
+          +'<ul class="news-list">'
+          +nd.news.map(n=>{
+            let ds="";
+            if(n.date){
+              try{ const dd=new Date(typeof n.date==="number"?n.date*1000:n.date);
+                ds=" · "+dd.toLocaleDateString("es-AR",{day:"2-digit",month:"short"}); }catch(e){}
+            }
+            return `<li><a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.title)}</a>`
+              +`<span class="news-meta"> · ${esc(n.publisher||"")}${ds}</span></li>`;
+          }).join("")+'</ul>';
+      }catch(e){}
     }
 
     async function verdictOne(t){
@@ -283,9 +319,18 @@
     document.getElementById("resetCat").addEventListener("click", e=>{
       e.preventDefault(); MERCADOS=DEFAULT_MARKETS.slice(); saveMarkets(); document.getElementById("addMsg").textContent=""; renderCatalog();
     });
+    document.querySelectorAll(".tf-btn").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        document.querySelectorAll(".tf-btn").forEach(b=>b.classList.remove("active"));
+        btn.classList.add("active");
+        currentInterval=btn.dataset.iv;
+        if(currentSym) loadSymbol(currentSym, currentLabel||"");
+      });
+    });
 
     renderCatalog();
     boot().then(landingFx);
+    { const s=new URLSearchParams(location.search).get("sym"); if(s) loadSymbol(s.toUpperCase(),""); }
   </script>
 </body>
 </html>
