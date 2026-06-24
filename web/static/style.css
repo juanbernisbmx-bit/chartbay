@@ -20,6 +20,10 @@ a:hover{color:#cc3300}
   text-transform:uppercase;letter-spacing:.08em;padding:5px 16px;
   border-bottom:2px solid #b8860b;font-family:Verdana,Arial,sans-serif}
 
+/* aviso alfa en secciones de bots */
+.alfa-warn{background:#fffbe6;border:1px solid #b8860b;margin:10px 16px 0;padding:8px 12px;
+  font-size:11px;line-height:1.55;color:#5c4500;font-family:Verdana,Arial,sans-serif}
+
 /* contenedor central con marco fino, como sitio viejo */
 .wrap{max-width:800px;margin:14px auto;background:#fff;border:1px solid #b9b9b9;
   padding:0 0 28px}
