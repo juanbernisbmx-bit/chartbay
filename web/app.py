@@ -85,6 +85,14 @@ def _safe_name(ticker: str) -> str:
     return re.sub(r"[^A-Z0-9]", "_", ticker.upper())
 
 
+# interval -> (yf_interval, yf_period, tv_interval)
+ALLOWED_INTERVALS = {
+    "1d":  ("1d",  "1y",  "D"),
+    "1wk": ("1wk", "5y",  "W"),
+    "1h":  ("1h",  "60d", "60"),
+}
+
+
 def bump_visits() -> int:
     fp = CACHE_DIR / "visits.txt"
     try:
@@ -324,18 +332,51 @@ def api_lookup():
     t = sanitize_ticker(request.args.get("ticker", ""))
     if not t:
         return jsonify({"ok": False, "error": "símbolo inválido"}), 400
-    return _snapshot_response(t)
+    iv_key = request.args.get("interval", "1d")
+    if iv_key not in ALLOWED_INTERVALS:
+        iv_key = "1d"
+    interval, period, tv_interval = ALLOWED_INTERVALS[iv_key]
+    return _snapshot_response(t, interval, period, tv_interval)
 
 
-def _snapshot_response(t: str):
+def _snapshot_response(t: str, interval: str = "1d", period: str = "1y", tv_interval: str = "D"):
     try:
-        df = data.descargar(t, config.INTERVAL, config.PERIOD)
+        df = data.descargar(t, interval, period)
         snap = indicators.construir_snapshot(df)
         nombre = getattr(config, "NOMBRES", {}).get(t, t)
         return jsonify({"ok": True, "ticker": t, "nombre": nombre,
-                        "tv": to_tradingview(t), "snapshot": snap})
+                        "tv": to_tradingview(t), "tv_interval": tv_interval, "snapshot": snap})
     except Exception as e:
         return jsonify({"ok": False, "ticker": t, "error": str(e)})
+
+
+@app.route("/api/news")
+def api_news():
+    t = sanitize_ticker(request.args.get("ticker", ""))
+    if not t:
+        return jsonify({"ok": False, "error": "símbolo inválido"}), 400
+    try:
+        import yfinance as yf
+        raw = yf.Ticker(t).news or []
+        articles = []
+        for item in raw[:5]:
+            ct = item.get("content", {})
+            if ct:
+                title = ct.get("title", "")
+                publisher = ct.get("provider", {}).get("displayName", "")
+                url = ct.get("canonicalUrl", {}).get("url", "")
+                pub_date = ct.get("pubDate", "")
+            else:
+                title = item.get("title", "")
+                publisher = item.get("publisher", "")
+                url = item.get("link", "")
+                pub_date = item.get("providerPublishTime", "")
+            if title and url:
+                articles.append({"title": title, "publisher": publisher,
+                                  "url": url, "date": pub_date})
+        return jsonify({"ok": True, "ticker": t, "news": articles})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 
 @app.route("/api/verdict_one", methods=["POST"])
@@ -399,6 +440,20 @@ def api_verdict_get():
     if cache_fp.exists():
         return jsonify(json.loads(cache_fp.read_text(encoding="utf-8")))
     return jsonify({"veredictos": {}, "fecha": today})
+
+
+@app.route("/compare")
+def compare_view():
+    a = sanitize_ticker(request.args.get("a", ""))
+    b = sanitize_ticker(request.args.get("b", ""))
+    return render_template("compare.html", a=a, b=b)
+
+
+@app.route("/heatmap")
+def heatmap():
+    return render_template("heatmap.html",
+                           tickers=config.TICKERS,
+                           nombres=getattr(config, "NOMBRES", {}))
 
 
 if __name__ == "__main__":
