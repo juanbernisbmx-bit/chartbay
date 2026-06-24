@@ -24,7 +24,7 @@
       </nav>
     </header>
 
-    <p class="catalog-title">— Quant Bay · Regresión OLS —</p>
+    <p class="catalog-title">— Quant Bay · Econometría en el navegador —</p>
 
     <div id="qb-error" style="display:none;background:#fff0f0;border:1px solid #e8a8a8;padding:8px 12px;margin:8px 16px;color:#b00000;font-size:12px;font-family:Verdana,Arial,sans-serif"></div>
 
@@ -65,32 +65,63 @@
     <div class="qb-section" id="qb-results" style="display:none">
       <p class="qb-subtitle">④ Resultados</p>
 
+      <!-- Ecuación -->
       <p style="font-size:11px;font-weight:bold;margin:8px 0 3px">Ecuación estimada:</p>
       <div class="qb-eq" id="qb-equation"></div>
 
+      <!-- Coeficientes y estadísticos del modelo -->
       <div class="qb-results-grid">
         <div>
-          <p style="font-size:11px;font-weight:bold;margin:0 0 4px">Coeficientes:</p>
-          <table class="ledger">
-            <thead><tr><th>Variable</th><th>Coeficiente</th></tr></thead>
-            <tbody id="qb-coef-body"></tbody>
-          </table>
+          <p style="font-size:11px;font-weight:bold;margin:0 0 4px">Coeficientes y significancia:</p>
+          <div class="qb-table-scroll">
+            <table class="ledger">
+              <thead><tr><th>Variable</th><th>Coef.</th><th>Err. Est.</th><th>t-stat</th><th>p-valor</th><th>Signif.</th></tr></thead>
+              <tbody id="qb-coef-body"></tbody>
+            </table>
+          </div>
         </div>
         <div>
-          <p style="font-size:11px;font-weight:bold;margin:0 0 4px">Estadísticos:</p>
+          <p style="font-size:11px;font-weight:bold;margin:0 0 4px">Estadísticos del modelo:</p>
           <table class="ledger">
             <thead><tr><th>Indicador</th><th>Valor</th></tr></thead>
             <tbody id="qb-stats-body"></tbody>
           </table>
         </div>
       </div>
+      <p class="qb-sig-legend">*** p&lt;0.01 &nbsp;&middot;&nbsp; ** p&lt;0.05 &nbsp;&middot;&nbsp; * p&lt;0.10 &nbsp;&middot;&nbsp; n.s. no significativo</p>
 
+      <!-- Real vs Predicho -->
       <p style="font-size:11px;font-weight:bold;margin:10px 0 4px">Real vs. Predicho:</p>
       <canvas id="qb-chart" class="qb-chart"></canvas>
 
+      <!-- Correlación -->
+      <p class="qb-subtitle" style="margin-top:18px">Análisis de correlación</p>
+      <div class="qb-table-scroll" id="qb-corr-wrap"></div>
+      <div class="qb-interp" id="qb-corr-interp" style="display:none;margin-top:6px"></div>
+
+      <!-- VIF -->
+      <p class="qb-subtitle" style="margin-top:18px">Multicolinealidad (VIF)</p>
+      <div class="qb-table-scroll" id="qb-vif-wrap"></div>
+      <div id="qb-vif-warn"></div>
+
+      <!-- Diagnósticos de residuos -->
+      <p class="qb-subtitle" style="margin-top:18px">Diagnósticos del modelo</p>
+      <div class="qb-results-grid">
+        <div><canvas id="qb-resid-fitted" class="qb-chart" style="max-height:240px"></canvas></div>
+        <div><canvas id="qb-resid-hist" class="qb-chart" style="max-height:240px"></canvas></div>
+      </div>
+      <div id="qb-resid-stats" class="qb-resid-stats"></div>
+
+      <!-- Interpretación -->
       <p style="font-size:11px;font-weight:bold;margin:10px 0 4px">Interpretación:</p>
       <div class="qb-interp" id="qb-interpretation"></div>
 
+      <!-- Exportar PDF -->
+      <div style="margin:14px 0 4px">
+        <button class="btn-ink" id="qb-export-pdf">&gt; exportar informe PDF</button>
+      </div>
+
+      <!-- Tabla detallada -->
       <details style="margin:10px 0">
         <summary style="font-size:11px;cursor:pointer;color:#1b3a6b;font-weight:bold;user-select:none">▶ Tabla de predicciones y residuos</summary>
         <div id="qb-pred-table" style="overflow-x:auto;margin-top:6px"></div>
@@ -102,6 +133,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="{{ url_for('static', filename='js/quantbay.bundle.js') }}"></script>
 </body>
 </html>

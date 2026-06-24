@@ -339,3 +339,38 @@ code{font-family:"Courier New",monospace;background:#f0f0f0;padding:1px 4px;font
 .qb-interp{background:#fffbe6;border:1px solid #b8860b;padding:10px 14px;
   font-size:11px;line-height:1.75;white-space:pre-wrap;margin:4px 0 10px;color:#5c4500;
   font-family:Verdana,Arial,sans-serif}
+
+/* Significance badges */
+.sig-badge{display:inline-block;font-size:10px;padding:1px 5px;border-radius:2px;font-weight:bold;
+  font-family:Verdana,Arial,sans-serif;white-space:nowrap}
+.sig-h{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
+.sig-m{background:#d1e7dd;color:#0f5132;border:1px solid #badbcc}
+.sig-l{background:#fff3cd;color:#856404;border:1px solid #ffecb5}
+.sig-n{background:#f8f9fa;color:#6c757d;border:1px solid #dee2e6}
+.qb-sig-legend{font-size:10px;color:#777;margin:2px 0 8px;font-family:Verdana,Arial,sans-serif}
+
+/* Correlation matrix */
+.qb-corr-table td,.qb-corr-table th{font-size:11px;padding:4px 7px;text-align:center;
+  min-width:54px;white-space:nowrap}
+.qb-corr-table thead th{background:#e8eaf0;color:#1b3a6b;font-weight:bold}
+.qb-corr-table tbody th{background:#f0f4ff;color:#1b3a6b;font-weight:bold;text-align:left}
+.corr-diag{background:#e8eaf6;font-weight:bold;color:#1b3a6b}
+.corr-sp{background:#c8e6c9;color:#1b5e20}
+.corr-sn{background:#ffcdd2;color:#b71c1c}
+.corr-mp{background:#e8f5e9;color:#2e7d32}
+.corr-mn{background:#fce4ec;color:#880e4f}
+.corr-w{background:#fafafa;color:#444}
+
+/* VIF state badges */
+.qb-vif-ok{color:#155724;font-weight:bold}
+.qb-vif-med{color:#856404;font-weight:bold}
+.qb-vif-high{color:#842029;font-weight:bold}
+
+/* Warning block */
+.qb-warn{background:#fff3cd;border:1px solid #ffecb5;padding:8px 12px;margin:6px 0;
+  font-size:11px;font-family:Verdana,Arial,sans-serif}
+.qb-warn p{margin:2px 0;color:#664d03}
+
+/* Residual diagnostics */
+.qb-resid-stats{font-size:11px;font-family:Verdana,Arial,sans-serif;color:#333;margin:4px 0 10px}
+.qb-resid-stat-line{margin:3px 0}
