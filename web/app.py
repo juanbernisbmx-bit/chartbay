@@ -12,9 +12,12 @@ import os
 import re
 import sqlite3
 import sys
+import time
+from collections import defaultdict
 from datetime import date, datetime
 from functools import wraps
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from flask import (
@@ -32,6 +35,7 @@ import config           # noqa: E402
 import data             # noqa: E402
 import indicators       # noqa: E402
 import db               # noqa: E402
+from seed_data import BOTS_BASE  # noqa: E402
 
 CACHE_DIR = Path(__file__).resolve().parent / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
@@ -39,6 +43,10 @@ REPORTS_DIR = ROOT / config.OUTPUT_DIR
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-inseguro-cambiar")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
 
 APP_USERNAME = os.environ.get("APP_USERNAME", "juan")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "cambia-esta-clave")
@@ -46,43 +54,17 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD", "cambia-esta-clave")
 REGISTRATION_OPEN = False  # cambiar a True para reabrir el registro
 
 
-# ----------------------------- arranque BD -----------------------------
+# ─── Seguridad: headers de respuesta ────────────────────────────────────────
 
-BOTS_BASE = [
-    {
-        "name": "AlgoBot v4.31 — BTC Tendencia",
-        "market": "Cripto (BTC/USD)",
-        "timeframe": "H4 (swing)",
-        "description": "Bot de tendencia multiestrategia para Bitcoin en 4 horas. Modo AUTO que elige estrategia segun el regimen de mercado (ADX): sigue tendencia con EMA o opera rangos con RSI. Sin grid ni martingala; siempre con stop real.",
-        "rules": "Estrategias: AUTO / EMA crossover / RSI mean-reversion / MACD / Donchian / UT Bot. Regimen por ADX (alto=tendencia, bajo=rango). SL/TP fijo o por multiplos de ATR. Riesgo 1% por trade, breakeven, maxima perdida diaria 5%, filtro de spread.",
-        "backtest": "Defaults validados en backtest 2022-2026 y simulacion out-of-sample 2017-2021. Aun asi: modelo base, testealo en demo."
-    },
-    {
-        "name": "AlgoBot Scalper M5 — Breakout/ORB",
-        "market": "Indices (NAS100)",
-        "timeframe": "M5 (intradia)",
-        "description": "Scalper experimental de ruptura intradia para Nasdaq. Detecta consolidaciones estrechas y entra en la ruptura, o usa Opening Range Breakout (rango de apertura de sesion). Muy sensible a costos.",
-        "rules": "Ruptura de rango (o ORB) + filtro de tendencia EMA50, filtro de regimen por exponente de Hurst (solo opera si H>0.55, mercado tendencial), horario de sesion USA y spread maximo. SL 1.5xATR, TP 2xATR, breakeven, salida por tiempo, corte de perdida diaria 3%.",
-        "backtest": "Sin validar — proyecto de aprendizaje. El backtest DEBE correrse con spread y comision reales o no vale."
-    },
-    {
-        "name": "Aggressive Grid Scalper — Cripto/Forex",
-        "market": "Cripto / Forex",
-        "timeframe": "M1 (scalping)",
-        "description": "Grid agresivo + scalping de alta frecuencia. Abre niveles en grilla con filtro de direccion por EMA y RSI, y regimen por ADX. ALTO RIESGO: un grid sin stop se rompe en tendencias fuertes.",
-        "rules": "Grid con espaciado por ATR (paso = ATRx0.5), TP por nivel, filtro EMA9/EMA21 + RSI7 (sobrecompra 70 / sobreventa 30), regimen ADX (umbral 25). Sin martingala (multiplicador 1.0), max 20 posiciones, corte por equity y perdida diaria. Pensado para cuenta DEMO.",
-        "backtest": "Sin testear — modelo base de alto riesgo. Solo demo + Strategy Tester."
-    },
-    {
-        "name": "Aggressive Grid Scalper — Nasdaq",
-        "market": "Indices (NAS100)",
-        "timeframe": "M1 (scalping)",
-        "description": "Variante del grid scalper agresivo afinada para Nasdaq, con gestion de riesgo extra (stop por equity, perdida diaria, trailing opcional). Mismo motor de grilla + scalping. ALTO RIESGO.",
-        "rules": "Grid por ATR + filtro EMA9/21 y RSI7, regimen ADX. Lote fijo o por % de riesgo. Cierra todo si la perdida flotante supera 20% del balance; limite de perdida diaria 10%; trailing opcional. Sin martingala. Pensado para DEMO.",
-        "backtest": "Sin testear — modelo base de alto riesgo. Solo demo + Strategy Tester."
-    },
-]
+@app.after_request
+def add_security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return response
 
+
+# ─── Arranque BD ─────────────────────────────────────────────────────────────
 
 def seed_owner():
     conn = db.get_conn()
@@ -135,7 +117,7 @@ def inject_globals():
     return {"registration_open": REGISTRATION_OPEN}
 
 
-# ----------------------------- helpers -----------------------------
+# ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def sanitize_ticker(raw: str) -> str:
     t = (raw or "").strip().upper()
@@ -157,6 +139,14 @@ def to_tradingview(ticker: str) -> str:
 
 def _safe_name(ticker: str) -> str:
     return re.sub(r"[^A-Z0-9]", "_", ticker.upper())
+
+
+def _safe_redirect(url: str) -> str:
+    """Devuelve url solo si es una ruta relativa que empieza con /. Previene open redirect."""
+    parsed = urlparse(url or "")
+    if url and url.startswith("/") and not parsed.netloc and not parsed.scheme:
+        return url
+    return "/"
 
 
 # interval -> (yf_interval, yf_period, tv_interval)
@@ -181,7 +171,25 @@ def bump_visits() -> int:
     return n
 
 
-# ----------------------------- auth -----------------------------
+# ─── Auth ────────────────────────────────────────────────────────────────────
+
+# Rate limiting de login: max 5 intentos por IP en 60 segundos.
+# Funciona por proceso (suficiente para gunicorn con 1 worker en Render free).
+_LOGIN_WINDOW = 60
+_LOGIN_MAX = 5
+_login_attempts: dict = defaultdict(list)
+
+
+def _check_login_rate(ip: str) -> bool:
+    """Retorna True si el IP puede intentar login; False si superó el límite."""
+    now = time.time()
+    attempts = _login_attempts[ip]
+    attempts[:] = [t for t in attempts if now - t < _LOGIN_WINDOW]
+    if len(attempts) >= _LOGIN_MAX:
+        return False
+    attempts.append(now)
+    return True
+
 
 def login_required(f):
     @wraps(f)
@@ -198,16 +206,20 @@ def login_required(f):
 def login():
     error = None
     if request.method == "POST":
-        u = request.form.get("username", "").strip()
-        p = request.form.get("password", "")
-        conn = db.get_conn()
-        row = conn.execute("SELECT * FROM users WHERE username=?", (u,)).fetchone()
-        conn.close()
-        if row and check_password_hash(row["password_hash"], p):
-            session["user"] = row["username"]
-            session["uid"] = row["id"]
-            return redirect(request.args.get("next") or url_for("dashboard"))
-        error = "Usuario o contraseña incorrectos."
+        ip = request.remote_addr or "unknown"
+        if not _check_login_rate(ip):
+            error = "Demasiados intentos. Esperá un minuto antes de volver a intentar."
+        else:
+            u = request.form.get("username", "").strip()
+            p = request.form.get("password", "")
+            conn = db.get_conn()
+            row = conn.execute("SELECT * FROM users WHERE username=?", (u,)).fetchone()
+            conn.close()
+            if row and check_password_hash(row["password_hash"], p):
+                session["user"] = row["username"]
+                session["uid"] = row["id"]
+                return redirect(_safe_redirect(request.args.get("next", "")))
+            error = "Usuario o contraseña incorrectos."
     return render_template("login.html", error=error)
 
 
@@ -248,7 +260,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-# --------------------------- herramienta ---------------------------
+# ─── Herramienta ─────────────────────────────────────────────────────────────
 
 @app.route("/")
 def dashboard():
@@ -281,7 +293,7 @@ def report_view(name):
     return render_template("report.html", name=name, content=fp.read_text(encoding="utf-8"))
 
 
-# --------------------------- comunidad ---------------------------
+# ─── Comunidad ───────────────────────────────────────────────────────────────
 
 @app.route("/community")
 def community():
@@ -393,7 +405,7 @@ def bot_review(bot_id):
     return redirect(url_for("bot_detail", bot_id=bot_id))
 
 
-# --------------------------- API análisis ---------------------------
+# ─── API análisis ────────────────────────────────────────────────────────────
 
 @app.route("/api/snapshot")
 def api_snapshot():

@@ -20,6 +20,8 @@ def init_db():
     conn = get_conn()
     conn.executescript(
         """
+        PRAGMA journal_mode=WAL;
+
         CREATE TABLE IF NOT EXISTS users(
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             username      TEXT UNIQUE NOT NULL,
@@ -48,6 +50,10 @@ def init_db():
             FOREIGN KEY(bot_id)  REFERENCES bots(id),
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
+
+        CREATE INDEX IF NOT EXISTS idx_bots_user    ON bots(user_id);
+        CREATE INDEX IF NOT EXISTS idx_reviews_bot  ON reviews(bot_id);
+        CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id);
         """
     )
     conn.commit()
