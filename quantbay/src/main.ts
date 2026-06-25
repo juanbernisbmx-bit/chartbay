@@ -6,6 +6,7 @@ import {
   type LeakageSignal,
   type LogisticResult,
 } from './services/analysisService';
+import { autoRepairAndAnalyze, type AutoRepairResult } from './services/autoRepair';
 import {
   correlationClass,
   escapeHtml,
@@ -733,11 +734,105 @@ function exportPDF(): void {
   doc.save('quantbay_regresion.pdf');
 }
 
+// ── Auto-repair log ───────────────────────────────────────────────────────────
+
+const REASON_LABEL: Record<string, string> = {
+  perfect_collinearity: 'COLINEALIDAD PERFECTA',
+  singular_matrix:      'MATRIZ SINGULAR',
+  high_vif:             'VIF ELEVADO',
+  insufficient_obs:     'OBS. INSUFICIENTES',
+};
+
+function renderRepairLog(result: AutoRepairResult): void {
+  const el = $('qb-repair-log');
+  if (!el) return;
+
+  if (!result.repaired) {
+    el.innerHTML = '';
+    el.style.display = 'none';
+    return;
+  }
+
+  const removed = result.actions.map(a => `<code>${escapeHtml(a.removed)}</code>`).join(', ');
+  const kept    = result.finalXNames.map(n => `<code>${escapeHtml(n)}</code>`).join(', ');
+
+  const steps = result.actions.map((a, i) => {
+    const valStr = a.valueBefore !== undefined
+      ? ` — valor detectado: <strong>${isFinite(a.valueBefore) ? a.valueBefore.toFixed(3) : '>999'}</strong>`
+      : '';
+    return `
+      <div class="qb-repair-step">
+        <span class="qb-repair-badge qb-repair-${a.reason}">${REASON_LABEL[a.reason] ?? a.reason}</span>
+        <div class="qb-repair-body">
+          <strong>Paso ${i + 1}:</strong> eliminada <code>${escapeHtml(a.removed)}</code>${valStr}<br>
+          <span class="muted">${escapeHtml(a.detail)}</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="qb-repair-log">
+      <div class="qb-panel-head">
+        <p class="qb-subtitle">Auto-repair log</p>
+        <span>MODEL DOCTOR · ${result.actions.length} FIX${result.actions.length !== 1 ? 'ES' : ''}</span>
+      </div>
+      <p class="qb-repair-summary">
+        Se detectaron <strong>${result.actions.length}</strong> problema(s) y se corrigieron automáticamente.<br>
+        Variables originales: ${result.originalXNames.map(n => `<code>${escapeHtml(n)}</code>`).join(', ')}<br>
+        Variables eliminadas: ${removed}<br>
+        Modelo final con: ${kept}
+      </p>
+      <div class="qb-repair-steps">${steps}</div>
+    </div>`;
+  el.style.display = '';
+}
+
+// ── Auto-run handler ──────────────────────────────────────────────────────────
+
+function onAutoRun(): void {
+  if (!csvData) return;
+  showError('');
+
+  const yName  = ($('qb-y') as HTMLSelectElement)?.value ?? '';
+  const xNames = Array.from(document.querySelectorAll<HTMLInputElement>('.qb-x-cb:checked'))
+    .map(cb => cb.value)
+    .filter(v => v !== yName);
+
+  if (xNames.length === 0) {
+    showError('Seleccioná al menos una variable X distinta de Y.');
+    return;
+  }
+
+  try {
+    const analysis = autoRepairAndAnalyze(csvData, yName, xNames);
+
+    lastResult    = analysis.result;
+    lastCorr      = analysis.corrMatrix;
+    lastCorrCols  = analysis.corrColumns;
+    lastVIF       = analysis.vifValues;
+
+    renderRepairLog(analysis);
+    renderResults(
+      analysis.result,
+      analysis.dropped,
+      analysis.corrMatrix,
+      analysis.corrColumns,
+      analysis.vifValues
+    );
+
+    const res = $('qb-results');
+    if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
+  } catch (err) {
+    showError(`Error en el análisis automático: ${(err as Error).message}`);
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 function init(): void {
   $('qb-file')?.addEventListener('change', onFileChange as EventListener);
   $('qb-run')?.addEventListener('click', onRun);
+  $('qb-auto-run')?.addEventListener('click', onAutoRun);
   $('qb-export-pdf')?.addEventListener('click', exportPDF);
 }
 

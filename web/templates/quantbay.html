@@ -26,11 +26,11 @@
 
     <section class="qb-shell-head">
       <div>
-        <p class="qb-kicker">Chart Bay Terminal / Quant Deck</p>
+        <p class="qb-kicker">Chart Bay / Quant</p>
         <h2>Quant Bay</h2>
-        <p>Load a CSV dataset and estimate econometric models in-browser. OLS, residual diagnostics, correlation structure and model validation.</p>
+        <p>Subi un CSV, elegi que variable queres explicar y Quant Bay calcula una regresion OLS con tablas, graficos y una lectura simple.</p>
       </div>
-      <div class="qb-terminal-chip">MODEL ENGINE: STANDBY</div>
+      <div class="qb-terminal-chip">Simple OLS</div>
     </section>
 
     <section class="qb-statusbar" aria-label="Estado del workspace">
@@ -45,71 +45,75 @@
 
     <div class="qb-workspace">
       <aside class="qb-sidebar" aria-label="Quant Bay modules">
-        <div class="qb-side-label">Signal deck</div>
-        <a href="#qb-upload-panel">Dataset</a>
-        <a href="#qb-vars">Regression Engine</a>
-        <a href="#qb-correlation-panel">Correlation Matrix</a>
-        <a href="#qb-diagnostics-panel">Diagnostics</a>
-        <a href="#qb-vif-panel">Structural Tests</a>
-        <a href="#qb-forecast-panel">Forecast Lab</a>
+        <div class="qb-side-label">Pasos</div>
+        <a href="#qb-upload-panel">1. CSV</a>
+        <a href="#qb-vars">2. Variables</a>
+        <a href="#qb-forecast-panel">3. Grafico</a>
+        <a href="#qb-correlation-panel">4. Correlacion</a>
+        <a href="#qb-diagnostics-panel">5. Diagnostico</a>
       </aside>
 
       <main class="qb-main">
         <section class="qb-section" id="qb-upload-panel">
           <div class="qb-panel-head">
-            <p class="qb-subtitle">Dataset / CSV Input</p>
-            <span>DATA HOLD</span>
+            <p class="qb-subtitle">1. Cargar datos</p>
+            <span>CSV</span>
           </div>
           <div class="qb-upload-row">
-            <label for="qb-file" class="btn-ink">Load CSV</label>
+            <label for="qb-file" class="btn-ink">Subir CSV</label>
             <input type="file" id="qb-file" accept=".csv" style="display:none">
-            <span id="qb-filename" class="muted">No dataset mounted</span>
+            <span id="qb-filename" class="muted">Todavia no subiste un archivo</span>
           </div>
-          <p class="muted qb-help">CSV headers are read from row 1. Numeric columns are detected automatically and kept client-side.</p>
+          <p class="muted qb-help">El archivo tiene que tener nombres de columnas en la primera fila. Quant Bay detecta automaticamente las columnas numericas.</p>
           <div class="qb-runlog" id="qb-runlog" aria-live="polite"></div>
         </section>
 
         <section class="qb-section" id="qb-preview" style="display:none">
           <div class="qb-panel-head">
-            <p class="qb-subtitle">Dataset Preview</p>
-            <span>FIRST 6 ROWS</span>
+            <p class="qb-subtitle">2. Revisar datos</p>
+            <span>Primeras filas</span>
           </div>
           <div id="qb-table-wrap"></div>
         </section>
 
         <section class="qb-section" id="qb-vars" style="display:none">
           <div class="qb-panel-head">
-            <p class="qb-subtitle">Variable Selection</p>
-            <span>DESIGN MATRIX</span>
+            <p class="qb-subtitle">3. Elegir variables</p>
+            <span>Modelo</span>
           </div>
           <div class="qb-vars-grid">
             <div>
-              <label>Dependent variable (Y)</label>
+              <label>Que queres explicar? (Y)</label>
               <select id="qb-y" style="width:100%"></select>
             </div>
             <div>
-              <label>Independent variables (X)</label>
+              <label>Con que variables? (X)</label>
               <div id="qb-x-checks"></div>
             </div>
           </div>
-          <button class="btn-ink" id="qb-run">Estimate OLS coefficients</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+            <button class="btn-ink" id="qb-run">Calcular regresion</button>
+            <button class="btn-ink qb-btn-repair" id="qb-auto-run" title="Detecta y corrige multicolinealidad, matriz singular y otros problemas automaticamente">Arreglar y calcular</button>
+          </div>
         </section>
+
+        <div id="qb-repair-log" style="display:none;margin:12px 0"></div>
 
         <section class="qb-section" id="qb-results" style="display:none">
           <div class="qb-panel-head">
-            <p class="qb-subtitle">Model Results</p>
-            <span>OLS ENGINE</span>
+            <p class="qb-subtitle">4. Resultados</p>
+            <span>OLS</span>
           </div>
 
           <div id="qb-binary-warn"></div>
           <div id="qb-leak-warn"></div>
 
-          <p class="qb-label">Estimated equation</p>
+          <p class="qb-label">Ecuacion estimada</p>
           <div class="qb-eq" id="qb-equation"></div>
 
           <div class="qb-results-grid">
             <div>
-              <p class="qb-label">Coefficients and significance</p>
+              <p class="qb-label">Coeficientes</p>
               <div class="qb-table-scroll">
                 <table class="ledger">
                   <thead><tr><th>Variable</th><th>Coef.</th><th>Std. Err.</th><th>t-stat</th><th>p-value</th><th>95% CI</th><th>Sig.</th></tr></thead>
@@ -118,7 +122,7 @@
               </div>
             </div>
             <div>
-              <p class="qb-label">Model statistics</p>
+              <p class="qb-label">Resumen del modelo</p>
               <table class="ledger">
                 <thead><tr><th>Metric</th><th>Value</th></tr></thead>
                 <tbody id="qb-stats-body"></tbody>
@@ -177,7 +181,7 @@
           <div class="qb-interp" id="qb-interpretation"></div>
 
           <div style="margin:14px 0 4px">
-            <button class="btn-ink" id="qb-export-pdf">Export PDF report</button>
+            <button class="btn-ink" id="qb-export-pdf">Exportar PDF</button>
           </div>
 
           <details style="margin:10px 0">
