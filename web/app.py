@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from flask import (
-    Flask, jsonify, redirect, render_template, request, session, url_for, abort
+    Flask, Response, jsonify, redirect, render_template, request, session, url_for, abort
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -35,6 +35,7 @@ import config           # noqa: E402
 import data             # noqa: E402
 import indicators       # noqa: E402
 import db               # noqa: E402
+import providers        # noqa: E402
 from seed_data import BOTS_BASE  # noqa: E402
 
 CACHE_DIR = Path(__file__).resolve().parent / "cache"
@@ -574,6 +575,132 @@ def guia():
 @app.route("/quantbay")
 def quantbay():
     return render_template("quantbay.html")
+
+
+# ─── Datos Frecuentes ────────────────────────────────────────────────────────
+# Series macro oficiales (FRED y, a futuro, BCRA/World Bank/IMF/OECD) listas
+# para descargar. La lógica de fuentes vive en el paquete `providers`; acá
+# sólo hay rutas HTTP + una caché diaria en disco para no golpear las APIs.
+
+DATA_CACHE_DIR = CACHE_DIR / "data"
+DATA_CACHE_DIR.mkdir(exist_ok=True)
+_INDICATOR_RE = re.compile(r"^[a-z0-9_]{1,40}$")
+
+
+def _valid_indicator(indicator_id: str):
+    """Devuelve el Indicator si el id es válido y está en el catálogo; si no, None."""
+    if not _INDICATOR_RE.fullmatch(indicator_id or ""):
+        return None
+    return providers.get_indicator(indicator_id)
+
+
+def _series_cached(indicator_id: str):
+    """Series del indicador, con caché diaria en disco (las macro cambian, a lo sumo, a diario)."""
+    fp = DATA_CACHE_DIR / f"{indicator_id}_{date.today().isoformat()}.json"
+    if fp.exists():
+        try:
+            return providers.series_from_json(json.loads(fp.read_text(encoding="utf-8")))
+        except Exception:
+            pass  # caché corrupta: se vuelve a pedir
+    series = providers.fetch_series(indicator_id)
+    try:
+        fp.write_text(providers.to_json_str(series), encoding="utf-8")
+    except Exception:
+        pass
+    return series
+
+
+def _fred_ready() -> bool:
+    return any(s["code"] == "fred" and s["available"] for s in providers.provider_status())
+
+
+@app.route("/data")
+def frequent_data():
+    bootstrap = {
+        "catalog": providers.catalog_public(),
+        "categories": providers.CATEGORIES,
+        "fredReady": _fred_ready(),
+    }
+    return render_template(
+        "frequent_data.html",
+        bootstrap=bootstrap,
+        sources=providers.provider_status(),
+        fred_ready=bootstrap["fredReady"],
+        hoy=date.today().isoformat(),
+    )
+
+
+@app.route("/api/data/catalog")
+def api_data_catalog():
+    return jsonify({
+        "ok": True,
+        "categories": providers.CATEGORIES,
+        "catalog": providers.catalog_public(),
+        "sources": providers.provider_status(),
+    })
+
+
+@app.route("/api/data/series/<indicator_id>")
+def api_data_series(indicator_id):
+    if not _valid_indicator(indicator_id):
+        return jsonify({"ok": False, "error": "Indicador desconocido"}), 404
+    try:
+        return jsonify({"ok": True, **providers.to_json(_series_cached(indicator_id))})
+    except providers.ProviderError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+
+@app.route("/api/data/meta/<indicator_id>")
+def api_data_meta(indicator_id):
+    ind = _valid_indicator(indicator_id)
+    if not ind:
+        return jsonify({"ok": False, "error": "Indicador desconocido"}), 404
+    fp = DATA_CACHE_DIR / f"meta_{indicator_id}_{date.today().isoformat()}.json"
+    if fp.exists():
+        try:
+            return jsonify(json.loads(fp.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    try:
+        obs = providers.latest_observation(indicator_id)
+        payload = {
+            "ok": True, "id": indicator_id, "frequency": ind.frequency,
+            "last_updated": obs.date if obs else None,
+            "value": obs.value if obs else None,
+        }
+        try:
+            fp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
+        return jsonify(payload)
+    except providers.ProviderError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+
+@app.route("/api/data/download/<indicator_id>")
+def api_data_download(indicator_id):
+    if not _valid_indicator(indicator_id):
+        abort(404)
+    fmt = (request.args.get("format", "csv") or "csv").lower()
+    spec = providers.EXPORT_FORMATS.get(fmt)
+    if not spec:
+        return jsonify({"ok": False, "error": f"Formato no soportado: {fmt}"}), 400
+    try:
+        series = _series_cached(indicator_id)
+    except providers.ProviderError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+    body = spec["render"](series)
+    filename = f"chartbay_{indicator_id}.{spec['ext']}"
+    return Response(
+        body, mimetype=spec["mimetype"],
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay · Datos Frecuentes</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="wrap">
+    {% include 'alfa_banner.html' %}
+    <header class="masthead">
+      <svg class="ship" viewBox="0 0 260 170" aria-hidden="true"></svg>
+      <h1 class="wordmark" aria-label="Chart Bay">ℭ𝔥𝔞𝔯𝔱 <span class="bay">𝔅𝔞𝔶</span><span class="tcursor">▮</span></h1>
+      <p class="tagline">Datos macro oficiales, listos para descargar · {{ hoy }}</p>
+
+      <nav class="mainnav">
+        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">·</span>
+        <strong>Datos</strong><span class="sep">·</span>
+        <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">·</span>
+        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
+        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">·</span>
+        <a href="{{ url_for('guia') }}">Guía</a><span class="sep">·</span>
+        <a href="{{ url_for('quantbay') }}">Quant</a><span class="sep">·</span>
+        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
+        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% endif %}
+      </nav>
+    </header>
+
+    <section class="search">
+      <form id="fdSearch" autocomplete="off" onsubmit="return false">
+        <span class="prompt">&gt;</span>
+        <input id="fdQuery" type="text" placeholder="buscar indicador · inflación · tasas · dólar · PBI · desempleo">
+      </form>
+      <div class="tf-bar" id="fdCats"><span class="tf-lbl">Categorías:</span></div>
+    </section>
+
+    {% if not fred_ready %}
+    <div class="alfa-warn">
+      ⚠ Para activar las descargas falta configurar <code>FRED_API_KEY</code> en el <code>.env</code>.
+      Es gratis e instantáneo: <a href="https://fredaccount.stlouisfed.org/apikeys" target="_blank" rel="noopener">conseguila acá</a>.
+    </div>
+    {% endif %}
+
+    <p class="catalog-title">Datos macro · un clic y a tu máquina</p>
+    <ul class="catalog" id="fdList"></ul>
+    <p class="fd-empty" id="fdEmpty" style="display:none">Sin resultados para esta búsqueda.</p>
+
+    <div class="fd-workspace" id="fdWorkspace" style="display:none"></div>
+
+    <p class="colophon">
+      Series oficiales normalizadas a <code>date,value</code> · descarga en CSV o JSON.<br>
+      Próximamente más fuentes: BCRA · World Bank · IMF · OECD.<br><br>
+      Datos con fines educativos. No constituye asesoramiento financiero.
+    </p>
+  </div>
+
+  <script id="fd-bootstrap" type="application/json">{{ bootstrap|tojson }}</script>
+  <script>
+  /* ============================================================
+     Datos Frecuentes — UI nativa escrita en "estilo componentes".
+     Cada bloque mapea 1:1 a un futuro componente React:
+       - api          -> capa de datos (hook / React Query)
+       - state        -> useState / store
+       - *Component   -> funciones puras de render (JSX equivalente)
+       - controllers  -> handlers
+     Cuando se migre, el backend (/api/data/*) no cambia.
+     ============================================================ */
+  (function () {
+    "use strict";
+
+    // ── capa de datos ───────────────────────────────────────────
+    var BOOT = JSON.parse(document.getElementById("fd-bootstrap").textContent);
+    var api = {
+      catalog:     function () { return BOOT.catalog; },
+      categories:  function () { return BOOT.categories; },
+      fredReady:   function () { return !!BOOT.fredReady; },
+      meta:        function (id) { return fetch("/api/data/meta/" + encodeURIComponent(id)).then(function (r) { return r.json(); }); },
+      downloadUrl: function (id, fmt) { return "/api/data/download/" + encodeURIComponent(id) + "?format=" + fmt; }
+    };
+
+    // ── estado ──────────────────────────────────────────────────
+    var state = { query: "", category: "all", workspace: loadWorkspace() };
+    var metaCache = {};
+
+    // ── helpers ─────────────────────────────────────────────────
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+    function loadWorkspace() {
+      try { var a = JSON.parse(localStorage.getItem("cb_workspace") || "[]"); return Array.isArray(a) ? a : []; }
+      catch (e) { return []; }
+    }
+    function saveWorkspace() { try { localStorage.setItem("cb_workspace", JSON.stringify(state.workspace)); } catch (e) {} }
+    function inWorkspace(id) { return state.workspace.indexOf(id) !== -1; }
+
+    // ── componentes (render puro) ───────────────────────────────
+    function CategoryChips(categories, active) {           // <CategoryFilter>
+      var html = '<button class="tf-btn ' + (active === "all" ? "active" : "") + '" data-cat="all">Todas</button>';
+      return html + categories.map(function (c) {
+        return '<button class="tf-btn ' + (active === c.id ? "active" : "") + '" data-cat="' + esc(c.id) + '">' + esc(c.label) + "</button>";
+      }).join("");
+    }
+
+    function IndicatorRow(ind, idx) {                       // <IndicatorCard>
+      var m = metaCache[ind.id];
+      var upd = (m && m.last_updated) ? m.last_updated : "···";
+      var wsOn = inWorkspace(ind.id);
+      var ready = api.fredReady();
+      var actions = ready
+        ? '<a class="fd-dl" href="' + api.downloadUrl(ind.id, "csv") + '" download>↓ CSV</a>'
+          + '<a class="fd-dl fd-dl-soft" href="' + api.downloadUrl(ind.id, "json") + '" download>JSON</a>'
+        : '<span class="fd-dl fd-dl-off" title="Configurá FRED_API_KEY para descargar">↓ CSV</span>';
+      return '' +
+        '<li data-id="' + esc(ind.id) + '">' +
+          '<div class="erow fd-row">' +
+            '<div class="fd-main">' +
+              '<span class="idx">' + (idx + 1 < 10 ? "0" : "") + (idx + 1) + "</span>" +
+              '<span class="fd-text">' +
+                '<span class="name">' + esc(ind.name) + "</span>" +
+                '<span class="fd-meta">' + esc(ind.country) + " · " + esc(ind.frequency) +
+                  (ind.units ? " · " + esc(ind.units) : "") +
+                  ' · act. <span class="fd-upd">' + esc(upd) + "</span></span>" +
+              "</span>" +
+            "</div>" +
+            '<div class="fd-actions">' + actions +
+              '<button class="fd-ws ' + (wsOn ? "on" : "") + '" data-ws="' + esc(ind.id) + '">' +
+                (wsOn ? "✓ Workspace" : "+ Workspace") + "</button>" +
+            "</div>" +
+          "</div>" +
+        "</li>";
+    }
+
+    function filtered() {
+      var q = state.query.trim().toLowerCase();
+      return api.catalog().filter(function (ind) {
+        if (state.category !== "all" && ind.category !== state.category) return false;
+        if (q) {
+          var hay = (ind.name + " " + ind.country + " " + ind.frequency + " " + (ind.units || "")).toLowerCase();
+          if (hay.indexOf(q) === -1) return false;
+        }
+        return true;
+      });
+    }
+
+    // ── render principal ────────────────────────────────────────
+    function renderChips() {
+      var bar = document.getElementById("fdCats");
+      bar.querySelectorAll(".tf-btn").forEach(function (b) { b.remove(); });
+      bar.insertAdjacentHTML("beforeend", CategoryChips(api.categories(), state.category));
+    }
+    function render() {
+      var items = filtered();
+      document.getElementById("fdList").innerHTML = items.map(IndicatorRow).join("");
+      document.getElementById("fdEmpty").style.display = items.length ? "none" : "";
+      renderWorkspaceBar();
+      lazyMeta(items);
+    }
+    function renderWorkspaceBar() {                          // <WorkspaceTray>
+      var el = document.getElementById("fdWorkspace");
+      var n = state.workspace.length;
+      if (!n) { el.style.display = "none"; el.innerHTML = ""; return; }
+      el.style.display = "";
+      el.innerHTML = '<span class="fd-ws-label">Workspace (' + n + ")</span> " +
+        state.workspace.map(function (id) {
+          var ind = findIndicator(id);
+          return '<span class="fd-ws-chip">' + esc(ind ? ind.name : id) +
+            ' <button data-ws-rm="' + esc(id) + '" title="Quitar">✕</button></span>';
+        }).join("") +
+        ' <a class="fd-ws-clear" href="#" id="fdWsClear">vaciar</a>';
+    }
+    function findIndicator(id) {
+      var c = api.catalog();
+      for (var i = 0; i < c.length; i++) if (c[i].id === id) return c[i];
+      return null;
+    }
+
+    // ── carga perezosa de "última actualización" ────────────────
+    function lazyMeta(items) {
+      if (!api.fredReady()) return;
+      items.forEach(function (ind) {
+        if (ind.id in metaCache) { paintMeta(ind.id); return; }
+        api.meta(ind.id).then(function (d) {
+          metaCache[ind.id] = (d && d.ok) ? d : { last_updated: null };
+          paintMeta(ind.id);
+        }).catch(function () { metaCache[ind.id] = { last_updated: null }; });
+      });
+    }
+    function paintMeta(id) {
+      var row = document.querySelector('#fdList li[data-id="' + id + '"] .fd-upd');
+      if (!row) return;
+      var m = metaCache[id];
+      row.textContent = (m && m.last_updated) ? m.last_updated : "n/d";
+    }
+
+    // ── controladores ───────────────────────────────────────────
+    function setCategory(c) { state.category = c; renderChips(); render(); }
+    function setQuery(q) { state.query = q; render(); }
+    function toggleWorkspace(id) {
+      var i = state.workspace.indexOf(id);
+      if (i === -1) state.workspace.push(id); else state.workspace.splice(i, 1);
+      saveWorkspace(); render();
+    }
+
+    // ── eventos (delegación: sobrevive a los re-render) ─────────
+    document.getElementById("fdCats").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-cat]"); if (b) setCategory(b.dataset.cat);
+    });
+    document.getElementById("fdQuery").addEventListener("input", function (e) { setQuery(e.target.value); });
+    document.getElementById("fdList").addEventListener("click", function (e) {
+      var ws = e.target.closest("[data-ws]"); if (ws) toggleWorkspace(ws.dataset.ws);
+    });
+    document.getElementById("fdWorkspace").addEventListener("click", function (e) {
+      var rm = e.target.closest("[data-ws-rm]");
+      if (rm) { toggleWorkspace(rm.dataset.wsRm); return; }
+      if (e.target.id === "fdWsClear") { e.preventDefault(); state.workspace = []; saveWorkspace(); render(); }
+    });
+
+    // ── init ────────────────────────────────────────────────────
+    renderChips();
+    render();
+  })();
+  </script>
+</body>
+</html>
