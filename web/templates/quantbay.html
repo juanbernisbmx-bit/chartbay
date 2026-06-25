@@ -3,142 +3,192 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ChartBay · Quant Bay</title>
+  <title>ChartBay - Quant Bay</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <div class="wrap">
+  <div class="wrap qb-wrap">
     {% include 'alfa_banner.html' %}
     <header class="masthead">
       <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
       <nav class="mainnav">
-        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">·</span>
-        <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">·</span>
-        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
-        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">·</span>
-        <a href="{{ url_for('guia') }}">Guía</a><span class="sep">·</span>
-        <strong>Quant</strong><span class="sep">·</span>
-        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
-        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
+        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">.</span>
+        <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">.</span>
+        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">.</span>
+        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">.</span>
+        <a href="{{ url_for('guia') }}">Guia</a><span class="sep">.</span>
+        <strong>Quant</strong><span class="sep">.</span>
+        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">.</span>
+        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">.</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
       </nav>
     </header>
 
-    <p class="catalog-title">Quant Bay · Econometría en el navegador</p>
+    <section class="qb-shell-head">
+      <div>
+        <p class="qb-kicker">Chart Bay Terminal / Quant Deck</p>
+        <h2>Quant Bay</h2>
+        <p>Load a CSV dataset and estimate econometric models in-browser. OLS, residual diagnostics, correlation structure and model validation.</p>
+      </div>
+      <div class="qb-terminal-chip">MODEL ENGINE: STANDBY</div>
+    </section>
+
+    <section class="qb-statusbar" aria-label="Estado del workspace">
+      <div><span>Dataset</span><strong id="qb-status-dataset">No file</strong></div>
+      <div><span>Observations</span><strong id="qb-status-obs">0</strong></div>
+      <div><span>Numeric vars</span><strong id="qb-status-vars">0</strong></div>
+      <div><span>Method</span><strong>OLS</strong></div>
+      <div><span>Engine</span><strong id="qb-status-engine">IDLE</strong></div>
+    </section>
 
     <div id="qb-error" style="display:none"></div>
 
-    <!-- ① Cargar datos -->
-    <div class="qb-section">
-      <p class="qb-subtitle">① Cargar datos (CSV)</p>
-      <div class="qb-upload-row">
-        <label for="qb-file" class="btn-ink">&#9650; cargar CSV</label>
-        <input type="file" id="qb-file" accept=".csv" style="display:none">
-        <span id="qb-filename" class="muted" style="font-size:12px"></span>
-      </div>
-      <p class="muted" style="font-size:11px;margin:6px 0 0">El CSV debe tener encabezados en la primera fila. Las columnas numéricas se detectan automáticamente.</p>
-    </div>
+    <div class="qb-workspace">
+      <aside class="qb-sidebar" aria-label="Quant Bay modules">
+        <div class="qb-side-label">Signal deck</div>
+        <a href="#qb-upload-panel">Dataset</a>
+        <a href="#qb-vars">Regression Engine</a>
+        <a href="#qb-correlation-panel">Correlation Matrix</a>
+        <a href="#qb-diagnostics-panel">Diagnostics</a>
+        <a href="#qb-vif-panel">Structural Tests</a>
+        <a href="#qb-forecast-panel">Forecast Lab</a>
+      </aside>
 
-    <!-- ② Vista previa -->
-    <div class="qb-section" id="qb-preview" style="display:none">
-      <p class="qb-subtitle">② Vista previa del dataset</p>
-      <div id="qb-table-wrap"></div>
-    </div>
-
-    <!-- ③ Selección de variables -->
-    <div class="qb-section" id="qb-vars" style="display:none">
-      <p class="qb-subtitle">③ Selección de variables</p>
-      <div class="qb-vars-grid">
-        <div>
-          <label style="font-size:12px;font-weight:bold;display:block;margin-bottom:4px">Variable dependiente (Y):</label>
-          <select id="qb-y" style="width:100%"></select>
-        </div>
-        <div>
-          <label style="font-size:12px;font-weight:bold;display:block;margin-bottom:4px">Variables independientes (X):</label>
-          <div id="qb-x-checks"></div>
-        </div>
-      </div>
-      <button class="btn-ink" id="qb-run">&gt; correr regresión OLS</button>
-    </div>
-
-    <!-- ④ Resultados -->
-    <div class="qb-section" id="qb-results" style="display:none">
-      <p class="qb-subtitle">④ Resultados</p>
-
-      <!-- Avisos de detección -->
-      <div id="qb-binary-warn"></div>
-      <div id="qb-leak-warn"></div>
-
-      <!-- Ecuación -->
-      <p style="font-size:11px;font-weight:bold;margin:8px 0 3px">Ecuación estimada:</p>
-      <div class="qb-eq" id="qb-equation"></div>
-
-      <!-- Coeficientes y estadísticos del modelo -->
-      <div class="qb-results-grid">
-        <div>
-          <p style="font-size:11px;font-weight:bold;margin:0 0 4px">Coeficientes y significancia:</p>
-          <div class="qb-table-scroll">
-            <table class="ledger">
-              <thead><tr><th>Variable</th><th>Coef.</th><th>Err. Est.</th><th>t-stat</th><th>p-valor</th><th>Signif.</th></tr></thead>
-              <tbody id="qb-coef-body"></tbody>
-            </table>
+      <main class="qb-main">
+        <section class="qb-section" id="qb-upload-panel">
+          <div class="qb-panel-head">
+            <p class="qb-subtitle">Dataset / CSV Input</p>
+            <span>DATA HOLD</span>
           </div>
-        </div>
-        <div>
-          <p style="font-size:11px;font-weight:bold;margin:0 0 4px">Estadísticos del modelo:</p>
-          <table class="ledger">
-            <thead><tr><th>Indicador</th><th>Valor</th></tr></thead>
-            <tbody id="qb-stats-body"></tbody>
-          </table>
-        </div>
-      </div>
-      <p class="qb-sig-legend">*** p&lt;0.01 &nbsp;&middot;&nbsp; ** p&lt;0.05 &nbsp;&middot;&nbsp; * p&lt;0.10 &nbsp;&middot;&nbsp; n.s. no significativo</p>
+          <div class="qb-upload-row">
+            <label for="qb-file" class="btn-ink">Load CSV</label>
+            <input type="file" id="qb-file" accept=".csv" style="display:none">
+            <span id="qb-filename" class="muted">No dataset mounted</span>
+          </div>
+          <p class="muted qb-help">CSV headers are read from row 1. Numeric columns are detected automatically and kept client-side.</p>
+          <div class="qb-runlog" id="qb-runlog" aria-live="polite"></div>
+        </section>
 
-      <!-- Regresión logística (solo si target binario) -->
-      <div id="qb-logit-wrap" style="display:none">
-        <p class="qb-subtitle" style="margin-top:14px">Regresión Logística (recomendada para 0/1)</p>
-        <div id="qb-logit-content"></div>
-      </div>
+        <section class="qb-section" id="qb-preview" style="display:none">
+          <div class="qb-panel-head">
+            <p class="qb-subtitle">Dataset Preview</p>
+            <span>FIRST 6 ROWS</span>
+          </div>
+          <div id="qb-table-wrap"></div>
+        </section>
 
-      <!-- Real vs Predicho -->
-      <p style="font-size:11px;font-weight:bold;margin:10px 0 4px">Real vs. Predicho:</p>
-      <canvas id="qb-chart" class="qb-chart"></canvas>
+        <section class="qb-section" id="qb-vars" style="display:none">
+          <div class="qb-panel-head">
+            <p class="qb-subtitle">Variable Selection</p>
+            <span>DESIGN MATRIX</span>
+          </div>
+          <div class="qb-vars-grid">
+            <div>
+              <label>Dependent variable (Y)</label>
+              <select id="qb-y" style="width:100%"></select>
+            </div>
+            <div>
+              <label>Independent variables (X)</label>
+              <div id="qb-x-checks"></div>
+            </div>
+          </div>
+          <button class="btn-ink" id="qb-run">Estimate OLS coefficients</button>
+        </section>
 
-      <!-- Correlación -->
-      <p class="qb-subtitle" style="margin-top:18px">Análisis de correlación</p>
-      <div class="qb-table-scroll" id="qb-corr-wrap"></div>
-      <div class="qb-interp" id="qb-corr-interp" style="display:none;margin-top:6px"></div>
+        <section class="qb-section" id="qb-results" style="display:none">
+          <div class="qb-panel-head">
+            <p class="qb-subtitle">Model Results</p>
+            <span>OLS ENGINE</span>
+          </div>
 
-      <!-- VIF -->
-      <p class="qb-subtitle" style="margin-top:18px">Multicolinealidad (VIF)</p>
-      <div class="qb-table-scroll" id="qb-vif-wrap"></div>
-      <div id="qb-vif-warn"></div>
+          <div id="qb-binary-warn"></div>
+          <div id="qb-leak-warn"></div>
 
-      <!-- Diagnósticos de residuos -->
-      <p class="qb-subtitle" style="margin-top:18px">Diagnósticos del modelo</p>
-      <div class="qb-results-grid">
-        <div><canvas id="qb-resid-fitted" class="qb-chart" style="max-height:240px"></canvas></div>
-        <div><canvas id="qb-resid-hist" class="qb-chart" style="max-height:240px"></canvas></div>
-      </div>
-      <div id="qb-resid-stats" class="qb-resid-stats"></div>
+          <p class="qb-label">Estimated equation</p>
+          <div class="qb-eq" id="qb-equation"></div>
 
-      <!-- Interpretación -->
-      <p style="font-size:11px;font-weight:bold;margin:10px 0 4px">Interpretación:</p>
-      <div class="qb-interp" id="qb-interpretation"></div>
+          <div class="qb-results-grid">
+            <div>
+              <p class="qb-label">Coefficients and significance</p>
+              <div class="qb-table-scroll">
+                <table class="ledger">
+                  <thead><tr><th>Variable</th><th>Coef.</th><th>Std. Err.</th><th>t-stat</th><th>p-value</th><th>95% CI</th><th>Sig.</th></tr></thead>
+                  <tbody id="qb-coef-body"></tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <p class="qb-label">Model statistics</p>
+              <table class="ledger">
+                <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+                <tbody id="qb-stats-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <p class="qb-sig-legend">*** p&lt;0.01 &middot; ** p&lt;0.05 &middot; * p&lt;0.10 &middot; n.s. not significant</p>
 
-      <!-- Exportar PDF -->
-      <div style="margin:14px 0 4px">
-        <button class="btn-ink" id="qb-export-pdf">&gt; exportar informe PDF</button>
-      </div>
+          <div id="qb-logit-wrap" style="display:none">
+            <div class="qb-panel-head qb-subpanel">
+              <p class="qb-subtitle">Logistic Regression</p>
+              <span>BINARY TARGET</span>
+            </div>
+            <div id="qb-logit-content"></div>
+          </div>
 
-      <!-- Tabla detallada -->
-      <details style="margin:10px 0">
-        <summary style="font-size:11px;cursor:pointer;color:#1b3a6b;font-weight:bold;user-select:none">▶ Tabla de predicciones y residuos</summary>
-        <div id="qb-pred-table" style="overflow-x:auto;margin-top:6px"></div>
-      </details>
+          <div id="qb-forecast-panel">
+            <div class="qb-panel-head qb-subpanel">
+              <p class="qb-subtitle">Actual vs Predicted</p>
+              <span>DIAGNOSTIC SCATTER</span>
+            </div>
+            <canvas id="qb-chart" class="qb-chart"></canvas>
+          </div>
+
+          <div id="qb-correlation-panel">
+            <div class="qb-panel-head qb-subpanel">
+              <p class="qb-subtitle">Correlation Matrix</p>
+              <span>PEARSON R</span>
+            </div>
+            <div class="qb-table-scroll" id="qb-corr-wrap"></div>
+            <div class="qb-interp" id="qb-corr-interp" style="display:none;margin-top:6px"></div>
+          </div>
+
+          <div id="qb-vif-panel">
+            <div class="qb-panel-head qb-subpanel">
+              <p class="qb-subtitle">Structural Tests</p>
+              <span>VIF</span>
+            </div>
+            <div class="qb-table-scroll" id="qb-vif-wrap"></div>
+            <div id="qb-vif-warn"></div>
+          </div>
+
+          <div id="qb-diagnostics-panel">
+            <div class="qb-panel-head qb-subpanel">
+              <p class="qb-subtitle">Residual Diagnostics</p>
+              <span>MODEL VALIDATION</span>
+            </div>
+            <div class="qb-results-grid">
+              <div><canvas id="qb-resid-fitted" class="qb-chart" style="max-height:240px"></canvas></div>
+              <div><canvas id="qb-resid-hist" class="qb-chart" style="max-height:240px"></canvas></div>
+            </div>
+            <div id="qb-resid-stats" class="qb-resid-stats"></div>
+          </div>
+
+          <p class="qb-label">Technical interpretation</p>
+          <div class="qb-interp" id="qb-interpretation"></div>
+
+          <div style="margin:14px 0 4px">
+            <button class="btn-ink" id="qb-export-pdf">Export PDF report</button>
+          </div>
+
+          <details style="margin:10px 0">
+            <summary>Prediction and residual ledger</summary>
+            <div id="qb-pred-table" style="overflow-x:auto;margin-top:6px"></div>
+          </details>
+        </section>
+      </main>
     </div>
 
-    <p class="colophon">Análisis estadístico educativo · No constituye asesoramiento financiero ni garantía de resultados.</p>
+    <p class="colophon">Educational statistical analysis. Not financial advice or a guarantee of results.</p>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>

@@ -42,7 +42,17 @@ CACHE_DIR.mkdir(exist_ok=True)
 REPORTS_DIR = ROOT / config.OUTPUT_DIR
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "dev-inseguro-cambiar")
+
+_secret_key = os.environ.get("SECRET_KEY", "")
+if not _secret_key:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "SECRET_KEY no está configurado — usando clave de desarrollo insegura. "
+        "Definí SECRET_KEY en el entorno antes de desplegar."
+    )
+    _secret_key = "dev-inseguro-cambiar"
+app.secret_key = _secret_key
+
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
@@ -56,11 +66,23 @@ REGISTRATION_OPEN = False  # cambiar a True para reabrir el registro
 
 # ─── Seguridad: headers de respuesta ────────────────────────────────────────
 
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' cdn.jsdelivr.net cdnjs.cloudflare.com s3.tradingview.com; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob:; "
+    "connect-src 'self'; "
+    "frame-src s3.tradingview.com; "
+    "frame-ancestors 'none'"
+)
+
+
 @app.after_request
 def add_security_headers(response):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Content-Security-Policy", _CSP)
     return response
 
 

@@ -55,8 +55,9 @@ describe('extractMatrix', () => {
     expect(extractMatrix([{ a: null }, { a: 'x' }], ['a']).X).toHaveLength(0);
   });
 
-  it('single-column extraction', () => {
-    expect(extractMatrix(rows, ['a']).X).toEqual([[1], [3], [7]]);
+  it('single-column extraction only excludes rows where that column is invalid', () => {
+    // row with a=5 and b='bad' is valid when extracting only 'a'
+    expect(extractMatrix(rows, ['a']).X).toEqual([[1], [3], [5], [7]]);
   });
 });
 

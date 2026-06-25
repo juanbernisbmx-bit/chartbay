@@ -1,4 +1,4 @@
-import { tDistPValue } from './statistics';
+import { tDistPValue, fDistPValue, tQuantile } from './statistics';
 
 export interface RegressionInput {
   X: number[][];
@@ -19,12 +19,15 @@ export interface RegressionResult {
   yName: string;
   nObs: number;
   nFeatures: number;
-  // Phase 2 — statistical inference
-  stdErrors: number[];       // length k+1: [intercept, β₁, …, βₖ]
+  // Statistical inference
+  stdErrors: number[];               // length k+1: [intercept, β₁, …, βₖ]
   tStats: number[];
   pValues: number[];
-  df: number;                // n − k − 1
-  sigma2: number;            // residual variance
+  ci95: [number, number][];          // 95% CI for each coefficient: [[lo, hi], ...]
+  df: number;                        // n − k − 1
+  sigma2: number;                    // residual variance
+  fStat: number;                     // F-statistic for overall model significance
+  fPValue: number;                   // p-value of F-test (H₀: all slopes = 0)
 }
 
 export function transpose(A: number[][]): number[][] {
@@ -122,6 +125,14 @@ export function runOLS(input: RegressionInput): RegressionResult {
   const tStats = beta.map((b, i) => stdErrors[i] > 1e-15 ? b / stdErrors[i] : Infinity);
   const pValues = tStats.map(t => tDistPValue(t, df));
 
+  // F-statistic: (R²/k) / ((1-R²)/df) — tests H₀: all slopes = 0
+  const fStat = k > 0 && df > 0 ? (rSquared / k) / ((1 - rSquared) / df) : 0;
+  const fPValue = fDistPValue(fStat, k, df);
+
+  // 95% confidence intervals: β ± t(0.025, df) * SE
+  const tCrit = tQuantile(0.05, df);
+  const ci95 = beta.map((b, i) => [b - tCrit * stdErrors[i], b + tCrit * stdErrors[i]] as [number, number]);
+
   const terms = coefficients
     .map(
       (c, i) =>
@@ -145,8 +156,11 @@ export function runOLS(input: RegressionInput): RegressionResult {
     stdErrors,
     tStats,
     pValues,
+    ci95,
     df,
     sigma2,
+    fStat,
+    fPValue,
   };
 }
 
@@ -165,10 +179,11 @@ export function computeVIF(X: number[][]): number[] {
         featureNames: xOther[0].map((_, i) => `x${i}`),
         yName: `x${j}`,
       });
-      const r2 = Math.max(0, Math.min(0.9999, res.rSquared));
+      const r2 = Math.max(0, res.rSquared);
+      if (r2 >= 1 - 1e-10) return Infinity;
       return 1 / (1 - r2);
     } catch {
-      return 999;
+      return Infinity;
     }
   });
 }

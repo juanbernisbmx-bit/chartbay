@@ -36,13 +36,21 @@ export function parseCSVFile(file: File): Promise<ParsedCSV> {
   });
 }
 
+function isValidNumeric(raw: unknown): boolean {
+  if (raw === null || raw === undefined || raw === '') return false;
+  const v = Number(raw);
+  return !isNaN(v) && isFinite(v);
+}
+
 export function extractColumn(
   rows: Record<string, unknown>[],
   column: string
 ): number[] {
-  return rows
-    .map(row => Number(row[column]))
-    .filter(v => !isNaN(v) && isFinite(v));
+  return rows.reduce<number[]>((acc, row) => {
+    const raw = row[column];
+    if (isValidNumeric(raw)) acc.push(Number(raw));
+    return acc;
+  }, []);
 }
 
 export function extractMatrix(
@@ -52,9 +60,8 @@ export function extractMatrix(
   const X: number[][] = [];
   const validIndices: number[] = [];
   rows.forEach((row, i) => {
-    const vals = columns.map(col => Number(row[col]));
-    if (vals.every(v => !isNaN(v) && isFinite(v))) {
-      X.push(vals);
+    if (columns.every(col => isValidNumeric(row[col]))) {
+      X.push(columns.map(col => Number(row[col])));
       validIndices.push(i);
     }
   });
@@ -67,12 +74,7 @@ export function getValidRows(
   xNames: string[]
 ): { X: number[][]; y: number[]; dropped: number } {
   const allCols = [yName, ...xNames];
-  const valid = rows.filter(row =>
-    allCols.every(col => {
-      const v = Number(row[col]);
-      return !isNaN(v) && isFinite(v);
-    })
-  );
+  const valid = rows.filter(row => allCols.every(col => isValidNumeric(row[col])));
   return {
     X: valid.map(row => xNames.map(col => Number(row[col]))),
     y: valid.map(row => Number(row[yName])),
