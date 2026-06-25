@@ -33,6 +33,31 @@ export interface AnalysisResult {
   logitResult: LogisticResult | null;
 }
 
+export type AnalysisValidationIssueType =
+  | 'missing_values'
+  | 'invalid_numeric'
+  | 'constant_column'
+  | 'duplicate_column'
+  | 'collinearity';
+
+export interface AnalysisValidationIssue {
+  type: AnalysisValidationIssueType;
+  columns: string[];
+  message: string;
+  count?: number;
+  correlation?: number;
+}
+
+export class AnalysisValidationError extends Error {
+  issues: AnalysisValidationIssue[];
+
+  constructor(issues: AnalysisValidationIssue[]) {
+    super(formatValidationMessage(issues));
+    this.name = 'AnalysisValidationError';
+    this.issues = issues;
+  }
+}
+
 export function getCompleteNumericColumns(
   rows: Record<string, unknown>[],
   colNames: string[]
@@ -49,6 +74,37 @@ export function getCompleteNumericColumns(
 }
 
 const LEAK_THRESHOLD = 0.95;
+const COLLINEARITY_THRESHOLD = 0.9999;
+const EPS = 1e-12;
+
+function isMissing(raw: unknown): boolean {
+  return raw === null || raw === undefined || raw === '';
+}
+
+function isFiniteNumeric(raw: unknown): boolean {
+  if (isMissing(raw)) return false;
+  const value = Number(raw);
+  return !isNaN(value) && isFinite(value);
+}
+
+function sameNumber(a: number, b: number): boolean {
+  const scale = Math.max(1, Math.abs(a), Math.abs(b));
+  return Math.abs(a - b) <= EPS * scale;
+}
+
+function isConstant(values: number[]): boolean {
+  if (values.length <= 1) return true;
+  return values.every(value => sameNumber(value, values[0]));
+}
+
+function formatValidationMessage(issues: AnalysisValidationIssue[]): string {
+  const lines = issues.map(issue => `- ${issue.message}`);
+  return [
+    'No se pudo estimar el modelo porque el dataset tiene problemas que deben revisarse primero.',
+    ...lines,
+    'Chart Bay no elimino ni modifico datos automaticamente.',
+  ].join('\n');
+}
 
 function mean(values: number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -62,6 +118,151 @@ function sigmoid(z: number): number {
   if (z > 500) return 1;
   if (z < -500) return 0;
   return 1 / (1 + Math.exp(-z));
+}
+
+function columnCorrelation(a: number[], b: number[]): number {
+  const aMean = mean(a);
+  const bMean = mean(b);
+  let numerator = 0;
+  let aDev2 = 0;
+  let bDev2 = 0;
+  for (let i = 0; i < a.length; i++) {
+    const da = a[i] - aMean;
+    const db = b[i] - bMean;
+    numerator += da * db;
+    aDev2 += da * da;
+    bDev2 += db * db;
+  }
+  const denominator = Math.sqrt(aDev2 * bDev2);
+  return denominator === 0 ? 0 : numerator / denominator;
+}
+
+function hasRankDeficiency(matrix: number[][]): boolean {
+  if (matrix.length === 0 || matrix[0].length === 0) return false;
+  const n = matrix.length;
+  const p = matrix[0].length;
+  const cols = Array.from({ length: p }, (_, col) => matrix.map(row => row[col]));
+  const maxNorm = Math.max(...cols.map(col => Math.sqrt(col.reduce((sum, value) => sum + value * value, 0))));
+  const threshold = 1e-10 * Math.sqrt(n) * Math.max(1, maxNorm);
+  const basis: number[][] = [];
+
+  for (const col of cols) {
+    let residual = col.slice();
+    for (const vector of basis) {
+      const projection = vector.reduce((sum, value, index) => sum + value * residual[index], 0);
+      residual = residual.map((value, index) => value - projection * vector[index]);
+    }
+    const norm = Math.sqrt(residual.reduce((sum, value) => sum + value * value, 0));
+    if (norm < threshold) return true;
+    basis.push(residual.map(value => value / norm));
+  }
+
+  return false;
+}
+
+export function validateAnalysisInput(
+  csvData: ParsedCSV,
+  yName: string,
+  xNames: string[]
+): AnalysisValidationIssue[] {
+  const selected = [yName, ...xNames];
+  const issues: AnalysisValidationIssue[] = [];
+
+  for (const col of selected) {
+    let missing = 0;
+    let invalid = 0;
+    for (const row of csvData.rows) {
+      const raw = row[col];
+      if (isMissing(raw)) {
+        missing++;
+      } else if (!isFiniteNumeric(raw)) {
+        invalid++;
+      }
+    }
+
+    if (missing > 0) {
+      issues.push({
+        type: 'missing_values',
+        columns: [col],
+        count: missing,
+        message: `"${col}" tiene ${missing} valor(es) faltante(s). Completa o filtra esos registros antes de estimar.`,
+      });
+    }
+
+    if (invalid > 0) {
+      issues.push({
+        type: 'invalid_numeric',
+        columns: [col],
+        count: invalid,
+        message: `"${col}" tiene ${invalid} valor(es) con texto o formato no numerico. Revisa separadores, simbolos y celdas con texto.`,
+      });
+    }
+  }
+
+  if (issues.length > 0) return issues;
+
+  const columns = new Map<string, number[]>(
+    selected.map(col => [col, csvData.rows.map(row => Number(row[col]))])
+  );
+
+  for (const col of selected) {
+    const values = columns.get(col) ?? [];
+    if (isConstant(values)) {
+      issues.push({
+        type: 'constant_column',
+        columns: [col],
+        message: `"${col}" es constante: todos sus valores son iguales. Una columna sin variacion no aporta informacion al modelo.`,
+      });
+    }
+  }
+
+  for (let i = 0; i < xNames.length; i++) {
+    for (let j = i + 1; j < xNames.length; j++) {
+      const aName = xNames[i];
+      const bName = xNames[j];
+      const a = columns.get(aName) ?? [];
+      const b = columns.get(bName) ?? [];
+      if (a.length === b.length && a.every((value, index) => sameNumber(value, b[index]))) {
+        issues.push({
+          type: 'duplicate_column',
+          columns: [aName, bName],
+          message: `"${aName}" y "${bName}" son columnas duplicadas: tienen los mismos valores fila por fila.`,
+        });
+      }
+    }
+  }
+
+  for (let i = 0; i < xNames.length; i++) {
+    for (let j = i + 1; j < xNames.length; j++) {
+      const aName = xNames[i];
+      const bName = xNames[j];
+      const a = columns.get(aName) ?? [];
+      const b = columns.get(bName) ?? [];
+      if (isConstant(a) || isConstant(b)) continue;
+      const r = columnCorrelation(a, b);
+      if (Math.abs(r) >= COLLINEARITY_THRESHOLD) {
+        issues.push({
+          type: 'collinearity',
+          columns: [aName, bName],
+          correlation: r,
+          message: `"${aName}" y "${bName}" tienen colinealidad casi perfecta (r = ${r.toFixed(6)}). Elegi una de las dos o transforma las variables antes de estimar.`,
+        });
+      }
+    }
+  }
+
+  if (issues.length === 0 && xNames.length > 1) {
+    const design = csvData.rows.map(row => [1, ...xNames.map(col => Number(row[col]))]);
+    if (hasRankDeficiency(design)) {
+      issues.push({
+        type: 'collinearity',
+        columns: xNames,
+        message: 'Las variables X seleccionadas tienen colinealidad perfecta o casi perfecta como conjunto. Revisa si una columna es combinacion lineal de otras antes de estimar.',
+      });
+    }
+  }
+
+  return issues;
 }
 
 export function isBinaryTarget(y: number[]): boolean {
@@ -158,6 +359,11 @@ export function runQuantAnalysis(
   yName: string,
   xNames: string[]
 ): AnalysisResult {
+  const validationIssues = validateAnalysisInput(csvData, yName, xNames);
+  if (validationIssues.length > 0) {
+    throw new AnalysisValidationError(validationIssues);
+  }
+
   const { X, y, dropped } = getValidRows(csvData.rows, yName, xNames);
   if (y.length < xNames.length + 2) {
     throw new Error(`Observaciones insuficientes (${y.length}) para ${xNames.length} variable(s).`);
