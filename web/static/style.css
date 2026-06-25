@@ -553,10 +553,14 @@ input:focus,select:focus,textarea:focus,.search input:focus,.compare-input:focus
   line-height:1.6;
   padding:42px 30px;
   cursor:pointer;
+  animation:bootFailsafe .35s ease 4.8s forwards;
 }
 .boot pre{margin:0;white-space:pre-wrap}
 .boot .skip{position:absolute;right:16px;bottom:14px;color:var(--faint);font-size:11px}
-.boot.hide{opacity:0;transition:opacity .45s ease}
+.boot.hide{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .45s ease,visibility 0s linear .45s}
+@keyframes bootFailsafe{
+  to{opacity:0;visibility:hidden;pointer-events:none}
+}
 
 .login-wrap{
   width:min(380px,calc(100% - 28px));

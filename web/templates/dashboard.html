@@ -10,6 +10,21 @@
 </head>
 <body>
   <div id="boot" class="boot"><pre id="bootlog"></pre><span class="skip">[ clic para saltar ]</span></div>
+  <script>
+    (function(){
+      var boot = document.getElementById("boot");
+      if (!boot) return;
+      function releaseBoot(){
+        if (!boot || boot.dataset.released === "1") return;
+        boot.dataset.released = "1";
+        boot.classList.add("hide");
+        setTimeout(function(){ if (boot && boot.parentNode) boot.parentNode.removeChild(boot); }, 520);
+      }
+      boot.addEventListener("click", releaseBoot);
+      window.setTimeout(releaseBoot, 5200);
+      window.__chartbayReleaseBoot = releaseBoot;
+    })();
+  </script>
 
   <div class="wrap">
     {% include 'alfa_banner.html' %}
