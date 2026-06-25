@@ -1128,9 +1128,12 @@ a:hover{color:#7b0000}
 .boot{display:none!important}
 .alfa-banner{
   background:transparent;
-  color:#6f6b61;
+  color:#20130d;
   border:0;
-  padding:6px;
+  padding:7px 6px 2px;
+  font-family:"Old English Text MT","Cloister Black","UnifrakturCook","UnifrakturMaguntia",Georgia,"Times New Roman",serif;
+  font-size:15px;
+  font-weight:700;
   letter-spacing:0;
   text-transform:none;
 }
@@ -1150,11 +1153,11 @@ a:hover{color:#7b0000}
 }
 .ship{
   display:block;
-  width:245px;
-  height:170px;
-  margin:8px auto -4px;
+  width:min(430px,92vw);
+  height:250px;
+  margin:4px auto 0;
   overflow:visible;
-  background:url("/static/img/chartbay-ship.png") center/contain no-repeat;
+  background:url("/static/img/chartbay-logo.jpg") center/contain no-repeat;
 }
 .ship>*{display:none}
 .ship path,.ship line,.ship polyline,.ship circle,.ship rect{
@@ -1172,7 +1175,7 @@ a:hover{color:#7b0000}
 .ship .chart,.ship .jolly-line{fill:none;stroke:#4c2d1b}
 .ship .jolly,.ship .eye{fill:#4c2d1b;stroke:#4c2d1b}
 .wordmark{
-  display:inline-block;
+  display:none;
   margin:0 0 9px;
   color:#1b120c;
   font-family:"Old English Text MT","Cloister Black","UnifrakturCook","UnifrakturMaguntia","Blackletter",Georgia,"Times New Roman",serif;
@@ -1298,6 +1301,31 @@ input,select,textarea,.search input,.compare-input,.filterbar input[type=text],.
 .addcard{
   justify-content:center;
   margin:10px auto 0;
+}
+.guia-wrap{
+  margin:0 auto;
+}
+.guia-index{
+  margin:0 0 12px;
+  text-align:center;
+  font-size:13px;
+}
+.guia-index span{color:#777;margin:0 6px}
+.guia-section-title{
+  margin:18px 0 8px;
+  color:#000;
+  font-family:Georgia,"Times New Roman",serif;
+  font-size:21px;
+  text-align:center;
+}
+.guia-nombre{
+  color:#000;
+  font-size:15px;
+  font-weight:700;
+}
+.guia-que,.guia-como{
+  color:#222;
+  font-size:13px;
 }
 .result{margin:14px 0 0}
 .result-head,.verdict,.terminal,.tv-advanced,.cmp-chart,.info-box,.botcard,.reviewform,.guia-entry{

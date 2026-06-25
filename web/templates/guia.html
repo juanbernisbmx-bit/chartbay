@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ChartBay · Guía de indicadores</title>
+  <title>ChartBay - Guia</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -11,92 +11,348 @@
   <div class="wrap">
     {% include 'alfa_banner.html' %}
     <header class="masthead">
-      <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
+      <div class="ship" aria-hidden="true"></div>
+      <h1 class="wordmark" aria-label="Chart Bay">Chart Bay</h1>
       <nav class="mainnav">
-        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">·</span>
-        <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">·</span>
-        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
-        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">·</span>
-        <a href="{{ url_for('guia') }}">Guía</a><span class="sep">·</span>
-        <a href="{{ url_for('quantbay') }}">Quant</a><span class="sep">·</span>
-        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
-        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
+        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">.</span>
+        <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">.</span>
+        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">.</span>
+        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">.</span>
+        <strong>Guia</strong><span class="sep">.</span>
+        <a href="{{ url_for('quantbay') }}">Quant</a><span class="sep">.</span>
+        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">.</span>
+        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">.</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
       </nav>
     </header>
 
-    <p class="catalog-title">Guía de indicadores</p>
+    <p class="catalog-title">Guia de conceptos</p>
 
     <div class="guia-wrap">
+      <div class="guia-index">
+        <a href="#finanzas">Finanzas e indicadores</a>
+        <span>|</span>
+        <a href="#econometria">Econometria y Quant Bay</a>
+      </div>
+
+      <h2 class="guia-section-title" id="finanzas">Finanzas e indicadores de mercado</h2>
 
       <div class="guia-entry" id="tendencia">
         <h3 class="guia-nombre">Tendencia (medias EMA 20/50/200)</h3>
-        <p class="guia-que"><strong>Qué es:</strong> el rumbo general del precio según sus promedios.</p>
-        <p class="guia-como"><strong>Cómo leerlo:</strong> si la EMA50 está por encima de la EMA200 y el precio sobre ellas → tendencia alcista; al revés → bajista; entrelazadas → lateral (sin rumbo claro).</p>
+        <p class="guia-que"><strong>Que es:</strong> el rumbo general del precio segun sus promedios moviles.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> si la EMA50 esta por encima de la EMA200 y el precio esta sobre ellas, el contexto suele ser alcista. Si ocurre al reves, suele ser bajista. Si se cruzan mucho, el mercado esta lateral.</p>
       </div>
 
       <div class="guia-entry" id="rsi">
-        <h3 class="guia-nombre">RSI (Índice de Fuerza Relativa)</h3>
-        <p class="guia-que"><strong>Qué es:</strong> mide si el activo está "sobrecomprado" o "sobrevendido" (0 a 100).</p>
-        <p class="guia-como"><strong>Cómo leerlo:</strong> por encima de 70 suele estar caro/sobrecomprado (posible freno); por debajo de 30, barato/sobrevendido (posible rebote); ~50 es neutral.</p>
+        <h3 class="guia-nombre">RSI (Indice de Fuerza Relativa)</h3>
+        <p class="guia-que"><strong>Que es:</strong> un oscilador de 0 a 100 que mide velocidad y fuerza del movimiento.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> arriba de 70 puede indicar sobrecompra; abajo de 30, sobreventa. Cerca de 50 suele ser neutral.</p>
       </div>
 
       <div class="guia-entry" id="macd">
         <h3 class="guia-nombre">MACD</h3>
-        <p class="guia-que"><strong>Qué es:</strong> compara dos medias para detectar cambios de impulso.</p>
-        <p class="guia-como"><strong>Cómo leerlo:</strong> si el histograma pasa de negativo a positivo (cruce al alza) → impulso comprador; de positivo a negativo → impulso vendedor.</p>
+        <p class="guia-que"><strong>Que es:</strong> compara medias moviles para detectar cambios de impulso.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> cuando el histograma pasa de negativo a positivo puede aparecer impulso comprador; cuando pasa de positivo a negativo puede aparecer impulso vendedor.</p>
       </div>
 
       <div class="guia-entry" id="estocastico">
-        <h3 class="guia-nombre">Estocástico (%K / %D)</h3>
-        <p class="guia-que"><strong>Qué es:</strong> otro medidor de sobrecompra/sobreventa, más rápido que el RSI.</p>
-        <p class="guia-como"><strong>Cómo leerlo:</strong> arriba de 80 = sobrecomprado; abajo de 20 = sobrevendido. Un cruce de %K sobre %D en zona baja sugiere rebote; lo contrario en zona alta, caída.</p>
+        <h3 class="guia-nombre">Estocastico (%K / %D)</h3>
+        <p class="guia-que"><strong>Que es:</strong> un indicador rapido de sobrecompra y sobreventa.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> arriba de 80 suele marcar sobrecompra; abajo de 20, sobreventa. Los cruces de %K y %D ayudan a detectar cambios de corto plazo.</p>
       </div>
 
       <div class="guia-entry" id="atr">
         <h3 class="guia-nombre">ATR (volatilidad)</h3>
-        <p class="guia-que"><strong>Qué es:</strong> cuánto se mueve el precio en promedio (en valor y en % del precio).</p>
-        <p class="guia-como"><strong>Cómo leerlo:</strong> ATR alto = mucha volatilidad (movimientos grandes, más riesgo); bajo = mercado calmo. Sirve para dimensionar stops (ej. 1.5× ATR).</p>
+        <p class="guia-que"><strong>Que es:</strong> cuanto se mueve el precio en promedio.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> ATR alto significa movimientos grandes y mas riesgo; ATR bajo significa mercado mas calmo. Sirve para dimensionar stops.</p>
       </div>
 
       <div class="guia-entry" id="bollinger">
         <h3 class="guia-nombre">Bandas de Bollinger</h3>
-        <p class="guia-que"><strong>Qué es:</strong> una banda alrededor del precio según su volatilidad.</p>
-        <p class="guia-como"><strong>Cómo leerlo:</strong> tocar la banda superior = precio "estirado" arriba; la inferior, estirado abajo. Bandas muy juntas suelen anticipar un movimiento fuerte.</p>
+        <p class="guia-que"><strong>Que es:</strong> bandas alrededor del precio calculadas con volatilidad.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> tocar la banda superior puede indicar precio estirado al alza; tocar la inferior, precio estirado a la baja. Bandas muy juntas suelen anticipar movimiento fuerte.</p>
       </div>
 
       <div class="guia-entry" id="soporte">
         <h3 class="guia-nombre">Soporte y resistencia</h3>
-        <p class="guia-que"><strong>Qué es:</strong> niveles donde el precio suele frenar (soporte abajo, resistencia arriba).</p>
-        <p class="guia-como"><strong>Cómo leerlo:</strong> cerca del soporte puede rebotar; cerca de la resistencia puede frenar. Si los rompe con fuerza, suele seguir en esa dirección.</p>
+        <p class="guia-que"><strong>Que es:</strong> zonas donde el precio suele frenar o reaccionar.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> soporte es zona inferior donde puede rebotar; resistencia es zona superior donde puede frenarse. Si rompe con fuerza, puede continuar.</p>
       </div>
 
       <div class="guia-entry" id="volumen">
         <h3 class="guia-nombre">Volumen relativo</h3>
-        <p class="guia-que"><strong>Qué es:</strong> el volumen de hoy comparado con su promedio de 20 sesiones.</p>
-        <p class="guia-como"><strong>Cómo leerlo:</strong> mayor a 1 = más actividad de lo normal (movimiento con convicción); menor a 1 = poco interés (movimientos menos confiables).</p>
+        <p class="guia-que"><strong>Que es:</strong> el volumen actual comparado contra su promedio.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> mayor a 1 indica mas actividad de lo normal; menor a 1 indica poco interes. Ayuda a juzgar si un movimiento tiene conviccion.</p>
       </div>
 
       <div class="guia-entry" id="obv">
         <h3 class="guia-nombre">OBV (volumen en balance)</h3>
-        <p class="guia-que"><strong>Qué es:</strong> acumula el volumen según si el precio sube o baja.</p>
-        <p class="guia-como"><strong>Cómo leerlo:</strong> si el OBV sube junto con el precio, confirma la tendencia; si el precio sube pero el OBV baja, ojo: puede ser una señal débil (divergencia).</p>
+        <p class="guia-que"><strong>Que es:</strong> acumula volumen segun si el precio sube o baja.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> si OBV sube junto con el precio, confirma fuerza. Si el precio sube pero OBV baja, puede haber divergencia.</p>
       </div>
 
       <div class="guia-entry" id="ichimoku">
-        <h3 class="guia-nombre">Ichimoku (la "nube")</h3>
-        <p class="guia-que"><strong>Qué es:</strong> un sistema que muestra tendencia, soporte/resistencia y momentum juntos.</p>
-        <p class="guia-como"><strong>Cómo leerlo:</strong> precio por encima de la nube = contexto alcista; por debajo = bajista; dentro de la nube = indecisión.</p>
+        <h3 class="guia-nombre">Ichimoku (nube)</h3>
+        <p class="guia-que"><strong>Que es:</strong> un sistema que combina tendencia, soporte/resistencia y momentum.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> precio sobre la nube suele ser alcista; debajo de la nube, bajista; dentro de la nube, indecision.</p>
       </div>
 
       <div class="guia-entry" id="fibonacci">
         <h3 class="guia-nombre">Fibonacci (retrocesos)</h3>
-        <p class="guia-que"><strong>Qué es:</strong> niveles donde un precio suele "descansar" tras un movimiento (0.236, 0.382, 0.5, 0.618, 0.786).</p>
-        <p class="guia-como"><strong>Cómo leerlo:</strong> en una subida, esos niveles actúan como posibles soportes donde el precio puede frenar la corrección; el 0.618 es el más vigilado.</p>
+        <p class="guia-que"><strong>Que es:</strong> niveles donde un precio puede descansar despues de un movimiento.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> los niveles 0.382, 0.5 y 0.618 suelen vigilarse como posibles soportes o resistencias.</p>
+      </div>
+
+      <h2 class="guia-section-title" id="econometria">Econometria y Quant Bay</h2>
+
+      <div class="guia-entry" id="dataset">
+        <h3 class="guia-nombre">Dataset</h3>
+        <p class="guia-que"><strong>Que es:</strong> la tabla de datos que subis a Quant Bay, normalmente en CSV.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> cada fila es una observacion y cada columna es una variable.</p>
+      </div>
+
+      <div class="guia-entry" id="csv">
+        <h3 class="guia-nombre">CSV</h3>
+        <p class="guia-que"><strong>Que es:</strong> un archivo de texto con datos separados por comas.</p>
+        <p class="guia-como"><strong>Como usarlo:</strong> la primera fila debe tener nombres de columnas. Quant Bay detecta las columnas numericas automaticamente.</p>
+      </div>
+
+      <div class="guia-entry" id="observaciones">
+        <h3 class="guia-nombre">Observaciones</h3>
+        <p class="guia-que"><strong>Que es:</strong> la cantidad de filas validas usadas por el modelo.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> mas observaciones suelen dar estimaciones mas estables, aunque la calidad del dato importa mas que el numero solo.</p>
+      </div>
+
+      <div class="guia-entry" id="variable-y">
+        <h3 class="guia-nombre">Variable dependiente (Y)</h3>
+        <p class="guia-que"><strong>Que es:</strong> la variable que queres explicar o predecir.</p>
+        <p class="guia-como"><strong>Ejemplo:</strong> si queres explicar el rendimiento de una accion, ese rendimiento es Y.</p>
+      </div>
+
+      <div class="guia-entry" id="variable-x">
+        <h3 class="guia-nombre">Variables independientes (X)</h3>
+        <p class="guia-que"><strong>Que es:</strong> las variables que usas para explicar Y.</p>
+        <p class="guia-como"><strong>Ejemplo:</strong> volumen, volatilidad, tasa, inflacion o cualquier columna numerica que pueda ayudar a explicar Y.</p>
+      </div>
+
+      <div class="guia-entry" id="matriz-diseno">
+        <h3 class="guia-nombre">Matriz de diseno</h3>
+        <p class="guia-que"><strong>Que es:</strong> la tabla interna que arma el modelo con las variables X seleccionadas.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> si esta matriz tiene columnas repetidas o casi iguales, el modelo puede fallar o volverse inestable.</p>
+      </div>
+
+      <div class="guia-entry" id="ols">
+        <h3 class="guia-nombre">OLS / Minimos Cuadrados Ordinarios</h3>
+        <p class="guia-que"><strong>Que es:</strong> el metodo que busca la linea o formula que minimiza los errores entre valores reales y estimados.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> sirve para estimar relaciones lineales. No prueba causalidad por si solo.</p>
+      </div>
+
+      <div class="guia-entry" id="regresion">
+        <h3 class="guia-nombre">Regresion lineal</h3>
+        <p class="guia-que"><strong>Que es:</strong> un modelo que explica Y como combinacion de una o mas variables X.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> produce una ecuacion del tipo Y = intercepto + coeficientes por variables.</p>
+      </div>
+
+      <div class="guia-entry" id="intercepto">
+        <h3 class="guia-nombre">Intercepto</h3>
+        <p class="guia-que"><strong>Que es:</strong> el valor estimado de Y cuando todas las X valen cero.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> no siempre tiene interpretacion economica directa; depende de si X=0 tiene sentido en tus datos.</p>
+      </div>
+
+      <div class="guia-entry" id="coeficiente">
+        <h3 class="guia-nombre">Coeficiente</h3>
+        <p class="guia-que"><strong>Que es:</strong> el efecto estimado de una variable X sobre Y, manteniendo las demas constantes.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> coeficiente positivo indica relacion positiva; negativo indica relacion inversa. La significancia se mira con el p-valor.</p>
+      </div>
+
+      <div class="guia-entry" id="ecuacion">
+        <h3 class="guia-nombre">Ecuacion estimada</h3>
+        <p class="guia-que"><strong>Que es:</strong> la formula final que devuelve la regresion.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> muestra intercepto y coeficientes; sirve para entender direccion y magnitud de cada variable.</p>
+      </div>
+
+      <div class="guia-entry" id="prediccion">
+        <h3 class="guia-nombre">Prediccion / valor estimado</h3>
+        <p class="guia-que"><strong>Que es:</strong> el valor que el modelo calcula para Y usando la ecuacion estimada.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> se compara contra el valor real para ver que tan bien ajusta el modelo.</p>
+      </div>
+
+      <div class="guia-entry" id="residuo">
+        <h3 class="guia-nombre">Residuo</h3>
+        <p class="guia-que"><strong>Que es:</strong> la diferencia entre valor real y valor predicho.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> residuos chicos indican mejor ajuste. Patrones claros en residuos pueden indicar que el modelo esta mal especificado.</p>
+      </div>
+
+      <div class="guia-entry" id="actual-vs-predicho">
+        <h3 class="guia-nombre">Actual vs. Predicho</h3>
+        <p class="guia-que"><strong>Que es:</strong> un grafico que compara valores reales contra valores estimados.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> cuanto mas cerca esten los puntos de la diagonal, mejor ajusta el modelo.</p>
+      </div>
+
+      <div class="guia-entry" id="r2">
+        <h3 class="guia-nombre">R2</h3>
+        <p class="guia-que"><strong>Que es:</strong> porcentaje de variacion de Y explicado por el modelo.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> R2 alto no siempre significa buen modelo. Puede haber sobreajuste, fuga de datos o variables mal elegidas.</p>
+      </div>
+
+      <div class="guia-entry" id="r2-ajustado">
+        <h3 class="guia-nombre">R2 ajustado</h3>
+        <p class="guia-que"><strong>Que es:</strong> una version de R2 que penaliza agregar variables innecesarias.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> es mas util que R2 cuando comparas modelos con distinta cantidad de variables.</p>
+      </div>
+
+      <div class="guia-entry" id="error-estandar">
+        <h3 class="guia-nombre">Error estandar</h3>
+        <p class="guia-que"><strong>Que es:</strong> una medida de incertidumbre del coeficiente estimado.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> error estandar bajo indica estimacion mas precisa; alto indica mas incertidumbre.</p>
+      </div>
+
+      <div class="guia-entry" id="t-stat">
+        <h3 class="guia-nombre">t-stat</h3>
+        <p class="guia-que"><strong>Que es:</strong> coeficiente dividido por su error estandar.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> valores absolutos mas grandes suelen indicar mas evidencia de que el coeficiente no es cero.</p>
+      </div>
+
+      <div class="guia-entry" id="p-valor">
+        <h3 class="guia-nombre">p-valor</h3>
+        <p class="guia-que"><strong>Que es:</strong> una medida de evidencia estadistica contra la hipotesis de que el coeficiente es cero.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> p menor a 0.05 suele considerarse significativo. No mide importancia economica ni causalidad.</p>
+      </div>
+
+      <div class="guia-entry" id="significancia">
+        <h3 class="guia-nombre">Significancia estadistica</h3>
+        <p class="guia-que"><strong>Que es:</strong> una forma de marcar si un resultado parece dificil de explicar por azar bajo ciertos supuestos.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> en Quant Bay, *** indica p&lt;0.01, ** p&lt;0.05, * p&lt;0.10 y n.s. no significativo.</p>
+      </div>
+
+      <div class="guia-entry" id="ic95">
+        <h3 class="guia-nombre">Intervalo de confianza 95%</h3>
+        <p class="guia-que"><strong>Que es:</strong> un rango probable para el coeficiente estimado bajo los supuestos del modelo.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> si el intervalo incluye cero, el efecto puede no ser estadisticamente claro.</p>
+      </div>
+
+      <div class="guia-entry" id="f-stat">
+        <h3 class="guia-nombre">F-estadistico</h3>
+        <p class="guia-que"><strong>Que es:</strong> prueba si el modelo completo aporta explicacion frente a un modelo sin variables X.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> se interpreta junto con p(F). Un p(F) bajo sugiere que el conjunto de variables tiene poder explicativo.</p>
+      </div>
+
+      <div class="guia-entry" id="grados-libertad">
+        <h3 class="guia-nombre">Grados de libertad</h3>
+        <p class="guia-que"><strong>Que es:</strong> observaciones disponibles menos parametros estimados.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> pocos grados de libertad hacen que las pruebas sean menos confiables.</p>
+      </div>
+
+      <div class="guia-entry" id="sigma2">
+        <h3 class="guia-nombre">Varianza residual / sigma2</h3>
+        <p class="guia-que"><strong>Que es:</strong> mide la dispersion de los errores del modelo.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> valores menores indican residuos menos dispersos, pero debe evaluarse junto con graficos y contexto.</p>
+      </div>
+
+      <div class="guia-entry" id="correlacion">
+        <h3 class="guia-nombre">Correlacion de Pearson</h3>
+        <p class="guia-que"><strong>Que es:</strong> mide relacion lineal entre dos variables, de -1 a 1.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> cerca de 1 es relacion positiva fuerte; cerca de -1, negativa fuerte; cerca de 0, poca relacion lineal.</p>
+      </div>
+
+      <div class="guia-entry" id="matriz-correlacion">
+        <h3 class="guia-nombre">Matriz de correlacion</h3>
+        <p class="guia-que"><strong>Que es:</strong> una tabla con correlaciones entre todas las variables numericas.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> ayuda a detectar variables muy parecidas entre si o posibles relaciones fuertes.</p>
+      </div>
+
+      <div class="guia-entry" id="multicolinealidad">
+        <h3 class="guia-nombre">Multicolinealidad</h3>
+        <p class="guia-que"><strong>Que es:</strong> ocurre cuando dos o mas variables X explican casi lo mismo.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> puede volver inestables los coeficientes y hacer que el modelo falle por matriz singular.</p>
+      </div>
+
+      <div class="guia-entry" id="vif">
+        <h3 class="guia-nombre">VIF</h3>
+        <p class="guia-que"><strong>Que es:</strong> indicador de multicolinealidad para cada variable X.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> VIF menor a 5 suele ser aceptable; entre 5 y 10 pide cuidado; mayor a 10 indica problema serio.</p>
+      </div>
+
+      <div class="guia-entry" id="matriz-singular">
+        <h3 class="guia-nombre">Matriz singular</h3>
+        <p class="guia-que"><strong>Que es:</strong> un caso donde el modelo no puede calcular coeficientes porque hay variables repetidas o perfectamente relacionadas.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> hay que quitar una variable redundante o usar la opcion de arreglo automatico si esta disponible.</p>
+      </div>
+
+      <div class="guia-entry" id="filas-omitidas">
+        <h3 class="guia-nombre">Filas omitidas / missing values</h3>
+        <p class="guia-que"><strong>Que es:</strong> filas que Quant Bay no usa porque falta algun dato necesario o no es numerico.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> si se omiten muchas filas, revisa el CSV porque el resultado puede quedar sesgado o con poca muestra.</p>
+      </div>
+
+      <div class="guia-entry" id="variable-binaria">
+        <h3 class="guia-nombre">Variable binaria</h3>
+        <p class="guia-que"><strong>Que es:</strong> una variable que solo toma dos valores, como 0 y 1.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> si Y es binaria, OLS se interpreta como modelo de probabilidad lineal y tiene limitaciones.</p>
+      </div>
+
+      <div class="guia-entry" id="mpl">
+        <h3 class="guia-nombre">Modelo de Probabilidad Lineal</h3>
+        <p class="guia-que"><strong>Que es:</strong> usar OLS cuando la variable Y es 0/1.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> los coeficientes se leen como cambios aproximados en puntos porcentuales, pero las predicciones pueden quedar fuera de 0 a 1.</p>
+      </div>
+
+      <div class="guia-entry" id="logistica">
+        <h3 class="guia-nombre">Regresion logistica</h3>
+        <p class="guia-que"><strong>Que es:</strong> un modelo mas apropiado para variables dependientes binarias.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> estima probabilidades entre 0 y 1. Quant Bay la muestra como comparacion cuando detecta Y binaria.</p>
+      </div>
+
+      <div class="guia-entry" id="odds-ratio">
+        <h3 class="guia-nombre">Odds ratio</h3>
+        <p class="guia-que"><strong>Que es:</strong> una forma de interpretar coeficientes de regresion logistica.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> mayor a 1 aumenta las chances del evento; menor a 1 las reduce.</p>
+      </div>
+
+      <div class="guia-entry" id="log-verosimilitud">
+        <h3 class="guia-nombre">Log-verosimilitud</h3>
+        <p class="guia-que"><strong>Que es:</strong> medida de ajuste usada en modelos como la regresion logistica.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> sirve para comparar modelos logisticos; por si sola no es tan intuitiva como R2.</p>
+      </div>
+
+      <div class="guia-entry" id="mcfadden">
+        <h3 class="guia-nombre">Pseudo R2 de McFadden</h3>
+        <p class="guia-que"><strong>Que es:</strong> medida de ajuste para regresion logistica.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> no se interpreta igual que R2 lineal. Valores entre 0.2 y 0.4 pueden ser buenos en modelos logisticos.</p>
+      </div>
+
+      <div class="guia-entry" id="data-leakage">
+        <h3 class="guia-nombre">Data leakage / fuga de datos</h3>
+        <p class="guia-que"><strong>Que es:</strong> cuando una variable X contiene informacion directa o indirecta de Y.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> puede inflar artificialmente el R2 y hacer que el modelo parezca mejor de lo que realmente es.</p>
+      </div>
+
+      <div class="guia-entry" id="sobreajuste">
+        <h3 class="guia-nombre">Sobreajuste</h3>
+        <p class="guia-que"><strong>Que es:</strong> cuando el modelo aprende demasiado bien la muestra, pero generaliza mal.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> R2 muy alto con muchas variables o pocos datos puede ser una senal de sobreajuste.</p>
+      </div>
+
+      <div class="guia-entry" id="supuestos-ols">
+        <h3 class="guia-nombre">Supuestos de OLS</h3>
+        <p class="guia-que"><strong>Que es:</strong> condiciones bajo las cuales las pruebas estadisticas del modelo son mas confiables.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> incluye linealidad, independencia de errores, varianza constante de residuos y ausencia de multicolinealidad severa.</p>
+      </div>
+
+      <div class="guia-entry" id="homocedasticidad">
+        <h3 class="guia-nombre">Homocedasticidad</h3>
+        <p class="guia-que"><strong>Que es:</strong> que los residuos tengan varianza parecida a lo largo del rango de predicciones.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> si los residuos se abren como abanico, puede haber heterocedasticidad y los p-valores pueden ser menos confiables.</p>
+      </div>
+
+      <div class="guia-entry" id="linealidad">
+        <h3 class="guia-nombre">Linealidad</h3>
+        <p class="guia-que"><strong>Que es:</strong> supuesto de que la relacion entre X e Y puede aproximarse con una combinacion lineal.</p>
+        <p class="guia-como"><strong>Como leerlo:</strong> si la relacion real es curva o cambia por tramos, OLS simple puede quedar corto.</p>
       </div>
 
     </div>
 
-    <p class="colophon">Esto es material educativo, no asesoramiento financiero. Ningún indicador acierta solo: se usan combinados y nunca garantizan resultados.</p>
+    <p class="colophon">Esto es material educativo, no asesoramiento financiero. Ningun indicador ni modelo econometrico garantiza resultados.</p>
   </div>
 </body>
 </html>
