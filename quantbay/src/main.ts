@@ -1,18 +1,18 @@
-import { parseCSVFile, getValidRows } from './csvParser';
-import { runOLS, computeVIF, type RegressionResult } from './regression';
-import { pearsonMatrix } from './statistics';
+import { parseCSVFile, type ParsedCSV } from './csvParser';
+import type { RegressionResult } from './regression';
 import { interpret } from './interpretation';
+import { runQuantAnalysis } from './services/analysisService';
+import {
+  correlationClass,
+  escapeHtml,
+  significanceBadge,
+  significanceLabel,
+} from './utils/format';
 
 declare const Chart: any;
 declare const jspdf: any; // window.jspdf from CDN
 
-interface CSVData {
-  headers: string[];
-  rows: Record<string, unknown>[];
-  numericColumns: string[];
-}
-
-let csvData: CSVData | null = null;
+let csvData: ParsedCSV | null = null;
 let activeChart: any = null;
 let residFittedChart: any = null;
 let residHistChart: any = null;
@@ -23,40 +23,11 @@ let lastVIF: number[] | null = null;
 
 const $ = (id: string): HTMLElement | null => document.getElementById(id);
 
-const esc = (s: unknown): string =>
-  String(s ?? '').replace(
-    /[&<>"']/g,
-    c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c)
-  );
-
 function showError(msg: string): void {
   const el = $('qb-error');
   if (!el) return;
   el.textContent = msg;
   el.style.display = msg ? '' : 'none';
-}
-
-function sigBadge(p: number): string {
-  if (p < 0.01) return '<span class="sig-badge sig-h">*** p&lt;0.01</span>';
-  if (p < 0.05) return '<span class="sig-badge sig-m">** p&lt;0.05</span>';
-  if (p < 0.10) return '<span class="sig-badge sig-l">* p&lt;0.10</span>';
-  return '<span class="sig-badge sig-n">n.s.</span>';
-}
-
-function sigLabel(p: number): string {
-  if (p < 0.01) return '***';
-  if (p < 0.05) return '**';
-  if (p < 0.10) return '*';
-  return 'n.s.';
-}
-
-function corrCls(r: number, isDiag: boolean): string {
-  if (isDiag) return 'corr-diag';
-  if (r >= 0.7) return 'corr-sp';
-  if (r <= -0.7) return 'corr-sn';
-  if (r >= 0.3) return 'corr-mp';
-  if (r <= -0.3) return 'corr-mn';
-  return 'corr-w';
 }
 
 // ── Upload ────────────────────────────────────────────────────────────────────
@@ -87,11 +58,11 @@ async function onFileChange(e: Event): Promise<void> {
 
 // ── Preview ───────────────────────────────────────────────────────────────────
 
-function renderPreview({ headers, rows, numericColumns }: CSVData): void {
+function renderPreview({ headers, rows, numericColumns }: ParsedCSV): void {
   const preview = rows.slice(0, 6);
-  const thead = `<tr>${headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr>`;
+  const thead = `<tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
   const tbody = preview
-    .map(row => `<tr>${headers.map(h => `<td>${esc(row[h])}</td>`).join('')}</tr>`)
+    .map(row => `<tr>${headers.map(h => `<td>${escapeHtml(row[h])}</td>`).join('')}</tr>`)
     .join('');
   const wrap = $('qb-table-wrap');
   if (!wrap) return;
@@ -110,27 +81,17 @@ function renderPreview({ headers, rows, numericColumns }: CSVData): void {
 function renderVarSelectors(cols: string[]): void {
   const yEl = $('qb-y') as HTMLSelectElement | null;
   const xEl = $('qb-x-checks');
-  if (yEl) yEl.innerHTML = cols.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  if (yEl) yEl.innerHTML = cols.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   if (xEl)
     xEl.innerHTML = cols
       .map(
         (c, i) =>
-          `<label class="qb-x-check"><input type="checkbox" class="qb-x-cb" value="${esc(c)}" ${i > 0 ? 'checked' : ''}> ${esc(c)}</label>`
+          `<label class="qb-x-check"><input type="checkbox" class="qb-x-cb" value="${escapeHtml(c)}" ${i > 0 ? 'checked' : ''}> ${escapeHtml(c)}</label>`
       )
       .join('');
 }
 
 // ── Run regression ────────────────────────────────────────────────────────────
-
-function getAllNumericData(
-  rows: Record<string, unknown>[],
-  colNames: string[]
-): number[][] {
-  const valid = rows.filter(row =>
-    colNames.every(c => { const v = Number(row[c]); return !isNaN(v) && isFinite(v); })
-  );
-  return colNames.map(col => valid.map(row => Number(row[col])));
-}
 
 function onRun(): void {
   if (!csvData) return;
@@ -145,25 +106,21 @@ function onRun(): void {
     return;
   }
 
-  const { X, y, dropped } = getValidRows(csvData.rows, yName, xNames);
-  if (y.length < xNames.length + 2) {
-    showError(`Observaciones insuficientes (${y.length}) para ${xNames.length} variable(s).`);
-    return;
-  }
-
   try {
-    const result = runOLS({ X, y, featureNames: xNames, yName });
+    const analysis = runQuantAnalysis(csvData, yName, xNames);
 
-    const allColData = getAllNumericData(csvData.rows, csvData.numericColumns);
-    const corrMatrix = pearsonMatrix(allColData);
-    const vifValues = computeVIF(X);
+    lastResult = analysis.result;
+    lastCorr = analysis.corrMatrix;
+    lastCorrCols = analysis.corrColumns;
+    lastVIF = analysis.vifValues;
 
-    lastResult = result;
-    lastCorr = corrMatrix;
-    lastCorrCols = csvData.numericColumns;
-    lastVIF = vifValues;
-
-    renderResults(result, dropped, corrMatrix, csvData.numericColumns, vifValues);
+    renderResults(
+      analysis.result,
+      analysis.dropped,
+      analysis.corrMatrix,
+      analysis.corrColumns,
+      analysis.vifValues
+    );
     const res = $('qb-results');
     if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
   } catch (err) {
@@ -220,16 +177,16 @@ function renderCoefTable(result: RegressionResult): void {
       <td>${fmt6(result.stdErrors[0])}</td>
       <td>${fmt4(result.tStats[0])}</td>
       <td>${fmt4(result.pValues[0])}</td>
-      <td>${sigBadge(result.pValues[0])}</td>
+      <td>${significanceBadge(result.pValues[0])}</td>
     </tr>`,
     ...result.featureNames.map(
       (n, i) => `<tr>
-        <td>${esc(n)}</td>
+        <td>${escapeHtml(n)}</td>
         <td>${fmt6(result.coefficients[i])}</td>
         <td>${fmt6(result.stdErrors[i + 1])}</td>
         <td>${fmt4(result.tStats[i + 1])}</td>
         <td>${fmt4(result.pValues[i + 1])}</td>
-        <td>${sigBadge(result.pValues[i + 1])}</td>
+        <td>${significanceBadge(result.pValues[i + 1])}</td>
       </tr>`
     ),
   ].join('');
@@ -309,13 +266,13 @@ function renderCorrMatrix(corrMatrix: number[][], colNames: string[]): void {
   const abbr = (n: string) => (n.length > 9 ? n.slice(0, 8) + '…' : n);
 
   let html = '<table class="ledger qb-corr-table"><thead><tr><th></th>';
-  html += colNames.map(n => `<th title="${esc(n)}">${esc(abbr(n))}</th>`).join('');
+  html += colNames.map(n => `<th title="${escapeHtml(n)}">${escapeHtml(abbr(n))}</th>`).join('');
   html += '</tr></thead><tbody>';
   for (let i = 0; i < k; i++) {
-    html += `<tr><th title="${esc(colNames[i])}">${esc(abbr(colNames[i]))}</th>`;
+    html += `<tr><th title="${escapeHtml(colNames[i])}">${escapeHtml(abbr(colNames[i]))}</th>`;
     for (let j = 0; j < k; j++) {
       const r = corrMatrix[i][j];
-      html += `<td class="${corrCls(r, i === j)}">${r.toFixed(3)}</td>`;
+      html += `<td class="${correlationClass(r, i === j)}">${r.toFixed(3)}</td>`;
     }
     html += '</tr>';
   }
@@ -367,14 +324,14 @@ function renderVIF(vifValues: number[], xNames: string[]): void {
     } else {
       cls = 'qb-vif-ok'; label = '✓ Aceptable';
     }
-    html += `<tr><td>${esc(xNames[i])}</td><td>${vStr}</td><td class="${cls}">${label}</td></tr>`;
+    html += `<tr><td>${escapeHtml(xNames[i])}</td><td>${vStr}</td><td class="${cls}">${label}</td></tr>`;
   });
   html += '</tbody></table>';
   wrap.innerHTML = html;
 
   if (warnEl) {
     warnEl.innerHTML = warnings.length > 0
-      ? `<div class="qb-warn">${warnings.map(w => `<p>${esc(w)}</p>`).join('')}</div>`
+      ? `<div class="qb-warn">${warnings.map(w => `<p>${escapeHtml(w)}</p>`).join('')}</div>`
       : '';
   }
 }
@@ -503,12 +460,12 @@ function exportPDF(): void {
       body: [
         ['Intercepto', lastResult.intercept.toFixed(6), lastResult.stdErrors[0].toFixed(6),
           isFinite(lastResult.tStats[0]) ? lastResult.tStats[0].toFixed(4) : '—',
-          lastResult.pValues[0].toFixed(4), sigLabel(lastResult.pValues[0])],
+          lastResult.pValues[0].toFixed(4), significanceLabel(lastResult.pValues[0])],
         ...lastResult.featureNames.map((n, i) => [n,
           lastResult!.coefficients[i].toFixed(6),
           lastResult!.stdErrors[i + 1].toFixed(6),
           isFinite(lastResult!.tStats[i + 1]) ? lastResult!.tStats[i + 1].toFixed(4) : '—',
-          lastResult!.pValues[i + 1].toFixed(4), sigLabel(lastResult!.pValues[i + 1])]),
+          lastResult!.pValues[i + 1].toFixed(4), significanceLabel(lastResult!.pValues[i + 1])]),
       ],
       startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [27, 58, 107] }, margin: { left: 10, right: 10 },
     });
