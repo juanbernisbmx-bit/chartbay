@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ChartBay · Bitácoras</title>
+  <title>ChartBay · Reportes</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -13,9 +13,9 @@
     <header class="masthead">
       <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
       <nav class="mainnav">
-        <a href="{{ url_for('dashboard') }}">Puerto</a><span class="sep">·</span>
+        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">·</span>
         <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
-        <a href="{{ url_for('heatmap') }}">Calor</a><span class="sep">·</span>
+        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">·</span>
         <a href="{{ url_for('guia') }}">Guía</a><span class="sep">·</span>
         <a href="{{ url_for('quantbay') }}">Quant</a><span class="sep">·</span>
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
@@ -23,7 +23,7 @@
       </nav>
     </header>
     <hr class="rule">
-    <p class="catalog-title">— Bitácoras archivadas —</p>
+    <p class="catalog-title">Reportes archivados</p>
     {% if files %}
       <ul class="report-list">
         {% for f in files %}

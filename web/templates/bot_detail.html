@@ -14,9 +14,9 @@
       <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
       <nav class="mainnav">
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
-        <a href="{{ url_for('dashboard') }}">Puerto</a><span class="sep">·</span>
+        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">·</span>
         <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
-        <a href="{{ url_for('heatmap') }}">Calor</a><span class="sep">·</span>
+        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">·</span>
         <a href="{{ url_for('guia') }}">Guía</a><span class="sep">·</span>
         <a href="{{ url_for('quantbay') }}">Quant</a><span class="sep">·</span>
         {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
@@ -38,7 +38,7 @@
       {% if bot.backtest %}<h3>Resultados / backtest</h3><p class="pre">{{ bot.backtest }}</p>{% endif %}
     </div>
 
-    <p class="catalog-title">— Reseñas de la tripulación —</p>
+    <p class="catalog-title">Reseñas de la comunidad</p>
 
     {% if session.user %}
     <form class="reviewform" method="post" action="{{ url_for('bot_review', bot_id=bot.id) }}">

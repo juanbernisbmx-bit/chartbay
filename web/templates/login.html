@@ -30,21 +30,21 @@
       <path class="chart" d="M97 58 l-7 0 m7 0 l0 7"/>
     </svg>
     <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
-    <p class="tagline">El sitio de análisis técnico más resistente de la galaxia</p>
+    <p class="tagline">Acceso a terminal de análisis técnico y cuantitativo</p>
 
     {% if error %}<div class="login-error">{{ error }}</div>{% endif %}
 
     <form class="login-form" method="post">
-      <label>Capitán
+      <label>Usuario
         <input type="text" name="username" autocomplete="username" required autofocus>
       </label>
       <label>Contraseña
         <input type="password" name="password" autocomplete="current-password" required>
       </label>
-      <button type="submit">Izar velas</button>
+      <button type="submit">Entrar</button>
     </form>
     {% if registration_open %}
-    <p style="margin-top:16px;font-size:11px">¿Aún sin cuenta? <a href="{{ url_for('register') }}">Enrólate en la tripulación</a></p>
+    <p style="margin-top:16px;font-size:11px">¿Aún sin cuenta? <a href="{{ url_for('register') }}">Crear cuenta</a></p>
     {% else %}
     <p style="margin-top:16px;font-size:11px;color:#888">Registro cerrado (versión alfa).</p>
     {% endif %}

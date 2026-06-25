@@ -13,10 +13,10 @@
     <header class="masthead">
       <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
       <nav class="mainnav">
-        <a href="{{ url_for('dashboard') }}">Puerto</a><span class="sep">·</span>
-        <a href="{{ url_for('reports') }}">Bitácoras</a><span class="sep">·</span>
+        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">·</span>
+        <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">·</span>
         <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
-        <a href="{{ url_for('heatmap') }}">Calor</a><span class="sep">·</span>
+        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">·</span>
         <a href="{{ url_for('guia') }}">Guía</a><span class="sep">·</span>
         <strong>Quant</strong><span class="sep">·</span>
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
@@ -24,9 +24,9 @@
       </nav>
     </header>
 
-    <p class="catalog-title">— Quant Bay · Econometría en el navegador —</p>
+    <p class="catalog-title">Quant Bay · Econometría en el navegador</p>
 
-    <div id="qb-error" style="display:none;background:#fff0f0;border:1px solid #e8a8a8;padding:8px 12px;margin:8px 16px;color:#b00000;font-size:12px;font-family:Verdana,Arial,sans-serif"></div>
+    <div id="qb-error" style="display:none"></div>
 
     <!-- ① Cargar datos -->
     <div class="qb-section">
@@ -51,7 +51,7 @@
       <div class="qb-vars-grid">
         <div>
           <label style="font-size:12px;font-weight:bold;display:block;margin-bottom:4px">Variable dependiente (Y):</label>
-          <select id="qb-y" style="font-family:Verdana,Arial,sans-serif;font-size:12px;padding:3px 6px;border:2px solid #7f9db9;width:100%"></select>
+          <select id="qb-y" style="width:100%"></select>
         </div>
         <div>
           <label style="font-size:12px;font-weight:bold;display:block;margin-bottom:4px">Variables independientes (X):</label>

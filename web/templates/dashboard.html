@@ -34,13 +34,13 @@
         <path class="chart" d="M97 58 l-7 0 m7 0 l0 7"/>
       </svg>
       <h1 class="wordmark">Chart<span class="bay">Bay</span><span class="tcursor">▮</span></h1>
-      <p class="tagline" id="tagline" data-full="El sitio de análisis técnico más resistente de la galaxia · {{ hoy }}"></p>
+      <p class="tagline" id="tagline" data-full="Terminal cuantitativa para escanear mercado, momentum y riesgo · {{ hoy }}"></p>
 
       <nav class="mainnav">
         <a href="#catalogo">Mercados</a><span class="sep">·</span>
-        <a href="{{ url_for('reports') }}">Bitácoras</a><span class="sep">·</span>
+        <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">·</span>
         <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
-        <a href="{{ url_for('heatmap') }}">Calor</a><span class="sep">·</span>
+        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">·</span>
         <a href="{{ url_for('guia') }}">Guía</a><span class="sep">·</span>
         <a href="{{ url_for('quantbay') }}">Quant</a><span class="sep">·</span>
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
@@ -52,7 +52,7 @@
       <form id="searchForm" autocomplete="off">
         <span class="prompt">&gt;</span>
         <input id="q" type="text" placeholder="scan AAPL · TSLA · BTC-USD · ^GSPC">
-        <button type="submit">Trazar carta</button>
+        <button type="submit">Escanear</button>
       </form>
       <div class="tf-bar">
         <span class="tf-lbl">Marco:</span>
@@ -66,20 +66,20 @@
 
     <section id="result" class="result"></section>
 
-    <p id="catalogo" class="catalog-title">— Cartas disponibles —</p>
+    <p id="catalogo" class="catalog-title">Watchlist de mercado</p>
     <ul class="catalog" id="catalog"></ul>
 
     <form id="addForm" class="addcard" autocomplete="off">
       <span class="prompt">+</span>
       <input id="addSym" placeholder="símbolo (AMZN, DOGE-USD, ^RUT)">
       <input id="addName" placeholder="nombre (opcional)">
-      <button type="submit">añadir carta</button>
+      <button type="submit">añadir activo</button>
       <span id="addMsg"></span>
       <a href="#" id="resetCat">restaurar lista</a>
     </form>
 
     <p class="colophon">
-      Visitas al puerto: <span class="odometer">{% for d in '%06d'|format(visits) %}<span>{{ d }}</span>{% endfor %}</span><br><br>
+      Sesiones registradas: <span class="odometer">{% for d in '%06d'|format(visits) %}<span>{{ d }}</span>{% endfor %}</span><br><br>
       Análisis técnico educativo. No constituye asesoramiento financiero.
     </p>
   </div>
@@ -154,11 +154,11 @@
       const lines=[
         "ChartBay OS v0.6  ·  kernel retro-2006","",
         "[ booting ] montando /mercados ............... ok",
-        "[ booting ] cargando indicadores tecnicos .... ok",
+        "[ booting ] cargando indicadores cuant ....... ok",
         "[ booting ] enlace con TradingView ........... ok",
-        "[ booting ] motor de IA (oraculo) ............ standby",
-        "[ booting ] izando bandera pirata ............ ok","",
-        "acceso concedido, capitan. bienvenido a bordo.",
+        "[ booting ] motor de IA ...................... standby",
+        "[ booting ] calibrando scanner de riesgo ..... ok","",
+        "acceso concedido. terminal lista.",
       ];
       for(const l of lines){ if(done) break; await typeLine(log,l,null,4); }
       await sleep(550); kill();
@@ -168,7 +168,7 @@
       const tg=document.getElementById("tagline");
       if(tg) await typeInto(tg, tg.dataset.full, 16);
       const st=document.getElementById("statusTxt");
-      if(st) await typeInto(st, `> sistema en linea · ${MERCADOS.length} cartas montadas · oraculo IA en standby`, 12);
+      if(st) await typeInto(st, `> sistema en linea · ${MERCADOS.length} activos montados · IA en standby`, 12);
     }
 
     function applyTrend(el, t){
@@ -229,7 +229,7 @@
       c.appendChild(w);
       const s=document.createElement("script"); s.type="text/javascript"; s.async=true;
       s.src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
-      s.innerHTML=JSON.stringify({ symbol:sym, interval:iv||"D", timezone:"Etc/UTC", theme:"light",
+      s.innerHTML=JSON.stringify({ symbol:sym, interval:iv||"D", timezone:"Etc/UTC", theme:"dark",
         style:"2", locale:"es", allow_symbol_change:true, hide_side_toolbar:true, autosize:true });
       c.appendChild(s); el.innerHTML=""; el.appendChild(c);
     }
@@ -263,7 +263,7 @@
         <div class="tv-advanced" id="adv"></div>
         <table class="ledger"><thead><tr><th>Indicador</th><th>Lectura</th></tr></thead>
           <tbody>${rows.map(r=>`<tr><td>${r[0]}${r[2]?` <span class="info-q" data-info="${r[2]}">?</span>`:''}</td><td>${r[1]}</td></tr>`).join("")}</tbody></table>
-        <button class="btn-ink" id="vone">&gt; pedir veredicto del oráculo (IA)</button>
+        <button class="btn-ink" id="vone">&gt; generar lectura IA</button>
         <div class="verdict" id="vone-out"></div>`;
     }
 
@@ -278,7 +278,7 @@
         <div id="payload"></div>`;
       res.scrollIntoView({behavior:"smooth", block:"start"});
       const log=document.getElementById("conlog");
-      await typeLine(log, `chartbay@puerto:~$ scan ${(label||sym)}`, null, 12);
+      await typeLine(log, `chartbay@terminal:~$ scan ${(label||sym)}`, null, 12);
       await typeLine(log, "[+] estableciendo enlace con el feed de mercado...");
       let d;
       try{ d=await (await fetch("/api/lookup?ticker="+encodeURIComponent(sym)+"&interval="+currentInterval)).json(); }
@@ -292,8 +292,8 @@
       await typeLine(log, "[+] calculando RSI · MACD · ATR · EMA50/200 .... OK", "ok");
       await typeLine(log, `[+] tendencia detectada: ${s.tendencia.toUpperCase()}`);
       await typeLine(log, `[+] precio ${s.precio} · rsi ${s.RSI14} · atr ${s.ATR_pct_precio}%`);
-      await typeLine(log, "[+] trazando carta de TradingView .............. OK", "ok");
-      await typeLine(log, "[*] analisis listo — desplegando carta.", "ok");
+      await typeLine(log, "[+] renderizando panel de mercado .............. OK", "ok");
+      await typeLine(log, "[*] analisis listo — desplegando snapshot.", "ok");
       document.getElementById("payload").innerHTML = payloadHtml(d, s)+'<div id="news-box" class="news-section"></div>';
       mountAdvanced(document.getElementById("adv"), d.tv, d.tv_interval||"D");
       document.getElementById("vone").onclick=()=>verdictOne(d.ticker);
@@ -305,7 +305,7 @@
       try{
         const nd=await (await fetch("/api/news?ticker="+encodeURIComponent(t))).json();
         if(!nd.ok||!nd.news||!nd.news.length) return;
-        box.innerHTML='<p class="catalog-title" style="margin-top:18px">— Últimas noticias —</p>'
+        box.innerHTML='<p class="catalog-title" style="margin-top:18px">Últimas noticias</p>'
           +'<ul class="news-list">'
           +nd.news.map(n=>{
             let ds="";
@@ -323,11 +323,11 @@
       const out=document.getElementById("vone-out");
       out.innerHTML='<div class="terminal"><div class="term-body"><div id="orlog"></div><span class="cursor">▮</span></div></div>';
       const log=document.getElementById("orlog");
-      await typeLine(log, "[*] estableciendo canal cifrado con el oraculo (IA)...");
+      await typeLine(log, "[*] estableciendo canal con el motor IA...");
       await typeLine(log, "[*] analizando la foto tecnica... esto puede tardar.");
       const resp=await fetch("/api/verdict_one?ticker="+encodeURIComponent(t),{method:"POST"});
       if(resp.status===401){
-        out.innerHTML='<p class="muted" style="text-align:center;margin:14px 0">→ <a href="/login">Iniciá sesión</a> para consultar el oráculo IA.</p>';
+        out.innerHTML='<p class="muted" style="text-align:center;margin:14px 0">→ <a href="/login">Iniciá sesión</a> para consultar el motor IA.</p>';
         return;
       }
       const p=await resp.json();
