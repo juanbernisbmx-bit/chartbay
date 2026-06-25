@@ -1464,3 +1464,72 @@ input,select,textarea,.search input,.compare-input,.filterbar input[type=text],.
   .mainnav a,.mainnav strong{line-height:1.9}
   .search input{width:100%;flex-basis:100%}
 }
+
+/* ===========================================================
+   Datos Frecuentes — reusa .catalog/.tf-btn/.search del skin
+   Pirate Bay; sólo agrega lo propio de las filas de indicadores.
+   =========================================================== */
+.fd-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+  padding:7px 10px;
+}
+.fd-main{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.fd-text{display:flex;flex-direction:column;min-width:0}
+.fd-text .name{font-size:13px;font-weight:700;color:#000}
+.fd-meta{color:#555;font-size:11px}
+.fd-upd{color:#222}
+.fd-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.fd-dl{
+  display:inline-flex;
+  align-items:center;
+  min-height:24px;
+  padding:2px 11px;
+  border:1px solid #777;
+  border-radius:12px;
+  background:linear-gradient(#fff,#deded8);
+  color:#000;
+  font-size:12px;
+  text-decoration:none;
+}
+.fd-dl:hover{filter:brightness(1.03);text-decoration:none;color:#000}
+.fd-dl-soft{background:#f4f4ee;color:#333}
+.fd-dl-off{opacity:.45;cursor:not-allowed;background:#eee}
+.fd-ws{
+  min-height:24px;
+  padding:2px 11px;
+  border:1px solid #aaa;
+  border-radius:12px;
+  background:#f8f8f4;
+  color:#000;
+  font-size:12px;
+  cursor:pointer;
+}
+.fd-ws.on{background:#dfeeff;border-color:#819bb5}
+.fd-ws:hover{filter:brightness(1.02)}
+.fd-empty{text-align:center;color:#777;margin:14px 0}
+.fd-workspace{
+  margin:12px auto 0;
+  width:min(760px,calc(100% - 20px));
+  text-align:center;
+  font-size:12px;
+}
+.fd-ws-label{font-weight:700}
+.fd-ws-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  margin:3px;
+  padding:2px 9px;
+  border:1px solid #b8b8ae;
+  border-radius:12px;
+  background:#fff;
+}
+.fd-ws-chip button{border:0;background:transparent;color:#900;cursor:pointer;font-size:11px;padding:0;line-height:1}
+.fd-ws-clear{margin-left:6px}
+@media(max-width:520px){
+  .fd-actions{width:100%;justify-content:flex-start}
+}
