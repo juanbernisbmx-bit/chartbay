@@ -3,7 +3,19 @@
     "allow": [
       "Bash(git add *)",
       "mcp__visualize__read_me",
-      "mcp__visualize__show_widget"
+      "mcp__visualize__show_widget",
+      "Bash(npm test *)",
+      "PowerShell($env:PATH += \";C:\\\\Program Files\\\\nodejs;$env:APPDATA\\\\npm\"; cd \"C:\\\\Users\\\\santi\\\\Claude\\\\Projects\\\\indicador tv ia\\\\quantbay\"; node --version; npx vitest run 2>&1)",
+      "PowerShell($env:NVM_HOME)",
+      "PowerShell($env:NVM_SYMLINK)",
+      "PowerShell(Get-ChildItem \"C:\\\\\" -Name -Depth 1 | Where-Object { $_ -match 'node|nvm|fnm' }; Test-Path \"C:\\\\Program Files\\\\nodejs\\\\node.exe\"; Test-Path \"C:\\\\Windows\\\\System32\\\\node.exe\")",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\santi\\\\AppData\\\\Local\\\\claude-cli-nodejs\" | Select-Object Name; $nodePath = \"C:\\\\Users\\\\santi\\\\AppData\\\\Local\\\\claude-cli-nodejs\"; if \\(Test-Path \"$nodePath\\\\node.exe\"\\) { & \"$nodePath\\\\node.exe\" --version } elseif \\(Test-Path \"$nodePath\\\\bin\\\\node.exe\"\\) { & \"$nodePath\\\\bin\\\\node.exe\" --version } else { Get-ChildItem $nodePath -Recurse -Filter \"node.exe\" | Select-Object FullName -First 3 })",
+      "Bash(/c/Users/santi/AppData/Local/OpenAI/Codex/runtimes/cua_node/1b23c930bdf84ed6/bin/node.exe --version)",
+      "Bash(/c/Users/santi/AppData/Local/OpenAI/Codex/runtimes/cua_node/1b23c930bdf84ed6/bin/node.exe /c/Users/santi/AppData/Local/OpenAI/Codex/runtimes/cua_node/1b23c930bdf84ed6/bin/node_modules/npm/bin/npm-cli.js --version)",
+      "Bash(/c/Users/santi/AppData/Local/OpenAI/Codex/runtimes/cua_node/1b23c930bdf84ed6/bin/node.exe /c/Users/santi/AppData/Local/OpenAI/Codex/runtimes/cua_node/1b23c930bdf84ed6/bin/node_modules/npm/bin/npx-cli.js vitest run)",
+      "Bash([ -f \"$VITEST\" ])",
+      "Bash(C:/Users/santi/AppData/Local/OpenAI/Codex/runtimes/cua_node/1b23c930bdf84ed6/bin/node.exe 'C:/Users/santi/Claude/Projects/indicador tv ia/quantbay/node_modules/.bin/vitest' run)",
+      "Bash(C:/Users/santi/AppData/Local/OpenAI/Codex/runtimes/cua_node/1b23c930bdf84ed6/bin/node.exe C:/Users/santi/AppData/Local/OpenAI/Codex/runtimes/cua_node/1b23c930bdf84ed6/bin/node_modules/npm/bin/npm-cli.js install)"
     ]
   }
 }

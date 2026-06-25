@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { betaInc, tDistPValue, pearsonMatrix } from '../src/statistics';
+import { betaInc, tDistPValue, fDistPValue, tQuantile, pearsonMatrix } from '../src/statistics';
 
 describe('betaInc', () => {
   it('returns 0 at x=0', () => expect(betaInc(0, 1, 1)).toBe(0));
@@ -52,6 +52,38 @@ describe('tDistPValue', () => {
   it('df=0 → 0', () => {
     expect(tDistPValue(1, 0)).toBe(0);
   });
+});
+
+describe('fDistPValue', () => {
+  it('f=0 gives p=1', () => expect(fDistPValue(0, 1, 10)).toBeCloseTo(1, 3));
+  it('f=Infinity gives p=0', () => expect(fDistPValue(Infinity, 1, 10)).toBe(0));
+  it('f=4.96, df1=1, df2=10 → p ≈ 0.05', () => {
+    expect(fDistPValue(4.96, 1, 10)).toBeCloseTo(0.05, 2);
+  });
+  it('f=4.17, df1=1, df2=30 → p ≈ 0.05', () => {
+    expect(fDistPValue(4.17, 1, 30)).toBeCloseTo(0.05, 2);
+  });
+  it('large f gives p near 0', () => expect(fDistPValue(100, 5, 20)).toBeLessThan(0.001));
+  it('invalid df1 → 1', () => expect(fDistPValue(3, 0, 10)).toBe(1));
+  it('invalid df2 → 1', () => expect(fDistPValue(3, 1, 0)).toBe(1));
+  it('negative f → 1', () => expect(fDistPValue(-1, 1, 10)).toBe(1));
+});
+
+describe('tQuantile', () => {
+  it('tQuantile(0.05, 10) ≈ 2.228  (two-tailed 95% critical value)', () => {
+    expect(tQuantile(0.05, 10)).toBeCloseTo(2.228, 2);
+  });
+  it('tQuantile(0.05, 30) ≈ 2.042', () => {
+    expect(tQuantile(0.05, 30)).toBeCloseTo(2.042, 2);
+  });
+  it('tQuantile(0.05, 1) ≈ 12.706  (Cauchy)', () => {
+    expect(tQuantile(0.05, 1)).toBeCloseTo(12.706, 1);
+  });
+  it('round-trips: tDistPValue(tQuantile(0.05, df), df) ≈ 0.05', () => {
+    const t = tQuantile(0.05, 20);
+    expect(tDistPValue(t, 20)).toBeCloseTo(0.05, 4);
+  });
+  it('df=0 → Infinity', () => expect(tQuantile(0.05, 0)).toBe(Infinity));
 });
 
 describe('pearsonMatrix', () => {

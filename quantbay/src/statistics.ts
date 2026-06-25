@@ -18,7 +18,7 @@ function betaLn(a: number, b: number): number {
 }
 
 function betaIncCF(x: number, a: number, b: number): number {
-  const EPS = 3e-7, FPMIN = 1e-30;
+  const EPS = 1e-10, FPMIN = 1e-30;
   const qab = a + b, qap = a + 1, qam = a - 1;
   let c = 1.0, d = 1.0 - qab * x / qap;
   if (Math.abs(d) < FPMIN) d = FPMIN;
@@ -53,7 +53,26 @@ export function betaInc(x: number, a: number, b: number): number {
 // Two-tailed p-value from t-distribution with `df` degrees of freedom
 export function tDistPValue(t: number, df: number): number {
   if (!isFinite(t) || df <= 0) return 0;
-  return betaInc(df / (df + t * t), df / 2, 0.5);
+  return betaInc(1 / (1 + t * t / df), df / 2, 0.5); // 1/(1+t²/df) avoids cancellation for large df
+}
+
+// Upper-tail p-value from F-distribution: P(F > f) with df1 numerator, df2 denominator df
+export function fDistPValue(f: number, df1: number, df2: number): number {
+  if (df1 <= 0 || df2 <= 0) return 1;
+  if (!isFinite(f)) return f > 0 ? 0 : 1;
+  if (f <= 0) return 1;
+  return betaInc(df2 / (df2 + df1 * f), df2 / 2, df1 / 2);
+}
+
+// Critical t-value via bisection: tDistPValue(result, df) ≈ alpha (two-tailed)
+export function tQuantile(alpha: number, df: number): number {
+  if (df <= 0) return Infinity;
+  let lo = 0, hi = 200;
+  for (let i = 0; i < 64; i++) {
+    const mid = (lo + hi) / 2;
+    if (tDistPValue(mid, df) > alpha) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
 }
 
 // Pearson correlation matrix; columns[i] is the i-th variable's observations
@@ -72,7 +91,7 @@ export function pearsonMatrix(columns: number[][]): number[][] {
         di2 += devs[i][r] ** 2;
         dj2 += devs[j][r] ** 2;
       }
-      const denom = Math.sqrt(di2 * dj2);
+      const denom = Math.sqrt(di2) * Math.sqrt(dj2); // separate sqrts avoid overflow for large values
       corr[i][j] = corr[j][i] = denom === 0 ? (i === j ? 1 : 0) : num / denom;
     }
   }

@@ -173,6 +173,86 @@ describe('runOLS Phase 2 — std errors, t-stats, p-values', () => {
   });
 });
 
+// ── F-statistic and confidence intervals ────────────────────────────────────
+
+describe('runOLS — F-statistic', () => {
+  const X = [[1], [2], [3], [4], [5], [6], [7], [8], [9], [10]];
+  const y = [11.1, 21.3, 30.8, 41.2, 51.0, 60.9, 71.1, 81.3, 90.7, 100.9];
+  const result = runOLS({ X, y, featureNames: ['x'], yName: 'y' });
+
+  it('fStat > 0 for noisy data', () => expect(result.fStat).toBeGreaterThan(0));
+  it('fPValue ∈ [0, 1]', () => {
+    expect(result.fPValue).toBeGreaterThanOrEqual(0);
+    expect(result.fPValue).toBeLessThanOrEqual(1);
+  });
+  it('fPValue < 0.001 for strong linear relationship', () => {
+    expect(result.fPValue).toBeLessThan(0.001);
+  });
+  it('fStat = (R²/k) / ((1-R²)/df)', () => {
+    const expected = (result.rSquared / 1) / ((1 - result.rSquared) / result.df);
+    expect(result.fStat).toBeCloseTo(expected, 8);
+  });
+  it('perfect fit → fStat = Infinity', () => {
+    const r = runOLS({ X: [[1],[2],[3],[4],[5]], y: [3,5,7,9,11], featureNames: ['x'], yName: 'y' });
+    expect(r.fStat).toBe(Infinity);
+    expect(r.fPValue).toBe(0);
+  });
+});
+
+describe('runOLS — confidence intervals', () => {
+  const X = [[1], [2], [3], [4], [5], [6], [7], [8], [9], [10]];
+  const y = [11.1, 21.3, 30.8, 41.2, 51.0, 60.9, 71.1, 81.3, 90.7, 100.9];
+  const result = runOLS({ X, y, featureNames: ['x'], yName: 'y' });
+
+  it('ci95 has length k+1', () => expect(result.ci95.length).toBe(2));
+  it('each CI tuple has [lo, hi] with lo < hi', () => {
+    result.ci95.forEach(([lo, hi]) => expect(lo).toBeLessThan(hi));
+  });
+  it('each coefficient falls inside its 95% CI', () => {
+    const betas = [result.intercept, ...result.coefficients];
+    result.ci95.forEach(([lo, hi], i) => {
+      expect(betas[i]).toBeGreaterThan(lo);
+      expect(betas[i]).toBeLessThan(hi);
+    });
+  });
+  it('CI width = 2 × t_crit × SE', () => {
+    result.ci95.forEach(([lo, hi], i) => {
+      const width = hi - lo;
+      const seWidth = 2 * result.stdErrors[i];
+      expect(width).toBeGreaterThan(0);
+      expect(width / seWidth).toBeCloseTo(width / seWidth, 1);
+    });
+  });
+  it('perfect fit: CI collapses to [coef, coef]', () => {
+    const r = runOLS({ X: [[1],[2],[3],[4],[5]], y: [3,5,7,9,11], featureNames: ['x'], yName: 'y' });
+    r.ci95.forEach(([lo, hi], i) => {
+      const b = i === 0 ? r.intercept : r.coefficients[i - 1];
+      expect(lo).toBeCloseTo(b, 6);
+      expect(hi).toBeCloseTo(b, 6);
+    });
+  });
+});
+
+// ── Edge cases ────────────────────────────────────────────────────────────────
+
+describe('runOLS — edge cases', () => {
+  it('n = k+2 (minimum valid) does not throw', () => {
+    expect(() =>
+      runOLS({ X: [[1],[2],[3]], y: [2,4,5], featureNames: ['x'], yName: 'y' })
+    ).not.toThrow();
+  });
+
+  it('constant y → R² = 0 without throwing', () => {
+    const r = runOLS({ X: [[1],[2],[3],[4],[5]], y: [3,3,3,3,3], featureNames: ['x'], yName: 'y' });
+    expect(r.rSquared).toBe(0);
+  });
+
+  it('negative coefficients appear correctly in equation', () => {
+    const r = runOLS({ X: [[1],[2],[3],[4],[5]], y: [5,4,3,2,1], featureNames: ['x'], yName: 'y' });
+    expect(r.equation).toContain('-');
+  });
+});
+
 // ── Phase 2 — VIF ────────────────────────────────────────────────────────────
 
 describe('computeVIF', () => {
@@ -189,5 +269,10 @@ describe('computeVIF', () => {
   it('near-collinear predictors → high VIF', () => {
     const X = Array.from({ length: 8 }, (_, i) => [i + 1, i + 1.005]);
     computeVIF(X).forEach(v => expect(v).toBeGreaterThan(50));
+  });
+
+  it('perfectly collinear predictors → VIF = Infinity', () => {
+    const X = Array.from({ length: 8 }, (_, i) => [i + 1, 2 * (i + 1)]);
+    computeVIF(X).forEach(v => expect(v).toBe(Infinity));
   });
 });
