@@ -1157,7 +1157,7 @@ a:hover{color:#7b0000}
   height:250px;
   margin:4px auto 0;
   overflow:visible;
-  background:url("/static/img/chartbay-logo.jpg") center/contain no-repeat;
+  background:url("/static/img/chartbay-logo.png") center/contain no-repeat;
 }
 .ship>*{display:none}
 .ship path,.ship line,.ship polyline,.ship circle,.ship rect{
