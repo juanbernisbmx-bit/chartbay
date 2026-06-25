@@ -1151,10 +1151,12 @@ a:hover{color:#7b0000}
 .ship{
   display:block;
   width:245px;
-  height:auto;
+  height:170px;
   margin:8px auto -4px;
   overflow:visible;
+  background:url("/static/img/chartbay-ship.png") center/contain no-repeat;
 }
+.ship>*{display:none}
 .ship path,.ship line,.ship polyline,.ship circle,.ship rect{
   stroke:var(--pb-brown);
   stroke-width:3.2;
