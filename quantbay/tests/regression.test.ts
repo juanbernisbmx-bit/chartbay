@@ -100,6 +100,83 @@ describe('runOLS — error cases', () => {
   });
 });
 
+// ── Rank-deficiency detection ─────────────────────────────────────────────────
+
+describe('runOLS — rank deficiency: collinear columns', () => {
+  const X = [[1, 2], [2, 4], [3, 6], [4, 8], [5, 10]]; // b = 2·a
+  const y = [1, 2, 3, 4, 5];
+
+  it('throws and names the redundant column', () => {
+    let msg = '';
+    try { runOLS({ X, y, featureNames: ['publicidad', 'publicidad_dup'], yName: 'y' }); }
+    catch (e) { msg = (e as Error).message; }
+    expect(msg).toContain('"publicidad_dup"');
+    expect(msg).toContain('"publicidad"');
+  });
+
+  it('error mentions colineal and correlation', () => {
+    let msg = '';
+    try { runOLS({ X, y, featureNames: ['a', 'b'], yName: 'y' }); }
+    catch (e) { msg = (e as Error).message; }
+    expect(msg).toMatch(/colineal/i);
+    expect(msg).toMatch(/correlaci[oó]n/i);
+  });
+
+  it('error suggests dropRedundant option', () => {
+    let msg = '';
+    try { runOLS({ X, y, featureNames: ['a', 'b'], yName: 'y' }); }
+    catch (e) { msg = (e as Error).message; }
+    expect(msg).toContain('dropRedundant');
+  });
+
+  it('dropRedundant: true drops the second column and returns droppedFeatures', () => {
+    const result = runOLS({ X, y, featureNames: ['a', 'b'], yName: 'y', dropRedundant: true });
+    expect(result.droppedFeatures).toBeDefined();
+    expect(result.droppedFeatures!.length).toBe(1);
+    expect(result.droppedFeatures![0].name).toBe('b');
+    expect(result.droppedFeatures![0].reason).toContain('"a"');
+    expect(result.nFeatures).toBe(1);
+    expect(result.featureNames).toEqual(['a']);
+  });
+
+  it('dropRedundant result is numerically valid (y = 2a+1 perfect fit)', () => {
+    const result = runOLS({
+      X, y: [3, 5, 7, 9, 11], featureNames: ['a', 'b'], yName: 'y', dropRedundant: true,
+    });
+    expect(result.rSquared).toBeCloseTo(1, 6);
+    expect(result.coefficients[0]).toBeCloseTo(2, 4);
+    expect(result.intercept).toBeCloseTo(1, 4);
+  });
+});
+
+describe('runOLS — rank deficiency: zero-variance column', () => {
+  const X = [[1, 5], [2, 5], [3, 5], [4, 5], [5, 5]]; // 'constante' is all 5s
+  const y = [1, 2, 3, 4, 5];
+
+  it('throws naming the zero-variance column', () => {
+    let msg = '';
+    try { runOLS({ X, y, featureNames: ['x', 'constante'], yName: 'y' }); }
+    catch (e) { msg = (e as Error).message; }
+    expect(msg).toContain('"constante"');
+    expect(msg).toMatch(/varianza cero/i);
+  });
+
+  it('error mentions the automatic intercept', () => {
+    let msg = '';
+    try { runOLS({ X, y, featureNames: ['x', 'constante'], yName: 'y' }); }
+    catch (e) { msg = (e as Error).message; }
+    expect(msg).toMatch(/intercepto/i);
+  });
+
+  it('dropRedundant: true drops the constant column', () => {
+    const result = runOLS({ X, y, featureNames: ['x', 'constante'], yName: 'y', dropRedundant: true });
+    expect(result.droppedFeatures!.length).toBe(1);
+    expect(result.droppedFeatures![0].name).toBe('constante');
+    expect(result.nFeatures).toBe(1);
+    expect(result.featureNames).toEqual(['x']);
+  });
+});
+
 describe('Matrix utilities', () => {
   it('transpose 3×2 → 2×3', () => {
     expect(transpose([[1, 2], [3, 4], [5, 6]])).toEqual([[1, 3, 5], [2, 4, 6]]);
