@@ -68,11 +68,11 @@ REGISTRATION_OPEN = False  # cambiar a True para reabrir el registro
 
 _CSP = (
     "default-src 'self'; "
-    "script-src 'self' cdn.jsdelivr.net cdnjs.cloudflare.com s3.tradingview.com; "
+    "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com s3.tradingview.com; "
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: blob:; "
-    "connect-src 'self'; "
-    "frame-src s3.tradingview.com; "
+    "connect-src 'self' *.tradingview.com wss://*.tradingview.com; "
+    "frame-src s3.tradingview.com *.tradingview.com; "
     "frame-ancestors 'none'"
 )
 
