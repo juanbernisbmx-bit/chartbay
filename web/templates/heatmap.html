@@ -46,19 +46,19 @@ async function loadTile(tile){
   const sym=tile.dataset.sym;
   try{
     const d=await (await fetch("/api/lookup?ticker="+encodeURIComponent(sym))).json();
-    if(!d.ok){ tile.classList.add("heat-err"); return; }
+    tile.classList.remove("load");
+    if(!d.ok){ tile.classList.add("heat-err"); tile.querySelector(".ht-chg").textContent="—"; return; }
     const s=d.snapshot, chg=s.variacion_pct["1d"], trend=s.tendencia;
     tile.querySelector(".ht-sym").textContent=d.nombre||sym;
-    tile.querySelector(".ht-chg").textContent=(chg>=0?"+":"")+chg+"%";
-    tile.querySelector(".ht-trend").textContent=trend;
-    tile.classList.remove("load");
-    if(trend.includes("alcista"))  tile.classList.add("heat-up");
-    else if(trend.includes("bajista")) tile.classList.add("heat-down");
+    tile.querySelector(".ht-chg").textContent=chg!=null ? (chg>=0?"+":"")+chg+"%" : "N/A";
+    tile.querySelector(".ht-trend").textContent=trend||"";
+    if(trend&&trend.includes("alcista"))  tile.classList.add("heat-up");
+    else if(trend&&trend.includes("bajista")) tile.classList.add("heat-down");
     else tile.classList.add("heat-flat");
     tile.style.cursor="pointer";
     tile.title=sym;
-    tile.onclick=()=>{ window.location="{{ url_for('dashboard') }}?sym="+encodeURIComponent(sym); };
-  }catch(e){ tile.classList.add("heat-err"); }
+    tile.onclick=()=>{ window.location.href="{{ url_for('dashboard') }}?sym="+encodeURIComponent(sym); };
+  }catch(e){ tile.classList.remove("load"); tile.classList.add("heat-err"); tile.querySelector(".ht-chg").textContent="—"; }
 }
 
 tiles.forEach((t,i)=>setTimeout(()=>loadTile(t), i*200));

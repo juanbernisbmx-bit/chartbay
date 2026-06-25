@@ -1150,23 +1150,32 @@ a:hover{color:#7b0000}
 }
 .ship{
   display:block;
-  width:220px;
+  width:245px;
   height:auto;
-  margin:8px auto 2px;
+  margin:8px auto -4px;
+  overflow:visible;
 }
 .ship path,.ship line,.ship polyline,.ship circle,.ship rect{
   stroke:var(--pb-brown);
+  stroke-width:3.2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
 }
-.ship .hull,.ship .flagbg,.ship .sail{fill:rgba(155,106,62,.12)}
-.ship .chart,.ship .jolly-line{stroke:#5d351e}
-.ship .jolly,.ship .eye{fill:#5d351e}
+.ship .ship-wake{fill:none;stroke:#4c2d1b;stroke-width:3}
+.ship .hull,.ship .flagbg,.ship .sail{
+  fill:rgba(155,106,62,.2);
+  stroke:#7b4a2b;
+}
+.ship .mast,.ship .yard,.ship .rig,.ship .hull-line{fill:none;stroke:#5d351e}
+.ship .chart,.ship .jolly-line{fill:none;stroke:#4c2d1b}
+.ship .jolly,.ship .eye{fill:#4c2d1b;stroke:#4c2d1b}
 .wordmark{
   display:inline-block;
-  margin:0 0 10px;
+  margin:0 0 9px;
   color:#1b120c;
-  font-family:Georgia,"Times New Roman",serif;
-  font-size:42px;
-  font-weight:700;
+  font-family:"Old English Text MT","Cloister Black","UnifrakturCook","UnifrakturMaguntia","Blackletter",Georgia,"Times New Roman",serif;
+  font-size:46px;
+  font-weight:400;
   letter-spacing:-1px;
   text-shadow:0 1px 0 #fff;
 }
