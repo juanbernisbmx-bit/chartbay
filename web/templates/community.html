@@ -28,11 +28,11 @@
     {% include 'alfa_banner.html' %}
     <header class="masthead">
       <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
-      <p class="tagline">Taberna de bots · algoritmos compartidos por la tripulación</p>
+      <p class="tagline">Estrategias, modelos base y señales compartidas por la comunidad</p>
       <nav class="mainnav">
-        <a href="{{ url_for('dashboard') }}">Puerto</a><span class="sep">·</span>
+        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">·</span>
         <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
-        <a href="{{ url_for('heatmap') }}">Calor</a><span class="sep">·</span>
+        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">·</span>
         <a href="{{ url_for('guia') }}">Guía</a><span class="sep">·</span>
         <a href="{{ url_for('quantbay') }}">Quant</a><span class="sep">·</span>
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
@@ -62,17 +62,17 @@
     </form>
 
     {% if filtering %}
-      <p class="catalog-title">— Resultados ({{ results|length }}) —</p>
+      <p class="catalog-title">Resultados ({{ results|length }})</p>
       {% if results %}{{ botgrid(results) }}
       {% else %}<p class="muted" style="text-align:center;margin:20px 16px">Sin resultados con esos filtros. Prueba otra combinación o <a href="{{ url_for('community') }}">limpia el filtro</a>.</p>{% endif %}
     {% else %}
       {% if featured %}
-        <p class="catalog-title">— Bots destacados —</p>
+        <p class="catalog-title">Bots destacados</p>
         {{ botgrid(featured) }}
       {% endif %}
-      <p class="catalog-title">— Recién llegados —</p>
+      <p class="catalog-title">Recién llegados</p>
       {% if recent %}{{ botgrid(recent) }}
-      {% else %}<p class="muted" style="text-align:center;margin:20px 16px">Aún no hay bots en la taberna. ¡Sé el primero en <a href="{{ url_for('bot_new') }}">publicar uno</a>!</p>{% endif %}
+      {% else %}<p class="muted" style="text-align:center;margin:20px 16px">Aún no hay bots publicados. Sé el primero en <a href="{{ url_for('bot_new') }}">publicar uno</a>.</p>{% endif %}
     {% endif %}
 
     <p class="colophon">Comunidad educativa. Ningún bot aquí es asesoramiento financiero ni garantiza resultados.</p>
