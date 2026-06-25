@@ -884,6 +884,7 @@ input:focus,select:focus,textarea:focus,.search input:focus,.compare-input:focus
   margin:12px 20px;
   color:#ffabb9;
   font-size:12px;
+  white-space:pre-wrap;
 }
 .qb-panel-head{
   display:flex;
