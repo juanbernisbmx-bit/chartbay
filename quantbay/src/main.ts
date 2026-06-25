@@ -29,6 +29,64 @@ let lastLogit: LogisticResult | null = null;
 
 const $ = (id: string): HTMLElement | null => document.getElementById(id);
 
+interface QuantDemoCase {
+  id: string;
+  label: string;
+  file: string;
+  yName: string;
+  xNames: string[];
+  restriction: string;
+  description: string;
+}
+
+const DEMO_CASES: Record<string, QuantDemoCase> = {
+  'ols-simple': {
+    id: 'ols-simple',
+    label: 'OLS simple',
+    file: '01_simple_linear.csv',
+    yName: 'y',
+    xNames: ['x'],
+    restriction: 'Sin restriccion: modelo OLS simple y = beta0 + beta1*x + error.',
+    description: 'Relacion lineal clara para verificar intercepto, pendiente, RSS y diagnosticos basicos.',
+  },
+  'rls-beta1-zero': {
+    id: 'rls-beta1-zero',
+    label: 'RLS beta1 = 0',
+    file: '01_simple_linear.csv',
+    yName: 'y',
+    xNames: ['x'],
+    restriction: 'Restriccion sugerida: beta1 = 0.',
+    description: 'Usa el dataset simple para contrastar una pendiente nula contra el ajuste OLS completo.',
+  },
+  'rls-beta1-beta2': {
+    id: 'rls-beta1-beta2',
+    label: 'RLS beta1 = beta2',
+    file: '02_beta1_eq_beta2_approx_valid.csv',
+    yName: 'y',
+    xNames: ['x1', 'x2'],
+    restriction: 'Restriccion sugerida: beta1 - beta2 = 0.',
+    description: 'Caso donde beta1 y beta2 son aproximadamente iguales; la restriccion no deberia rechazarse a niveles usuales.',
+  },
+  'rls-sum-one': {
+    id: 'rls-sum-one',
+    label: 'RLS beta1 + beta2 = 1',
+    file: '04_beta1_plus_beta2_eq_1.csv',
+    yName: 'y',
+    xNames: ['x1', 'x2'],
+    restriction: 'Restriccion sugerida: beta1 + beta2 = 1.',
+    description: 'Dataset para comprobar una restriccion lineal sobre la suma de coeficientes.',
+  },
+  singular: {
+    id: 'singular',
+    label: 'Caso singular',
+    file: '05_perfect_collinearity.csv',
+    yName: 'y',
+    xNames: ['x1', 'x2'],
+    restriction: 'Restriccion sugerida: beta1 - beta2 = 0; primero debe detectarse x2 = 2*x1.',
+    description: 'Caso de colinealidad perfecta: la matriz de diseno no tiene rango completo y el modelo debe avisar antes de estimar.',
+  },
+};
+
 function showError(msg: string): void {
   const el = $('qb-error');
   if (!el) return;
@@ -65,6 +123,112 @@ async function technicalLoadSequence(): Promise<void> {
     emitted.push(step);
     writeRunLog(emitted);
     await new Promise(resolve => setTimeout(resolve, 90));
+  }
+}
+
+function parseDemoCsv(text: string): ParsedCSV {
+  const [headerLine, ...dataLines] = text.trim().split(/\r?\n/);
+  const headers = headerLine.split(',').map(header => header.trim());
+  const rows = dataLines
+    .filter(line => line.trim().length > 0)
+    .map(line => {
+      const values = line.split(',');
+      return Object.fromEntries(
+        headers.map((header, index) => {
+          const raw = values[index]?.trim() ?? '';
+          return [header, raw === '' ? null : Number(raw)];
+        })
+      );
+    });
+
+  return {
+    headers,
+    rows,
+    numericColumns: headers.filter(header =>
+      rows.length > 0 &&
+      rows.every(row => {
+        const raw = row[header];
+        return raw !== null && raw !== '' && !isNaN(Number(raw)) && isFinite(Number(raw));
+      })
+    ),
+  };
+}
+
+function setVariableSelection(yName: string, xNames: string[]): void {
+  const yEl = $('qb-y') as HTMLSelectElement | null;
+  if (yEl) yEl.value = yName;
+  document.querySelectorAll<HTMLInputElement>('.qb-x-cb').forEach(cb => {
+    cb.checked = xNames.includes(cb.value) && cb.value !== yName;
+  });
+}
+
+function renderDemoInfo(demo: QuantDemoCase): void {
+  const html = `
+    <strong>${escapeHtml(demo.label)}</strong><br>
+    ${escapeHtml(demo.description)}<br>
+    <span>Y: <code>${escapeHtml(demo.yName)}</code> · X: ${demo.xNames.map(name => `<code>${escapeHtml(name)}</code>`).join(', ')}</span><br>
+    <span>${escapeHtml(demo.restriction)}</span>`;
+  const note = $('qb-demo-note');
+  const restriction = $('qb-demo-restriction');
+  if (note) note.innerHTML = html;
+  if (restriction) {
+    restriction.innerHTML = `<strong>Restriccion sugerida:</strong> ${escapeHtml(demo.restriction)}`;
+    restriction.style.display = '';
+  }
+}
+
+function clearDemoInfo(): void {
+  const note = $('qb-demo-note');
+  const restriction = $('qb-demo-restriction');
+  if (note) {
+    note.textContent = 'Elegi un ejemplo para precargar CSV, variable dependiente, regresores y restriccion sugerida.';
+  }
+  if (restriction) {
+    restriction.innerHTML = '';
+    restriction.style.display = 'none';
+  }
+}
+
+async function loadDemoCase(id: string): Promise<void> {
+  const demo = DEMO_CASES[id];
+  if (!demo) return;
+  showError('');
+  setEngineStatus('PARSING');
+  writeRunLog([`Loading demo: ${demo.label}`]);
+
+  try {
+    const response = await fetch(`/datasets/${encodeURIComponent(demo.file)}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`No se pudo cargar ${demo.file}`);
+    csvData = parseDemoCsv(await response.text());
+    if (csvData.numericColumns.length < 2) {
+      throw new Error('El CSV de ejemplo necesita al menos 2 columnas numericas.');
+    }
+
+    const fn = $('qb-filename');
+    if (fn) fn.textContent = demo.file;
+    setText('qb-status-dataset', demo.file);
+    setText('qb-status-obs', csvData.rows.length);
+    setText('qb-status-vars', csvData.numericColumns.length);
+    setEngineStatus('READY');
+    writeRunLog([
+      `Demo mounted: ${demo.label}`,
+      `Dataset: ${demo.file}`,
+      `Suggested restriction: ${demo.restriction}`,
+    ]);
+
+    renderPreview(csvData);
+    renderVarSelectors(csvData.numericColumns);
+    setVariableSelection(demo.yName, demo.xNames);
+    renderDemoInfo(demo);
+
+    const preview = $('qb-preview'), vars = $('qb-vars'), results = $('qb-results'), repair = $('qb-repair-log');
+    if (preview) preview.style.display = '';
+    if (vars) vars.style.display = '';
+    if (results) results.style.display = 'none';
+    if (repair) repair.style.display = 'none';
+  } catch (err) {
+    setEngineStatus('ERROR');
+    showError(`Error al cargar demo: ${(err as Error).message}`);
   }
 }
 
@@ -107,6 +271,7 @@ async function onFileChange(e: Event): Promise<void> {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
   showError('');
+  clearDemoInfo();
   const fn = $('qb-filename');
   if (fn) fn.textContent = file.name;
   setText('qb-status-dataset', file.name);
@@ -831,6 +996,9 @@ function onAutoRun(): void {
 
 function init(): void {
   $('qb-file')?.addEventListener('change', onFileChange as EventListener);
+  document.querySelectorAll<HTMLButtonElement>('.qb-demo-btn').forEach(btn => {
+    btn.addEventListener('click', () => loadDemoCase(btn.dataset.demo ?? ''));
+  });
   $('qb-run')?.addEventListener('click', onRun);
   $('qb-auto-run')?.addEventListener('click', onAutoRun);
   $('qb-export-pdf')?.addEventListener('click', exportPDF);

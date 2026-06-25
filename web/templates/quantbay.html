@@ -88,6 +88,23 @@
           <div class="qb-runlog" id="qb-runlog" aria-live="polite"></div>
         </section>
 
+        <section class="qb-section" id="qb-demo-panel">
+          <div class="qb-panel-head">
+            <p class="qb-subtitle">Demo guiada</p>
+            <span>Datasets de validacion</span>
+          </div>
+          <div class="qb-demo-grid" aria-label="Ejemplos de Quant Bay">
+            <button class="btn-ink qb-demo-btn" data-demo="ols-simple">OLS simple</button>
+            <button class="btn-ink qb-demo-btn" data-demo="rls-beta1-zero">RLS beta1 = 0</button>
+            <button class="btn-ink qb-demo-btn" data-demo="rls-beta1-beta2">RLS beta1 = beta2</button>
+            <button class="btn-ink qb-demo-btn" data-demo="rls-sum-one">RLS beta1 + beta2 = 1</button>
+            <button class="btn-ink qb-demo-btn" data-demo="singular">Caso singular</button>
+          </div>
+          <div class="qb-demo-note" id="qb-demo-note">
+            Elegi un ejemplo para precargar CSV, variable dependiente, regresores y restriccion sugerida.
+          </div>
+        </section>
+
         <section class="qb-section" id="qb-preview" style="display:none">
           <div class="qb-panel-head">
             <p class="qb-subtitle">2. Revisar datos</p>
@@ -115,6 +132,7 @@
             <button class="btn-ink" id="qb-run">Calcular regresion</button>
             <button class="btn-ink qb-btn-repair" id="qb-auto-run" title="Detecta y corrige multicolinealidad, matriz singular y otros problemas automaticamente">Arreglar y calcular</button>
           </div>
+          <div class="qb-demo-note qb-demo-restriction" id="qb-demo-restriction" style="display:none"></div>
         </section>
 
         <div id="qb-repair-log" style="display:none;margin:12px 0"></div>

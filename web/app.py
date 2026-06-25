@@ -577,6 +577,23 @@ def quantbay():
     return render_template("quantbay.html")
 
 
+@app.route("/datasets/<path:name>")
+def quantbay_dataset(name):
+    allowed = {
+        "01_simple_linear.csv",
+        "02_beta1_eq_beta2_approx_valid.csv",
+        "03_beta1_eq_beta2_false.csv",
+        "04_beta1_plus_beta2_eq_1.csv",
+        "05_perfect_collinearity.csv",
+    }
+    if name not in allowed:
+        abort(404)
+    fp = ROOT / "datasets" / name
+    if not fp.exists():
+        abort(404)
+    return Response(fp.read_text(encoding="utf-8"), mimetype="text/csv")
+
+
 # ─── Datos Frecuentes ────────────────────────────────────────────────────────
 # Series macro oficiales (FRED y, a futuro, BCRA/World Bank/IMF/OECD) listas
 # para descargar. La lógica de fuentes vive en el paquete `providers`; acá
