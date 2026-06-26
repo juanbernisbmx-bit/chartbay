@@ -973,6 +973,11 @@ input:focus,select:focus,textarea:focus,.search input:focus,.compare-input:focus
 .qb-x-check:hover{border-color:var(--line-strong);background:#0b1119}
 .qb-table-scroll{overflow-x:auto}
 .qb-results-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);gap:12px;margin:8px 0}
+.qb-ts-chart-wrap{
+  height:280px;
+  min-height:280px;
+  margin-top:10px;
+}
 .qb-chart{
   width:100%;
   max-height:320px;
@@ -981,6 +986,10 @@ input:focus,select:focus,textarea:focus,.search input:focus,.compare-input:focus
   background:#05080d;
   margin:4px 0 10px;
   display:block;
+}
+.qb-ts-chart-wrap .qb-chart{
+  height:100%;
+  max-height:none;
 }
 .qb-interp{
   background:#080c12;
