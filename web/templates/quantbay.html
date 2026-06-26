@@ -48,17 +48,17 @@
       <div>
         <p class="qb-kicker">Chart Bay / Quant</p>
         <h2>Quant Bay</h2>
-        <p>Subi un CSV, elegi que variable queres explicar y Quant Bay calcula una regresion OLS con tablas, graficos y una lectura simple.</p>
+        <p>Cargá un CSV, elegí tus variables y obtenés una regresión OLS completa: coeficientes, gráficos e interpretación automática. Todo corre en tu navegador — tus datos no salen de tu computadora.</p>
       </div>
-      <div class="qb-terminal-chip">Simple OLS</div>
+      <div class="qb-terminal-chip">Regresión OLS</div>
     </section>
 
     <section class="qb-statusbar" aria-label="Estado del workspace">
-      <div><span>Dataset</span><strong id="qb-status-dataset">No file</strong></div>
-      <div><span>Observations</span><strong id="qb-status-obs">0</strong></div>
-      <div><span>Numeric vars</span><strong id="qb-status-vars">0</strong></div>
-      <div><span>Method</span><strong>OLS</strong></div>
-      <div><span>Engine</span><strong id="qb-status-engine">IDLE</strong></div>
+      <div><span>Archivo</span><strong id="qb-status-dataset">Sin archivo</strong></div>
+      <div><span>Observaciones</span><strong id="qb-status-obs">0</strong></div>
+      <div><span>Variables numéricas</span><strong id="qb-status-vars">0</strong></div>
+      <div><span>Método</span><strong>OLS</strong></div>
+      <div><span>Motor</span><strong id="qb-status-engine">LISTO</strong></div>
     </section>
 
     <div id="qb-error" style="display:none"></div>
@@ -84,7 +84,7 @@
             <input type="file" id="qb-file" accept=".csv" style="display:none">
             <span id="qb-filename" class="muted">Todavia no subiste un archivo</span>
           </div>
-          <p class="muted qb-help">El archivo tiene que tener nombres de columnas en la primera fila. Quant Bay detecta automaticamente las columnas numericas.</p>
+          <p class="muted qb-help">El archivo tiene que tener nombres de columnas en la primera fila. Quant Bay detecta automaticamente las columnas numericas. &nbsp;<a href="/datasets/01_simple_linear.csv" download="ejemplo_quant.csv" class="muted" style="text-decoration:underline">Descargar ejemplo CSV</a></p>
           <div class="qb-runlog" id="qb-runlog" aria-live="polite"></div>
         </section>
 
@@ -128,9 +128,12 @@
               <div id="qb-x-checks"></div>
             </div>
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-            <button class="btn-ink" id="qb-run">Calcular regresion</button>
-            <button class="btn-ink qb-btn-repair" id="qb-auto-run" title="Detecta y corrige multicolinealidad, matriz singular y otros problemas automaticamente">Arreglar y calcular</button>
+          <div style="margin-top:10px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <button class="btn-ink" id="qb-run" style="font-weight:700">Calcular regresión</button>
+              <button class="btn-ink qb-btn-repair" id="qb-auto-run" title="Detecta y corrige multicolinealidad, matriz singular y otros problemas automaticamente">⚙ Arreglar y calcular</button>
+            </div>
+            <p class="muted" style="font-size:11px;margin:5px 0 0">"Arreglar y calcular" detecta y corrige multicolinealidad o matrices singulares antes de estimar.</p>
           </div>
           <div class="qb-demo-note qb-demo-restriction" id="qb-demo-restriction" style="display:none"></div>
         </section>
@@ -171,23 +174,23 @@
 
           <div id="qb-logit-wrap" style="display:none">
             <div class="qb-panel-head qb-subpanel">
-              <p class="qb-subtitle">Logistic Regression</p>
-              <span>BINARY TARGET</span>
+              <p class="qb-subtitle">Regresión Logística</p>
+              <span>VARIABLE BINARIA</span>
             </div>
             <div id="qb-logit-content"></div>
           </div>
 
           <div id="qb-forecast-panel">
             <div class="qb-panel-head qb-subpanel">
-              <p class="qb-subtitle">Actual vs Predicted</p>
-              <span>DIAGNOSTIC SCATTER</span>
+              <p class="qb-subtitle">Actual vs Predicho</p>
+              <span>DISPERSIÓN DIAGNÓSTICA</span>
             </div>
             <canvas id="qb-chart" class="qb-chart"></canvas>
           </div>
 
           <div id="qb-correlation-panel">
             <div class="qb-panel-head qb-subpanel">
-              <p class="qb-subtitle">Correlation Matrix</p>
+              <p class="qb-subtitle">Matriz de correlación</p>
               <span>PEARSON R</span>
             </div>
             <div class="qb-table-scroll" id="qb-corr-wrap"></div>
@@ -196,8 +199,8 @@
 
           <div id="qb-vif-panel">
             <div class="qb-panel-head qb-subpanel">
-              <p class="qb-subtitle">Structural Tests</p>
-              <span>VIF</span>
+              <p class="qb-subtitle">Tests estructurales</p>
+              <span>VIF · MULTICOLINEALIDAD</span>
             </div>
             <div class="qb-table-scroll" id="qb-vif-wrap"></div>
             <div id="qb-vif-warn"></div>
@@ -205,8 +208,8 @@
 
           <div id="qb-diagnostics-panel">
             <div class="qb-panel-head qb-subpanel">
-              <p class="qb-subtitle">Residual Diagnostics</p>
-              <span>MODEL VALIDATION</span>
+              <p class="qb-subtitle">Diagnósticos de residuos</p>
+              <span>VALIDACIÓN DEL MODELO</span>
             </div>
             <div class="qb-results-grid">
               <div><canvas id="qb-resid-fitted" class="qb-chart" style="max-height:240px"></canvas></div>
@@ -215,22 +218,24 @@
             <div id="qb-resid-stats" class="qb-resid-stats"></div>
           </div>
 
-          <p class="qb-label">Technical interpretation</p>
+          <p class="qb-label">Interpretación automática</p>
           <div class="qb-interp" id="qb-interpretation"></div>
 
           <div style="margin:14px 0 4px">
             <button class="btn-ink" id="qb-export-pdf">Exportar PDF</button>
+            <button class="btn-ink" id="qb-export-csv">Exportar CSV</button>
+            <button class="btn-ink" id="qb-export-txt">Exportar TXT</button>
           </div>
 
           <details style="margin:10px 0">
-            <summary>Prediction and residual ledger</summary>
+            <summary>Tabla de predicciones y residuos</summary>
             <div id="qb-pred-table" style="overflow-x:auto;margin-top:6px"></div>
           </details>
         </section>
       </main>
     </div>
 
-    <p class="colophon">Educational statistical analysis. Not financial advice or a guarantee of results.</p>
+    <p class="colophon">Análisis estadístico educativo. No constituye asesoramiento financiero ni garantía de resultados.</p>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>

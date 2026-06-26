@@ -179,7 +179,8 @@ describe('runQuantAnalysis — missing data', () => {
 describe('runQuantAnalysis — error cases', () => {
   it('throws when observations are insufficient for the number of predictors', () => {
     const small = makeCsv([{ x: 1, y: 2 }, { x: 3, y: 4 }]);
-    expect(() => runQuantAnalysis(small, 'y', ['x'])).toThrow();
+    expect(() => runQuantAnalysis(small, 'y', ['x'])).toThrow(/Observaciones insuficientes/);
+    expect(() => runQuantAnalysis(small, 'y', ['x'])).toThrow(/agrega datos o usa menos variables X/);
   });
 
   it('reports perfect pairwise collinearity before estimating', () => {

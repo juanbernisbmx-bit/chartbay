@@ -2,6 +2,7 @@ import { parseCSVFile, type ParsedCSV } from './csvParser';
 import type { RegressionResult } from './regression';
 import { interpret } from './interpretation';
 import {
+  AnalysisValidationError,
   runQuantAnalysis,
   type LeakageSignal,
   type LogisticResult,
@@ -26,6 +27,7 @@ let lastCorr: number[][] | null = null;
 let lastCorrCols: string[] | null = null;
 let lastVIF: number[] | null = null;
 let lastLogit: LogisticResult | null = null;
+let lastDropped = 0;
 
 const $ = (id: string): HTMLElement | null => document.getElementById(id);
 
@@ -90,8 +92,51 @@ const DEMO_CASES: Record<string, QuantDemoCase> = {
 function showError(msg: string): void {
   const el = $('qb-error');
   if (!el) return;
-  el.textContent = msg;
+  el.innerHTML = msg ? escapeHtml(msg).replace(/\n/g, '<br>') : '';
   el.style.display = msg ? '' : 'none';
+}
+
+function formatRegressionError(err: unknown): string {
+  if (err instanceof AnalysisValidationError) {
+    const lines = err.issues.map(issue => {
+      const cols = issue.columns.map(col => `"${col}"`).join(', ');
+      switch (issue.type) {
+        case 'missing_values':
+          return `Hay celdas vacias en ${cols}. Completa esos datos o filtra esas filas antes de calcular.`;
+        case 'invalid_numeric':
+          return `Hay valores no numericos en ${cols}. Revisa texto, simbolos, separadores decimales o celdas mezcladas con palabras.`;
+        case 'constant_column':
+          return `${cols} no cambia entre filas. Una variable constante no ayuda a explicar Y; usa otra variable o agrega datos con variacion.`;
+        case 'duplicate_column':
+          return `${cols} contienen la misma informacion fila por fila. Deja solo una de esas columnas.`;
+        case 'collinearity':
+          return `${cols} estan demasiado relacionadas entre si. El modelo no puede separar sus efectos; quita una variable o transforma los datos.`;
+        default:
+          return issue.message;
+      }
+    });
+    return [
+      'No se pudo calcular la regresion.',
+      ...lines.map(line => `- ${line}`),
+      'Chart Bay no cambio ni elimino datos automaticamente.',
+    ].join('\n');
+  }
+
+  const message = (err as Error).message ?? String(err);
+  if (/Observaciones insuficientes/i.test(message)) {
+    return `${message}\nSugerencia: usa menos variables X o carga un dataset con mas filas numericas completas.`;
+  }
+  if (/singular|colineal|rango|rank/i.test(message)) {
+    return `${message}\nSugerencia: quita una variable repetida o una variable que sea combinacion de otras.`;
+  }
+  return message;
+}
+
+function updateSidebarStep(stepNum: number): void {
+  document.querySelectorAll<HTMLAnchorElement>('.qb-sidebar a').forEach((link, i) => {
+    link.style.fontWeight = (i + 1 === stepNum) ? '700' : '';
+    link.style.opacity = (i + 1 <= stepNum) ? '1' : '0.45';
+  });
 }
 
 function setText(id: string, value: string | number): void {
@@ -111,14 +156,14 @@ function writeRunLog(lines: string[]): void {
 
 async function technicalLoadSequence(): Promise<void> {
   const steps = [
-    'Parsing dataset...',
-    'Cleaning missing values...',
-    'Building design matrix...',
-    'Estimating OLS coefficients...',
-    'Computing diagnostics...',
+    'Leyendo datos...',
+    'Filtrando valores faltantes...',
+    'Construyendo matriz de diseño...',
+    'Estimando coeficientes OLS...',
+    'Calculando diagnósticos...',
   ];
   const emitted: string[] = [];
-  setEngineStatus('RUNNING');
+  setEngineStatus('CALCULANDO');
   for (const step of steps) {
     emitted.push(step);
     writeRunLog(emitted);
@@ -193,8 +238,8 @@ async function loadDemoCase(id: string): Promise<void> {
   const demo = DEMO_CASES[id];
   if (!demo) return;
   showError('');
-  setEngineStatus('PARSING');
-  writeRunLog([`Loading demo: ${demo.label}`]);
+  setEngineStatus('LEYENDO');
+  writeRunLog([`Cargando demo: ${demo.label}`]);
 
   try {
     const response = await fetch(`/datasets/${encodeURIComponent(demo.file)}`, { cache: 'no-store' });
@@ -209,11 +254,11 @@ async function loadDemoCase(id: string): Promise<void> {
     setText('qb-status-dataset', demo.file);
     setText('qb-status-obs', csvData.rows.length);
     setText('qb-status-vars', csvData.numericColumns.length);
-    setEngineStatus('READY');
+    setEngineStatus('LISTO');
     writeRunLog([
-      `Demo mounted: ${demo.label}`,
-      `Dataset: ${demo.file}`,
-      `Suggested restriction: ${demo.restriction}`,
+      `Demo cargado: ${demo.label}`,
+      `Archivo: ${demo.file}`,
+      `Restricción sugerida: ${demo.restriction}`,
     ]);
 
     renderPreview(csvData);
@@ -226,6 +271,8 @@ async function loadDemoCase(id: string): Promise<void> {
     if (vars) vars.style.display = '';
     if (results) results.style.display = 'none';
     if (repair) repair.style.display = 'none';
+
+    await onRun();
   } catch (err) {
     setEngineStatus('ERROR');
     showError(`Error al cargar demo: ${(err as Error).message}`);
@@ -275,8 +322,8 @@ async function onFileChange(e: Event): Promise<void> {
   const fn = $('qb-filename');
   if (fn) fn.textContent = file.name;
   setText('qb-status-dataset', file.name);
-  setEngineStatus('PARSING');
-  writeRunLog(['Mounting CSV in data hold...']);
+  setEngineStatus('LEYENDO');
+  writeRunLog(['Leyendo archivo CSV...']);
 
   try {
     csvData = await parseCSVFile(file);
@@ -286,11 +333,11 @@ async function onFileChange(e: Event): Promise<void> {
     }
     setText('qb-status-obs', csvData.rows.length);
     setText('qb-status-vars', csvData.numericColumns.length);
-    setEngineStatus('READY');
+    setEngineStatus('LISTO');
     writeRunLog([
-      `Dataset mounted: ${csvData.rows.length} observations`,
-      `Numeric variables detected: ${csvData.numericColumns.length}`,
-      'Regression engine ready.',
+      `Dataset cargado: ${csvData.rows.length} observaciones`,
+      `Variables numéricas detectadas: ${csvData.numericColumns.length}`,
+      'Motor de regresión listo.',
     ]);
     renderPreview(csvData);
     renderVarSelectors(csvData.numericColumns);
@@ -298,6 +345,7 @@ async function onFileChange(e: Event): Promise<void> {
     if (preview) preview.style.display = '';
     if (vars) vars.style.display = '';
     if (results) results.style.display = 'none';
+    updateSidebarStep(2);
   } catch (err) {
     setEngineStatus('ERROR');
     showError(`Error al leer el archivo: ${(err as Error).message}`);
@@ -377,19 +425,20 @@ async function onRun(): Promise<void> {
       }
     );
     setText('qb-status-obs', analysis.result.nObs);
-    setEngineStatus('COMPLETE');
+    setEngineStatus('COMPLETADO');
     writeRunLog([
-      'Parsing dataset... OK',
-      'Cleaning missing values... OK',
-      'Building design matrix... OK',
-      'Estimating OLS coefficients... OK',
-      'Computing diagnostics... OK',
+      'Leyendo datos... OK',
+      'Filtrando valores faltantes... OK',
+      'Construyendo matriz de diseño... OK',
+      'Estimando coeficientes OLS... OK',
+      'Calculando diagnósticos... OK',
     ]);
     const res = $('qb-results');
     if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
+    updateSidebarStep(3);
   } catch (err) {
     setEngineStatus('ERROR');
-    showError(`Error en la regresión: ${(err as Error).message}`);
+    showError(formatRegressionError(err));
   }
 }
 
@@ -408,6 +457,7 @@ function renderResults(
   } = {}
 ): void {
   const { binary = false, leaks = [], logitResult = null } = checks;
+  lastDropped = dropped;
   renderBinaryWarn(binary, result.yName);
   renderLeakageWarn(leaks);
   const eq = $('qb-equation');
@@ -448,9 +498,9 @@ function renderBinaryWarn(isBinary: boolean, yName: string): void {
   }
   el.innerHTML = `
     <div class="qb-warn-yellow">
-      <p><strong>Binary dependent variable detected: ${escapeHtml(yName)}</strong></p>
-      <p>OLS is being used as a linear probability model. Predictions can fall outside [0, 1], residual variance is not constant, and coefficients should be read in approximate percentage-point terms.</p>
-      <p>Logistic regression output is shown below the OLS coefficient ledger for comparison.</p>
+      <p><strong>Variable dependiente binaria detectada: ${escapeHtml(yName)}</strong></p>
+      <p>Se está usando OLS como modelo de probabilidad lineal. Las predicciones pueden quedar fuera del rango [0,1], la varianza residual no es constante y los coeficientes se interpretan como cambios aproximados en puntos porcentuales.</p>
+      <p>Se muestra una regresión logística a continuación para comparar.</p>
     </div>`;
 }
 
@@ -464,14 +514,14 @@ function renderLeakageWarn(leaks: LeakageSignal[]): void {
   const rows = leaks
     .map(
       leak =>
-        `<p><strong>${escapeHtml(leak.name)}</strong> correlates ${leak.r.toFixed(4)} with the target (|r| = ${leak.abs.toFixed(4)}). Review whether this regressor is derived from the response.</p>`
+        `<p><strong>${escapeHtml(leak.name)}</strong> tiene correlación ${leak.r.toFixed(4)} con la variable dependiente (|r| = ${leak.abs.toFixed(4)}). Revisá si este predictor se deriva de la respuesta.</p>`
     )
     .join('');
   el.innerHTML = `
     <div class="qb-warn-red">
-      <p><strong>Possible data leakage detected</strong></p>
+      <p><strong>Posible data leakage detectado</strong></p>
       ${rows}
-      <p>Threshold: |r| >= 0.95.</p>
+      <p>Umbral: |r| ≥ 0.95.</p>
     </div>`;
 }
 
@@ -549,14 +599,14 @@ function renderStatsTable(result: RegressionResult, dropped: number): void {
   if (!body) return;
   const fmtF = (f: number) => !isFinite(f) ? '∞' : f.toFixed(4);
   body.innerHTML = `
-    <tr><td>R²</td><td>${result.rSquared.toFixed(6)}</td></tr>
-    <tr><td>R² ajustado</td><td>${result.adjustedRSquared.toFixed(6)}</td></tr>
+    <tr><td>R²</td><td>${result.rSquared.toFixed(4)}</td></tr>
+    <tr><td>R² ajustado</td><td>${result.adjustedRSquared.toFixed(4)}</td></tr>
     <tr><td>F-estadístico</td><td>${fmtF(result.fStat)}</td></tr>
-    <tr><td>p(F)</td><td>${result.fPValue.toFixed(6)}</td></tr>
+    <tr><td>p(F)</td><td>${result.fPValue.toFixed(4)}</td></tr>
     <tr><td>Observaciones (n)</td><td>${result.nObs}</td></tr>
     <tr><td>Variables (k)</td><td>${result.nFeatures}</td></tr>
     <tr><td>Grados de libertad</td><td>${result.df}</td></tr>
-    <tr><td>σ² (var. residual)</td><td>${result.sigma2.toFixed(6)}</td></tr>
+    <tr><td>σ² (var. residual)</td><td>${result.sigma2.toFixed(4)}</td></tr>
     ${dropped > 0 ? `<tr><td>Filas omitidas (NA)</td><td>${dropped}</td></tr>` : ''}`;
 }
 
@@ -594,7 +644,7 @@ function renderChart(result: RegressionResult): void {
         },
       ],
     },
-    options: chartTheme(`${result.yName}: actual vs predicted`, `Actual (${result.yName})`, `Predicted (${result.yName})`),
+    options: chartTheme(`${result.yName}: actual vs predicho`, `Actual (${result.yName})`, `Predicho (${result.yName})`),
   });
 }
 
@@ -710,7 +760,7 @@ function renderResidDiag(result: RegressionResult): void {
           },
         ],
       },
-      options: chartTheme('residuals vs fitted', 'Fitted value', 'Residual', false),
+      options: chartTheme('residuos vs ajustados', 'Valor ajustado', 'Residuo', false),
     });
   }
 
@@ -727,7 +777,7 @@ function renderResidDiag(result: RegressionResult): void {
     residHistChart = new Chart(histCanvas, {
       type: 'bar',
       data: { labels, datasets: [{ data: counts, backgroundColor: 'rgba(122, 167, 255, .42)', borderColor: '#7aa7ff', borderWidth: 1 }] },
-      options: chartTheme('residual distribution', 'Residual', 'Frequency', false),
+      options: chartTheme('distribución de residuos', 'Residuo', 'Frecuencia', false),
     });
   }
 
@@ -742,10 +792,110 @@ function renderResidDiag(result: RegressionResult): void {
 
 // ── PDF Export ────────────────────────────────────────────────────────────────
 
+function residualSumSquares(result: RegressionResult): number {
+  return result.residuals.reduce((sum, residual) => sum + residual ** 2, 0);
+}
+
+function downloadTextFile(filename: string, content: string, mime: string): void {
+  const blob = new Blob([content], { type: `${mime};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function csvCell(value: string | number): string {
+  const text = String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function exportAnalysisCSV(): void {
+  if (!lastResult) {
+    showError('Primero ejecutá una regresión para poder exportar.');
+    return;
+  }
+
+  const result = lastResult;
+  const conclusion = interpret(result);
+  const rows: Array<Array<string | number>> = [
+    ['section', 'metric', 'variable', 'value'],
+    ['model', 'dependent_variable', '', result.yName],
+    ['model', 'r_squared', '', result.rSquared],
+    ['model', 'adjusted_r_squared', '', result.adjustedRSquared],
+    ['model', 'rss', '', residualSumSquares(result)],
+    ['model', 'f_stat', '', result.fStat],
+    ['model', 'f_p_value', '', result.fPValue],
+    ['model', 'observations', '', result.nObs],
+    ['model', 'features', '', result.nFeatures],
+    ['model', 'degrees_of_freedom', '', result.df],
+    ['model', 'dropped_rows', '', lastDropped],
+    ['coefficient', 'estimate', 'intercept', result.intercept],
+    ['coefficient', 'std_error', 'intercept', result.stdErrors[0]],
+    ['coefficient', 't_stat', 'intercept', result.tStats[0]],
+    ['coefficient', 'p_value', 'intercept', result.pValues[0]],
+    ...result.featureNames.flatMap((name, index) => [
+      ['coefficient', 'estimate', name, result.coefficients[index]],
+      ['coefficient', 'std_error', name, result.stdErrors[index + 1]],
+      ['coefficient', 't_stat', name, result.tStats[index + 1]],
+      ['coefficient', 'p_value', name, result.pValues[index + 1]],
+    ] as Array<Array<string | number>>),
+    ['conclusion', 'text', '', conclusion],
+  ];
+
+  downloadTextFile(
+    'quantbay_resultados.csv',
+    rows.map(row => row.map(csvCell).join(',')).join('\n'),
+    'text/csv'
+  );
+}
+
+function exportAnalysisTXT(): void {
+  if (!lastResult) {
+    showError('Primero ejecutá una regresión para poder exportar.');
+    return;
+  }
+
+  const result = lastResult;
+  const lines = [
+    'Quant Bay - Resultados del analisis',
+    '',
+    `Variable dependiente: ${result.yName}`,
+    `Ecuacion: ${result.equation}`,
+    '',
+    'Coeficientes',
+    'Variable\tCoeficiente\tError estandar\tt-stat\tp-value',
+    `Intercepto\t${result.intercept.toFixed(6)}\t${result.stdErrors[0].toFixed(6)}\t${result.tStats[0].toFixed(6)}\t${result.pValues[0].toFixed(6)}`,
+    ...result.featureNames.map((name, index) =>
+      `${name}\t${result.coefficients[index].toFixed(6)}\t${result.stdErrors[index + 1].toFixed(6)}\t${result.tStats[index + 1].toFixed(6)}\t${result.pValues[index + 1].toFixed(6)}`
+    ),
+    '',
+    'Resumen del modelo',
+    `R2: ${result.rSquared.toFixed(6)}`,
+    `R2 ajustado: ${result.adjustedRSquared.toFixed(6)}`,
+    `RSS: ${residualSumSquares(result).toFixed(6)}`,
+    `F-stat: ${isFinite(result.fStat) ? result.fStat.toFixed(6) : 'Infinity'}`,
+    `p(F): ${result.fPValue.toFixed(6)}`,
+    `Observaciones: ${result.nObs}`,
+    `Variables X: ${result.nFeatures}`,
+    `Grados de libertad: ${result.df}`,
+    `Filas omitidas: ${lastDropped}`,
+    '',
+    'Conclusion textual',
+    interpret(result),
+    '',
+  ];
+
+  downloadTextFile('quantbay_resultados.txt', lines.join('\n'), 'text/plain');
+}
+
 function exportPDF(): void {
   const jspdfLib = (window as any).jspdf;
-  if (!jspdfLib?.jsPDF) { alert('jsPDF no disponible. Verificá que el CDN cargó.'); return; }
-  if (!lastResult) { alert('Primero ejecutá una regresión.'); return; }
+  if (!jspdfLib?.jsPDF) { showError('Exportación PDF no disponible. Verificá la conexión a internet.'); return; }
+  if (!lastResult) { showError('Primero ejecutá una regresión para poder exportar.'); return; }
 
   const { jsPDF } = jspdfLib;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -988,7 +1138,7 @@ function onAutoRun(): void {
     const res = $('qb-results');
     if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
   } catch (err) {
-    showError(`Error en el análisis automático: ${(err as Error).message}`);
+    showError(formatRegressionError(err));
   }
 }
 
@@ -1002,6 +1152,8 @@ function init(): void {
   $('qb-run')?.addEventListener('click', onRun);
   $('qb-auto-run')?.addEventListener('click', onAutoRun);
   $('qb-export-pdf')?.addEventListener('click', exportPDF);
+  $('qb-export-csv')?.addEventListener('click', exportAnalysisCSV);
+  $('qb-export-txt')?.addEventListener('click', exportAnalysisTXT);
 }
 
 if (document.readyState === 'loading') {
