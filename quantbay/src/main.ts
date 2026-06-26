@@ -13,28 +13,14 @@ import {
   correlationClass,
   escapeHtml,
   significanceBadge,
-  significanceLabel,
 } from './utils/format';
+import { $, setEngineStatus, setMethodStatus, setText, showError, updateSidebarStep, writeRunLog } from './app/dom';
+import { appState } from './app/state';
+import { exportAnalysisCSV, exportAnalysisTXT, exportPDF } from './ui/exports';
 
 declare const Chart: any;
-declare const jspdf: any; // window.jspdf from CDN
-
-let csvData: ParsedCSV | null = null;
-let activeChart: any = null;
-let residFittedChart: any = null;
-let residHistChart: any = null;
-let lastResult: RegressionResult | null = null;
-let lastCorr: number[][] | null = null;
-let lastCorrCols: string[] | null = null;
-let lastVIF: number[] | null = null;
-let lastLogit: LogisticResult | null = null;
-let lastDropped = 0;
-let activeDemoId: string | null = null;
-
 // Max CSV dimensions accepted before analysis
 const CSV_LIMITS = { maxRows: 5000, maxCols: 50, maxXVars: 20 };
-
-const $ = (id: string): HTMLElement | null => document.getElementById(id);
 
 interface QuantDemoCase {
   id: string;
@@ -99,19 +85,6 @@ const DEMO_CASES: Record<string, QuantDemoCase> = {
   },
 };
 
-function showError(msg: string): void {
-  const el = $('qb-error');
-  if (!el) return;
-  el.innerHTML = msg ? escapeHtml(msg).replace(/\n/g, '<br>') : '';
-  el.style.display = msg ? '' : 'none';
-}
-
-function setMethodStatus(method: string): void {
-  setText('qb-status-method', method);
-  const badge = document.querySelector<HTMLElement>('#qb-results .qb-panel-head span');
-  if (badge) badge.textContent = method;
-}
-
 function checkCSVLimits(data: ParsedCSV, xNames: string[]): string | null {
   if (data.rows.length > CSV_LIMITS.maxRows)
     return `El CSV tiene ${data.rows.length} filas. El máximo soportado es ${CSV_LIMITS.maxRows}. Reducí el dataset antes de calcular.`;
@@ -156,28 +129,6 @@ function formatRegressionError(err: unknown): string {
     return `${message}\nSugerencia: quita una variable repetida o una variable que sea combinacion de otras.`;
   }
   return message;
-}
-
-function updateSidebarStep(stepNum: number): void {
-  document.querySelectorAll<HTMLAnchorElement>('.qb-sidebar a').forEach((link, i) => {
-    link.style.fontWeight = (i + 1 === stepNum) ? '700' : '';
-    link.style.opacity = (i + 1 <= stepNum) ? '1' : '0.45';
-  });
-}
-
-function setText(id: string, value: string | number): void {
-  const el = $(id);
-  if (el) el.textContent = String(value);
-}
-
-function setEngineStatus(value: string): void {
-  setText('qb-status-engine', value);
-}
-
-function writeRunLog(lines: string[]): void {
-  const log = $('qb-runlog');
-  if (!log) return;
-  log.innerHTML = lines.map(line => `<div>${escapeHtml(line)}</div>`).join('');
 }
 
 async function technicalLoadSequence(): Promise<void> {
@@ -279,23 +230,23 @@ async function loadDemoCase(id: string): Promise<void> {
   const demo = DEMO_CASES[id];
   if (!demo) return;
   showError('');
-  activeDemoId = id;
+  appState.activeDemoId = id;
   setEngineStatus('LEYENDO');
   writeRunLog([`Cargando demo: ${demo.label}`]);
 
   try {
     const response = await fetch(`/datasets/${encodeURIComponent(demo.file)}`, { cache: 'no-store' });
     if (!response.ok) throw new Error(`No se pudo cargar ${demo.file}`);
-    csvData = parseDemoCsv(await response.text());
-    if (csvData.numericColumns.length < 2) {
+    appState.csvData = parseDemoCsv(await response.text());
+    if (appState.csvData.numericColumns.length < 2) {
       throw new Error('El CSV de ejemplo necesita al menos 2 columnas numéricas.');
     }
 
     const fn = $('qb-filename');
     if (fn) fn.textContent = demo.file;
     setText('qb-status-dataset', demo.file);
-    setText('qb-status-obs', csvData.rows.length);
-    setText('qb-status-vars', csvData.numericColumns.length);
+    setText('qb-status-obs', appState.csvData.rows.length);
+    setText('qb-status-vars', appState.csvData.numericColumns.length);
     setEngineStatus('LISTO');
     writeRunLog([
       `Demo cargado: ${demo.label}`,
@@ -303,8 +254,8 @@ async function loadDemoCase(id: string): Promise<void> {
       `Restricción sugerida: ${demo.restriction}`,
     ]);
 
-    renderPreview(csvData);
-    renderVarSelectors(csvData.numericColumns);
+    renderPreview(appState.csvData);
+    renderVarSelectors(appState.csvData.numericColumns);
     setVariableSelection(demo.yName, demo.xNames);
     renderDemoInfo(demo);
 
@@ -371,7 +322,7 @@ async function onFileChange(e: Event): Promise<void> {
   }
 
   showError('');
-  activeDemoId = null;
+  appState.activeDemoId = null;
   clearDemoInfo();
   const fn = $('qb-filename');
   if (fn) fn.textContent = file.name;
@@ -380,21 +331,21 @@ async function onFileChange(e: Event): Promise<void> {
   writeRunLog(['Leyendo archivo CSV...']);
 
   try {
-    csvData = await parseCSVFile(file);
-    if (csvData.numericColumns.length < 2) {
+    appState.csvData = await parseCSVFile(file);
+    if (appState.csvData.numericColumns.length < 2) {
       showError('El CSV necesita al menos 2 columnas numéricas.');
       return;
     }
-    setText('qb-status-obs', csvData.rows.length);
-    setText('qb-status-vars', csvData.numericColumns.length);
+    setText('qb-status-obs', appState.csvData.rows.length);
+    setText('qb-status-vars', appState.csvData.numericColumns.length);
     setEngineStatus('LISTO');
     writeRunLog([
-      `Dataset cargado: ${csvData.rows.length} observaciones`,
-      `Variables numéricas detectadas: ${csvData.numericColumns.length}`,
+      `Dataset cargado: ${appState.csvData.rows.length} observaciones`,
+      `Variables numéricas detectadas: ${appState.csvData.numericColumns.length}`,
       'Motor de regresión listo.',
     ]);
-    renderPreview(csvData);
-    renderVarSelectors(csvData.numericColumns);
+    renderPreview(appState.csvData);
+    renderVarSelectors(appState.csvData.numericColumns);
     const preview = $('qb-preview'), vars = $('qb-vars'), results = $('qb-results');
     if (preview) preview.style.display = '';
     if (vars) vars.style.display = '';
@@ -445,7 +396,7 @@ function renderVarSelectors(cols: string[]): void {
 // ── Run regression ────────────────────────────────────────────────────────────
 
 async function onRun(): Promise<void> {
-  if (!csvData) return;
+  if (!appState.csvData) return;
   showError('');
   const yName = ($('qb-y') as HTMLSelectElement)?.value ?? '';
   const xNames = Array.from(document.querySelectorAll<HTMLInputElement>('.qb-x-cb:checked'))
@@ -457,20 +408,20 @@ async function onRun(): Promise<void> {
     return;
   }
 
-  const limitErr = checkCSVLimits(csvData, xNames);
+  const limitErr = checkCSVLimits(appState.csvData, xNames);
   if (limitErr) { showError(limitErr); return; }
 
-  const rlsConstraint = activeDemoId ? DEMO_CASES[activeDemoId]?.rlsConstraint : undefined;
+  const rlsConstraint = appState.activeDemoId ? DEMO_CASES[appState.activeDemoId]?.rlsConstraint : undefined;
 
   try {
     await technicalLoadSequence();
-    const output = runRegressionMode(csvData, yName, xNames, rlsConstraint);
+    const output = runRegressionMode(appState.csvData, yName, xNames, rlsConstraint);
 
-    lastResult = output.result;
-    lastCorr = output.corrMatrix;
-    lastCorrCols = output.corrColumns;
-    lastVIF = output.vifValues;
-    lastLogit = output.logitResult;
+    appState.lastResult = output.result;
+    appState.lastCorr = output.corrMatrix;
+    appState.lastCorrCols = output.corrColumns;
+    appState.lastVIF = output.vifValues;
+    appState.lastLogit = output.logitResult;
 
     setMethodStatus(output.method);
     renderResults(
@@ -512,7 +463,7 @@ function renderResults(
   } = {}
 ): void {
   const { binary = false, leaks = [], logitResult = null } = checks;
-  lastDropped = dropped;
+  appState.lastDropped = dropped;
   renderBinaryWarn(binary, result.yName);
   renderLeakageWarn(leaks);
   const eq = $('qb-equation');
@@ -574,7 +525,7 @@ function renderLeakageWarn(leaks: LeakageSignal[]): void {
     )
     .join('');
 
-  if (activeDemoId) {
+  if (appState.activeDemoId) {
     // Demo datasets are intentionally built with strong linear relationships
     el.innerHTML = `
       <div class="qb-warn-yellow">
@@ -717,7 +668,7 @@ function renderRLSPanel(result: RegressionResult): void {
 
 function renderChart(result: RegressionResult): void {
   const canvas = $('qb-chart') as HTMLCanvasElement | null;
-  if (activeChart) { activeChart.destroy(); activeChart = null; }
+  if (appState.activeChart) { appState.activeChart.destroy(); appState.activeChart = null; }
   if (typeof Chart === 'undefined' || !canvas) return;
 
   const actual = result.predictions.map((p, i) => p + result.residuals[i]);
@@ -725,7 +676,7 @@ function renderChart(result: RegressionResult): void {
   const minV = Math.min(...allV), maxV = Math.max(...allV);
   const pad = (maxV - minV) * 0.05 || 1;
 
-  activeChart = new Chart(canvas, {
+  appState.activeChart = new Chart(canvas, {
     type: 'scatter',
     data: {
       datasets: [
@@ -839,10 +790,10 @@ function renderResidDiag(result: RegressionResult): void {
 
   const rfCanvas = $('qb-resid-fitted') as HTMLCanvasElement | null;
   if (rfCanvas) {
-    if (residFittedChart) { residFittedChart.destroy(); residFittedChart = null; }
+    if (appState.residFittedChart) { appState.residFittedChart.destroy(); appState.residFittedChart = null; }
     const minP = Math.min(...result.predictions);
     const maxP = Math.max(...result.predictions);
-    residFittedChart = new Chart(rfCanvas, {
+    appState.residFittedChart = new Chart(rfCanvas, {
       type: 'scatter',
       data: {
         datasets: [
@@ -871,7 +822,7 @@ function renderResidDiag(result: RegressionResult): void {
 
   const histCanvas = $('qb-resid-hist') as HTMLCanvasElement | null;
   if (histCanvas) {
-    if (residHistChart) { residHistChart.destroy(); residHistChart = null; }
+    if (appState.residHistChart) { appState.residHistChart.destroy(); appState.residHistChart = null; }
     const resids = result.residuals;
     const minR = Math.min(...resids), maxR = Math.max(...resids);
     const bins = Math.min(10, Math.max(3, Math.floor(Math.sqrt(resids.length))));
@@ -879,7 +830,7 @@ function renderResidDiag(result: RegressionResult): void {
     const counts = new Array(bins).fill(0);
     resids.forEach(r => { const idx = Math.min(Math.floor((r - minR) / bw), bins - 1); counts[idx]++; });
     const labels = Array.from({ length: bins }, (_, i) => (minR + (i + 0.5) * bw).toFixed(2));
-    residHistChart = new Chart(histCanvas, {
+    appState.residHistChart = new Chart(histCanvas, {
       type: 'bar',
       data: { labels, datasets: [{ data: counts, backgroundColor: 'rgba(122, 167, 255, .42)', borderColor: '#7aa7ff', borderWidth: 1 }] },
       options: chartTheme('distribución de residuos', 'Residuo', 'Frecuencia', false),
@@ -893,281 +844,6 @@ function renderResidDiag(result: RegressionResult): void {
     const sd = Math.sqrt(result.residuals.reduce((s, r) => s + (r - mn) ** 2, 0) / Math.max(1, n - 1));
     statsEl.innerHTML = `<p class="qb-resid-stat-line">Media de residuos: <strong>${mn.toFixed(6)}</strong> &nbsp;·&nbsp; Desv. estándar: <strong>${sd.toFixed(6)}</strong></p>`;
   }
-}
-
-// ── PDF Export ────────────────────────────────────────────────────────────────
-
-function residualSumSquares(result: RegressionResult): number {
-  return result.residuals.reduce((sum, residual) => sum + residual ** 2, 0);
-}
-
-function downloadTextFile(filename: string, content: string, mime: string): void {
-  const blob = new Blob([content], { type: `${mime};charset=utf-8` });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function csvCell(value: string | number): string {
-  const text = String(value);
-  // Prefix formula-injection characters with a single quote so Excel/Sheets
-  // treats the cell as text instead of executing a formula.
-  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
-  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-}
-
-function exportAnalysisCSV(): void {
-  if (!lastResult) {
-    showError('Primero ejecutá una regresión para poder exportar.');
-    return;
-  }
-
-  const result = lastResult;
-  const conclusion = interpret(result);
-  const noInfCSV = result.restrictedInferenceAvailable === false;
-  const infVal = (v: number): string | number => noInfCSV ? 'N/D' : v;
-  const rows: Array<Array<string | number>> = [
-    ['section', 'metric', 'variable', 'value'],
-    ['model', 'dependent_variable', '', result.yName],
-    ['model', 'method', '', result.method ?? 'OLS'],
-    ['model', 'r_squared', '', result.rSquared],
-    ['model', 'adjusted_r_squared', '', result.adjustedRSquared],
-    ['model', 'rss', '', residualSumSquares(result)],
-    ['model', 'f_stat', '', result.fStat],
-    ['model', 'f_p_value', '', result.fPValue],
-    ['model', 'observations', '', result.nObs],
-    ['model', 'features', '', result.nFeatures],
-    ['model', 'degrees_of_freedom', '', result.df],
-    ['model', 'dropped_rows', '', lastDropped],
-    ...(noInfCSV ? [['note', 'inference', '', 'Inferencia individual no disponible para RLS sin matriz de covarianza restringida']] as Array<Array<string | number>> : []),
-    ['coefficient', 'estimate', 'intercept', result.intercept],
-    ['coefficient', 'std_error', 'intercept', infVal(result.stdErrors[0])],
-    ['coefficient', 't_stat', 'intercept', infVal(result.tStats[0])],
-    ['coefficient', 'p_value', 'intercept', infVal(result.pValues[0])],
-    ...result.featureNames.flatMap((name, index) => [
-      ['coefficient', 'estimate', name, result.coefficients[index]],
-      ['coefficient', 'std_error', name, infVal(result.stdErrors[index + 1])],
-      ['coefficient', 't_stat', name, infVal(result.tStats[index + 1])],
-      ['coefficient', 'p_value', name, infVal(result.pValues[index + 1])],
-    ] as Array<Array<string | number>>),
-    ['conclusion', 'text', '', conclusion],
-  ];
-
-  downloadTextFile(
-    'quantbay_resultados.csv',
-    rows.map(row => row.map(csvCell).join(',')).join('\n'),
-    'text/csv'
-  );
-}
-
-function exportAnalysisTXT(): void {
-  if (!lastResult) {
-    showError('Primero ejecutá una regresión para poder exportar.');
-    return;
-  }
-
-  const result = lastResult;
-  const noInfTxt = result.restrictedInferenceAvailable === false;
-  const fmtI = (v: number): string => noInfTxt ? 'N/D' : v.toFixed(6);
-  const lines = [
-    'Quant Bay - Resultados del analisis',
-    '',
-    `Variable dependiente: ${result.yName}`,
-    `Metodo: ${result.method ?? 'OLS'}`,
-    `Ecuacion: ${result.equation}`,
-    '',
-    ...(noInfTxt ? ['NOTA: Inferencia individual (Err. Est., t-stat, p-value) no disponible para RLS sin matriz de covarianza restringida.', ''] : []),
-    'Coeficientes',
-    'Variable\tCoeficiente\tError estandar\tt-stat\tp-value',
-    `Intercepto\t${result.intercept.toFixed(6)}\t${fmtI(result.stdErrors[0])}\t${fmtI(result.tStats[0])}\t${fmtI(result.pValues[0])}`,
-    ...result.featureNames.map((name, index) =>
-      `${name}\t${result.coefficients[index].toFixed(6)}\t${fmtI(result.stdErrors[index + 1])}\t${fmtI(result.tStats[index + 1])}\t${fmtI(result.pValues[index + 1])}`
-    ),
-    '',
-    'Resumen del modelo',
-    `R2: ${result.rSquared.toFixed(6)}`,
-    `R2 ajustado: ${result.adjustedRSquared.toFixed(6)}`,
-    `RSS: ${residualSumSquares(result).toFixed(6)}`,
-    `F-stat: ${isFinite(result.fStat) ? result.fStat.toFixed(6) : 'Infinity'}`,
-    `p(F): ${result.fPValue.toFixed(6)}`,
-    `Observaciones: ${result.nObs}`,
-    `Variables X: ${result.nFeatures}`,
-    `Grados de libertad: ${result.df}`,
-    `Filas omitidas: ${lastDropped}`,
-    '',
-    'Conclusion textual',
-    interpret(result),
-    '',
-  ];
-
-  downloadTextFile('quantbay_resultados.txt', lines.join('\n'), 'text/plain');
-}
-
-function exportPDF(): void {
-  const jspdfLib = (window as any).jspdf;
-  if (!jspdfLib?.jsPDF) { showError('Exportación PDF no disponible. Verificá la conexión a internet.'); return; }
-  if (!lastResult) { showError('Primero ejecutá una regresión para poder exportar.'); return; }
-
-  const { jsPDF } = jspdfLib;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W = 190;
-  let y = 15;
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text('Quant Bay — Análisis de Regresión OLS', 10, y);
-  y += 7;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text('Generado por ChartBay · ' + new Date().toLocaleDateString('es-AR'), 10, y);
-  y += 8;
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('Ecuación estimada:', 10, y);
-  y += 5;
-  doc.setFont('courier', 'normal');
-  doc.setFontSize(8);
-  const eqLines = doc.splitTextToSize(lastResult.equation, W);
-  doc.text(eqLines, 10, y);
-  y += eqLines.length * 4 + 5;
-
-  if (doc.autoTable) {
-    const noInfPDF = lastResult.restrictedInferenceAvailable === false;
-    const pdfI = (v: number, dec = 4): string => noInfPDF ? 'N/D' : (isFinite(v) ? v.toFixed(dec) : '—');
-    const pdfCI = (lo: number, hi: number): string => noInfPDF ? 'N/D' : `[${lo.toFixed(4)}, ${hi.toFixed(4)}]`;
-    const pdfSig = (p: number): string => noInfPDF ? 'N/D' : significanceLabel(p);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text(`Coeficientes y Significancia${noInfPDF ? ' (RLS — inferencia individual N/D)' : ''}`, 10, y);
-    y += 4;
-    doc.autoTable({
-      head: [['Variable', 'Coef.', 'Err. Est.', 't-stat', 'p-valor', 'IC 95%', 'Signif.']],
-      body: [
-        ['Intercepto', lastResult.intercept.toFixed(6), pdfI(lastResult.stdErrors[0], 6),
-          pdfI(lastResult.tStats[0]),
-          pdfI(lastResult.pValues[0]),
-          pdfCI(lastResult.ci95[0][0], lastResult.ci95[0][1]),
-          pdfSig(lastResult.pValues[0])],
-        ...lastResult.featureNames.map((n, i) => [n,
-          lastResult!.coefficients[i].toFixed(6),
-          pdfI(lastResult!.stdErrors[i + 1], 6),
-          pdfI(lastResult!.tStats[i + 1]),
-          pdfI(lastResult!.pValues[i + 1]),
-          pdfCI(lastResult!.ci95[i + 1][0], lastResult!.ci95[i + 1][1]),
-          pdfSig(lastResult!.pValues[i + 1])]),
-      ],
-      startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [27, 58, 107] }, margin: { left: 10, right: 10 },
-    });
-    y = doc.lastAutoTable.finalY + 5;
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('Estadísticos del Modelo', 10, y);
-    y += 4;
-    doc.autoTable({
-      head: [['Indicador', 'Valor']],
-      body: [
-        ['R²', lastResult.rSquared.toFixed(6)],
-        ['R² ajustado', lastResult.adjustedRSquared.toFixed(6)],
-        ['F-estadístico', isFinite(lastResult.fStat) ? lastResult.fStat.toFixed(4) : '∞'],
-        ['p(F)', lastResult.fPValue.toFixed(6)],
-        ['n (observaciones)', String(lastResult.nObs)],
-        ['k (variables)', String(lastResult.nFeatures)],
-        ['Grados de libertad', String(lastResult.df)],
-        ['σ² (varianza residual)', lastResult.sigma2.toFixed(6)],
-      ],
-      startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [27, 58, 107] }, margin: { left: 10, right: 10 },
-    });
-    y = doc.lastAutoTable.finalY + 5;
-  }
-
-  const chartCanvas = $('qb-chart') as HTMLCanvasElement | null;
-  if (chartCanvas) {
-    if (y > 220) { doc.addPage(); y = 15; }
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('Real vs. Predicho', 10, y);
-    y += 4;
-    try { doc.addImage(chartCanvas.toDataURL('image/png'), 'PNG', 10, y, W, 65); y += 69; } catch (_) {}
-  }
-
-  if (lastCorr && lastCorrCols && doc.autoTable) {
-    if (y > 200) { doc.addPage(); y = 15; }
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('Matriz de Correlación de Pearson', 10, y);
-    y += 4;
-    doc.autoTable({
-      head: [['', ...lastCorrCols]],
-      body: lastCorr.map((row, i) => [lastCorrCols![i], ...row.map(v => v.toFixed(3))]),
-      startY: y, styles: { fontSize: 7 }, headStyles: { fillColor: [27, 58, 107] }, margin: { left: 10, right: 10 },
-    });
-    y = doc.lastAutoTable.finalY + 5;
-  }
-
-  if (lastVIF && doc.autoTable) {
-    if (y > 220) { doc.addPage(); y = 15; }
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('Diagnóstico de Multicolinealidad (VIF)', 10, y);
-    y += 4;
-    doc.autoTable({
-      head: [['Variable', 'VIF', 'Estado']],
-      body: lastVIF.map((v, i) => [
-        lastResult!.featureNames[i],
-        !isFinite(v) ? '>999' : v.toFixed(2),
-        v >= 10 ? 'Severo' : v >= 5 ? 'Precaución' : 'Aceptable',
-      ]),
-      startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [27, 58, 107] }, margin: { left: 10, right: 10 },
-    });
-    y = doc.lastAutoTable.finalY + 5;
-  }
-
-  const rfCanvas = $('qb-resid-fitted') as HTMLCanvasElement | null;
-  const rhCanvas = $('qb-resid-hist') as HTMLCanvasElement | null;
-  if (rfCanvas || rhCanvas) {
-    if (y > 200) { doc.addPage(); y = 15; }
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('Diagnósticos de Residuos', 10, y);
-    y += 4;
-    try {
-      if (rfCanvas) doc.addImage(rfCanvas.toDataURL('image/png'), 'PNG', 10, y, 90, 55);
-      if (rhCanvas) doc.addImage(rhCanvas.toDataURL('image/png'), 'PNG', 105, y, 90, 55);
-      y += 59;
-    } catch (_) {}
-  }
-
-  if (y > 230) { doc.addPage(); y = 15; }
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('Interpretación Automática', 10, y);
-  y += 5;
-  const interpEl = $('qb-interpretation');
-  if (interpEl) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    const lines = doc.splitTextToSize(interpEl.textContent ?? '', W);
-    doc.text(lines, 10, y);
-  }
-
-  const pageCount = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(7);
-    doc.text('Análisis estadístico educativo · No constituye asesoramiento financiero.', 10, 290);
-    doc.text(`Pág. ${i}/${pageCount}`, 185, 290);
-  }
-
-  doc.save('quantbay_regresión.pdf');
 }
 
 // ── Auto-repair log ───────────────────────────────────────────────────────────
@@ -1237,7 +913,7 @@ function renderRepairLog(result: AutoRepairResult, rlsFallbackNote = ''): void {
 // ── Auto-run handler ──────────────────────────────────────────────────────────
 
 function onAutoRun(): void {
-  if (!csvData) return;
+  if (!appState.csvData) return;
   showError('');
 
   const yName  = ($('qb-y') as HTMLSelectElement)?.value ?? '';
@@ -1250,16 +926,16 @@ function onAutoRun(): void {
     return;
   }
 
-  const rlsConstraint = activeDemoId ? DEMO_CASES[activeDemoId]?.rlsConstraint : undefined;
+  const rlsConstraint = appState.activeDemoId ? DEMO_CASES[appState.activeDemoId]?.rlsConstraint : undefined;
 
   try {
-    const output = runAutoRegressionMode(csvData, yName, xNames, rlsConstraint);
+    const output = runAutoRegressionMode(appState.csvData, yName, xNames, rlsConstraint);
 
-    lastResult   = output.result;
-    lastCorr     = output.corrMatrix;
-    lastCorrCols = output.corrColumns;
-    lastVIF      = output.vifValues;
-    lastLogit    = null;
+    appState.lastResult   = output.result;
+    appState.lastCorr     = output.corrMatrix;
+    appState.lastCorrCols = output.corrColumns;
+    appState.lastVIF      = output.vifValues;
+    appState.lastLogit    = null;
 
     setMethodStatus(output.method);
     renderRepairLog(output.repairResult, output.rlsFallbackNote);
