@@ -100,7 +100,7 @@ function isConstant(values: number[]): boolean {
 function formatValidationMessage(issues: AnalysisValidationIssue[]): string {
   const lines = issues.map(issue => `- ${issue.message}`);
   return [
-    'No se pudo estimar el modelo porque el dataset tiene problemas que deben revisarse primero.',
+    'No se pudo estimar el modelo porque el dataset necesita una revision antes de calcular.',
     ...lines,
     'Chart Bay no elimino ni modifico datos automaticamente.',
   ].join('\n');
@@ -185,7 +185,7 @@ export function validateAnalysisInput(
         type: 'missing_values',
         columns: [col],
         count: missing,
-        message: `"${col}" tiene ${missing} valor(es) faltante(s). Completa o filtra esos registros antes de estimar.`,
+        message: `"${col}" tiene ${missing} valor(es) faltante(s). Completa esas celdas o filtra esas filas antes de estimar; una celda vacia cambia el modelo que se puede calcular.`,
       });
     }
 
@@ -194,7 +194,7 @@ export function validateAnalysisInput(
         type: 'invalid_numeric',
         columns: [col],
         count: invalid,
-        message: `"${col}" tiene ${invalid} valor(es) con texto o formato no numerico. Revisa separadores, simbolos y celdas con texto.`,
+        message: `"${col}" tiene ${invalid} valor(es) con texto o formato no numerico. Revisa separadores, simbolos y celdas con texto; por ejemplo, usa 1234.56 en vez de texto mezclado con numeros.`,
       });
     }
   }
@@ -211,7 +211,7 @@ export function validateAnalysisInput(
       issues.push({
         type: 'constant_column',
         columns: [col],
-        message: `"${col}" es constante: todos sus valores son iguales. Una columna sin variacion no aporta informacion al modelo.`,
+        message: `"${col}" es constante: todos sus valores son iguales. Una columna sin variacion no aporta informacion al modelo; elegi otra variable o agrega datos con cambios reales.`,
       });
     }
   }
@@ -226,7 +226,7 @@ export function validateAnalysisInput(
         issues.push({
           type: 'duplicate_column',
           columns: [aName, bName],
-          message: `"${aName}" y "${bName}" son columnas duplicadas: tienen los mismos valores fila por fila.`,
+          message: `"${aName}" y "${bName}" son columnas duplicadas: tienen los mismos valores fila por fila. Usa solo una de ellas para evitar contar la misma informacion dos veces.`,
         });
       }
     }
@@ -245,7 +245,7 @@ export function validateAnalysisInput(
           type: 'collinearity',
           columns: [aName, bName],
           correlation: r,
-          message: `"${aName}" y "${bName}" tienen colinealidad casi perfecta (r = ${r.toFixed(6)}). Elegi una de las dos o transforma las variables antes de estimar.`,
+          message: `"${aName}" y "${bName}" tienen colinealidad casi perfecta (r = ${r.toFixed(6)}). Se mueven practicamente igual, entonces el modelo no puede separar sus efectos. Elegi una de las dos o transforma las variables antes de estimar.`,
         });
       }
     }
@@ -257,7 +257,7 @@ export function validateAnalysisInput(
       issues.push({
         type: 'collinearity',
         columns: xNames,
-        message: 'Las variables X seleccionadas tienen colinealidad perfecta o casi perfecta como conjunto. Revisa si una columna es combinacion lineal de otras antes de estimar.',
+        message: 'Las variables X seleccionadas tienen colinealidad perfecta o casi perfecta como conjunto. En simple: una variable puede reconstruirse con otras, y la matriz queda singular. Revisa si una columna es combinacion lineal de otras antes de estimar.',
       });
     }
   }
@@ -366,7 +366,7 @@ export function runQuantAnalysis(
 
   const { X, y, dropped } = getValidRows(csvData.rows, yName, xNames);
   if (y.length < xNames.length + 2) {
-    throw new Error(`Observaciones insuficientes (${y.length}) para ${xNames.length} variable(s).`);
+    throw new Error(`Observaciones insuficientes (${y.length}) para ${xNames.length} variable(s). Necesitas mas filas validas que parametros a estimar; agrega datos o usa menos variables X.`);
   }
 
   const result = runOLS({ X, y, featureNames: xNames, yName });
