@@ -1,0 +1,31 @@
+import type { ParsedCSV } from '../csvParser';
+import type { RegressionResult } from '../regression';
+import type { LogisticResult } from '../services/analysisService';
+
+export interface QuantBayAppState {
+  csvData: ParsedCSV | null;
+  activeChart: any;
+  residFittedChart: any;
+  residHistChart: any;
+  lastResult: RegressionResult | null;
+  lastCorr: number[][] | null;
+  lastCorrCols: string[] | null;
+  lastVIF: number[] | null;
+  lastLogit: LogisticResult | null;
+  lastDropped: number;
+  activeDemoId: string | null;
+}
+
+export const appState: QuantBayAppState = {
+  csvData: null,
+  activeChart: null,
+  residFittedChart: null,
+  residHistChart: null,
+  lastResult: null,
+  lastCorr: null,
+  lastCorrCols: null,
+  lastVIF: null,
+  lastLogit: null,
+  lastDropped: 0,
+  activeDemoId: null,
+};
