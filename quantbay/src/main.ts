@@ -341,9 +341,20 @@ function chartTheme(title: string, xTitle: string, yTitle: string, legend = true
 
 // ── Upload ────────────────────────────────────────────────────────────────────
 
+const MAX_CSV_BYTES = 2 * 1024 * 1024; // 2 MB — checked before PapaParse so a huge file never freezes the browser
+
 async function onFileChange(e: Event): Promise<void> {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
+
+  if (file.size > MAX_CSV_BYTES) {
+    showError(
+      `El archivo pesa ${(file.size / 1024 / 1024).toFixed(1)} MB. ` +
+      `El máximo soportado es 2 MB. Reducí el CSV antes de cargarlo.`
+    );
+    return;
+  }
+
   showError('');
   activeDemoId = null;
   clearDemoInfo();
@@ -623,25 +634,27 @@ function renderCoefTable(result: RegressionResult): void {
   const fmt6 = (n: number) => (isFinite(n) ? n.toFixed(6) : '—');
   const fmt4 = (n: number) => (isFinite(n) ? n.toFixed(4) : '—');
   const fmtCI = ([lo, hi]: [number, number]) => `[${fmt4(lo)},&nbsp;${fmt4(hi)}]`;
+  const noInf = result.restrictedInferenceAvailable === false;
+  const nd = '<span style="opacity:0.4;font-style:italic">N/D</span>';
   body.innerHTML = [
     `<tr>
       <td>Intercepto</td>
       <td>${fmt6(result.intercept)}</td>
-      <td>${fmt6(result.stdErrors[0])}</td>
-      <td>${fmt4(result.tStats[0])}</td>
-      <td>${fmt4(result.pValues[0])}</td>
-      <td style="white-space:nowrap">${fmtCI(result.ci95[0])}</td>
-      <td>${significanceBadge(result.pValues[0])}</td>
+      <td>${noInf ? nd : fmt6(result.stdErrors[0])}</td>
+      <td>${noInf ? nd : fmt4(result.tStats[0])}</td>
+      <td>${noInf ? nd : fmt4(result.pValues[0])}</td>
+      <td style="white-space:nowrap">${noInf ? nd : fmtCI(result.ci95[0])}</td>
+      <td>${noInf ? nd : significanceBadge(result.pValues[0])}</td>
     </tr>`,
     ...result.featureNames.map(
       (n, i) => `<tr>
         <td>${escapeHtml(n)}</td>
         <td>${fmt6(result.coefficients[i])}</td>
-        <td>${fmt6(result.stdErrors[i + 1])}</td>
-        <td>${fmt4(result.tStats[i + 1])}</td>
-        <td>${fmt4(result.pValues[i + 1])}</td>
-        <td style="white-space:nowrap">${fmtCI(result.ci95[i + 1])}</td>
-        <td>${significanceBadge(result.pValues[i + 1])}</td>
+        <td>${noInf ? nd : fmt6(result.stdErrors[i + 1])}</td>
+        <td>${noInf ? nd : fmt4(result.tStats[i + 1])}</td>
+        <td>${noInf ? nd : fmt4(result.pValues[i + 1])}</td>
+        <td style="white-space:nowrap">${noInf ? nd : fmtCI(result.ci95[i + 1])}</td>
+        <td>${noInf ? nd : significanceBadge(result.pValues[i + 1])}</td>
       </tr>`
     ),
   ].join('');
@@ -913,9 +926,12 @@ function exportAnalysisCSV(): void {
 
   const result = lastResult;
   const conclusion = interpret(result);
+  const noInfCSV = result.restrictedInferenceAvailable === false;
+  const infVal = (v: number): string | number => noInfCSV ? 'N/D' : v;
   const rows: Array<Array<string | number>> = [
     ['section', 'metric', 'variable', 'value'],
     ['model', 'dependent_variable', '', result.yName],
+    ['model', 'method', '', result.method ?? 'OLS'],
     ['model', 'r_squared', '', result.rSquared],
     ['model', 'adjusted_r_squared', '', result.adjustedRSquared],
     ['model', 'rss', '', residualSumSquares(result)],
@@ -925,15 +941,16 @@ function exportAnalysisCSV(): void {
     ['model', 'features', '', result.nFeatures],
     ['model', 'degrees_of_freedom', '', result.df],
     ['model', 'dropped_rows', '', lastDropped],
+    ...(noInfCSV ? [['note', 'inference', '', 'Inferencia individual no disponible para RLS sin matriz de covarianza restringida']] as Array<Array<string | number>> : []),
     ['coefficient', 'estimate', 'intercept', result.intercept],
-    ['coefficient', 'std_error', 'intercept', result.stdErrors[0]],
-    ['coefficient', 't_stat', 'intercept', result.tStats[0]],
-    ['coefficient', 'p_value', 'intercept', result.pValues[0]],
+    ['coefficient', 'std_error', 'intercept', infVal(result.stdErrors[0])],
+    ['coefficient', 't_stat', 'intercept', infVal(result.tStats[0])],
+    ['coefficient', 'p_value', 'intercept', infVal(result.pValues[0])],
     ...result.featureNames.flatMap((name, index) => [
       ['coefficient', 'estimate', name, result.coefficients[index]],
-      ['coefficient', 'std_error', name, result.stdErrors[index + 1]],
-      ['coefficient', 't_stat', name, result.tStats[index + 1]],
-      ['coefficient', 'p_value', name, result.pValues[index + 1]],
+      ['coefficient', 'std_error', name, infVal(result.stdErrors[index + 1])],
+      ['coefficient', 't_stat', name, infVal(result.tStats[index + 1])],
+      ['coefficient', 'p_value', name, infVal(result.pValues[index + 1])],
     ] as Array<Array<string | number>>),
     ['conclusion', 'text', '', conclusion],
   ];
@@ -952,17 +969,21 @@ function exportAnalysisTXT(): void {
   }
 
   const result = lastResult;
+  const noInfTxt = result.restrictedInferenceAvailable === false;
+  const fmtI = (v: number): string => noInfTxt ? 'N/D' : v.toFixed(6);
   const lines = [
     'Quant Bay - Resultados del analisis',
     '',
     `Variable dependiente: ${result.yName}`,
+    `Metodo: ${result.method ?? 'OLS'}`,
     `Ecuacion: ${result.equation}`,
     '',
+    ...(noInfTxt ? ['NOTA: Inferencia individual (Err. Est., t-stat, p-value) no disponible para RLS sin matriz de covarianza restringida.', ''] : []),
     'Coeficientes',
     'Variable\tCoeficiente\tError estandar\tt-stat\tp-value',
-    `Intercepto\t${result.intercept.toFixed(6)}\t${result.stdErrors[0].toFixed(6)}\t${result.tStats[0].toFixed(6)}\t${result.pValues[0].toFixed(6)}`,
+    `Intercepto\t${result.intercept.toFixed(6)}\t${fmtI(result.stdErrors[0])}\t${fmtI(result.tStats[0])}\t${fmtI(result.pValues[0])}`,
     ...result.featureNames.map((name, index) =>
-      `${name}\t${result.coefficients[index].toFixed(6)}\t${result.stdErrors[index + 1].toFixed(6)}\t${result.tStats[index + 1].toFixed(6)}\t${result.pValues[index + 1].toFixed(6)}`
+      `${name}\t${result.coefficients[index].toFixed(6)}\t${fmtI(result.stdErrors[index + 1])}\t${fmtI(result.tStats[index + 1])}\t${fmtI(result.pValues[index + 1])}`
     ),
     '',
     'Resumen del modelo',
@@ -1014,25 +1035,30 @@ function exportPDF(): void {
   y += eqLines.length * 4 + 5;
 
   if (doc.autoTable) {
+    const noInfPDF = lastResult.restrictedInferenceAvailable === false;
+    const pdfI = (v: number, dec = 4): string => noInfPDF ? 'N/D' : (isFinite(v) ? v.toFixed(dec) : '—');
+    const pdfCI = (lo: number, hi: number): string => noInfPDF ? 'N/D' : `[${lo.toFixed(4)}, ${hi.toFixed(4)}]`;
+    const pdfSig = (p: number): string => noInfPDF ? 'N/D' : significanceLabel(p);
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
-    doc.text('Coeficientes y Significancia', 10, y);
+    doc.text(`Coeficientes y Significancia${noInfPDF ? ' (RLS — inferencia individual N/D)' : ''}`, 10, y);
     y += 4;
     doc.autoTable({
       head: [['Variable', 'Coef.', 'Err. Est.', 't-stat', 'p-valor', 'IC 95%', 'Signif.']],
       body: [
-        ['Intercepto', lastResult.intercept.toFixed(6), lastResult.stdErrors[0].toFixed(6),
-          isFinite(lastResult.tStats[0]) ? lastResult.tStats[0].toFixed(4) : '—',
-          lastResult.pValues[0].toFixed(4),
-          `[${lastResult.ci95[0][0].toFixed(4)}, ${lastResult.ci95[0][1].toFixed(4)}]`,
-          significanceLabel(lastResult.pValues[0])],
+        ['Intercepto', lastResult.intercept.toFixed(6), pdfI(lastResult.stdErrors[0], 6),
+          pdfI(lastResult.tStats[0]),
+          pdfI(lastResult.pValues[0]),
+          pdfCI(lastResult.ci95[0][0], lastResult.ci95[0][1]),
+          pdfSig(lastResult.pValues[0])],
         ...lastResult.featureNames.map((n, i) => [n,
           lastResult!.coefficients[i].toFixed(6),
-          lastResult!.stdErrors[i + 1].toFixed(6),
-          isFinite(lastResult!.tStats[i + 1]) ? lastResult!.tStats[i + 1].toFixed(4) : '—',
-          lastResult!.pValues[i + 1].toFixed(4),
-          `[${lastResult!.ci95[i + 1][0].toFixed(4)}, ${lastResult!.ci95[i + 1][1].toFixed(4)}]`,
-          significanceLabel(lastResult!.pValues[i + 1])]),
+          pdfI(lastResult!.stdErrors[i + 1], 6),
+          pdfI(lastResult!.tStats[i + 1]),
+          pdfI(lastResult!.pValues[i + 1]),
+          pdfCI(lastResult!.ci95[i + 1][0], lastResult!.ci95[i + 1][1]),
+          pdfSig(lastResult!.pValues[i + 1])]),
       ],
       startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [27, 58, 107] }, margin: { left: 10, right: 10 },
     });

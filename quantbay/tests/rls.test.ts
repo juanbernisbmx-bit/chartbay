@@ -118,3 +118,49 @@ describe('runRLS vs runOLS consistency', () => {
     expect(r.rssOLS!).toBeCloseTo(olsRss, 8);
   });
 });
+
+describe('runRLS – inference unavailability (no OLS contamination)', () => {
+  const c: RLSConstraint = { R: [[0, 1]], q: [0], label: 'beta1 = 0' };
+  const input = { X: simpleX, y: simpleY, featureNames: ['x'], yName: 'y' };
+
+  it('restrictedInferenceAvailable is false', () => {
+    const r = runRLS(input, c);
+    expect(r.restrictedInferenceAvailable).toBe(false);
+  });
+
+  it('stdErrors are all NaN (length k+1)', () => {
+    const r = runRLS(input, c);
+    expect(r.stdErrors).toHaveLength(2); // intercept + 1 predictor
+    expect(r.stdErrors.every(v => isNaN(v))).toBe(true);
+  });
+
+  it('tStats are all NaN', () => {
+    const r = runRLS(input, c);
+    expect(r.tStats.every(v => isNaN(v))).toBe(true);
+  });
+
+  it('pValues are all NaN', () => {
+    const r = runRLS(input, c);
+    expect(r.pValues.every(v => isNaN(v))).toBe(true);
+  });
+
+  it('ci95 elements are [NaN, NaN]', () => {
+    const r = runRLS(input, c);
+    expect(r.ci95.every(([lo, hi]) => isNaN(lo) && isNaN(hi))).toBe(true);
+  });
+
+  it('OLS result is unaffected: pValues are finite', () => {
+    const ols = runOLS(input);
+    expect(ols.pValues.every(v => isFinite(v))).toBe(true);
+    expect(ols.restrictedInferenceAvailable).toBeUndefined();
+  });
+
+  it('sigma2 is computed from RLS residuals, not OLS', () => {
+    const r = runRLS(input, c);
+    const ols = runOLS(input);
+    // When constraint binds, RLS RSS > OLS RSS, so RLS sigma2 > OLS sigma2
+    expect(r.sigma2).toBeGreaterThan(ols.sigma2 - 1e-10);
+    const expectedSigma2 = r.rssRLS! / r.df;
+    expect(r.sigma2).toBeCloseTo(expectedSigma2, 8);
+  });
+});
