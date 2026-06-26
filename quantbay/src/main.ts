@@ -378,11 +378,12 @@ function renderVarSelectors(cols: string[]): void {
   const yEl = $('qb-y') as HTMLSelectElement | null;
   const xEl = $('qb-x-checks');
   if (yEl) yEl.innerHTML = cols.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  const defaultY = cols[0] ?? '';
   if (xEl)
     xEl.innerHTML = cols
       .map(
         (c, i) =>
-          `<label class="qb-x-check"><input type="checkbox" class="qb-x-cb" value="${escapeHtml(c)}" ${i > 0 ? 'checked' : ''}> ${escapeHtml(c)}</label>`
+          `<label class="qb-x-check" style="${c === defaultY ? 'opacity:0.4' : ''}"><input type="checkbox" class="qb-x-cb" value="${escapeHtml(c)}" ${i > 0 ? 'checked' : ''} ${c === defaultY ? 'disabled title="Ya es la variable Y"' : ''}> ${escapeHtml(c)}</label>`
       )
       .join('');
 }
@@ -545,21 +546,21 @@ function renderLogistic(res: LogisticResult | null): void {
   content.innerHTML = `
     <div class="qb-table-scroll">
       <table class="ledger">
-        <thead><tr><th>Variable</th><th>Logit coef.</th><th>Odds ratio</th></tr></thead>
+        <thead><tr><th>Variable</th><th>Coef. logístico</th><th>Odds ratio</th></tr></thead>
         <tbody>
-          <tr><td>Intercept</td><td>${f4(res.intercept)}</td><td>${f4(Math.exp(res.intercept))}</td></tr>
+          <tr><td>Intercepto</td><td>${f4(res.intercept)}</td><td>${f4(Math.exp(res.intercept))}</td></tr>
           ${rows}
         </tbody>
       </table>
     </div>
     <table class="ledger qb-compact-ledger">
-      <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+      <thead><tr><th>Métrica</th><th>Valor</th></tr></thead>
       <tbody>
         <tr><td>McFadden pseudo R²</td><td>${res.mcFaddenR2.toFixed(4)}</td></tr>
-        <tr><td>Model log-likelihood</td><td>${res.llModel.toFixed(4)}</td></tr>
-        <tr><td>Null log-likelihood</td><td>${res.llNull.toFixed(4)}</td></tr>
-        <tr><td>In-sample accuracy</td><td>${(res.accuracy * 100).toFixed(1)}%</td></tr>
-        <tr><td>Observations</td><td>${res.n}</td></tr>
+        <tr><td>Log-verosimilitud del modelo</td><td>${res.llModel.toFixed(4)}</td></tr>
+        <tr><td>Log-verosimilitud nula</td><td>${res.llNull.toFixed(4)}</td></tr>
+        <tr><td>Precisión en muestra</td><td>${(res.accuracy * 100).toFixed(1)}%</td></tr>
+        <tr><td>Observaciones</td><td>${res.n}</td></tr>
       </tbody>
     </table>`;
 }
@@ -1088,8 +1089,8 @@ function renderRepairLog(result: AutoRepairResult): void {
   el.innerHTML = `
     <div class="qb-repair-log">
       <div class="qb-panel-head">
-        <p class="qb-subtitle">Auto-repair log</p>
-        <span>MODEL DOCTOR · ${result.actions.length} FIX${result.actions.length !== 1 ? 'ES' : ''}</span>
+        <p class="qb-subtitle">Reparación automática</p>
+        <span>DOCTOR DEL MODELO · ${result.actions.length} CORRECCI${result.actions.length !== 1 ? 'ONES' : 'ÓN'}</span>
       </div>
       <p class="qb-repair-summary">
         Se detectaron <strong>${result.actions.length}</strong> problema(s) y se corrigieron automáticamente.<br>
@@ -1154,6 +1155,17 @@ function init(): void {
   $('qb-export-pdf')?.addEventListener('click', exportPDF);
   $('qb-export-csv')?.addEventListener('click', exportAnalysisCSV);
   $('qb-export-txt')?.addEventListener('click', exportAnalysisTXT);
+
+  $('qb-y')?.addEventListener('change', () => {
+    const yName = ($('qb-y') as HTMLSelectElement)?.value ?? '';
+    document.querySelectorAll<HTMLInputElement>('.qb-x-cb').forEach(cb => {
+      const isY = cb.value === yName;
+      cb.disabled = isY;
+      if (isY) cb.checked = false;
+      const label = cb.closest<HTMLElement>('.qb-x-check');
+      if (label) label.style.opacity = isY ? '0.4' : '';
+    });
+  });
 }
 
 if (document.readyState === 'loading') {

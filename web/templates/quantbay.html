@@ -68,9 +68,9 @@
         <div class="qb-side-label">Pasos</div>
         <a href="#qb-upload-panel">1. CSV</a>
         <a href="#qb-vars">2. Variables</a>
-        <a href="#qb-forecast-panel">3. Grafico</a>
-        <a href="#qb-correlation-panel">4. Correlacion</a>
-        <a href="#qb-diagnostics-panel">5. Diagnostico</a>
+        <a href="#qb-forecast-panel">3. Gráfico</a>
+        <a href="#qb-correlation-panel">4. Correlación</a>
+        <a href="#qb-diagnostics-panel">5. Diagnóstico</a>
       </aside>
 
       <main class="qb-main">
@@ -82,7 +82,7 @@
           <div class="qb-upload-row">
             <label for="qb-file" class="btn-ink">Subir CSV</label>
             <input type="file" id="qb-file" accept=".csv" style="display:none">
-            <span id="qb-filename" class="muted">Todavia no subiste un archivo</span>
+            <span id="qb-filename" class="muted">Todavía no subiste un archivo</span>
           </div>
           <p class="muted qb-help">El archivo tiene que tener nombres de columnas en la primera fila. Quant Bay detecta automaticamente las columnas numericas. &nbsp;<a href="/datasets/01_simple_linear.csv" download="ejemplo_quant.csv" class="muted" style="text-decoration:underline">Descargar ejemplo CSV</a></p>
           <div class="qb-runlog" id="qb-runlog" aria-live="polite"></div>
@@ -91,7 +91,7 @@
         <section class="qb-section" id="qb-demo-panel">
           <div class="qb-panel-head">
             <p class="qb-subtitle">Demo guiada</p>
-            <span>Datasets de validacion</span>
+            <span>Ejemplos de un click</span>
           </div>
           <div class="qb-demo-grid" aria-label="Ejemplos de Quant Bay">
             <button class="btn-ink qb-demo-btn" data-demo="ols-simple">OLS simple</button>
@@ -101,7 +101,7 @@
             <button class="btn-ink qb-demo-btn" data-demo="singular">Caso singular</button>
           </div>
           <div class="qb-demo-note" id="qb-demo-note">
-            Elegi un ejemplo para precargar CSV, variable dependiente, regresores y restriccion sugerida.
+            Elegí un ejemplo — carga el CSV y calcula la regresión automáticamente.
           </div>
         </section>
 
@@ -120,11 +120,11 @@
           </div>
           <div class="qb-vars-grid">
             <div>
-              <label>Que queres explicar? (Y)</label>
+              <label>¿Qué querés explicar? <span class="muted">(Y)</span></label>
               <select id="qb-y" style="width:100%"></select>
             </div>
             <div>
-              <label>Con que variables? (X)</label>
+              <label>¿Con qué variables? <span class="muted">(X)</span></label>
               <div id="qb-x-checks"></div>
             </div>
           </div>
@@ -149,7 +149,7 @@
           <div id="qb-binary-warn"></div>
           <div id="qb-leak-warn"></div>
 
-          <p class="qb-label">Ecuacion estimada</p>
+          <p class="qb-label">Ecuación estimada</p>
           <div class="qb-eq" id="qb-equation"></div>
 
           <div class="qb-results-grid">
@@ -157,7 +157,7 @@
               <p class="qb-label">Coeficientes</p>
               <div class="qb-table-scroll">
                 <table class="ledger">
-                  <thead><tr><th>Variable</th><th>Coef.</th><th>Std. Err.</th><th>t-stat</th><th>p-value</th><th>95% CI</th><th>Sig.</th></tr></thead>
+                  <thead><tr><th>Variable</th><th>Coef.</th><th>Err. Est.</th><th>t-stat</th><th>p-valor</th><th>IC 95%</th><th>Sig.</th></tr></thead>
                   <tbody id="qb-coef-body"></tbody>
                 </table>
               </div>
@@ -165,12 +165,12 @@
             <div>
               <p class="qb-label">Resumen del modelo</p>
               <table class="ledger">
-                <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+                <thead><tr><th>Indicador</th><th>Valor</th></tr></thead>
                 <tbody id="qb-stats-body"></tbody>
               </table>
             </div>
           </div>
-          <p class="qb-sig-legend">*** p&lt;0.01 &middot; ** p&lt;0.05 &middot; * p&lt;0.10 &middot; n.s. not significant</p>
+          <p class="qb-sig-legend">*** p&lt;0.01 &middot; ** p&lt;0.05 &middot; * p&lt;0.10 &middot; n.s. no significativo</p>
 
           <div id="qb-logit-wrap" style="display:none">
             <div class="qb-panel-head qb-subpanel">
