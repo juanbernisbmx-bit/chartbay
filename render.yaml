@@ -3,6 +3,11 @@ services:
     name: chartbay
     runtime: python
     plan: free
+    # IMPORTANTE: el bundle web/static/js/quantbay.bundle.js debe pre-compilarse
+    # localmente antes de cada deploy con: cd quantbay && npm install && npm run build
+    # El runtime Python de Render no incluye Node.js, por lo que el build JS
+    # debe viajar en el repositorio como artefacto compilado.
+    # Migración futura: Docker con python:3.12 + node:20 para build automático.
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn web.app:app --bind 0.0.0.0:$PORT
     envVars:

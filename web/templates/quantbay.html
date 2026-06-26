@@ -57,7 +57,7 @@
       <div><span>Archivo</span><strong id="qb-status-dataset">Sin archivo</strong></div>
       <div><span>Observaciones</span><strong id="qb-status-obs">0</strong></div>
       <div><span>Variables numéricas</span><strong id="qb-status-vars">0</strong></div>
-      <div><span>Método</span><strong>OLS</strong></div>
+      <div><span>Método</span><strong id="qb-status-method">OLS</strong></div>
       <div><span>Motor</span><strong id="qb-status-engine">LISTO</strong></div>
     </section>
 
@@ -171,6 +171,14 @@
             </div>
           </div>
           <p class="qb-sig-legend">*** p&lt;0.01 &middot; ** p&lt;0.05 &middot; * p&lt;0.10 &middot; n.s. no significativo</p>
+
+          <div id="qb-rls-panel" style="display:none">
+            <div class="qb-panel-head qb-subpanel">
+              <p class="qb-subtitle">Análisis de restricción</p>
+              <span>RLS · MÍNIMOS CUADRADOS RESTRINGIDOS</span>
+            </div>
+            <div id="qb-rls-content"></div>
+          </div>
 
           <div id="qb-logit-wrap" style="display:none">
             <div class="qb-panel-head qb-subpanel">

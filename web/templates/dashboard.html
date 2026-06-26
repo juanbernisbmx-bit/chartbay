@@ -7,6 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 </head>
 <body>
   <div id="boot" class="boot"><pre id="bootlog"></pre><span class="skip">[ clic para saltar ]</span></div>
@@ -349,7 +350,7 @@
       }
       const p=await resp.json();
       if(p.error){ out.innerHTML='<span class="err">⚠ '+p.error+'</span>'; return; }
-      out.innerHTML=marked.parse(p.veredicto);
+      out.innerHTML=DOMPurify.sanitize(marked.parse(p.veredicto));
     }
 
     document.getElementById("searchForm").addEventListener("submit", e=>{
