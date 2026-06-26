@@ -7,6 +7,7 @@ import { escapeHtml } from '../utils/format';
 declare const Chart: any;
 
 let timeSeriesChart: any = null;
+let pendingTimeSeriesChartFrame: { id: number; type: 'animationFrame' | 'timeout' } | null = null;
 
 function isFiniteNumeric(value: unknown): boolean {
   if (value === null || value === undefined || value === '') return false;
@@ -171,10 +172,36 @@ function renderTimeSeriesInterpretation(lines: string[]): void {
   el.textContent = lines.join('\n');
 }
 
-function renderTimeSeriesChart(result: TimeSeriesAnalysisResult): void {
+function scheduleTimeSeriesChartRender(callback: () => void): void {
+  if (typeof requestAnimationFrame === 'function') {
+    const id = requestAnimationFrame(() => {
+      pendingTimeSeriesChartFrame = null;
+      callback();
+    });
+    pendingTimeSeriesChartFrame = { id, type: 'animationFrame' };
+    return;
+  }
+
+  const id = window.setTimeout(() => {
+    pendingTimeSeriesChartFrame = null;
+    callback();
+  }, 0);
+  pendingTimeSeriesChartFrame = { id, type: 'timeout' };
+}
+
+function cancelPendingTimeSeriesChartRender(): void {
+  if (pendingTimeSeriesChartFrame === null) return;
+  if (pendingTimeSeriesChartFrame.type === 'animationFrame') {
+    cancelAnimationFrame(pendingTimeSeriesChartFrame.id);
+  } else {
+    clearTimeout(pendingTimeSeriesChartFrame.id);
+  }
+  pendingTimeSeriesChartFrame = null;
+}
+
+function createTimeSeriesChart(result: TimeSeriesAnalysisResult): void {
   const canvas = $('qb-ts-chart') as HTMLCanvasElement | null;
   if (!canvas || typeof Chart === 'undefined') return;
-  destroyTimeSeriesChart();
   if (result.dataset.rows.length === 0) return;
 
   timeSeriesChart = new Chart(canvas, {
@@ -202,10 +229,20 @@ function renderTimeSeriesChart(result: TimeSeriesAnalysisResult): void {
       },
     },
   });
+  timeSeriesChart.resize();
+}
+
+function renderTimeSeriesChart(result: TimeSeriesAnalysisResult): void {
+  destroyTimeSeriesChart();
+  if (result.dataset.rows.length === 0) return;
+
+  scheduleTimeSeriesChartRender(() => createTimeSeriesChart(result));
 }
 
 export function renderTimeSeriesAnalysis(result: TimeSeriesAnalysisResult): void {
+  const panel = $('qb-ts-panel');
   const empty = $('qb-ts-empty');
+  if (panel) panel.style.display = '';
   if (empty) empty.style.display = 'none';
   renderTimeSeriesWarnings(result.validation.issues.map(issueToText));
   renderTimeSeriesSummary(result.summary);
@@ -214,6 +251,7 @@ export function renderTimeSeriesAnalysis(result: TimeSeriesAnalysisResult): void
 }
 
 export function destroyTimeSeriesChart(): void {
+  cancelPendingTimeSeriesChartRender();
   if (timeSeriesChart) {
     timeSeriesChart.destroy();
     timeSeriesChart = null;
