@@ -1,14 +1,14 @@
-import { parseCSVFile, getValidRows, type ParsedCSV } from './csvParser';
+import { parseCSVFile, type ParsedCSV } from './csvParser';
 import type { RegressionResult } from './regression';
 import { interpret } from './interpretation';
-import { runRLS, type RLSConstraint } from './rls';
+import type { RLSConstraint } from './rls';
 import {
   AnalysisValidationError,
-  runQuantAnalysis,
   type LeakageSignal,
   type LogisticResult,
 } from './services/analysisService';
-import { autoRepairAndAnalyze, type AutoRepairResult } from './services/autoRepair';
+import { type AutoRepairResult } from './services/autoRepair';
+import { runRegressionMode, runAutoRegressionMode } from './modes/regressionMode';
 import {
   correlationClass,
   escapeHtml,
@@ -219,7 +219,7 @@ function parseDemoCsv(text: string): ParsedCSV {
       rows.length > 0 &&
       rows.every(row => {
         const raw = row[header];
-        return raw !== null && raw !== '' && !isNaN(Number(raw)) && isFinite(Number(raw));
+        return raw !== null && !isNaN(Number(raw)) && isFinite(Number(raw));
       })
     ),
   };
@@ -460,57 +460,34 @@ async function onRun(): Promise<void> {
   const limitErr = checkCSVLimits(csvData, xNames);
   if (limitErr) { showError(limitErr); return; }
 
+  const rlsConstraint = activeDemoId ? DEMO_CASES[activeDemoId]?.rlsConstraint : undefined;
+
   try {
     await technicalLoadSequence();
-    const analysis = runQuantAnalysis(csvData, yName, xNames);
+    const output = runRegressionMode(csvData, yName, xNames, rlsConstraint);
 
-    // Apply RLS if the active demo has a structured constraint
-    const demo = activeDemoId ? DEMO_CASES[activeDemoId] : null;
-    const rlsConstraint = demo?.rlsConstraint;
-    let finalResult = analysis.result;
-    const logEntries = [
-      'Leyendo datos... OK',
-      'Filtrando valores faltantes... OK',
-      'Construyendo matriz de diseño... OK',
-      'Estimando coeficientes OLS... OK',
-    ];
+    lastResult = output.result;
+    lastCorr = output.corrMatrix;
+    lastCorrCols = output.corrColumns;
+    lastVIF = output.vifValues;
+    lastLogit = output.logitResult;
 
-    if (rlsConstraint) {
-      try {
-        const { X: Xrls, y: yrls } = getValidRows(csvData.rows, yName, xNames);
-        finalResult = runRLS({ X: Xrls, y: yrls, featureNames: xNames, yName }, rlsConstraint);
-        logEntries.push(`Aplicando restricción RLS: ${rlsConstraint.label}... OK`);
-        setMethodStatus('RLS');
-      } catch (rlsErr) {
-        logEntries.push(`Restricción RLS no pudo aplicarse: ${(rlsErr as Error).message}`);
-        setMethodStatus('OLS');
-      }
-    } else {
-      setMethodStatus('OLS');
-    }
-    logEntries.push('Calculando diagnósticos... OK');
-
-    lastResult = finalResult;
-    lastCorr = analysis.corrMatrix;
-    lastCorrCols = analysis.corrColumns;
-    lastVIF = analysis.vifValues;
-    lastLogit = analysis.logitResult;
-
+    setMethodStatus(output.method);
     renderResults(
-      finalResult,
-      analysis.dropped,
-      analysis.corrMatrix,
-      analysis.corrColumns,
-      analysis.vifValues,
+      output.result,
+      output.dropped,
+      output.corrMatrix,
+      output.corrColumns,
+      output.vifValues,
       {
-        binary: analysis.binary,
-        leaks: analysis.leaks,
-        logitResult: analysis.logitResult,
+        binary: output.binary,
+        leaks: output.leaks,
+        logitResult: output.logitResult,
       }
     );
-    setText('qb-status-obs', finalResult.nObs);
+    setText('qb-status-obs', output.result.nObs);
     setEngineStatus('COMPLETADO');
-    writeRunLog(logEntries);
+    writeRunLog(output.logEntries);
     const res = $('qb-results');
     if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
     updateSidebarStep(3);
@@ -1273,54 +1250,25 @@ function onAutoRun(): void {
     return;
   }
 
+  const rlsConstraint = activeDemoId ? DEMO_CASES[activeDemoId]?.rlsConstraint : undefined;
+
   try {
-    const analysis = autoRepairAndAnalyze(csvData, yName, xNames);
-    let finalResult = analysis.result;
-    let rlsFallbackNote = '';
+    const output = runAutoRegressionMode(csvData, yName, xNames, rlsConstraint);
 
-    // After repair, preserve RLS if the active demo had a constraint and the
-    // repaired feature set is still compatible with the R matrix dimensions.
-    const demo = activeDemoId ? DEMO_CASES[activeDemoId] : null;
-    const rlsConstraint = demo?.rlsConstraint;
-    if (rlsConstraint) {
-      const finalXNames = finalResult.featureNames;
-      const expectedParams = rlsConstraint.R[0].length;   // R has k+1 columns
-      const modelParams    = finalXNames.length + 1;       // intercept + k predictors
-      if (expectedParams !== modelParams) {
-        rlsFallbackNote =
-          `El modelo reparado se estimó como OLS porque la restricción "${rlsConstraint.label}" ` +
-          `espera ${expectedParams} parámetros pero el modelo reparado tiene ${modelParams} ` +
-          `(la reparación eliminó variables incluidas en la restricción).`;
-        setMethodStatus('OLS');
-      } else {
-        try {
-          const { X: Xrls, y: yrls } = getValidRows(csvData.rows, yName, finalXNames);
-          finalResult = runRLS({ X: Xrls, y: yrls, featureNames: finalXNames, yName }, rlsConstraint);
-          setMethodStatus('RLS');
-        } catch (rlsErr) {
-          rlsFallbackNote =
-            `El modelo reparado se estimó como OLS porque la restricción RLS no pudo aplicarse: ` +
-            `${(rlsErr as Error).message}.`;
-          setMethodStatus('OLS');
-        }
-      }
-    } else {
-      setMethodStatus('OLS');
-    }
-
-    lastResult   = finalResult;
-    lastCorr     = analysis.corrMatrix;
-    lastCorrCols = analysis.corrColumns;
-    lastVIF      = analysis.vifValues;
+    lastResult   = output.result;
+    lastCorr     = output.corrMatrix;
+    lastCorrCols = output.corrColumns;
+    lastVIF      = output.vifValues;
     lastLogit    = null;
 
-    renderRepairLog(analysis, rlsFallbackNote);
+    setMethodStatus(output.method);
+    renderRepairLog(output.repairResult, output.rlsFallbackNote);
     renderResults(
-      finalResult,
-      analysis.dropped,
-      analysis.corrMatrix,
-      analysis.corrColumns,
-      analysis.vifValues
+      output.result,
+      output.dropped,
+      output.corrMatrix,
+      output.corrColumns,
+      output.vifValues
     );
 
     setEngineStatus('COMPLETADO');
