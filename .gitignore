@@ -7,3 +7,8 @@ informes/
 venv/
 web/chartbay.db
 *.db
+
+# JS toolchain — never version dependencies or caches
+node_modules/
+.vite/
+dist/
