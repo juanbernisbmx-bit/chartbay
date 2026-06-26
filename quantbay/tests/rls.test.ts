@@ -119,48 +119,155 @@ describe('runRLS vs runOLS consistency', () => {
   });
 });
 
-describe('runRLS – inference unavailability (no OLS contamination)', () => {
+// ── 1. OLS normal: inferencia completa ────────────────────────────────────────
+describe('OLS normal — inferencia completa', () => {
+  const input = { X: simpleX, y: simpleY, featureNames: ['x'], yName: 'y' };
+  it('stdErrors son finitos y positivos', () => {
+    const r = runOLS(input);
+    expect(r.stdErrors.every(v => isFinite(v) && v >= 0)).toBe(true);
+  });
+  it('pValues están en [0, 1]', () => {
+    const r = runOLS(input);
+    expect(r.pValues.every(v => v >= 0 && v <= 1)).toBe(true);
+  });
+  it('restrictedInferenceAvailable no definido (OLS no restringe)', () => {
+    const r = runOLS(input);
+    expect(r.restrictedInferenceAvailable).toBeUndefined();
+  });
+});
+
+// ── 2. RLS beta1 = 0: inferencia completa ─────────────────────────────────────
+describe('runRLS – beta1 = 0 — inferencia completa', () => {
   const c: RLSConstraint = { R: [[0, 1]], q: [0], label: 'beta1 = 0' };
   const input = { X: simpleX, y: simpleY, featureNames: ['x'], yName: 'y' };
 
-  it('restrictedInferenceAvailable is false', () => {
+  it('restrictedInferenceAvailable es true', () => {
     const r = runRLS(input, c);
-    expect(r.restrictedInferenceAvailable).toBe(false);
+    expect(r.restrictedInferenceAvailable).toBe(true);
   });
-
-  it('stdErrors are all NaN (length k+1)', () => {
+  it('stdErrors son finitos, positivos, longitud k+1', () => {
     const r = runRLS(input, c);
-    expect(r.stdErrors).toHaveLength(2); // intercept + 1 predictor
-    expect(r.stdErrors.every(v => isNaN(v))).toBe(true);
+    expect(r.stdErrors).toHaveLength(2);
+    expect(r.stdErrors.every(v => isFinite(v) && v >= 0)).toBe(true);
   });
-
-  it('tStats are all NaN', () => {
+  it('tStats son finitos', () => {
     const r = runRLS(input, c);
-    expect(r.tStats.every(v => isNaN(v))).toBe(true);
+    expect(r.tStats.every(v => isFinite(v))).toBe(true);
   });
-
-  it('pValues are all NaN', () => {
+  it('pValues están en [0, 1]', () => {
     const r = runRLS(input, c);
-    expect(r.pValues.every(v => isNaN(v))).toBe(true);
+    expect(r.pValues.every(v => v >= 0 && v <= 1)).toBe(true);
   });
-
-  it('ci95 elements are [NaN, NaN]', () => {
+  it('ci95 contiene el coeficiente restringido', () => {
     const r = runRLS(input, c);
-    expect(r.ci95.every(([lo, hi]) => isNaN(lo) && isNaN(hi))).toBe(true);
+    // intercepto
+    expect(r.ci95[0][0]).toBeLessThanOrEqual(r.intercept + 1e-9);
+    expect(r.ci95[0][1]).toBeGreaterThanOrEqual(r.intercept - 1e-9);
+    // beta1 = 0 (exactamente restringido)
+    expect(r.ci95[1][0]).toBeLessThanOrEqual(r.coefficients[0] + 1e-9);
+    expect(r.ci95[1][1]).toBeGreaterThanOrEqual(r.coefficients[0] - 1e-9);
   });
-
-  it('OLS result is unaffected: pValues are finite', () => {
+  it('SE_RLS ≤ SE_OLS (restricción válida reduce varianza)', () => {
+    const rls = runRLS(input, c);
+    const ols = runOLS(input);
+    // Cada SE_RLS debe ser <= SE_OLS correspondiente
+    rls.stdErrors.forEach((se, i) => {
+      expect(se).toBeLessThanOrEqual(ols.stdErrors[i] + 1e-9);
+    });
+  });
+  it('sigma2 del modelo RLS usa RSS_RLS', () => {
+    const r = runRLS(input, c);
+    expect(r.sigma2).toBeCloseTo(r.rssRLS! / r.df, 8);
+  });
+  it('OLS no se ve afectado', () => {
     const ols = runOLS(input);
     expect(ols.pValues.every(v => isFinite(v))).toBe(true);
     expect(ols.restrictedInferenceAvailable).toBeUndefined();
   });
+});
 
-  it('sigma2 is computed from RLS residuals, not OLS', () => {
+// ── 3. RLS beta1 = beta2: inferencia completa ─────────────────────────────────
+describe('runRLS – beta1 = beta2 — inferencia completa', () => {
+  const c: RLSConstraint = { R: [[0, 1, -1]], q: [0], label: 'beta1 = beta2' };
+  const input = { X: twoX, y: twoYEqualSlopes, featureNames: ['x1','x2'], yName: 'y' };
+
+  it('restrictedInferenceAvailable es true', () => {
+    expect(runRLS(input, c).restrictedInferenceAvailable).toBe(true);
+  });
+  it('stdErrors son finitos y no negativos', () => {
     const r = runRLS(input, c);
+    expect(r.stdErrors.every(v => isFinite(v) && v >= 0)).toBe(true);
+  });
+  it('pValues están en [0, 1]', () => {
+    const r = runRLS(input, c);
+    expect(r.pValues.every(v => v >= 0 && v <= 1)).toBe(true);
+  });
+  it('ci95 contiene los coeficientes restringidos', () => {
+    const r = runRLS(input, c);
+    [r.intercept, ...r.coefficients].forEach((coef, i) => {
+      expect(r.ci95[i][0]).toBeLessThanOrEqual(coef + 1e-9);
+      expect(r.ci95[i][1]).toBeGreaterThanOrEqual(coef - 1e-9);
+    });
+  });
+  it('SE_RLS ≤ SE_OLS', () => {
+    const rls = runRLS(input, c);
     const ols = runOLS(input);
-    // When constraint binds, RLS RSS > OLS RSS, so RLS sigma2 > OLS sigma2
-    expect(r.sigma2).toBeGreaterThan(ols.sigma2 - 1e-10);
-    const expectedSigma2 = r.rssRLS! / r.df;
-    expect(r.sigma2).toBeCloseTo(expectedSigma2, 8);
+    rls.stdErrors.forEach((se, i) => {
+      expect(se).toBeLessThanOrEqual(ols.stdErrors[i] + 1e-9);
+    });
+  });
+});
+
+// ── 4. RLS beta1 + beta2 = 1: inferencia completa ────────────────────────────
+describe('runRLS – beta1 + beta2 = 1 — inferencia completa', () => {
+  const c: RLSConstraint = { R: [[0, 1, 1]], q: [1], label: 'beta1 + beta2 = 1' };
+  const input = { X: twoX, y: twoYSumOne, featureNames: ['x1','x2'], yName: 'y' };
+
+  it('restrictedInferenceAvailable es true', () => {
+    expect(runRLS(input, c).restrictedInferenceAvailable).toBe(true);
+  });
+  it('stdErrors son finitos y no negativos', () => {
+    const r = runRLS(input, c);
+    expect(r.stdErrors.every(v => isFinite(v) && v >= 0)).toBe(true);
+  });
+  it('pValues están en [0, 1]', () => {
+    const r = runRLS(input, c);
+    expect(r.pValues.every(v => v >= 0 && v <= 1)).toBe(true);
+  });
+  it('ci95 es coherente: lo ≤ coef ≤ hi', () => {
+    const r = runRLS(input, c);
+    [r.intercept, ...r.coefficients].forEach((coef, i) => {
+      expect(r.ci95[i][0]).toBeLessThanOrEqual(coef + 1e-9);
+      expect(r.ci95[i][1]).toBeGreaterThanOrEqual(coef - 1e-9);
+    });
+  });
+  it('SE_RLS ≤ SE_OLS', () => {
+    const rls = runRLS(input, c);
+    const ols = runOLS(input);
+    rls.stdErrors.forEach((se, i) => {
+      expect(se).toBeLessThanOrEqual(ols.stdErrors[i] + 1e-9);
+    });
+  });
+});
+
+// ── 5. Caso singular: inferencia N/D con explicación ─────────────────────────
+// Cuando hay colinealidad perfecta, runOLS (llamado dentro de runRLS) lanza
+// antes de llegar al cálculo de inferencia — el error se propaga al caller.
+// No hay "resultado con N/D": hay una excepción con mensaje explicativo.
+// Verifica que el mensaje es legible y no es una excepción interna críptica.
+describe('runRLS – caso singular — error con mensaje claro', () => {
+  it('lanza error legible cuando x2 = 2*x1 (colinealidad perfecta)', () => {
+    const colX = [[1,2],[2,4],[3,6],[4,8],[5,10],[6,12],[7,14],[8,16]];
+    const colY = colX.map(([a]) => 1 + 3*a + 0.1);
+    const c: RLSConstraint = { R: [[0,1,-1]], q: [0], label: 'beta1=beta2' };
+    let msg = '';
+    try {
+      runRLS({ X: colX, y: colY, featureNames: ['x1','x2'], yName: 'y' }, c);
+    } catch (e) {
+      msg = (e as Error).message;
+    }
+    expect(msg.length).toBeGreaterThan(10);
+    // Debe mencionar colineal/singular/rango para ser pedagógico
+    expect(/colineal|singular|rango|rank/i.test(msg)).toBe(true);
   });
 });

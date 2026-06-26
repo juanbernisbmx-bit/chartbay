@@ -2,7 +2,7 @@ import {
   matMul, matVecMul, matInv, transpose, dotProduct, mean,
   runOLS, type RegressionInput, type RegressionResult,
 } from './regression';
-import { fDistPValue } from './statistics';
+import { fDistPValue, tDistPValue, tQuantile } from './statistics';
 
 // R * beta = q  (J restrictions, R is J×(k+1), q is J-vector)
 // Coefficients indexed as [beta0, beta1, ..., betak]
@@ -13,6 +13,10 @@ export interface RLSConstraint {
 }
 
 // beta_RLS = beta_OLS - (X'X)^-1 R' [R (X'X)^-1 R']^-1 (R beta_OLS - q)
+//
+// Var(beta_RLS) = sigma2_OLS * M
+//   where M = (X'X)^-1 - (X'X)^-1 R' [R(X'X)^-1 R']^-1 R (X'X)^-1
+//   and sigma2_OLS = RSS_OLS / (n-k-1)  (unbiased under H0: restriction is true)
 export function runRLS(input: RegressionInput, constraint: RLSConstraint): RegressionResult {
   const { X, y, featureNames, yName } = input;
   const n = y.length;
@@ -43,11 +47,14 @@ export function runRLS(input: RegressionInput, constraint: RLSConstraint): Regre
 
   // R * (X'X)^-1 * R'
   const Rt = transpose(R);
-  const RXtXinv = matMul(R, XtXinv);
-  const RXtXinvRt = matMul(RXtXinv, Rt);
+  const RXtXinv = matMul(R, XtXinv);           // J × (k+1)
+  const RXtXinvRt = matMul(RXtXinv, Rt);       // J × J
+
+  // [R(X'X)^-1R']^-1  — extracted so we can reuse it for inference
+  const RXtXinvRtInv = matInv(RXtXinvRt);
 
   // correction = (X'X)^-1 R' [R (X'X)^-1 R']^-1 (R beta_OLS - q)
-  const correction = matVecMul(XtXinv, matVecMul(Rt, matVecMul(matInv(RXtXinvRt), Rbeta_q)));
+  const correction = matVecMul(XtXinv, matVecMul(Rt, matVecMul(RXtXinvRtInv, Rbeta_q)));
   const betaRLS = betaOLS.map((b, i) => b - correction[i]);
 
   const predictions = Xd.map(row => dotProduct(betaRLS, row));
@@ -72,23 +79,78 @@ export function runRLS(input: RegressionInput, constraint: RLSConstraint): Regre
     .map((c, i) => `${c >= 0 ? ' + ' : ' - '}${Math.abs(c).toFixed(4)}·${featureNames[i]}`)
     .join('');
 
-  // Overall model F-test computed from RLS R² (descriptive, not the restriction test)
+  // Overall model F-test computed from RLS R²
   const sigma2 = df > 0 ? rssRLS / df : 0;
   const fStat = k > 0 && df > 0 && rSquared < 1 - 1e-10
     ? (rSquared / k) / ((1 - rSquared) / df)
     : 0;
   const fPValue = fDistPValue(fStat, k, df);
 
-  // Individual coefficient inference is NOT valid: stdErrors/tStats/pValues/ci95
-  // would require the restricted covariance matrix Var(beta_RLS), which depends on
-  // sigma² from the restricted model and (X'X)^-1 - (X'X)^-1 R'[R(X'X)^-1R']^-1 R(X'X)^-1.
-  // Placeholder NaN arrays signal to the UI that these must not be displayed as valid.
+  // ── RLS inference ─────────────────────────────────────────────────────────
+  //
+  // Var(beta_RLS) = sigma2_OLS * M
+  //   M = (X'X)^-1 - (X'X)^-1 R' [R(X'X)^-1 R']^-1 R (X'X)^-1
+  //
+  // sigma2_OLS = RSS_OLS/(n-k-1) is the unbiased estimator under H0.
+  // When the restriction is valid, Var(beta_RLS) <= Var(beta_OLS) componentwise
+  // (restricted estimation reduces variance — that is its only gain when H0 holds).
+  //
+  // Falls back to NaN arrays + restrictedInferenceAvailable:false only when
+  // df <= 0 or the covariance matrix computation throws numerically.
+
   const nanArr = (len: number): number[] => Array.from({ length: len }, () => NaN);
-  const nanCI = (len: number): [number, number][] =>
+  const nanCI  = (len: number): [number, number][] =>
     Array.from({ length: len }, () => [NaN, NaN] as [number, number]);
 
+  let stdErrors: number[];
+  let tStats:    number[];
+  let pValues:   number[];
+  let ci95:      [number, number][];
+  let restrictedInferenceAvailable: boolean;
+
+  if (df <= 0) {
+    stdErrors = nanArr(k + 1);
+    tStats    = nanArr(k + 1);
+    pValues   = nanArr(k + 1);
+    ci95      = nanCI(k + 1);
+    restrictedInferenceAvailable = false;
+  } else {
+    try {
+      const sigma2_ols = rssOLS / df;
+
+      // (X'X)^-1 R'                                  — size (k+1) × J
+      const XtXinvRt = matMul(XtXinv, Rt);
+      // (X'X)^-1 R' [R(X'X)^-1R']^-1                — size (k+1) × J
+      const XtXinvRtInv = matMul(XtXinvRt, RXtXinvRtInv);
+      // adjustment = (X'X)^-1 R' [R(X'X)^-1R']^-1 R(X'X)^-1  — size (k+1)×(k+1)
+      const covAdj = matMul(XtXinvRtInv, RXtXinv);
+      // M = (X'X)^-1 - adjustment
+      const covMatrix = XtXinv.map((row, i) =>
+        row.map((val, j) => val - covAdj[i][j])
+      );
+
+      stdErrors = betaRLS.map((_, i) =>
+        Math.sqrt(Math.max(0, sigma2_ols * covMatrix[i][i]))
+      );
+      tStats = betaRLS.map((b, i) =>
+        stdErrors[i] > 1e-15 ? b / stdErrors[i] : (b === 0 ? 0 : Infinity)
+      );
+      pValues = tStats.map(t => tDistPValue(t, df));
+      const tCrit = tQuantile(0.05, df);
+      ci95 = betaRLS.map((b, i) =>
+        [b - tCrit * stdErrors[i], b + tCrit * stdErrors[i]] as [number, number]
+      );
+      restrictedInferenceAvailable = true;
+    } catch {
+      stdErrors = nanArr(k + 1);
+      tStats    = nanArr(k + 1);
+      pValues   = nanArr(k + 1);
+      ci95      = nanCI(k + 1);
+      restrictedInferenceAvailable = false;
+    }
+  }
+
   return {
-    // Geometry
     coefficients: coefRLS,
     intercept: interceptRLS,
     predictions,
@@ -104,13 +166,11 @@ export function runRLS(input: RegressionInput, constraint: RLSConstraint): Regre
     sigma2,
     fStat,
     fPValue,
-    // Individual inference: NaN — requires restricted covariance matrix (not yet implemented)
-    stdErrors: nanArr(k + 1),
-    tStats: nanArr(k + 1),
-    pValues: nanArr(k + 1),
-    ci95: nanCI(k + 1),
-    restrictedInferenceAvailable: false,
-    // RLS-specific
+    stdErrors,
+    tStats,
+    pValues,
+    ci95,
+    restrictedInferenceAvailable,
     method: 'RLS',
     rlsConstraint: constraint.label,
     rssOLS,
