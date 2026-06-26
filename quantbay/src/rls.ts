@@ -72,8 +72,23 @@ export function runRLS(input: RegressionInput, constraint: RLSConstraint): Regre
     .map((c, i) => `${c >= 0 ? ' + ' : ' - '}${Math.abs(c).toFixed(4)}·${featureNames[i]}`)
     .join('');
 
+  // Overall model F-test computed from RLS R² (descriptive, not the restriction test)
+  const sigma2 = df > 0 ? rssRLS / df : 0;
+  const fStat = k > 0 && df > 0 && rSquared < 1 - 1e-10
+    ? (rSquared / k) / ((1 - rSquared) / df)
+    : 0;
+  const fPValue = fDistPValue(fStat, k, df);
+
+  // Individual coefficient inference is NOT valid: stdErrors/tStats/pValues/ci95
+  // would require the restricted covariance matrix Var(beta_RLS), which depends on
+  // sigma² from the restricted model and (X'X)^-1 - (X'X)^-1 R'[R(X'X)^-1R']^-1 R(X'X)^-1.
+  // Placeholder NaN arrays signal to the UI that these must not be displayed as valid.
+  const nanArr = (len: number): number[] => Array.from({ length: len }, () => NaN);
+  const nanCI = (len: number): [number, number][] =>
+    Array.from({ length: len }, () => [NaN, NaN] as [number, number]);
+
   return {
-    ...ols,
+    // Geometry
     coefficients: coefRLS,
     intercept: interceptRLS,
     predictions,
@@ -81,6 +96,21 @@ export function runRLS(input: RegressionInput, constraint: RLSConstraint): Regre
     rSquared,
     adjustedRSquared,
     equation: `${yName} = ${interceptRLS.toFixed(4)}${terms}`,
+    featureNames,
+    yName,
+    nObs: n,
+    nFeatures: k,
+    df,
+    sigma2,
+    fStat,
+    fPValue,
+    // Individual inference: NaN — requires restricted covariance matrix (not yet implemented)
+    stdErrors: nanArr(k + 1),
+    tStats: nanArr(k + 1),
+    pValues: nanArr(k + 1),
+    ci95: nanCI(k + 1),
+    restrictedInferenceAvailable: false,
+    // RLS-specific
     method: 'RLS',
     rlsConstraint: constraint.label,
     rssOLS,

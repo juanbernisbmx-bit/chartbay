@@ -38,6 +38,8 @@ export interface RegressionResult {
   fStatConstraint?: number;
   fPValueConstraint?: number;
   jConstraints?: number;
+  // false when stdErrors/tStats/pValues/ci95 are placeholders (NaN), not computed
+  restrictedInferenceAvailable?: boolean;
 }
 
 export function transpose(A: number[][]): number[][] {

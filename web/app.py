@@ -44,14 +44,26 @@ REPORTS_DIR = ROOT / config.OUTPUT_DIR
 
 app = Flask(__name__)
 
+# _is_dev must be defined before credential checks so both SECRET_KEY and APP_PASSWORD
+# can decide whether to fail fast or use a local dev fallback.
+_is_dev = os.environ.get("APP_ENV", "").lower() in ("development", "dev") or \
+          os.environ.get("FLASK_ENV", "").lower() == "development"
+
 _secret_key = os.environ.get("SECRET_KEY", "")
 if not _secret_key:
-    import logging as _logging
-    _logging.getLogger(__name__).warning(
-        "SECRET_KEY no está configurado — usando clave de desarrollo insegura. "
-        "Definí SECRET_KEY en el entorno antes de desplegar."
-    )
-    _secret_key = "dev-inseguro-cambiar"
+    if _is_dev:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "SECRET_KEY no configurado — usando clave de desarrollo local. "
+            "Definí SECRET_KEY antes de desplegar en producción."
+        )
+        _secret_key = "dev-inseguro-cambiar"
+    else:
+        raise RuntimeError(
+            "SECRET_KEY no está configurado. "
+            "En Render se genera automáticamente con generateValue: true. "
+            "Si desplegás en otro entorno, definí esta variable antes de iniciar la app."
+        )
 app.secret_key = _secret_key
 
 app.config.update(
@@ -61,10 +73,6 @@ app.config.update(
 
 APP_USERNAME = os.environ.get("APP_USERNAME", "juan")
 
-# Fail fast if APP_PASSWORD is missing in production.
-# Render sets APP_ENV via its dashboard; locally we accept a dev default.
-_is_dev = os.environ.get("APP_ENV", "").lower() in ("development", "dev") or \
-          os.environ.get("FLASK_ENV", "").lower() == "development"
 _raw_pw = os.environ.get("APP_PASSWORD", "")
 if not _raw_pw:
     if _is_dev:
