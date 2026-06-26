@@ -55,8 +55,8 @@ const DEMO_CASES: Record<string, QuantDemoCase> = {
     file: '01_simple_linear.csv',
     yName: 'y',
     xNames: ['x'],
-    restriction: 'Sin restriccion: modelo OLS simple y = beta0 + beta1*x + error.',
-    description: 'Relacion lineal clara para verificar intercepto, pendiente, RSS y diagnosticos basicos.',
+    restriction: 'Sin restricción: modelo OLS simple y = beta0 + beta1*x + error.',
+    description: 'Relación lineal clara para verificar intercepto, pendiente, RSS y diagnósticos básicos.',
   },
   'rls-beta1-zero': {
     id: 'rls-beta1-zero',
@@ -64,7 +64,7 @@ const DEMO_CASES: Record<string, QuantDemoCase> = {
     file: '01_simple_linear.csv',
     yName: 'y',
     xNames: ['x'],
-    restriction: 'Restriccion RLS activa: beta1 = 0.',
+    restriction: 'Restricción RLS activa: beta1 = 0.',
     description: 'Usa el dataset simple para contrastar una pendiente nula contra el ajuste OLS completo.',
     rlsConstraint: { R: [[0, 1]], q: [0], label: 'beta1 = 0' },
   },
@@ -74,8 +74,8 @@ const DEMO_CASES: Record<string, QuantDemoCase> = {
     file: '02_beta1_eq_beta2_approx_valid.csv',
     yName: 'y',
     xNames: ['x1', 'x2'],
-    restriction: 'Restriccion RLS activa: beta1 = beta2 (beta1 - beta2 = 0).',
-    description: 'Caso donde beta1 y beta2 son aproximadamente iguales; la restriccion no deberia rechazarse a niveles usuales.',
+    restriction: 'Restricción RLS activa: beta1 = beta2 (beta1 − beta2 = 0).',
+    description: 'Caso donde beta1 y beta2 son aproximadamente iguales; la restricción no debería rechazarse a niveles usuales.',
     rlsConstraint: { R: [[0, 1, -1]], q: [0], label: 'beta1 = beta2 (beta1 − beta2 = 0)' },
   },
   'rls-sum-one': {
@@ -84,8 +84,8 @@ const DEMO_CASES: Record<string, QuantDemoCase> = {
     file: '04_beta1_plus_beta2_eq_1.csv',
     yName: 'y',
     xNames: ['x1', 'x2'],
-    restriction: 'Restriccion RLS activa: beta1 + beta2 = 1.',
-    description: 'Dataset para comprobar una restriccion lineal sobre la suma de coeficientes.',
+    restriction: 'Restricción RLS activa: beta1 + beta2 = 1.',
+    description: 'Dataset para comprobar una restricción lineal sobre la suma de coeficientes.',
     rlsConstraint: { R: [[0, 1, 1]], q: [1], label: 'beta1 + beta2 = 1' },
   },
   singular: {
@@ -94,8 +94,8 @@ const DEMO_CASES: Record<string, QuantDemoCase> = {
     file: '05_perfect_collinearity.csv',
     yName: 'y',
     xNames: ['x1', 'x2'],
-    restriction: 'Sin restriccion RLS: debe detectarse colinealidad perfecta (x2 = 2*x1) antes de estimar.',
-    description: 'Caso de colinealidad perfecta: la matriz de diseno no tiene rango completo y el modelo debe avisar antes de estimar.',
+    restriction: 'Sin restricción RLS: debe detectarse colinealidad perfecta (x2 = 2*x1) antes de estimar.',
+    description: 'Caso de colinealidad perfecta: la matriz de diseño no tiene rango completo y el modelo debe avisar antes de estimar.',
   },
 };
 
@@ -142,15 +142,15 @@ function formatRegressionError(err: unknown): string {
       }
     });
     return [
-      'No se pudo calcular la regresion.',
+      'No se pudo calcular la regresión.',
       ...lines.map(line => `- ${line}`),
-      'Chart Bay no cambio ni elimino datos automaticamente.',
+      'ChartBay no cambió ni eliminó datos automáticamente.',
     ].join('\n');
   }
 
   const message = (err as Error).message ?? String(err);
   if (/Observaciones insuficientes/i.test(message)) {
-    return `${message}\nSugerencia: usa menos variables X o carga un dataset con mas filas numericas completas.`;
+    return `${message}\nSugerencia: usá menos variables X o cargá un dataset con más filas numéricas completas.`;
   }
   if (/singular|colineal|rango|rank/i.test(message)) {
     return `${message}\nSugerencia: quita una variable repetida o una variable que sea combinacion de otras.`;
@@ -225,12 +225,27 @@ function parseDemoCsv(text: string): ParsedCSV {
   };
 }
 
+function applyYIndicators(yName: string): void {
+  document.querySelectorAll<HTMLInputElement>('.qb-x-cb').forEach(cb => {
+    const isY = cb.value === yName;
+    cb.disabled = isY;
+    if (isY) cb.checked = false;
+    const label = cb.closest<HTMLElement>('.qb-x-check');
+    if (label) {
+      label.style.opacity = isY ? '0.4' : '';
+      const badge = label.querySelector<HTMLElement>('.qb-y-badge');
+      if (badge) badge.style.display = isY ? '' : 'none';
+    }
+  });
+}
+
 function setVariableSelection(yName: string, xNames: string[]): void {
   const yEl = $('qb-y') as HTMLSelectElement | null;
   if (yEl) yEl.value = yName;
   document.querySelectorAll<HTMLInputElement>('.qb-x-cb').forEach(cb => {
     cb.checked = xNames.includes(cb.value) && cb.value !== yName;
   });
+  applyYIndicators(yName);
 }
 
 function renderDemoInfo(demo: QuantDemoCase): void {
@@ -243,7 +258,7 @@ function renderDemoInfo(demo: QuantDemoCase): void {
   const restriction = $('qb-demo-restriction');
   if (note) note.innerHTML = html;
   if (restriction) {
-    restriction.innerHTML = `<strong>Restriccion sugerida:</strong> ${escapeHtml(demo.restriction)}`;
+    restriction.innerHTML = `<strong>Restricción sugerida:</strong> ${escapeHtml(demo.restriction)}`;
     restriction.style.display = '';
   }
 }
@@ -252,7 +267,7 @@ function clearDemoInfo(): void {
   const note = $('qb-demo-note');
   const restriction = $('qb-demo-restriction');
   if (note) {
-    note.textContent = 'Elegi un ejemplo para precargar CSV, variable dependiente, regresores y restriccion sugerida.';
+    note.textContent = 'Elegí un ejemplo para precargar CSV, variable dependiente, regresores y restricción sugerida.';
   }
   if (restriction) {
     restriction.innerHTML = '';
@@ -273,7 +288,7 @@ async function loadDemoCase(id: string): Promise<void> {
     if (!response.ok) throw new Error(`No se pudo cargar ${demo.file}`);
     csvData = parseDemoCsv(await response.text());
     if (csvData.numericColumns.length < 2) {
-      throw new Error('El CSV de ejemplo necesita al menos 2 columnas numericas.');
+      throw new Error('El CSV de ejemplo necesita al menos 2 columnas numéricas.');
     }
 
     const fn = $('qb-filename');
@@ -420,10 +435,10 @@ function renderVarSelectors(cols: string[]): void {
   const defaultY = cols[0] ?? '';
   if (xEl)
     xEl.innerHTML = cols
-      .map(
-        (c, i) =>
-          `<label class="qb-x-check" style="${c === defaultY ? 'opacity:0.4' : ''}"><input type="checkbox" class="qb-x-cb" value="${escapeHtml(c)}" ${i > 0 ? 'checked' : ''} ${c === defaultY ? 'disabled title="Ya es la variable Y"' : ''}> ${escapeHtml(c)}</label>`
-      )
+      .map((c, i) => {
+        const isY = c === defaultY;
+        return `<label class="qb-x-check" style="${isY ? 'opacity:0.4' : ''}"><input type="checkbox" class="qb-x-cb" value="${escapeHtml(c)}" ${i > 0 ? 'checked' : ''} ${isY ? 'disabled title="Ya seleccionada como variable Y"' : ''}> ${escapeHtml(c)}<span class="qb-y-badge"${isY ? '' : ' style="display:none"'}> (Y)</span></label>`;
+      })
       .join('');
 }
 
@@ -578,15 +593,26 @@ function renderLeakageWarn(leaks: LeakageSignal[]): void {
   const rows = leaks
     .map(
       leak =>
-        `<p><strong>${escapeHtml(leak.name)}</strong> tiene correlación ${leak.r.toFixed(4)} con la variable dependiente (|r| = ${leak.abs.toFixed(4)}). Revisá si este predictor se deriva de la respuesta.</p>`
+        `<p><strong>${escapeHtml(leak.name)}</strong>: correlación ${leak.r.toFixed(4)} con la variable dependiente (|r| = ${leak.abs.toFixed(4)}).</p>`
     )
     .join('');
-  el.innerHTML = `
-    <div class="qb-warn-red">
-      <p><strong>Posible data leakage detectado</strong></p>
-      ${rows}
-      <p>Umbral: |r| ≥ 0.95.</p>
-    </div>`;
+
+  if (activeDemoId) {
+    // Demo datasets are intentionally built with strong linear relationships
+    el.innerHTML = `
+      <div class="qb-warn-yellow">
+        <p><strong>Alta correlación detectada</strong></p>
+        ${rows}
+        <p>Este demo está diseñado para mostrar una relación lineal fuerte. En datos reales, revisá que los predictores no se deriven de la variable dependiente antes de usar el modelo. Umbral: |r| ≥ 0.95.</p>
+      </div>`;
+  } else {
+    el.innerHTML = `
+      <div class="qb-warn-red">
+        <p><strong>Posible data leakage detectado</strong></p>
+        ${rows}
+        <p>Revisá si este predictor se deriva de la respuesta o fue construido a partir de ella. Umbral: |r| ≥ 0.95.</p>
+      </div>`;
+  }
 }
 
 function renderLogistic(res: LogisticResult | null): void {
@@ -1164,7 +1190,7 @@ function exportPDF(): void {
     doc.text(`Pág. ${i}/${pageCount}`, 185, 290);
   }
 
-  doc.save('quantbay_regresion.pdf');
+  doc.save('quantbay_regresión.pdf');
 }
 
 // ── Auto-repair log ───────────────────────────────────────────────────────────
@@ -1176,13 +1202,23 @@ const REASON_LABEL: Record<string, string> = {
   insufficient_obs:     'OBS. INSUFICIENTES',
 };
 
-function renderRepairLog(result: AutoRepairResult): void {
+function renderRepairLog(result: AutoRepairResult, rlsFallbackNote = ''): void {
   const el = $('qb-repair-log');
   if (!el) return;
 
-  if (!result.repaired) {
+  if (!result.repaired && !rlsFallbackNote) {
     el.innerHTML = '';
     el.style.display = 'none';
+    return;
+  }
+
+  const rlsNoteHtml = rlsFallbackNote
+    ? `<div class="qb-warn-yellow" style="margin-top:8px"><strong>ℹ Método:</strong> ${escapeHtml(rlsFallbackNote)}</div>`
+    : '';
+
+  if (!result.repaired) {
+    el.innerHTML = `<div class="qb-repair-log">${rlsNoteHtml}</div>`;
+    el.style.display = '';
     return;
   }
 
@@ -1216,6 +1252,7 @@ function renderRepairLog(result: AutoRepairResult): void {
         Modelo final estimado con: ${kept}
       </div>
       <div class="qb-repair-steps">${steps}</div>
+      ${rlsNoteHtml}
     </div>`;
   el.style.display = '';
 }
@@ -1238,21 +1275,55 @@ function onAutoRun(): void {
 
   try {
     const analysis = autoRepairAndAnalyze(csvData, yName, xNames);
+    let finalResult = analysis.result;
+    let rlsFallbackNote = '';
 
-    lastResult    = analysis.result;
-    lastCorr      = analysis.corrMatrix;
-    lastCorrCols  = analysis.corrColumns;
-    lastVIF       = analysis.vifValues;
+    // After repair, preserve RLS if the active demo had a constraint and the
+    // repaired feature set is still compatible with the R matrix dimensions.
+    const demo = activeDemoId ? DEMO_CASES[activeDemoId] : null;
+    const rlsConstraint = demo?.rlsConstraint;
+    if (rlsConstraint) {
+      const finalXNames = finalResult.featureNames;
+      const expectedParams = rlsConstraint.R[0].length;   // R has k+1 columns
+      const modelParams    = finalXNames.length + 1;       // intercept + k predictors
+      if (expectedParams !== modelParams) {
+        rlsFallbackNote =
+          `El modelo reparado se estimó como OLS porque la restricción "${rlsConstraint.label}" ` +
+          `espera ${expectedParams} parámetros pero el modelo reparado tiene ${modelParams} ` +
+          `(la reparación eliminó variables incluidas en la restricción).`;
+        setMethodStatus('OLS');
+      } else {
+        try {
+          const { X: Xrls, y: yrls } = getValidRows(csvData.rows, yName, finalXNames);
+          finalResult = runRLS({ X: Xrls, y: yrls, featureNames: finalXNames, yName }, rlsConstraint);
+          setMethodStatus('RLS');
+        } catch (rlsErr) {
+          rlsFallbackNote =
+            `El modelo reparado se estimó como OLS porque la restricción RLS no pudo aplicarse: ` +
+            `${(rlsErr as Error).message}.`;
+          setMethodStatus('OLS');
+        }
+      }
+    } else {
+      setMethodStatus('OLS');
+    }
 
-    renderRepairLog(analysis);
+    lastResult   = finalResult;
+    lastCorr     = analysis.corrMatrix;
+    lastCorrCols = analysis.corrColumns;
+    lastVIF      = analysis.vifValues;
+    lastLogit    = null;
+
+    renderRepairLog(analysis, rlsFallbackNote);
     renderResults(
-      analysis.result,
+      finalResult,
       analysis.dropped,
       analysis.corrMatrix,
       analysis.corrColumns,
       analysis.vifValues
     );
 
+    setEngineStatus('COMPLETADO');
     const res = $('qb-results');
     if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
   } catch (err) {
@@ -1274,14 +1345,7 @@ function init(): void {
   $('qb-export-txt')?.addEventListener('click', exportAnalysisTXT);
 
   $('qb-y')?.addEventListener('change', () => {
-    const yName = ($('qb-y') as HTMLSelectElement)?.value ?? '';
-    document.querySelectorAll<HTMLInputElement>('.qb-x-cb').forEach(cb => {
-      const isY = cb.value === yName;
-      cb.disabled = isY;
-      if (isY) cb.checked = false;
-      const label = cb.closest<HTMLElement>('.qb-x-check');
-      if (label) label.style.opacity = isY ? '0.4' : '';
-    });
+    applyYIndicators(($('qb-y') as HTMLSelectElement)?.value ?? '');
   });
 }
 

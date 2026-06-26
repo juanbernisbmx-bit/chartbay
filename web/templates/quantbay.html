@@ -37,7 +37,7 @@
         <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">.</span>
         <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">.</span>
         <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">.</span>
-        <a href="{{ url_for('guia') }}">Guia</a><span class="sep">.</span>
+        <a href="{{ url_for('guia') }}">Guía</a><span class="sep">.</span>
         <strong>Quant</strong><span class="sep">.</span>
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">.</span>
         {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">.</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
@@ -84,7 +84,7 @@
             <input type="file" id="qb-file" accept=".csv" style="display:none">
             <span id="qb-filename" class="muted">Todavía no subiste un archivo</span>
           </div>
-          <p class="muted qb-help">El archivo tiene que tener nombres de columnas en la primera fila. Quant Bay detecta automaticamente las columnas numericas. &nbsp;<a href="/datasets/01_simple_linear.csv" download="ejemplo_quant.csv" class="muted" style="text-decoration:underline">Descargar ejemplo CSV</a></p>
+          <p class="muted qb-help">El archivo tiene que tener nombres de columnas en la primera fila. Quant Bay detecta automáticamente las columnas numéricas. &nbsp;<a href="/datasets/01_simple_linear.csv" download="ejemplo_quant.csv" class="muted" style="text-decoration:underline">Descargar ejemplo CSV</a></p>
           <div class="qb-runlog" id="qb-runlog" aria-live="polite"></div>
         </section>
 
@@ -131,7 +131,7 @@
           <div style="margin-top:10px">
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
               <button class="btn-ink" id="qb-run" style="font-weight:700">Calcular regresión</button>
-              <button class="btn-ink qb-btn-repair" id="qb-auto-run" title="Detecta y corrige multicolinealidad, matriz singular y otros problemas automaticamente">⚙ Arreglar y calcular</button>
+              <button class="btn-ink qb-btn-repair" id="qb-auto-run" title="Detecta y corrige multicolinealidad, matriz singular y otros problemas automáticamente">⚙ Arreglar y calcular</button>
             </div>
             <p class="muted" style="font-size:11px;margin:5px 0 0">"Arreglar y calcular" detecta y corrige multicolinealidad o matrices singulares antes de estimar.</p>
           </div>
