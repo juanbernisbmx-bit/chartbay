@@ -9,6 +9,13 @@ import { checkCSVLimits, formatRegressionError } from './ui/errors';
 import { renderPreview, renderVarSelectors } from './ui/tables';
 import { renderRepairLog } from './ui/diagnosticsView';
 import { renderRegressionResults } from './ui/regressionView';
+import { runTimeSeriesAnalysis } from './timeseries/service';
+import {
+  renderTimeSeriesAnalysis,
+  renderTimeSeriesNoData,
+  renderTimeSeriesSelectors,
+  resetTimeSeriesView,
+} from './ui/timeseriesView';
 
 interface QuantDemoCase {
   id: string;
@@ -168,6 +175,43 @@ function clearDemoInfo(): void {
   }
 }
 
+function isTimeSeriesMode(): boolean {
+  return appState.activeMode === 'timeseries';
+}
+
+function updateModePanels(): void {
+  const modeSelect = $('qb-mode') as HTMLSelectElement | null;
+  if (modeSelect) modeSelect.value = appState.activeMode;
+
+  const demo = $('qb-demo-panel');
+  const vars = $('qb-vars');
+  const results = $('qb-results');
+  const repair = $('qb-repair-log');
+  const tsPanel = $('qb-ts-panel');
+  const ts = isTimeSeriesMode();
+
+  if (demo) demo.style.display = ts ? 'none' : '';
+  if (vars) vars.style.display = !ts && appState.csvData && appState.csvData.numericColumns.length >= 2 ? '' : 'none';
+  if (results && ts) results.style.display = 'none';
+  if (repair && ts) repair.style.display = 'none';
+  if (tsPanel) tsPanel.style.display = ts ? '' : 'none';
+
+  if (ts) {
+    if (appState.csvData) renderTimeSeriesSelectors(appState.csvData);
+    else renderTimeSeriesNoData();
+  } else {
+    resetTimeSeriesView();
+    if (appState.csvData && appState.csvData.numericColumns.length < 2) {
+      showError('El CSV necesita al menos 2 columnas numéricas.');
+    }
+  }
+}
+
+function setActiveMode(mode: 'regression' | 'timeseries'): void {
+  appState.activeMode = mode;
+  showError('');
+  updateModePanels();
+}
 async function loadDemoCase(id: string): Promise<void> {
   const demo = DEMO_CASES[id];
   if (!demo) return;
@@ -203,7 +247,7 @@ async function loadDemoCase(id: string): Promise<void> {
 
     const preview = $('qb-preview'), vars = $('qb-vars'), results = $('qb-results'), repair = $('qb-repair-log');
     if (preview) preview.style.display = '';
-    if (vars) vars.style.display = '';
+    if (vars) vars.style.display = isTimeSeriesMode() ? 'none' : '';
     if (results) results.style.display = 'none';
     if (repair) repair.style.display = 'none';
 
@@ -240,7 +284,7 @@ async function onFileChange(e: Event): Promise<void> {
 
   try {
     appState.csvData = await parseCSVFile(file);
-    if (appState.csvData.numericColumns.length < 2) {
+    if (!isTimeSeriesMode() && appState.csvData.numericColumns.length < 2) {
       showError('El CSV necesita al menos 2 columnas numéricas.');
       return;
     }
@@ -250,13 +294,14 @@ async function onFileChange(e: Event): Promise<void> {
     writeRunLog([
       `Dataset cargado: ${appState.csvData.rows.length} observaciones`,
       `Variables numéricas detectadas: ${appState.csvData.numericColumns.length}`,
-      'Motor de regresión listo.',
+      isTimeSeriesMode() ? 'Motor de Time Series listo.' : 'Motor de regresión listo.',
     ]);
     renderPreview(appState.csvData);
     renderVarSelectors(appState.csvData.numericColumns);
+    updateModePanels();
     const preview = $('qb-preview'), vars = $('qb-vars'), results = $('qb-results');
     if (preview) preview.style.display = '';
-    if (vars) vars.style.display = '';
+    if (vars) vars.style.display = isTimeSeriesMode() ? 'none' : '';
     if (results) results.style.display = 'none';
     updateSidebarStep(2);
   } catch (err) {
@@ -270,6 +315,7 @@ async function onFileChange(e: Event): Promise<void> {
 // ── Run regression ────────────────────────────────────────────────────────────
 
 async function onRun(): Promise<void> {
+  if (isTimeSeriesMode()) return;
   if (!appState.csvData) return;
   showError('');
   const yName = ($('qb-y') as HTMLSelectElement)?.value ?? '';
@@ -325,6 +371,7 @@ async function onRun(): Promise<void> {
 // ── Results ───────────────────────────────────────────────────────────────────
 
 function onAutoRun(): void {
+  if (isTimeSeriesMode()) return;
   if (!appState.csvData) return;
   showError('');
 
@@ -369,6 +416,42 @@ function onAutoRun(): void {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
+
+function onTimeSeriesDateChange(): void {
+  if (!appState.csvData) return;
+  const dateColumn = ($('qb-ts-date') as HTMLSelectElement | null)?.value ?? '';
+  const valueColumn = ($('qb-ts-value') as HTMLSelectElement | null)?.value ?? '';
+  renderTimeSeriesSelectors(appState.csvData, dateColumn, valueColumn);
+}
+
+function onTimeSeriesRun(): void {
+  if (!appState.csvData) {
+    renderTimeSeriesNoData();
+    return;
+  }
+
+  const dateColumn = ($('qb-ts-date') as HTMLSelectElement | null)?.value ?? '';
+  const valueColumn = ($('qb-ts-value') as HTMLSelectElement | null)?.value ?? '';
+
+  if (!dateColumn || !valueColumn) {
+    renderTimeSeriesNoData('Selecciona una columna de fecha y una columna de valor para Time Series.');
+    return;
+  }
+
+  showError('');
+  const result = runTimeSeriesAnalysis(appState.csvData.rows, { dateColumn, valueColumn });
+  renderTimeSeriesAnalysis(result);
+  setText('qb-status-obs', result.summary.observations);
+  setEngineStatus('COMPLETADO');
+  writeRunLog([
+    `Time Series ejecutado: ${valueColumn}`,
+    `Fecha: ${dateColumn}`,
+    `Observaciones validas: ${result.summary.observations}`,
+  ]);
+  const panel = $('qb-ts-panel');
+  if (panel) panel.scrollIntoView({ behavior: 'smooth' });
+  updateSidebarStep(3);
+}
 function init(): void {
   $('qb-file')?.addEventListener('change', onFileChange as EventListener);
   document.querySelectorAll<HTMLButtonElement>('.qb-demo-btn').forEach(btn => {
@@ -376,6 +459,12 @@ function init(): void {
   });
   $('qb-run')?.addEventListener('click', onRun);
   $('qb-auto-run')?.addEventListener('click', onAutoRun);
+  $('qb-mode')?.addEventListener('change', event => {
+    const mode = (event.target as HTMLSelectElement).value === 'timeseries' ? 'timeseries' : 'regression';
+    setActiveMode(mode);
+  });
+  $('qb-ts-date')?.addEventListener('change', onTimeSeriesDateChange);
+  $('qb-ts-run')?.addEventListener('click', onTimeSeriesRun);
   $('qb-export-pdf')?.addEventListener('click', exportPDF);
   $('qb-export-csv')?.addEventListener('click', exportAnalysisCSV);
   $('qb-export-txt')?.addEventListener('click', exportAnalysisTXT);
@@ -383,6 +472,8 @@ function init(): void {
   $('qb-y')?.addEventListener('change', () => {
     applyYIndicators(($('qb-y') as HTMLSelectElement)?.value ?? '');
   });
+
+  updateModePanels();
 }
 
 if (document.readyState === 'loading') {

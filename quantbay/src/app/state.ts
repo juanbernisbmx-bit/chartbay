@@ -2,7 +2,10 @@ import type { ParsedCSV } from '../csvParser';
 import type { RegressionResult } from '../regression';
 import type { LogisticResult } from '../services/analysisService';
 
+export type QuantBayMode = 'regression' | 'timeseries';
+
 export interface QuantBayAppState {
+  activeMode: QuantBayMode;
   csvData: ParsedCSV | null;
   activeChart: any;
   residFittedChart: any;
@@ -17,6 +20,7 @@ export interface QuantBayAppState {
 }
 
 export const appState: QuantBayAppState = {
+  activeMode: 'regression',
   csvData: null,
   activeChart: null,
   residFittedChart: null,
