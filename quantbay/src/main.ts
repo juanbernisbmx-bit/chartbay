@@ -1,6 +1,7 @@
-import { parseCSVFile, type ParsedCSV } from './csvParser';
+import { parseCSVFile, getValidRows, type ParsedCSV } from './csvParser';
 import type { RegressionResult } from './regression';
 import { interpret } from './interpretation';
+import { runRLS, type RLSConstraint } from './rls';
 import {
   AnalysisValidationError,
   runQuantAnalysis,
@@ -28,6 +29,10 @@ let lastCorrCols: string[] | null = null;
 let lastVIF: number[] | null = null;
 let lastLogit: LogisticResult | null = null;
 let lastDropped = 0;
+let activeDemoId: string | null = null;
+
+// Max CSV dimensions accepted before analysis
+const CSV_LIMITS = { maxRows: 5000, maxCols: 50, maxXVars: 20 };
 
 const $ = (id: string): HTMLElement | null => document.getElementById(id);
 
@@ -39,8 +44,10 @@ interface QuantDemoCase {
   xNames: string[];
   restriction: string;
   description: string;
+  rlsConstraint?: RLSConstraint;
 }
 
+// R acts on [beta0, beta1, ..., betak]; q is the right-hand side of R*beta = q
 const DEMO_CASES: Record<string, QuantDemoCase> = {
   'ols-simple': {
     id: 'ols-simple',
@@ -57,8 +64,9 @@ const DEMO_CASES: Record<string, QuantDemoCase> = {
     file: '01_simple_linear.csv',
     yName: 'y',
     xNames: ['x'],
-    restriction: 'Restriccion sugerida: beta1 = 0.',
+    restriction: 'Restriccion RLS activa: beta1 = 0.',
     description: 'Usa el dataset simple para contrastar una pendiente nula contra el ajuste OLS completo.',
+    rlsConstraint: { R: [[0, 1]], q: [0], label: 'beta1 = 0' },
   },
   'rls-beta1-beta2': {
     id: 'rls-beta1-beta2',
@@ -66,8 +74,9 @@ const DEMO_CASES: Record<string, QuantDemoCase> = {
     file: '02_beta1_eq_beta2_approx_valid.csv',
     yName: 'y',
     xNames: ['x1', 'x2'],
-    restriction: 'Restriccion sugerida: beta1 - beta2 = 0.',
+    restriction: 'Restriccion RLS activa: beta1 = beta2 (beta1 - beta2 = 0).',
     description: 'Caso donde beta1 y beta2 son aproximadamente iguales; la restriccion no deberia rechazarse a niveles usuales.',
+    rlsConstraint: { R: [[0, 1, -1]], q: [0], label: 'beta1 = beta2 (beta1 − beta2 = 0)' },
   },
   'rls-sum-one': {
     id: 'rls-sum-one',
@@ -75,8 +84,9 @@ const DEMO_CASES: Record<string, QuantDemoCase> = {
     file: '04_beta1_plus_beta2_eq_1.csv',
     yName: 'y',
     xNames: ['x1', 'x2'],
-    restriction: 'Restriccion sugerida: beta1 + beta2 = 1.',
+    restriction: 'Restriccion RLS activa: beta1 + beta2 = 1.',
     description: 'Dataset para comprobar una restriccion lineal sobre la suma de coeficientes.',
+    rlsConstraint: { R: [[0, 1, 1]], q: [1], label: 'beta1 + beta2 = 1' },
   },
   singular: {
     id: 'singular',
@@ -84,7 +94,7 @@ const DEMO_CASES: Record<string, QuantDemoCase> = {
     file: '05_perfect_collinearity.csv',
     yName: 'y',
     xNames: ['x1', 'x2'],
-    restriction: 'Restriccion sugerida: beta1 - beta2 = 0; primero debe detectarse x2 = 2*x1.',
+    restriction: 'Sin restriccion RLS: debe detectarse colinealidad perfecta (x2 = 2*x1) antes de estimar.',
     description: 'Caso de colinealidad perfecta: la matriz de diseno no tiene rango completo y el modelo debe avisar antes de estimar.',
   },
 };
@@ -94,6 +104,22 @@ function showError(msg: string): void {
   if (!el) return;
   el.innerHTML = msg ? escapeHtml(msg).replace(/\n/g, '<br>') : '';
   el.style.display = msg ? '' : 'none';
+}
+
+function setMethodStatus(method: string): void {
+  setText('qb-status-method', method);
+  const badge = document.querySelector<HTMLElement>('#qb-results .qb-panel-head span');
+  if (badge) badge.textContent = method;
+}
+
+function checkCSVLimits(data: ParsedCSV, xNames: string[]): string | null {
+  if (data.rows.length > CSV_LIMITS.maxRows)
+    return `El CSV tiene ${data.rows.length} filas. El máximo soportado es ${CSV_LIMITS.maxRows}. Reducí el dataset antes de calcular.`;
+  if (data.headers.length > CSV_LIMITS.maxCols)
+    return `El CSV tiene ${data.headers.length} columnas. El máximo soportado es ${CSV_LIMITS.maxCols}.`;
+  if (xNames.length > CSV_LIMITS.maxXVars)
+    return `Seleccionaste ${xNames.length} variables X. El máximo es ${CSV_LIMITS.maxXVars}. Reducí la selección.`;
+  return null;
 }
 
 function formatRegressionError(err: unknown): string {
@@ -238,6 +264,7 @@ async function loadDemoCase(id: string): Promise<void> {
   const demo = DEMO_CASES[id];
   if (!demo) return;
   showError('');
+  activeDemoId = id;
   setEngineStatus('LEYENDO');
   writeRunLog([`Cargando demo: ${demo.label}`]);
 
@@ -318,6 +345,7 @@ async function onFileChange(e: Event): Promise<void> {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
   showError('');
+  activeDemoId = null;
   clearDemoInfo();
   const fn = $('qb-filename');
   if (fn) fn.textContent = file.name;
@@ -403,18 +431,47 @@ async function onRun(): Promise<void> {
     return;
   }
 
+  const limitErr = checkCSVLimits(csvData, xNames);
+  if (limitErr) { showError(limitErr); return; }
+
   try {
     await technicalLoadSequence();
     const analysis = runQuantAnalysis(csvData, yName, xNames);
 
-    lastResult = analysis.result;
+    // Apply RLS if the active demo has a structured constraint
+    const demo = activeDemoId ? DEMO_CASES[activeDemoId] : null;
+    const rlsConstraint = demo?.rlsConstraint;
+    let finalResult = analysis.result;
+    const logEntries = [
+      'Leyendo datos... OK',
+      'Filtrando valores faltantes... OK',
+      'Construyendo matriz de diseño... OK',
+      'Estimando coeficientes OLS... OK',
+    ];
+
+    if (rlsConstraint) {
+      try {
+        const { X: Xrls, y: yrls } = getValidRows(csvData.rows, yName, xNames);
+        finalResult = runRLS({ X: Xrls, y: yrls, featureNames: xNames, yName }, rlsConstraint);
+        logEntries.push(`Aplicando restricción RLS: ${rlsConstraint.label}... OK`);
+        setMethodStatus('RLS');
+      } catch (rlsErr) {
+        logEntries.push(`Restricción RLS no pudo aplicarse: ${(rlsErr as Error).message}`);
+        setMethodStatus('OLS');
+      }
+    } else {
+      setMethodStatus('OLS');
+    }
+    logEntries.push('Calculando diagnósticos... OK');
+
+    lastResult = finalResult;
     lastCorr = analysis.corrMatrix;
     lastCorrCols = analysis.corrColumns;
     lastVIF = analysis.vifValues;
     lastLogit = analysis.logitResult;
 
     renderResults(
-      analysis.result,
+      finalResult,
       analysis.dropped,
       analysis.corrMatrix,
       analysis.corrColumns,
@@ -425,15 +482,9 @@ async function onRun(): Promise<void> {
         logitResult: analysis.logitResult,
       }
     );
-    setText('qb-status-obs', analysis.result.nObs);
+    setText('qb-status-obs', finalResult.nObs);
     setEngineStatus('COMPLETADO');
-    writeRunLog([
-      'Leyendo datos... OK',
-      'Filtrando valores faltantes... OK',
-      'Construyendo matriz de diseño... OK',
-      'Estimando coeficientes OLS... OK',
-      'Calculando diagnósticos... OK',
-    ]);
+    writeRunLog(logEntries);
     const res = $('qb-results');
     if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
     updateSidebarStep(3);
@@ -466,6 +517,7 @@ function renderResults(
 
   renderCoefTable(result);
   renderStatsTable(result, dropped);
+  renderRLSPanel(result);
   renderLogistic(logitResult);
   renderChart(result);
   renderCorrMatrix(corrMatrix, corrCols);
@@ -600,6 +652,7 @@ function renderStatsTable(result: RegressionResult, dropped: number): void {
   if (!body) return;
   const fmtF = (f: number) => !isFinite(f) ? '∞' : f.toFixed(4);
   body.innerHTML = `
+    <tr><td>Método</td><td>${result.method === 'RLS' ? 'RLS' : 'OLS'}</td></tr>
     <tr><td>R²</td><td>${result.rSquared.toFixed(4)}</td></tr>
     <tr><td>R² ajustado</td><td>${result.adjustedRSquared.toFixed(4)}</td></tr>
     <tr><td>F-estadístico</td><td>${fmtF(result.fStat)}</td></tr>
@@ -609,6 +662,41 @@ function renderStatsTable(result: RegressionResult, dropped: number): void {
     <tr><td>Grados de libertad</td><td>${result.df}</td></tr>
     <tr><td>σ² (var. residual)</td><td>${result.sigma2.toFixed(4)}</td></tr>
     ${dropped > 0 ? `<tr><td>Filas omitidas (NA)</td><td>${dropped}</td></tr>` : ''}`;
+}
+
+function renderRLSPanel(result: RegressionResult): void {
+  const panel = $('qb-rls-panel');
+  const content = $('qb-rls-content');
+  if (!panel || !content) return;
+
+  if (result.method !== 'RLS') {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = '';
+  const f4 = (n: number) => (isFinite(n) ? n.toFixed(4) : '—');
+  const pVal = result.fPValueConstraint ?? 1;
+  const rejected = pVal < 0.05;
+  const verdict = rejected
+    ? `Restricción <strong>rechazada</strong> (p = ${f4(pVal)} &lt; 0.05): los datos no son estadísticamente compatibles con la restricción al 5%.`
+    : `Restricción <strong>no rechazada</strong> (p = ${f4(pVal)} ≥ 0.05): los datos son estadísticamente compatibles con la restricción al 5%.`;
+
+  content.innerHTML = `
+    <div class="qb-table-scroll">
+      <table class="ledger">
+        <thead><tr><th>Indicador</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Restricción aplicada</td><td><strong>${escapeHtml(result.rlsConstraint ?? '')}</strong></td></tr>
+          <tr><td>RSS sin restricción (OLS)</td><td>${(result.rssOLS ?? 0).toFixed(6)}</td></tr>
+          <tr><td>RSS con restricción (RLS)</td><td>${(result.rssRLS ?? 0).toFixed(6)}</td></tr>
+          <tr><td>F-test restricción</td><td>${f4(result.fStatConstraint ?? 0)}</td></tr>
+          <tr><td>p-valor (F-test)</td><td>${f4(pVal)}</td></tr>
+          <tr><td>Restricciones (J)</td><td>${result.jConstraints ?? 1}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="qb-interp" style="margin-top:8px">${verdict}</p>`;
 }
 
 function renderChart(result: RegressionResult): void {
@@ -811,7 +899,10 @@ function downloadTextFile(filename: string, content: string, mime: string): void
 
 function csvCell(value: string | number): string {
   const text = String(value);
-  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  // Prefix formula-injection characters with a single quote so Excel/Sheets
+  // treats the cell as text instead of executing a formula.
+  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 function exportAnalysisCSV(): void {
@@ -1092,12 +1183,12 @@ function renderRepairLog(result: AutoRepairResult): void {
         <p class="qb-subtitle">Reparación automática</p>
         <span>DOCTOR DEL MODELO · ${result.actions.length} CORRECCI${result.actions.length !== 1 ? 'ONES' : 'ÓN'}</span>
       </div>
-      <p class="qb-repair-summary">
-        Se detectaron <strong>${result.actions.length}</strong> problema(s) y se corrigieron automáticamente.<br>
-        Variables originales: ${result.originalXNames.map(n => `<code>${escapeHtml(n)}</code>`).join(', ')}<br>
-        Variables eliminadas: ${removed}<br>
-        Modelo final con: ${kept}
-      </p>
+      <div class="qb-warn-yellow" style="margin:8px 0">
+        <strong>⚠ El modelo que se calculó es diferente al que solicitaste.</strong><br>
+        Modelo solicitado: ${result.originalXNames.map(n => `<code>${escapeHtml(n)}</code>`).join(', ')}<br>
+        Variables eliminadas automáticamente: ${removed}<br>
+        Modelo final estimado con: ${kept}
+      </div>
       <div class="qb-repair-steps">${steps}</div>
     </div>`;
   el.style.display = '';

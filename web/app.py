@@ -60,7 +60,27 @@ app.config.update(
 )
 
 APP_USERNAME = os.environ.get("APP_USERNAME", "juan")
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "cambia-esta-clave")
+
+# Fail fast if APP_PASSWORD is missing in production.
+# Render sets APP_ENV via its dashboard; locally we accept a dev default.
+_is_dev = os.environ.get("APP_ENV", "").lower() in ("development", "dev") or \
+          os.environ.get("FLASK_ENV", "").lower() == "development"
+_raw_pw = os.environ.get("APP_PASSWORD", "")
+if not _raw_pw:
+    if _is_dev:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "APP_PASSWORD no configurado — usando contraseña de desarrollo local. "
+            "Definí APP_PASSWORD antes de desplegar en producción."
+        )
+        APP_PASSWORD = "dev-inseguro-cambiar"
+    else:
+        raise RuntimeError(
+            "APP_PASSWORD no está configurado. "
+            "Definí esta variable de entorno en el panel de Render antes de desplegar."
+        )
+else:
+    APP_PASSWORD = _raw_pw
 
 REGISTRATION_OPEN = False  # cambiar a True para reabrir el registro
 
@@ -721,4 +741,6 @@ def api_data_download(indicator_id):
 
 
 if __name__ == "__main__":
+    # debug=True is safe here: this block only runs with `python web/app.py`.
+    # Gunicorn (producción) ignora este bloque completamente.
     app.run(host="127.0.0.1", port=5000, debug=True)

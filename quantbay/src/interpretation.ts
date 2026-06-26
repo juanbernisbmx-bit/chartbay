@@ -35,7 +35,9 @@ export function interpret(result: RegressionResult): string {
       ? '⚠ Un R² muy alto puede indicar sobreajuste o multicolinealidad. Verificá que las variables sean independientes entre sí.'
       : '',
     '',
-    'Nota: OLS asume linealidad, homocedasticidad e independencia de los residuos. Verificá estos supuestos antes de usar el modelo.',
+    result.method === 'RLS'
+      ? `Nota: RLS aplica mínimos cuadrados con la restricción "${result.rlsConstraint ?? ''}". Los supuestos de OLS también aplican al modelo restringido.`
+      : 'Nota: OLS asume linealidad, homocedasticidad e independencia de los residuos. Verificá estos supuestos antes de usar el modelo.',
   ];
 
   return lines

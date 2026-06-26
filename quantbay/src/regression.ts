@@ -30,6 +30,14 @@ export interface RegressionResult {
   fStat: number;                     // F-statistic for overall model significance
   fPValue: number;                   // p-value of F-test (H₀: all slopes = 0)
   droppedFeatures?: Array<{ name: string; reason: string }>; // populated when dropRedundant: true
+  // Optional: populated by runRLS, absent on plain OLS results
+  method?: 'OLS' | 'RLS';
+  rlsConstraint?: string;
+  rssOLS?: number;
+  rssRLS?: number;
+  fStatConstraint?: number;
+  fPValueConstraint?: number;
+  jConstraints?: number;
 }
 
 export function transpose(A: number[][]): number[][] {
