@@ -1,5 +1,5 @@
 import { runQuantAnalysis, type LeakageSignal, type LogisticResult } from '../services/analysisService';
-import { runRLS, type RLSConstraint } from '../rls';
+import { runRLS, validateRLSConstraint, type RLSConstraint } from '../rls';
 import { getValidRows, type ParsedCSV } from '../csvParser';
 import { autoRepairAndAnalyze, type AutoRepairResult } from '../services/autoRepair';
 import type { RegressionResult } from '../regression';
@@ -47,12 +47,15 @@ export function runRegressionMode(
 
   if (rlsConstraint) {
     try {
+      validateRLSConstraint(rlsConstraint, xNames.length + 1);
       const { X, y } = getValidRows(csvData.rows, yName, xNames);
       finalResult = runRLS({ X, y, featureNames: xNames, yName }, rlsConstraint);
       logEntries.push(`Aplicando restricción RLS: ${rlsConstraint.label}... OK`);
       method = 'RLS';
     } catch (rlsErr) {
-      logEntries.push(`Restricción RLS no pudo aplicarse: ${(rlsErr as Error).message}`);
+      const message = (rlsErr as Error).message;
+      logEntries.push(`Restricción RLS no pudo aplicarse: ${message}`);
+      throw new Error(`No se pudo aplicar la restricción RLS "${rlsConstraint.label}": ${message}`);
     }
   }
   logEntries.push('Calculando diagnósticos... OK');
@@ -85,7 +88,7 @@ export function runAutoRegressionMode(
 
   if (rlsConstraint) {
     const finalXNames = finalResult.featureNames;
-    const expectedParams = rlsConstraint.R[0].length;
+    const expectedParams = rlsConstraint.R[0]?.length ?? 0;
     const modelParams = finalXNames.length + 1;
     if (expectedParams !== modelParams) {
       rlsFallbackNote =

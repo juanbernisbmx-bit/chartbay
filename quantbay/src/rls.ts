@@ -12,6 +12,40 @@ export interface RLSConstraint {
   label: string;
 }
 
+export function validateRLSConstraint(constraint: RLSConstraint, parameterCount: number): void {
+  const { R, q } = constraint;
+  const J = R.length;
+
+  if (J === 0) {
+    throw new Error('La restricción RLS está vacía. Definí al menos una restricción lineal antes de estimar.');
+  }
+  if (q.length !== J) {
+    throw new Error(
+      `La restricción RLS tiene ${J} fila(s) en R pero ${q.length} valor(es) en q. ` +
+      'Cada restricción necesita exactamente un valor q.'
+    );
+  }
+  if (J > parameterCount) {
+    throw new Error(
+      `La restricción RLS tiene ${J} restricciones para ${parameterCount} parámetros. ` +
+      'No puede haber más restricciones independientes que parámetros del modelo.'
+    );
+  }
+  for (const [rowIndex, row] of R.entries()) {
+    if (row.length !== parameterCount) {
+      throw new Error(
+        `La restricción RLS fila ${rowIndex + 1} tiene ${row.length} columnas pero el modelo tiene ${parameterCount} parámetros.`
+      );
+    }
+    if (!row.every(Number.isFinite)) {
+      throw new Error(`La restricción RLS fila ${rowIndex + 1} contiene valores no finitos.`);
+    }
+  }
+  if (!q.every(Number.isFinite)) {
+    throw new Error('La restricción RLS contiene valores q no finitos.');
+  }
+}
+
 // beta_RLS = beta_OLS - (X'X)^-1 R' [R (X'X)^-1 R']^-1 (R beta_OLS - q)
 //
 // Var(beta_RLS) = sigma2_OLS * M
@@ -35,16 +69,7 @@ export function runRLS(input: RegressionInput, constraint: RLSConstraint): Regre
   const { R, q } = constraint;
   const J = R.length;
 
-  if (J === 0 || q.length !== J) {
-    throw new Error('La restricción RLS debe incluir al menos una fila R y un valor q por cada restricción.');
-  }
-
-  if (R[0].length !== k + 1) {
-    throw new Error(
-      `La restricción tiene ${R[0].length} columnas pero el modelo tiene ${k + 1} parámetros ` +
-      `([intercepto, ${featureNames.join(', ')}]). Verificá que la demo cargada corresponde a las variables seleccionadas.`
-    );
-  }
+  validateRLSConstraint(constraint, k + 1);
 
   // R * beta_OLS - q
   const Rbeta_q = R.map((row, i) => dotProduct(row, betaOLS) - q[i]);
