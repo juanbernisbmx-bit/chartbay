@@ -81,7 +81,7 @@ export function runRLS(input: RegressionInput, constraint: RLSConstraint): Regre
 
   // Overall model F-test computed from RLS R²
   const sigma2 = df > 0 ? rssRLS / df : 0;
-  const fStat = k > 0 && df > 0 && rSquared < 1 - 1e-10
+  const fStat = k > 0 && df > 0
     ? (rSquared / k) / ((1 - rSquared) / df)
     : 0;
   const fPValue = fDistPValue(fStat, k, df);
