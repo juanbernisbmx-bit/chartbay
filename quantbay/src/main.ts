@@ -11,10 +11,13 @@ import { renderRepairLog } from './ui/diagnosticsView';
 import { renderRegressionResults } from './ui/regressionView';
 import { runTimeSeriesAnalysis } from './timeseries/service';
 import {
+  getMovingAverageWindow,
+  getSelectedTimeSeriesTransformation,
   renderTimeSeriesAnalysis,
   renderTimeSeriesNoData,
   renderTimeSeriesSelectors,
   resetTimeSeriesView,
+  syncTimeSeriesTransformationControls,
 } from './ui/timeseriesView';
 
 interface QuantDemoCase {
@@ -439,7 +442,12 @@ function onTimeSeriesRun(): void {
   }
 
   showError('');
-  const result = runTimeSeriesAnalysis(appState.csvData.rows, { dateColumn, valueColumn });
+  const result = runTimeSeriesAnalysis(appState.csvData.rows, {
+    dateColumn,
+    valueColumn,
+    transformation: getSelectedTimeSeriesTransformation(),
+    movingAverageWindow: getMovingAverageWindow(),
+  });
   renderTimeSeriesAnalysis(result);
   setText('qb-status-obs', result.summary.observations);
   setEngineStatus('COMPLETADO');
@@ -451,6 +459,13 @@ function onTimeSeriesRun(): void {
   const panel = $('qb-ts-panel');
   if (panel) panel.scrollIntoView({ behavior: 'smooth' });
   updateSidebarStep(3);
+}
+
+function onTimeSeriesTransformationChange(): void {
+  syncTimeSeriesTransformationControls();
+  if (isTimeSeriesMode() && appState.csvData) {
+    onTimeSeriesRun();
+  }
 }
 function init(): void {
   $('qb-file')?.addEventListener('change', onFileChange as EventListener);
@@ -465,6 +480,8 @@ function init(): void {
   });
   $('qb-ts-date')?.addEventListener('change', onTimeSeriesDateChange);
   $('qb-ts-run')?.addEventListener('click', onTimeSeriesRun);
+  $('qb-ts-transform')?.addEventListener('change', onTimeSeriesTransformationChange);
+  $('qb-ts-ma-window')?.addEventListener('change', onTimeSeriesTransformationChange);
   $('qb-export-pdf')?.addEventListener('click', exportPDF);
   $('qb-export-csv')?.addEventListener('click', exportAnalysisCSV);
   $('qb-export-txt')?.addEventListener('click', exportAnalysisTXT);

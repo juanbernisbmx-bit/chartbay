@@ -56,8 +56,17 @@ export interface TimeSeriesSummary {
   min: number | null;
   max: number | null;
   mean: number | null;
+  stdDev: number | null;
   frequency: TimeSeriesFrequency;
 }
+
+export type TimeSeriesTransformationKey =
+  | 'original'
+  | 'difference'
+  | 'percentReturn'
+  | 'logReturn'
+  | 'base100'
+  | 'movingAverage';
 
 export interface TimeSeriesTransformations {
   difference: Array<number | null>;
@@ -67,10 +76,26 @@ export interface TimeSeriesTransformations {
   movingAverage: Array<number | null>;
 }
 
+export interface TimeSeriesTransformedPoint {
+  date: Date;
+  value: number;
+}
+
+export interface TimeSeriesTransformedSeries {
+  key: TimeSeriesTransformationKey;
+  label: string;
+  points: TimeSeriesTransformedPoint[];
+  summary: TimeSeriesSummary;
+  warnings: string[];
+  interpretation: string;
+  movingAverageWindow?: number;
+}
+
 export interface TimeSeriesAnalysisResult {
   dataset: TimeSeriesDataset;
   validation: TimeSeriesValidationResult;
   summary: TimeSeriesSummary;
   transformations: TimeSeriesTransformations;
+  selectedTransformation: TimeSeriesTransformedSeries;
   interpretation: string[];
 }
