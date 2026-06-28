@@ -529,6 +529,6 @@ describe('runRLS mathematical validation', () => {
       label: 'four restrictions on three parameters',
     };
     expect(() => runRLS({ ...dataset, featureNames: ['x1', 'x2'], yName: 'y' }, tooMany))
-      .toThrow(/singular|colineales/i);
+      .toThrow(/restricciones|par/i);
   });
 });

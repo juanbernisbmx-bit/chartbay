@@ -43,6 +43,9 @@ export function formatRegressionError(err: unknown): string {
   if (/Observaciones insuficientes/i.test(message)) {
     return `${message}\nSugerencia: usá menos variables X o cargá un dataset con más filas numéricas completas.`;
   }
+  if (/restricci[oó]n RLS/i.test(message)) {
+    return `${message}\nSugerencia: revisa que R tenga una columna por parametro ([intercepto] + variables X), que q tenga un valor por fila de R y que las restricciones no esten duplicadas.`;
+  }
   if (/singular|colineal|rango|rank/i.test(message)) {
     return `${message}\nSugerencia: quita una variable repetida o una variable que sea combinacion de otras.`;
   }
