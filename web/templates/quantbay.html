@@ -172,6 +172,30 @@
           </div>
           <div id="qb-ts-warnings" style="margin-top:10px"></div>
           <div id="qb-ts-summary" class="qb-table-scroll" style="margin-top:10px"></div>
+          <div id="qb-ts-transform-panel" style="margin-top:12px">
+            <div class="qb-panel-head qb-subpanel">
+              <p class="qb-subtitle">Time Series Transformations</p>
+              <span>TRANSFORMACIONES</span>
+            </div>
+            <div class="qb-vars-grid">
+              <div>
+                <label for="qb-ts-transform">Transformacion</label>
+                <select id="qb-ts-transform" style="width:100%">
+                  <option value="original">Original series</option>
+                  <option value="difference">Simple difference</option>
+                  <option value="percentReturn">Percent return</option>
+                  <option value="logReturn">Log return</option>
+                  <option value="base100">Base-100 index</option>
+                  <option value="movingAverage">Simple moving average</option>
+                </select>
+              </div>
+              <div id="qb-ts-ma-window-wrap" style="display:none">
+                <label for="qb-ts-ma-window">Moving average window</label>
+                <input id="qb-ts-ma-window" type="number" min="2" value="3" step="1" style="width:100%">
+              </div>
+            </div>
+            <div id="qb-ts-transform-summary" class="qb-table-scroll" style="margin-top:10px"></div>
+          </div>
           <div class="qb-ts-chart-wrap"><canvas id="qb-ts-chart" class="qb-chart"></canvas></div>
           <p class="qb-label" style="margin-top:12px">Interpretacion</p>
           <div class="qb-interp" id="qb-ts-interpretation"></div>

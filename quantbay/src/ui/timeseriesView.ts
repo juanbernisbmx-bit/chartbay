@@ -1,5 +1,11 @@
 import type { ParsedCSV } from '../csvParser';
-import type { TimeSeriesAnalysisResult, TimeSeriesSummary, TimeSeriesValidationIssue } from '../timeseries/types';
+import type {
+  TimeSeriesAnalysisResult,
+  TimeSeriesSummary,
+  TimeSeriesTransformationKey,
+  TimeSeriesTransformedSeries,
+  TimeSeriesValidationIssue,
+} from '../timeseries/types';
 import { detectDateColumn } from '../timeseries/validation';
 import { $ } from '../app/dom';
 import { escapeHtml } from '../utils/format';
@@ -57,6 +63,39 @@ export function getTimeSeriesColumnDefaults(
   return { dateColumn, valueColumn, valueColumns, detectedDateColumn };
 }
 
+export function getSelectedTimeSeriesTransformation(): TimeSeriesTransformationKey {
+  const select = $('qb-ts-transform') as HTMLSelectElement | null;
+  const value = select?.value;
+  if (
+    value === 'difference' ||
+    value === 'percentReturn' ||
+    value === 'logReturn' ||
+    value === 'base100' ||
+    value === 'movingAverage'
+  ) {
+    return value;
+  }
+  return 'original';
+}
+
+export function getMovingAverageWindow(defaultValue = 3): number {
+  const input = $('qb-ts-ma-window') as HTMLInputElement | null;
+  const parsed = Number(input?.value);
+  return Number.isInteger(parsed) ? parsed : defaultValue;
+}
+
+export function syncTimeSeriesTransformationControls(observations?: number): void {
+  const transform = getSelectedTimeSeriesTransformation();
+  const wrap = $('qb-ts-ma-window-wrap') as HTMLElement | null;
+  const input = $('qb-ts-ma-window') as HTMLInputElement | null;
+  if (wrap) wrap.style.display = transform === 'movingAverage' ? '' : 'none';
+  if (input && observations !== undefined) {
+    const max = Math.max(2, observations - 1);
+    input.max = String(max);
+    if (!input.value) input.value = '3';
+  }
+}
+
 export function renderTimeSeriesNoData(message = 'Subi un CSV para analizar una serie temporal.'): void {
   const panel = $('qb-ts-panel');
   const empty = $('qb-ts-empty');
@@ -69,6 +108,7 @@ export function renderTimeSeriesNoData(message = 'Subi un CSV para analizar una 
   if (controls) controls.style.display = 'none';
   renderTimeSeriesWarnings([]);
   renderTimeSeriesSummary(null);
+  renderTransformedSummary(null);
   renderTimeSeriesInterpretation([]);
   destroyTimeSeriesChart();
 }
@@ -112,7 +152,9 @@ export function renderTimeSeriesSelectors(
   if (valueColumns.length === 0) warnings.push('No se detecto una columna de valor numerica.');
   renderTimeSeriesWarnings(warnings);
   renderTimeSeriesSummary(null);
+  renderTransformedSummary(null);
   renderTimeSeriesInterpretation([]);
+  syncTimeSeriesTransformationControls();
   destroyTimeSeriesChart();
 }
 
@@ -141,6 +183,31 @@ function renderTimeSeriesWarnings(messages: string[]): void {
   el.innerHTML = messages.length > 0
     ? `<div class="qb-warn-yellow"><ul>${messages.map(message => `<li>${escapeHtml(message)}</li>`).join('')}</ul></div>`
     : '';
+}
+
+function renderTransformedSummary(transformed: TimeSeriesTransformedSeries | null): void {
+  const el = $('qb-ts-transform-summary');
+  if (!el) return;
+  if (!transformed) {
+    el.innerHTML = '';
+    return;
+  }
+
+  const { summary } = transformed;
+  el.innerHTML = `
+    <table class="ledger">
+      <thead><tr><th>Transformacion</th><th>Valor</th></tr></thead>
+      <tbody>
+        <tr><td>Serie</td><td>${escapeHtml(transformed.label)}</td></tr>
+        <tr><td>Observaciones</td><td>${summary.observations}</td></tr>
+        <tr><td>Inicio</td><td>${formatDate(summary.startDate)}</td></tr>
+        <tr><td>Fin</td><td>${formatDate(summary.endDate)}</td></tr>
+        <tr><td>Minimo</td><td>${formatNumber(summary.min)}</td></tr>
+        <tr><td>Maximo</td><td>${formatNumber(summary.max)}</td></tr>
+        <tr><td>Media</td><td>${formatNumber(summary.mean)}</td></tr>
+        <tr><td>Desv. estandar</td><td>${formatNumber(summary.stdDev)}</td></tr>
+      </tbody>
+    </table>`;
 }
 
 function renderTimeSeriesSummary(summary: TimeSeriesSummary | null): void {
@@ -202,16 +269,17 @@ function cancelPendingTimeSeriesChartRender(): void {
 function createTimeSeriesChart(result: TimeSeriesAnalysisResult): void {
   const canvas = $('qb-ts-chart') as HTMLCanvasElement | null;
   if (!canvas || typeof Chart === 'undefined') return;
-  if (result.dataset.rows.length === 0) return;
+  const points = result.selectedTransformation.points;
+  if (points.length === 0) return;
 
   timeSeriesChart = new Chart(canvas, {
     type: 'line',
     data: {
-      labels: result.dataset.rows.map(row => formatDate(row.date)),
+      labels: points.map(row => formatDate(row.date)),
       datasets: [
         {
-          label: result.dataset.valueColumn,
-          data: result.dataset.rows.map(row => row.value),
+          label: result.selectedTransformation.label,
+          data: points.map(row => row.value),
           borderColor: '#1b3a6b',
           backgroundColor: 'rgba(27,58,107,.12)',
           pointRadius: 2,
@@ -234,7 +302,7 @@ function createTimeSeriesChart(result: TimeSeriesAnalysisResult): void {
 
 function renderTimeSeriesChart(result: TimeSeriesAnalysisResult): void {
   destroyTimeSeriesChart();
-  if (result.dataset.rows.length === 0) return;
+  if (result.selectedTransformation.points.length === 0) return;
 
   scheduleTimeSeriesChartRender(() => createTimeSeriesChart(result));
 }
@@ -244,9 +312,18 @@ export function renderTimeSeriesAnalysis(result: TimeSeriesAnalysisResult): void
   const empty = $('qb-ts-empty');
   if (panel) panel.style.display = '';
   if (empty) empty.style.display = 'none';
-  renderTimeSeriesWarnings(result.validation.issues.map(issueToText));
+  renderTimeSeriesWarnings([
+    ...result.validation.issues.map(issueToText),
+    ...result.selectedTransformation.warnings,
+  ]);
   renderTimeSeriesSummary(result.summary);
-  renderTimeSeriesInterpretation(result.interpretation);
+  renderTransformedSummary(result.selectedTransformation);
+  renderTimeSeriesInterpretation([
+    ...result.interpretation,
+    '',
+    result.selectedTransformation.interpretation,
+  ]);
+  syncTimeSeriesTransformationControls(result.summary.observations);
   renderTimeSeriesChart(result);
 }
 
@@ -261,6 +338,7 @@ export function destroyTimeSeriesChart(): void {
 export function resetTimeSeriesView(): void {
   renderTimeSeriesWarnings([]);
   renderTimeSeriesSummary(null);
+  renderTransformedSummary(null);
   renderTimeSeriesInterpretation([]);
   destroyTimeSeriesChart();
 }
