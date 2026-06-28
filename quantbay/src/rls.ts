@@ -35,6 +35,10 @@ export function runRLS(input: RegressionInput, constraint: RLSConstraint): Regre
   const { R, q } = constraint;
   const J = R.length;
 
+  if (J === 0 || q.length !== J) {
+    throw new Error('La restricción RLS debe incluir al menos una fila R y un valor q por cada restricción.');
+  }
+
   if (R[0].length !== k + 1) {
     throw new Error(
       `La restricción tiene ${R[0].length} columnas pero el modelo tiene ${k + 1} parámetros ` +
