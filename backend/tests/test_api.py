@@ -182,3 +182,28 @@ def test_adf_endpoint_constant_series_available_false(client):
     assert body["available"] is False
     assert "reason" in body
 
+
+def test_autocorrelation_endpoint_contract(client):
+    resp = client.post(
+        "/api/v1/diagnostics/autocorrelation", json={"values": _adf_values(), "maxLag": 10}
+    )
+    assert resp.status_code == 200
+
+    body = resp.json()
+    for key in (
+        "observations", "requestedMaxLag", "maxLag", "threshold", "rows", "pacf",
+        "ljungBox", "warnings", "interpretation", "pacfInterpretation",
+    ):
+        assert key in body, f"falta el campo {key} en la respuesta de autocorrelación"
+    assert len(body["rows"]) == 10
+    assert {"lag", "autocorrelation", "threshold", "outsideThreshold"} <= body["rows"][0].keys()
+    pacf_keys = {"lag", "partialAutocorrelation", "threshold", "outsideThreshold"}
+    assert pacf_keys <= body["pacf"][0].keys()
+    assert {"lag", "qStatistic", "pValue", "interpretation"} <= body["ljungBox"][0].keys()
+
+
+def test_autocorrelation_endpoint_optional_max_lag(client):
+    resp = client.post("/api/v1/diagnostics/autocorrelation", json={"values": _adf_values()})
+    assert resp.status_code == 200
+    assert resp.json()["maxLag"] == 12  # default
+
