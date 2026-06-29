@@ -80,12 +80,13 @@ pytest          # corre tests/, comparando resultados contra Statsmodels
 
 ## Estado (primera etapa)
 
-| Capacidad                         | Endpoint                                | Estado |
-| --------------------------------- | --------------------------------------- | ------ |
-| Health                            | `GET  /api/v1/health`                   | ✅     |
-| OLS                               | `POST /api/v1/regression/ols`           | ⏳     |
-| RLS / Wald                        | `POST /api/v1/regression/rls`           | ⏳     |
-| ADF                               | `POST /api/v1/diagnostics/adf`          | ⏳     |
-| ACF / PACF / Ljung-Box            | `POST /api/v1/diagnostics/autocorrelation` | ⏳  |
+| Capacidad                         | Endpoint                                   | Estado |
+| --------------------------------- | ------------------------------------------ | ------ |
+| Health                            | `GET  /api/v1/health`                      | ✅     |
+| OLS                               | `POST /api/v1/regression/ols`              | ✅     |
+| RLS / Wald                        | `POST /api/v1/regression/rls`              | ✅     |
+| ADF                               | `POST /api/v1/diagnostics/adf`             | ✅     |
+| ACF / PACF / Ljung-Box            | `POST /api/v1/diagnostics/autocorrelation` | ✅     |
 
-(Se completa por etapas; ver el plan del proyecto.)
+Primera etapa econométrica completa. Próximos dominios (`finance/`, `machine_learning/`)
+ya tienen su lugar en la estructura como esqueletos documentados.
