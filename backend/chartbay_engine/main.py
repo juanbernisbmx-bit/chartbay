@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from chartbay_engine import __version__
 from chartbay_engine.api.v1 import api_router as api_v1_router
+from chartbay_engine.core.errors import EngineError
 
 
 def _cors_origins() -> list[str]:
@@ -45,6 +47,14 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.exception_handler(EngineError)
+    async def _engine_error_handler(_request: Request, exc: EngineError) -> JSONResponse:
+        """Traduce errores de dominio del núcleo a HTTP 422 con cuerpo estructurado."""
+        return JSONResponse(
+            status_code=422,
+            content={"error": exc.message, "code": exc.code, "details": exc.details},
+        )
 
     app.include_router(api_v1_router, prefix="/api/v1")
     return app
