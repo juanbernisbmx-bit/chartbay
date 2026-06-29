@@ -136,3 +136,49 @@ def test_to_json_safe_nulls_non_finite():
     payload = {"a": float("inf"), "b": [1.0, float("nan"), float("-inf")], "c": "x", "d": 3}
     assert to_json_safe(payload) == {"a": None, "b": [1.0, None, None], "c": "x", "d": 3}
 
+
+def _adf_values(seed: int = 1, n: int = 200, phi: float = 0.5) -> list[float]:
+    rng = np.random.default_rng(seed)
+    e = rng.normal(0.0, 1.0, n)
+    x = np.empty(n)
+    x[0] = e[0]
+    for t in range(1, n):
+        x[t] = phi * x[t - 1] + e[t]
+    return [float(v) for v in x]
+
+
+def test_adf_endpoint_contract(client):
+    resp = client.post("/api/v1/diagnostics/adf", json={"values": _adf_values(), "lag": 4})
+    assert resp.status_code == 200
+
+    body = resp.json()
+    for key in (
+        "available", "statistic", "pValue", "usedLag", "nObs", "criticalValues", "isStationary",
+    ):
+        assert key in body, f"falta el campo {key} en la respuesta ADF"
+    assert body["available"] is True
+    assert body["usedLag"] == 4
+    assert 0.0 <= body["pValue"] <= 1.0
+    for key in ("onePercent", "fivePercent", "tenPercent"):
+        assert key in body["criticalValues"]
+
+
+def test_adf_endpoint_optional_lag(client):
+    resp = client.post("/api/v1/diagnostics/adf", json={"values": _adf_values()})
+    assert resp.status_code == 200
+    assert resp.json()["available"] is True
+
+
+def test_adf_endpoint_negative_lag_returns_422(client):
+    resp = client.post("/api/v1/diagnostics/adf", json={"values": _adf_values(), "lag": -1})
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "invalid_input"
+
+
+def test_adf_endpoint_constant_series_available_false(client):
+    resp = client.post("/api/v1/diagnostics/adf", json={"values": [5.0] * 40})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["available"] is False
+    assert "reason" in body
+
