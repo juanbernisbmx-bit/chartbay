@@ -88,12 +88,20 @@ export interface TimeSeriesACFLag {
   outsideThreshold: boolean;
 }
 
+export interface TimeSeriesLjungBoxLag {
+  lag: number;
+  qStatistic: number;
+  pValue: number;
+  interpretation: string;
+}
+
 export interface TimeSeriesACFDiagnostics {
   observations: number;
   requestedMaxLag: number;
   maxLag: number;
   threshold: number | null;
   rows: TimeSeriesACFLag[];
+  ljungBox: TimeSeriesLjungBoxLag[];
   warnings: string[];
   interpretation: string;
 }
