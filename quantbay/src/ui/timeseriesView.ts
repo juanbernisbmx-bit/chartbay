@@ -124,6 +124,7 @@ export function renderTimeSeriesNoData(message = 'Subi un CSV para analizar una 
   renderTimeSeriesSummary(null);
   renderTransformedSummary(null);
   renderACFDiagnostics(null);
+  renderADFDiagnostics(null);
   renderTimeSeriesInterpretation([]);
   destroyTimeSeriesChart();
 }
@@ -169,6 +170,7 @@ export function renderTimeSeriesSelectors(
   renderTimeSeriesSummary(null);
   renderTransformedSummary(null);
   renderACFDiagnostics(null);
+  renderADFDiagnostics(null);
   renderTimeSeriesInterpretation([]);
   syncTimeSeriesTransformationControls();
   destroyTimeSeriesChart();
@@ -313,6 +315,35 @@ function renderACFDiagnostics(acf: TimeSeriesACFDiagnostics | null): void {
   if (interpEl) interpEl.textContent = acf.interpretation;
   if (pacfInterpEl) pacfInterpEl.textContent = acf.pacfInterpretation;
 }
+
+function renderADFDiagnostics(result: TimeSeriesAnalysisResult | null): void {
+  const el = $('qb-ts-adf-table');
+  if (!el) return;
+  if (!result) {
+    el.innerHTML = '';
+    return;
+  }
+
+  const { adf } = result;
+  if (!adf.available) {
+    el.innerHTML = `<div class="qb-interp">${escapeHtml(adf.reason)}</div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <table class="ledger">
+      <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+      <tbody>
+        <tr><td>ADF statistic</td><td>${formatNumber(adf.statistic)}</td></tr>
+        <tr><td>Lag/order used</td><td>${adf.lag}</td></tr>
+        <tr><td>p-value</td><td>N/D</td></tr>
+        <tr><td>Verdict</td><td>${escapeHtml(adf.verdict)}</td></tr>
+        <tr><td>Critical values</td><td>1% ${adf.criticalValues.onePercent}, 5% ${adf.criticalValues.fivePercent}, 10% ${adf.criticalValues.tenPercent}</td></tr>
+      </tbody>
+    </table>
+    <div class="qb-interp" style="margin-top:8px">${escapeHtml(adf.interpretation)}</div>`;
+}
+
 function renderTimeSeriesSummary(summary: TimeSeriesSummary | null): void {
   const el = $('qb-ts-summary');
   if (!el) return;
@@ -422,6 +453,7 @@ export function renderTimeSeriesAnalysis(result: TimeSeriesAnalysisResult): void
   renderTimeSeriesSummary(result.summary);
   renderTransformedSummary(result.selectedTransformation);
   renderACFDiagnostics(result.acf);
+  renderADFDiagnostics(result);
   renderTimeSeriesInterpretation([
     ...result.interpretation,
     '',
@@ -444,6 +476,7 @@ export function resetTimeSeriesView(): void {
   renderTimeSeriesSummary(null);
   renderTransformedSummary(null);
   renderACFDiagnostics(null);
+  renderADFDiagnostics(null);
   renderTimeSeriesInterpretation([]);
   destroyTimeSeriesChart();
 }

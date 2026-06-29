@@ -225,6 +225,19 @@ function isTimeSeriesMode(): boolean {
   return appState.activeMode === 'timeseries';
 }
 
+function updateExportButtonState(): void {
+  const regressionReady = !!appState.lastResult;
+  const timeSeriesReady = !!appState.lastTimeSeriesResult;
+  for (const id of ['qb-export-pdf', 'qb-export-csv', 'qb-export-txt']) {
+    const button = $(id) as HTMLButtonElement | null;
+    if (button) button.disabled = !regressionReady;
+  }
+  for (const id of ['qb-ts-export-pdf', 'qb-ts-export-csv', 'qb-ts-export-txt']) {
+    const button = $(id) as HTMLButtonElement | null;
+    if (button) button.disabled = !timeSeriesReady;
+  }
+}
+
 function updateModePanels(): void {
   const modeSelect = $('qb-mode') as HTMLSelectElement | null;
   if (modeSelect) modeSelect.value = appState.activeMode;
@@ -257,6 +270,7 @@ function setActiveMode(mode: 'regression' | 'timeseries'): void {
   appState.activeMode = mode;
   showError('');
   updateModePanels();
+  updateExportButtonState();
 }
 async function loadDemoCase(id: string): Promise<void> {
   const demo = DEMO_CASES[id];
@@ -321,6 +335,8 @@ async function onFileChange(e: Event): Promise<void> {
 
   showError('');
   appState.activeDemoId = null;
+  appState.lastTimeSeriesResult = null;
+  updateExportButtonState();
   clearDemoInfo();
   const fn = $('qb-filename');
   if (fn) fn.textContent = file.name;
@@ -363,6 +379,8 @@ async function onFileChange(e: Event): Promise<void> {
 async function onRun(): Promise<void> {
   if (isTimeSeriesMode()) return;
   if (!appState.csvData) return;
+  appState.lastTimeSeriesResult = null;
+  updateExportButtonState();
   showError('');
   const yName = ($('qb-y') as HTMLSelectElement)?.value ?? '';
   const xNames = Array.from(document.querySelectorAll<HTMLInputElement>('.qb-x-cb:checked'))
@@ -412,6 +430,7 @@ async function onRun(): Promise<void> {
     const res = $('qb-results');
     if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
     updateSidebarStep(3);
+    updateExportButtonState();
   } catch (err) {
     setEngineStatus('ERROR');
     showError(formatRegressionError(err));
@@ -423,6 +442,8 @@ async function onRun(): Promise<void> {
 function onAutoRun(): void {
   if (isTimeSeriesMode()) return;
   if (!appState.csvData) return;
+  appState.lastTimeSeriesResult = null;
+  updateExportButtonState();
   showError('');
 
   const yName  = ($('qb-y') as HTMLSelectElement)?.value ?? '';
@@ -463,6 +484,7 @@ function onAutoRun(): void {
     setEngineStatus('COMPLETADO');
     const res = $('qb-results');
     if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
+    updateExportButtonState();
   } catch (err) {
     showError(formatRegressionError(err));
   }
@@ -473,6 +495,8 @@ function onAutoRun(): void {
 
 function onTimeSeriesDateChange(): void {
   if (!appState.csvData) return;
+  appState.lastTimeSeriesResult = null;
+  updateExportButtonState();
   const dateColumn = ($('qb-ts-date') as HTMLSelectElement | null)?.value ?? '';
   const valueColumn = ($('qb-ts-value') as HTMLSelectElement | null)?.value ?? '';
   renderTimeSeriesSelectors(appState.csvData, dateColumn, valueColumn);
@@ -480,6 +504,8 @@ function onTimeSeriesDateChange(): void {
 
 function onTimeSeriesRun(): void {
   if (!appState.csvData) {
+    appState.lastTimeSeriesResult = null;
+    updateExportButtonState();
     renderTimeSeriesNoData();
     return;
   }
@@ -488,6 +514,8 @@ function onTimeSeriesRun(): void {
   const valueColumn = ($('qb-ts-value') as HTMLSelectElement | null)?.value ?? '';
 
   if (!dateColumn || !valueColumn) {
+    appState.lastTimeSeriesResult = null;
+    updateExportButtonState();
     renderTimeSeriesNoData('Selecciona una columna de fecha y una columna de valor para Time Series.');
     return;
   }
@@ -500,6 +528,7 @@ function onTimeSeriesRun(): void {
     movingAverageWindow: getMovingAverageWindow(),
     acfMaxLag: getACFMaxLag(),
   });
+  appState.lastTimeSeriesResult = result;
   renderTimeSeriesAnalysis(result);
   setText('qb-status-obs', result.summary.observations);
   setEngineStatus('COMPLETADO');
@@ -511,6 +540,7 @@ function onTimeSeriesRun(): void {
   const panel = $('qb-ts-panel');
   if (panel) panel.scrollIntoView({ behavior: 'smooth' });
   updateSidebarStep(3);
+  updateExportButtonState();
 }
 
 function onTimeSeriesTransformationChange(): void {
@@ -537,6 +567,9 @@ function init(): void {
   $('qb-export-pdf')?.addEventListener('click', exportPDF);
   $('qb-export-csv')?.addEventListener('click', exportAnalysisCSV);
   $('qb-export-txt')?.addEventListener('click', exportAnalysisTXT);
+  $('qb-ts-export-pdf')?.addEventListener('click', exportPDF);
+  $('qb-ts-export-csv')?.addEventListener('click', exportAnalysisCSV);
+  $('qb-ts-export-txt')?.addEventListener('click', exportAnalysisTXT);
 
   $('qb-y')?.addEventListener('change', () => {
     applyYIndicators(($('qb-y') as HTMLSelectElement)?.value ?? '');
@@ -567,6 +600,7 @@ function init(): void {
   });
 
   updateModePanels();
+  updateExportButtonState();
 }
 
 if (document.readyState === 'loading') {

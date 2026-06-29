@@ -1,4 +1,5 @@
 import type { RegressionResult } from '../regression';
+import type { TimeSeriesAnalysisResult } from '../timeseries/types';
 import { interpret } from '../interpretation';
 import { significanceLabel } from '../utils/format';
 import { $, showError } from '../app/dom';
@@ -28,7 +29,234 @@ export function csvCell(value: string | number): string {
   return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
+function formatExportNumber(value: number | null | undefined): string {
+  return value === null || value === undefined || !Number.isFinite(value) ? 'N/D' : value.toFixed(6);
+}
+
+function timeSeriesDiagnosticNote(name: string): Array<Array<string | number>> {
+  return [['note', name, '', `${name} no disponible para la serie transformada seleccionada.`]];
+}
+
+function timeSeriesWarnings(result: TimeSeriesAnalysisResult): string[] {
+  return [
+    ...result.validation.issues.map(issue => issue.message),
+    ...result.selectedTransformation.warnings,
+    ...result.acf.warnings,
+    ...(result.adf.available ? [] : [result.adf.reason]),
+  ];
+}
+
+function adfValue(adf: unknown, key: string): string | number {
+  if (!adf || typeof adf !== 'object') return 'N/D';
+  const value = (adf as Record<string, unknown>)[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : String(value ?? 'N/D');
+}
+
+function adfUnavailableReason(result: TimeSeriesAnalysisResult): string {
+  return result.adf.available ? result.adf.interpretation : result.adf.reason;
+}
+
+function buildTimeSeriesCSVRows(result: TimeSeriesAnalysisResult): Array<Array<string | number>> {
+  const rows: Array<Array<string | number>> = [
+    ['section', 'metric', 'variable', 'value'],
+    ['time_series', 'value_column', '', result.dataset.valueColumn],
+    ['time_series', 'date_column', '', result.dataset.dateColumn ?? 'N/D'],
+    ['time_series', 'selected_transformation', '', result.selectedTransformation.label],
+    ['summary', 'observations', '', result.summary.observations],
+    ['summary', 'transformed_observations', '', result.selectedTransformation.summary.observations],
+    ['summary', 'frequency', '', result.summary.frequency],
+    ['summary', 'start_date', '', result.summary.startDate ? result.summary.startDate.toISOString().slice(0, 10) : 'N/D'],
+    ['summary', 'end_date', '', result.summary.endDate ? result.summary.endDate.toISOString().slice(0, 10) : 'N/D'],
+  ];
+
+  rows.push(...(result.acf.rows.length > 0
+    ? result.acf.rows.flatMap(row => [
+      ['acf', 'autocorrelation', String(row.lag), row.autocorrelation],
+      ['acf', 'threshold', String(row.lag), row.threshold],
+      ['acf', 'outside_threshold', String(row.lag), row.outsideThreshold ? 'Si' : 'No'],
+    ] as Array<Array<string | number>>)
+    : timeSeriesDiagnosticNote('ACF')));
+
+  rows.push(...(result.acf.ljungBox.length > 0
+    ? result.acf.ljungBox.flatMap(row => [
+      ['ljung_box', 'q_statistic', String(row.lag), row.qStatistic],
+      ['ljung_box', 'p_value', String(row.lag), row.pValue],
+      ['ljung_box', 'interpretation', String(row.lag), row.interpretation],
+    ] as Array<Array<string | number>>)
+    : timeSeriesDiagnosticNote('Ljung-Box')));
+
+  rows.push(...(result.acf.pacf.length > 0
+    ? result.acf.pacf.flatMap(row => [
+      ['pacf', 'partial_autocorrelation', String(row.lag), row.partialAutocorrelation],
+      ['pacf', 'threshold', String(row.lag), row.threshold],
+      ['pacf', 'outside_threshold', String(row.lag), row.outsideThreshold ? 'Si' : 'No'],
+    ] as Array<Array<string | number>>)
+    : timeSeriesDiagnosticNote('PACF')));
+
+  if (result.adf.available) {
+    rows.push(
+      ['adf', 'statistic', '', result.adf.statistic],
+      ['adf', 'lag', '', result.adf.lag],
+      ['adf', 'p_value', '', adfValue(result.adf, 'pValue')],
+      ['adf', 'verdict', '', result.adf.verdict],
+      ['adf', 'interpretation', '', result.adf.interpretation]
+    );
+  } else {
+    rows.push(['note', 'ADF', '', adfUnavailableReason(result)]);
+  }
+
+  for (const warning of timeSeriesWarnings(result)) {
+    rows.push(['warning', 'text', '', warning]);
+  }
+  rows.push(['interpretation', 'summary', '', result.interpretation.join(' ')]);
+  rows.push(['interpretation', 'transformation', '', result.selectedTransformation.interpretation]);
+  rows.push(['interpretation', 'acf', '', result.acf.interpretation]);
+  rows.push(['interpretation', 'pacf', '', result.acf.pacfInterpretation]);
+
+  return rows;
+}
+
+function exportTimeSeriesCSV(result: TimeSeriesAnalysisResult): void {
+  downloadTextFile(
+    'quantbay_time_series.csv',
+    buildTimeSeriesCSVRows(result).map(row => row.map(csvCell).join(',')).join('\n'),
+    'text/csv'
+  );
+}
+
+function exportTimeSeriesTXT(result: TimeSeriesAnalysisResult): void {
+  const warnings = timeSeriesWarnings(result);
+  const lines = [
+    'Quant Bay - Time Series',
+    '',
+    `Serie seleccionada: ${result.dataset.valueColumn}`,
+    `Columna de fecha: ${result.dataset.dateColumn ?? 'N/D'}`,
+    `Transformacion seleccionada: ${result.selectedTransformation.label}`,
+    `Observaciones: ${result.summary.observations}`,
+    `Observaciones transformadas: ${result.selectedTransformation.summary.observations}`,
+    `Frecuencia aproximada: ${result.summary.frequency}`,
+    '',
+    'ACF',
+    ...(result.acf.rows.length > 0
+      ? result.acf.rows.map(row => `Lag ${row.lag}\tACF ${formatExportNumber(row.autocorrelation)}\tUmbral +/- ${formatExportNumber(row.threshold)}\tFuera: ${row.outsideThreshold ? 'Si' : 'No'}`)
+      : ['ACF no disponible para la serie transformada seleccionada.']),
+    '',
+    'PACF',
+    ...(result.acf.pacf.length > 0
+      ? result.acf.pacf.map(row => `Lag ${row.lag}\tPACF ${formatExportNumber(row.partialAutocorrelation)}\tUmbral +/- ${formatExportNumber(row.threshold)}\tFuera: ${row.outsideThreshold ? 'Si' : 'No'}`)
+      : ['PACF no disponible para la serie transformada seleccionada.']),
+    '',
+    'Ljung-Box',
+    ...(result.acf.ljungBox.length > 0
+      ? result.acf.ljungBox.map(row => `Lag ${row.lag}\tQ ${formatExportNumber(row.qStatistic)}\tp ${formatExportNumber(row.pValue)}\t${row.interpretation}`)
+      : ['Ljung-Box no disponible para las ventanas de lag seleccionadas.']),
+    '',
+    'ADF',
+    result.adf.available
+      ? `Statistic: ${formatExportNumber(result.adf.statistic)}\tLag: ${result.adf.lag}\tp-value: ${adfValue(result.adf, 'pValue')}\t${result.adf.verdict}\t${result.adf.interpretation}`
+      : adfUnavailableReason(result),
+    '',
+    'Warnings',
+    ...(warnings.length > 0 ? warnings : ['Sin warnings disponibles.']),
+    '',
+    'Interpretacion',
+    ...result.interpretation,
+    result.selectedTransformation.interpretation,
+    result.acf.interpretation,
+    result.acf.pacfInterpretation,
+    '',
+  ];
+
+  downloadTextFile('quantbay_time_series.txt', lines.join('\n'), 'text/plain');
+}
+
+function exportTimeSeriesPDF(result: TimeSeriesAnalysisResult, doc: any): void {
+  const W = 190;
+  let y = 15;
+  const table = (title: string, head: string[][], body: Array<Array<string | number>>): void => {
+    if (!doc.autoTable) return;
+    if (y > 230) { doc.addPage(); y = 15; }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text(title, 10, y);
+    y += 4;
+    doc.autoTable({
+      head,
+      body,
+      startY: y,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [27, 58, 107] },
+      margin: { left: 10, right: 10 },
+    });
+    y = doc.lastAutoTable.finalY + 5;
+  };
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text('Quant Bay - Time Series', 10, y);
+  y += 7;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('Generado por ChartBay - ' + new Date().toLocaleDateString('es-AR'), 10, y);
+  y += 8;
+
+  table('Resumen', [['Indicador', 'Valor']], [
+    ['Serie seleccionada', result.dataset.valueColumn],
+    ['Columna de fecha', result.dataset.dateColumn ?? 'N/D'],
+    ['Transformacion', result.selectedTransformation.label],
+    ['Observaciones', result.summary.observations],
+    ['Observaciones transformadas', result.selectedTransformation.summary.observations],
+    ['Frecuencia aproximada', result.summary.frequency],
+  ]);
+  table('ACF', [['Lag', 'ACF', 'Umbral', 'Fuera']], result.acf.rows.length > 0
+    ? result.acf.rows.map(row => [row.lag, formatExportNumber(row.autocorrelation), `+/- ${formatExportNumber(row.threshold)}`, row.outsideThreshold ? 'Si' : 'No'])
+    : [['N/D', 'ACF no disponible para la serie transformada seleccionada.', '', '']]);
+  table('PACF', [['Lag', 'PACF', 'Umbral', 'Fuera']], result.acf.pacf.length > 0
+    ? result.acf.pacf.map(row => [row.lag, formatExportNumber(row.partialAutocorrelation), `+/- ${formatExportNumber(row.threshold)}`, row.outsideThreshold ? 'Si' : 'No'])
+    : [['N/D', 'PACF no disponible para la serie transformada seleccionada.', '', '']]);
+  table('Ljung-Box', [['Lag', 'Q', 'p-valor', 'Interpretacion']], result.acf.ljungBox.length > 0
+    ? result.acf.ljungBox.map(row => [row.lag, formatExportNumber(row.qStatistic), formatExportNumber(row.pValue), row.interpretation])
+    : [['N/D', 'Ljung-Box no disponible para las ventanas de lag seleccionadas.', '', '']]);
+
+  table('ADF', [['Metric', 'Value']], result.adf.available
+    ? [
+      ['Statistic', formatExportNumber(result.adf.statistic)],
+      ['Lag', result.adf.lag],
+      ['p-value', adfValue(result.adf, 'pValue')],
+      ['Verdict', result.adf.verdict],
+      ['Interpretation', result.adf.interpretation],
+    ]
+    : [['Nota', adfUnavailableReason(result)]]);
+
+  if (y > 230) { doc.addPage(); y = 15; }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Interpretacion y warnings', 10, y);
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  const text = [
+    ...timeSeriesWarnings(result),
+    ...result.interpretation,
+    result.selectedTransformation.interpretation,
+    result.acf.interpretation,
+    result.acf.pacfInterpretation,
+  ].join('\n');
+  doc.text(doc.splitTextToSize(text, W), 10, y);
+
+  doc.save('quantbay_time_series.pdf');
+}
+
 export function exportAnalysisCSV(): void {
+  if (appState.activeMode === 'timeseries') {
+    if (!appState.lastTimeSeriesResult) {
+      showError('Primero ejecuta un analisis de Time Series para poder exportar.');
+      return;
+    }
+    exportTimeSeriesCSV(appState.lastTimeSeriesResult);
+    return;
+  }
+
   if (!appState.lastResult) {
     showError('Primero ejecutá una regresión para poder exportar.');
     return;
@@ -73,6 +301,15 @@ export function exportAnalysisCSV(): void {
 }
 
 export function exportAnalysisTXT(): void {
+  if (appState.activeMode === 'timeseries') {
+    if (!appState.lastTimeSeriesResult) {
+      showError('Primero ejecuta un analisis de Time Series para poder exportar.');
+      return;
+    }
+    exportTimeSeriesTXT(appState.lastTimeSeriesResult);
+    return;
+  }
+
   if (!appState.lastResult) {
     showError('Primero ejecutá una regresión para poder exportar.');
     return;
@@ -117,6 +354,16 @@ export function exportAnalysisTXT(): void {
 
 export function exportPDF(): void {
   const jspdfLib = (window as any).jspdf;
+  if (appState.activeMode === 'timeseries') {
+    if (!jspdfLib?.jsPDF) { showError('Exportacion PDF no disponible. Verifica la conexion a internet.'); return; }
+    if (!appState.lastTimeSeriesResult) {
+      showError('Primero ejecuta un analisis de Time Series para poder exportar.');
+      return;
+    }
+    const { jsPDF } = jspdfLib;
+    exportTimeSeriesPDF(appState.lastTimeSeriesResult, new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' }));
+    return;
+  }
   if (!jspdfLib?.jsPDF) { showError('Exportación PDF no disponible. Verificá la conexión a internet.'); return; }
   if (!appState.lastResult) { showError('Primero ejecutá una regresión para poder exportar.'); return; }
   const result = appState.lastResult;

@@ -114,6 +114,9 @@ export interface TimeSeriesACFDiagnostics {
   interpretation: string;
   pacfInterpretation: string;
 }
+
+export type TimeSeriesADFDiagnostics = import('./adf').ADFResult;
+
 export interface TimeSeriesTransformedSeries {
   key: TimeSeriesTransformationKey;
   label: string;
@@ -131,5 +134,6 @@ export interface TimeSeriesAnalysisResult {
   transformations: TimeSeriesTransformations;
   selectedTransformation: TimeSeriesTransformedSeries;
   acf: TimeSeriesACFDiagnostics;
+  adf: TimeSeriesADFDiagnostics;
   interpretation: string[];
 }
