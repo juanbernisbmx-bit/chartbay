@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from chartbay_engine import __version__
+from chartbay_engine.api.json_response import SafeJSONResponse
 from chartbay_engine.api.v1 import api_router as api_v1_router
 from chartbay_engine.core.errors import EngineError
 
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
             "Motor cuantitativo de ChartBay: econometría, series de tiempo y, a futuro, "
             "finanzas y machine learning."
         ),
+        default_response_class=SafeJSONResponse,
     )
 
     app.add_middleware(

@@ -2,9 +2,30 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from pydantic import Field, model_validator
 
 from chartbay_engine.schemas.common import CamelModel
+
+
+def _validate_design_shapes(
+    x: Sequence[Sequence[float]], y: Sequence[float], feature_names: Sequence[str]
+) -> None:
+    """Chequeo de forma compartido por OLSRequest y RLSRequest."""
+    if not y:
+        raise ValueError("y no puede estar vacío.")
+    if not x:
+        raise ValueError("X no puede estar vacío.")
+    n_cols = len(x[0])
+    if any(len(row) != n_cols for row in x):
+        raise ValueError("Todas las filas de X deben tener la misma cantidad de columnas.")
+    if len(x) != len(y):
+        raise ValueError(f"X tiene {len(x)} filas pero y tiene {len(y)} valores.")
+    if len(feature_names) != n_cols:
+        raise ValueError(
+            f"featureNames tiene {len(feature_names)} nombres pero X tiene {n_cols} columna(s)."
+        )
 
 
 class OLSRequest(CamelModel):
@@ -21,22 +42,28 @@ class OLSRequest(CamelModel):
 
     @model_validator(mode="after")
     def _check_shapes(self) -> OLSRequest:
-        if not self.y:
-            raise ValueError("y no puede estar vacío.")
-        if not self.x:
-            raise ValueError("X no puede estar vacío.")
-        n_cols = len(self.x[0])
-        if any(len(row) != n_cols for row in self.x):
-            raise ValueError("Todas las filas de X deben tener la misma cantidad de columnas.")
-        if len(self.x) != len(self.y):
-            raise ValueError(
-                f"X tiene {len(self.x)} filas pero y tiene {len(self.y)} valores."
-            )
-        if len(self.feature_names) != n_cols:
-            raise ValueError(
-                f"featureNames tiene {len(self.feature_names)} nombres pero X tiene "
-                f"{n_cols} columna(s)."
-            )
+        _validate_design_shapes(self.x, self.y, self.feature_names)
+        return self
+
+
+class LinearConstraintSchema(CamelModel):
+    r: list[list[float]] = Field(
+        alias="R", description="Matriz de restricciones J×(k+1) (índice 0 = intercepto)."
+    )
+    q: list[float] = Field(description="Lado derecho de R·β = q.")
+    label: str = Field(default="", description="Etiqueta legible de la restricción.")
+
+
+class RLSRequest(CamelModel):
+    x: list[list[float]] = Field(alias="X", description="Matriz de diseño.")
+    y: list[float] = Field(description="Variable dependiente.")
+    feature_names: list[str] = Field(description="Nombres de las columnas de X.")
+    y_name: str = Field(default="y", description="Nombre de la variable dependiente.")
+    constraint: LinearConstraintSchema = Field(description="Restricción lineal R·β = q.")
+
+    @model_validator(mode="after")
+    def _check_shapes(self) -> RLSRequest:
+        _validate_design_shapes(self.x, self.y, self.feature_names)
         return self
 
 
@@ -46,7 +73,11 @@ class DroppedFeatureSchema(CamelModel):
 
 
 class RegressionResult(CamelModel):
-    """Resultado de una regresión (OLS o RLS). Serializa en camelCase."""
+    """Resultado de una regresión (OLS o RLS). Serializa en camelCase.
+
+    Los campos específicos de RLS quedan en ``None`` para OLS y se omiten en la respuesta
+    (``response_model_exclude_none=True`` en el endpoint).
+    """
 
     coefficients: list[float]
     intercept: float
@@ -70,3 +101,11 @@ class RegressionResult(CamelModel):
     f_p_value: float
     method: str = "OLS"
     dropped_features: list[DroppedFeatureSchema] | None = None
+    # ── Campos específicos de RLS (ausentes en OLS) ───────────────────────────
+    rls_constraint: str | None = None
+    rss_ols: float | None = Field(default=None, alias="rssOLS")
+    rss_rls: float | None = Field(default=None, alias="rssRLS")
+    f_stat_constraint: float | None = None
+    f_p_value_constraint: float | None = None
+    j_constraints: int | None = None
+    restricted_inference_available: bool | None = None
