@@ -9,6 +9,7 @@ import type {
 } from './types';
 import { computeAutocorrelation } from './acf';
 import { computeADF } from './adf';
+import { buildTimeSeriesRecommendation } from './recommendation';
 import { logReturn, normalizeBase100, percentReturn, simpleDifference, simpleMovingAverage } from './transforms';
 import { interpretTimeSeriesSummary } from './interpretation';
 import { validateTimeSeriesDataset } from './validation';
@@ -226,7 +227,7 @@ export function runTimeSeriesAnalysis(
     acf.warnings.push('Irregular frequency should be interpreted carefully when reading ACF lags.');
   }
 
-  return {
+  const result: TimeSeriesAnalysisResult = {
     dataset,
     validation,
     summary,
@@ -234,6 +235,9 @@ export function runTimeSeriesAnalysis(
     selectedTransformation,
     acf,
     adf,
+    recommendation: '',
     interpretation: interpretTimeSeriesSummary(summary, validation),
   };
+  result.recommendation = buildTimeSeriesRecommendation(result);
+  return result;
 }

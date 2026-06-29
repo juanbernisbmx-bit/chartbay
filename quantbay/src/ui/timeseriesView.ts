@@ -125,6 +125,7 @@ export function renderTimeSeriesNoData(message = 'Subi un CSV para analizar una 
   renderTransformedSummary(null);
   renderACFDiagnostics(null);
   renderADFDiagnostics(null);
+  renderTimeSeriesRecommendation(null);
   renderTimeSeriesInterpretation([]);
   destroyTimeSeriesChart();
 }
@@ -171,6 +172,7 @@ export function renderTimeSeriesSelectors(
   renderTransformedSummary(null);
   renderACFDiagnostics(null);
   renderADFDiagnostics(null);
+  renderTimeSeriesRecommendation(null);
   renderTimeSeriesInterpretation([]);
   syncTimeSeriesTransformationControls();
   destroyTimeSeriesChart();
@@ -344,6 +346,17 @@ function renderADFDiagnostics(result: TimeSeriesAnalysisResult | null): void {
     <div class="qb-interp" style="margin-top:8px">${escapeHtml(adf.interpretation)}</div>`;
 }
 
+function renderTimeSeriesRecommendation(result: TimeSeriesAnalysisResult | null): void {
+  const el = $('qb-ts-recommendation');
+  if (!el) return;
+  if (!result?.recommendation) {
+    el.textContent = '';
+    return;
+  }
+
+  el.textContent = result.recommendation;
+}
+
 function renderTimeSeriesSummary(summary: TimeSeriesSummary | null): void {
   const el = $('qb-ts-summary');
   if (!el) return;
@@ -454,6 +467,7 @@ export function renderTimeSeriesAnalysis(result: TimeSeriesAnalysisResult): void
   renderTransformedSummary(result.selectedTransformation);
   renderACFDiagnostics(result.acf);
   renderADFDiagnostics(result);
+  renderTimeSeriesRecommendation(result);
   renderTimeSeriesInterpretation([
     ...result.interpretation,
     '',
@@ -477,6 +491,7 @@ export function resetTimeSeriesView(): void {
   renderTransformedSummary(null);
   renderACFDiagnostics(null);
   renderADFDiagnostics(null);
+  renderTimeSeriesRecommendation(null);
   renderTimeSeriesInterpretation([]);
   destroyTimeSeriesChart();
 }

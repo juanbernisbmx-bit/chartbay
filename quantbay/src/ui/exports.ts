@@ -112,6 +112,9 @@ function buildTimeSeriesCSVRows(result: TimeSeriesAnalysisResult): Array<Array<s
   rows.push(['interpretation', 'transformation', '', result.selectedTransformation.interpretation]);
   rows.push(['interpretation', 'acf', '', result.acf.interpretation]);
   rows.push(['interpretation', 'pacf', '', result.acf.pacfInterpretation]);
+  if (result.recommendation) {
+    rows.push(['recommendation', 'suggested_next_step', '', result.recommendation]);
+  }
 
   return rows;
 }
@@ -164,6 +167,9 @@ function exportTimeSeriesTXT(result: TimeSeriesAnalysisResult): void {
     result.selectedTransformation.interpretation,
     result.acf.interpretation,
     result.acf.pacfInterpretation,
+    '',
+    'Suggested next step',
+    result.recommendation || 'N/D',
     '',
   ];
 
@@ -241,6 +247,7 @@ function exportTimeSeriesPDF(result: TimeSeriesAnalysisResult, doc: any): void {
     result.selectedTransformation.interpretation,
     result.acf.interpretation,
     result.acf.pacfInterpretation,
+    result.recommendation,
   ].join('\n');
   doc.text(doc.splitTextToSize(text, W), 10, y);
 

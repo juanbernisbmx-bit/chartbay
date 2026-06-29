@@ -30,6 +30,25 @@ describe('runTimeSeriesAnalysis', () => {
     return values;
   }
 
+  function seededNoiseValues(length: number): number[] {
+    let seed = 123456789;
+    return Array.from({ length }, () => {
+      seed = (1664525 * seed + 1013904223) % 4294967296;
+      return seed / 4294967296 - 0.5;
+    });
+  }
+
+  function persistentArValues(length: number): number[] {
+    const noise = seededNoiseValues(length);
+    const values: number[] = [];
+    let previous = 0;
+    for (let index = 0; index < length; index += 1) {
+      previous = 0.85 * previous + noise[index];
+      values.push(previous);
+    }
+    return values;
+  }
+
   it('returns a sorted dataset, summary, validation and transformations', () => {
     const result = runTimeSeriesAnalysis(
       [
@@ -195,5 +214,45 @@ describe('runTimeSeriesAnalysis', () => {
       expect(result.adf.reason).toMatch(/constant transformed series/i);
       expect(result.adf.statistic).toBeNull();
     }
+  });
+
+  it('recommends differencing for a non-stationary random walk', () => {
+    const result = runTimeSeriesAnalysis(
+      datedRows(randomWalkValues(140)),
+      { dateColumn: 'date', valueColumn: 'close', acfMaxLag: 12 }
+    );
+
+    expect(result.recommendation).toMatch(/Educational guidance/i);
+    expect(result.recommendation).toMatch(/first difference/i);
+    expect(result.recommendation).not.toMatch(/forecast|profit|trading signal/i);
+  });
+
+  it('suggests AR or lag exploration for a stationary autocorrelated series', () => {
+    const result = runTimeSeriesAnalysis(
+      datedRows(persistentArValues(160)),
+      { dateColumn: 'date', valueColumn: 'close', acfMaxLag: 12 }
+    );
+
+    expect(result.recommendation).toMatch(/ADF suggests stationarity/i);
+    expect(result.recommendation).toMatch(/AR or lag structure/i);
+  });
+
+  it('gives no strong warning for a stationary white-noise-like series', () => {
+    const result = runTimeSeriesAnalysis(
+      datedRows(seededNoiseValues(160)),
+      { dateColumn: 'date', valueColumn: 'close', acfMaxLag: 12 }
+    );
+
+    expect(result.recommendation).toMatch(/no strong evidence of a unit root or residual autocorrelation/i);
+  });
+
+  it('gives a data-quality recommendation when diagnostics are unavailable', () => {
+    const result = runTimeSeriesAnalysis(
+      datedRows(new Array(20).fill(7)),
+      { dateColumn: 'date', valueColumn: 'close', acfMaxLag: 3 }
+    );
+
+    expect(result.recommendation).toMatch(/review data quality and sample size/i);
+    expect(result.recommendation).toMatch(/constant series/i);
   });
 });
