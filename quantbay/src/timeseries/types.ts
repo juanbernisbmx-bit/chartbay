@@ -135,5 +135,6 @@ export interface TimeSeriesAnalysisResult {
   selectedTransformation: TimeSeriesTransformedSeries;
   acf: TimeSeriesACFDiagnostics;
   adf: TimeSeriesADFDiagnostics;
+  recommendation: string;
   interpretation: string[];
 }

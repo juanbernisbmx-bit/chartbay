@@ -158,6 +158,21 @@ describe('csvCell', () => {
     expect(text).not.toContain('ADF no disponible para esta serie.');
   });
 
+  it('exports the Time Series educational recommendation', async () => {
+    appState.activeMode = 'timeseries';
+    appState.lastTimeSeriesResult = runTimeSeriesAnalysis(
+      randomWalkRows(140),
+      { dateColumn: 'date', valueColumn: 'close', acfMaxLag: 12 }
+    );
+
+    exportAnalysisTXT();
+    const text = await downloadedText();
+
+    expect(text).toContain('Suggested next step');
+    expect(text).toContain('Educational guidance');
+    expect(text).toMatch(/first difference/i);
+  });
+
   it('exports readable notes when Time Series diagnostics are skipped for small samples', async () => {
     appState.activeMode = 'timeseries';
     appState.lastTimeSeriesResult = runTimeSeriesAnalysis(

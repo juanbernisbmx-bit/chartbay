@@ -41,6 +41,7 @@ function installTimeSeriesDom(): void {
     <div id="qb-ts-pacf-interpretation"></div>
     <div id="qb-ts-ljung-box-table"></div>
     <div id="qb-ts-adf-table"></div>
+    <div id="qb-ts-recommendation"></div>
     <div id="qb-ts-acf-interpretation"></div>
     <canvas id="qb-ts-chart"></canvas>
     <div id="qb-ts-interpretation"></div>
@@ -123,6 +124,7 @@ describe('timeseriesView helpers', () => {
     expect(document.getElementById('qb-ts-transform-summary')?.textContent).toContain('Percent return');
     expect(document.getElementById('qb-ts-transform-summary')?.textContent).toContain('2');
     expect(document.getElementById('qb-ts-warnings')?.textContent).toMatch(/reduce/i);
+    expect(document.getElementById('qb-ts-recommendation')?.textContent).toMatch(/Educational guidance/i);
     expect(document.getElementById('qb-ts-interpretation')?.textContent).toMatch(/relative period-to-period/i);
   });
 
