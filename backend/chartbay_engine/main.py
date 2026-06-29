@@ -17,15 +17,27 @@ from chartbay_engine.api.json_response import SafeJSONResponse
 from chartbay_engine.api.v1 import api_router as api_v1_router
 from chartbay_engine.core.errors import EngineError
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5000",
+    "http://127.0.0.1:5000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
 
 def _cors_origins() -> list[str]:
     """Orígenes permitidos para CORS.
 
     En transición el frontend lo sirve Flask (otro origen), por eso se habilita CORS.
-    Configurable con CHARTBAY_ENGINE_CORS_ORIGINS (lista separada por comas); "*" por defecto.
+    Configurable con CHARTBAY_ENGINE_CORS_ORIGINS (lista separada por comas).
     """
-    raw = os.environ.get("CHARTBAY_ENGINE_CORS_ORIGINS", "*").strip()
-    if raw == "*" or not raw:
+    raw = os.environ.get("CHARTBAY_ENGINE_CORS_ORIGINS")
+    if raw is None or not raw.strip():
+        return DEFAULT_CORS_ORIGINS.copy()
+    raw = raw.strip()
+    if raw == "*":
         return ["*"]
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
 

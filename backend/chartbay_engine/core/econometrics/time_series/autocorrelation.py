@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from chartbay_engine.core.econometrics import inference
+from chartbay_engine.core.errors import InvalidInputError
 
 MIN_OBSERVATIONS = 4
 DEFAULT_MAX_LAG = 12
@@ -156,7 +157,20 @@ def _empty(
 
 def run_autocorrelation(values, requested_max_lag: int | None = None) -> AutocorrelationResult:
     """Calcula ACF, PACF y Ljung-Box. ``requested_max_lag`` opcional (12 por defecto)."""
-    clean = [float(v) for v in values if np.isfinite(v)]
+    try:
+        arr = np.asarray(values, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise InvalidInputError(
+            "La serie de autocorrelación debe contener sólo valores numéricos."
+        ) from exc
+    if arr.ndim != 1:
+        raise InvalidInputError("La serie de autocorrelación debe ser un vector 1D.")
+    if not np.all(np.isfinite(arr)):
+        raise InvalidInputError(
+            "La serie de autocorrelación debe contener sólo valores finitos."
+        )
+
+    clean = [float(v) for v in arr]
     n = len(clean)
     warnings: list[str] = []
     raw_max_lag = DEFAULT_MAX_LAG if requested_max_lag is None else requested_max_lag
@@ -174,7 +188,6 @@ def run_autocorrelation(values, requested_max_lag: int | None = None) -> Autocor
             "ACF max lag should be meaningfully smaller than the transformed sample size."
         )
 
-    arr = np.asarray(clean, dtype=float)
     mean = float(arr.mean())
     centered = arr - mean
     denom = float(centered @ centered)
