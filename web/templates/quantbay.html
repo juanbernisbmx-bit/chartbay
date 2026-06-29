@@ -217,6 +217,21 @@
             </div>
             <div id="qb-ts-transform-summary" class="qb-table-scroll" style="margin-top:10px"></div>
           </div>
+          <div id="qb-ts-acf-panel" style="margin-top:12px">
+            <div class="qb-panel-head qb-subpanel">
+              <p class="qb-subtitle">Autocorrelation / ACF</p>
+              <span>DIAGNOSTICO</span>
+            </div>
+            <div class="qb-vars-grid">
+              <div>
+                <label for="qb-ts-acf-max-lag">Max lag</label>
+                <input id="qb-ts-acf-max-lag" type="number" min="1" max="40" value="12" step="1" style="width:100%">
+              </div>
+            </div>
+            <div id="qb-ts-acf-warnings" style="margin-top:10px"></div>
+            <div id="qb-ts-acf-table" class="qb-table-scroll" style="margin-top:10px"></div>
+            <div class="qb-interp" id="qb-ts-acf-interpretation" style="margin-top:8px"></div>
+          </div>
           <div class="qb-ts-chart-wrap"><canvas id="qb-ts-chart" class="qb-chart"></canvas></div>
           <p class="qb-label" style="margin-top:12px">Interpretacion</p>
           <div class="qb-interp" id="qb-ts-interpretation"></div>

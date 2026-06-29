@@ -91,4 +91,23 @@ describe('runTimeSeriesAnalysis', () => {
     expect(result.selectedTransformation.points.map(point => point.value)).toEqual([105, 115.5]);
     expect(result.selectedTransformation.warnings.join(' ')).toMatch(/window must be/i);
   });
+  it('computes ACF from the selected transformed series and clamps requested lag', () => {
+    const result = runTimeSeriesAnalysis(
+      [
+        { date: '2024-01-01', close: 1 },
+        { date: '2024-01-02', close: 2 },
+        { date: '2024-01-03', close: 4 },
+        { date: '2024-01-04', close: 8 },
+        { date: '2024-01-05', close: 16 },
+        { date: '2024-01-06', close: 32 },
+      ],
+      { dateColumn: 'date', valueColumn: 'close', transformation: 'difference', acfMaxLag: 99 }
+    );
+
+    expect(result.selectedTransformation.points.map(point => point.value)).toEqual([1, 2, 4, 8, 16]);
+    expect(result.acf.observations).toBe(5);
+    expect(result.acf.maxLag).toBe(2);
+    expect(result.acf.rows).toHaveLength(2);
+    expect(result.acf.warnings.join(' ')).toMatch(/between 1 and 2/i);
+  });
 });

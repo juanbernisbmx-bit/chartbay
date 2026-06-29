@@ -7,6 +7,7 @@ import type {
   TimeSeriesTransformedSeries,
   TimeSeriesTransformations,
 } from './types';
+import { computeAutocorrelation } from './acf';
 import { logReturn, normalizeBase100, percentReturn, simpleDifference, simpleMovingAverage } from './transforms';
 import { interpretTimeSeriesSummary } from './interpretation';
 import { validateTimeSeriesDataset } from './validation';
@@ -16,6 +17,7 @@ export interface RunTimeSeriesAnalysisOptions {
   valueColumn: string;
   movingAverageWindow?: number;
   transformation?: TimeSeriesTransformationKey;
+  acfMaxLag?: number;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -206,19 +208,29 @@ export function runTimeSeriesAnalysis(
   };
   const transformation = options.transformation ?? 'original';
 
+  const selectedTransformation = buildSelectedTransformation(
+    dates,
+    values,
+    transformations,
+    summary.frequency,
+    transformation,
+    options.movingAverageWindow
+  );
+  const acf = computeAutocorrelation(
+    selectedTransformation.points.map(point => point.value),
+    options.acfMaxLag
+  );
+  if (selectedTransformation.summary.frequency === 'irregular') {
+    acf.warnings.push('Irregular frequency should be interpreted carefully when reading ACF lags.');
+  }
+
   return {
     dataset,
     validation,
     summary,
     transformations,
-    selectedTransformation: buildSelectedTransformation(
-      dates,
-      values,
-      transformations,
-      summary.frequency,
-      transformation,
-      options.movingAverageWindow
-    ),
+    selectedTransformation,
+    acf,
     interpretation: interpretTimeSeriesSummary(summary, validation),
   };
 }

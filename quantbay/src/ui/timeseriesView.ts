@@ -1,5 +1,6 @@
 import type { ParsedCSV } from '../csvParser';
 import type {
+  TimeSeriesACFDiagnostics,
   TimeSeriesAnalysisResult,
   TimeSeriesSummary,
   TimeSeriesTransformationKey,
@@ -84,7 +85,13 @@ export function getMovingAverageWindow(defaultValue = 3): number {
   return Number.isInteger(parsed) ? parsed : defaultValue;
 }
 
-export function syncTimeSeriesTransformationControls(observations?: number): void {
+export function getACFMaxLag(defaultValue = 12): number {
+  const input = $('qb-ts-acf-max-lag') as HTMLInputElement | null;
+  const parsed = Number(input?.value);
+  return Number.isInteger(parsed) ? parsed : defaultValue;
+}
+
+export function syncTimeSeriesTransformationControls(observations?: number, transformedObservations?: number): void {
   const transform = getSelectedTimeSeriesTransformation();
   const wrap = $('qb-ts-ma-window-wrap') as HTMLElement | null;
   const input = $('qb-ts-ma-window') as HTMLInputElement | null;
@@ -94,8 +101,15 @@ export function syncTimeSeriesTransformationControls(observations?: number): voi
     input.max = String(max);
     if (!input.value) input.value = '3';
   }
-}
 
+  const acfInput = $('qb-ts-acf-max-lag') as HTMLInputElement | null;
+  if (acfInput) {
+    const acfObservations = transformedObservations ?? observations ?? 0;
+    const acfMax = Math.max(1, Math.min(40, Math.floor((acfObservations - 1) / 2)));
+    acfInput.max = String(acfMax);
+    if (!acfInput.value) acfInput.value = String(Math.min(12, acfMax));
+  }
+}
 export function renderTimeSeriesNoData(message = 'Subi un CSV para analizar una serie temporal.'): void {
   const panel = $('qb-ts-panel');
   const empty = $('qb-ts-empty');
@@ -109,6 +123,7 @@ export function renderTimeSeriesNoData(message = 'Subi un CSV para analizar una 
   renderTimeSeriesWarnings([]);
   renderTimeSeriesSummary(null);
   renderTransformedSummary(null);
+  renderACFDiagnostics(null);
   renderTimeSeriesInterpretation([]);
   destroyTimeSeriesChart();
 }
@@ -153,6 +168,7 @@ export function renderTimeSeriesSelectors(
   renderTimeSeriesWarnings(warnings);
   renderTimeSeriesSummary(null);
   renderTransformedSummary(null);
+  renderACFDiagnostics(null);
   renderTimeSeriesInterpretation([]);
   syncTimeSeriesTransformationControls();
   destroyTimeSeriesChart();
@@ -210,6 +226,46 @@ function renderTransformedSummary(transformed: TimeSeriesTransformedSeries | nul
     </table>`;
 }
 
+function renderACFDiagnostics(acf: TimeSeriesACFDiagnostics | null): void {
+  const el = $('qb-ts-acf-table');
+  const warningsEl = $('qb-ts-acf-warnings');
+  const interpEl = $('qb-ts-acf-interpretation');
+
+  if (!acf) {
+    if (el) el.innerHTML = '';
+    if (warningsEl) warningsEl.innerHTML = '';
+    if (interpEl) interpEl.textContent = '';
+    return;
+  }
+
+  if (warningsEl) {
+    warningsEl.innerHTML = acf.warnings.length > 0
+      ? `<div class="qb-warn-yellow"><ul>${acf.warnings.map(message => `<li>${escapeHtml(message)}</li>`).join('')}</ul></div>`
+      : '';
+  }
+
+  if (el) {
+    if (acf.rows.length === 0) {
+      el.innerHTML = '<div class="qb-interp">ACF no disponible para la serie transformada seleccionada.</div>';
+    } else {
+      el.innerHTML = `
+        <table class="ledger">
+          <thead><tr><th>Lag</th><th>Autocorrelacion</th><th>Umbral aprox.</th><th>Fuera del umbral</th></tr></thead>
+          <tbody>
+            ${acf.rows.map(row => `
+              <tr>
+                <td>${row.lag}</td>
+                <td>${formatNumber(row.autocorrelation)}</td>
+                <td>+/- ${formatNumber(row.threshold)}</td>
+                <td>${row.outsideThreshold ? 'Si' : 'No'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+  }
+
+  if (interpEl) interpEl.textContent = acf.interpretation;
+}
 function renderTimeSeriesSummary(summary: TimeSeriesSummary | null): void {
   const el = $('qb-ts-summary');
   if (!el) return;
@@ -318,12 +374,13 @@ export function renderTimeSeriesAnalysis(result: TimeSeriesAnalysisResult): void
   ]);
   renderTimeSeriesSummary(result.summary);
   renderTransformedSummary(result.selectedTransformation);
+  renderACFDiagnostics(result.acf);
   renderTimeSeriesInterpretation([
     ...result.interpretation,
     '',
     result.selectedTransformation.interpretation,
   ]);
-  syncTimeSeriesTransformationControls(result.summary.observations);
+  syncTimeSeriesTransformationControls(result.summary.observations, result.selectedTransformation.summary.observations);
   renderTimeSeriesChart(result);
 }
 
@@ -339,6 +396,7 @@ export function resetTimeSeriesView(): void {
   renderTimeSeriesWarnings([]);
   renderTimeSeriesSummary(null);
   renderTransformedSummary(null);
+  renderACFDiagnostics(null);
   renderTimeSeriesInterpretation([]);
   destroyTimeSeriesChart();
 }

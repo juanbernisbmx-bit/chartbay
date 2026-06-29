@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  getACFMaxLag,
   getMovingAverageWindow,
   getSelectedTimeSeriesTransformation,
   getTimeSeriesColumnDefaults,
@@ -33,6 +34,10 @@ function installTimeSeriesDom(): void {
     <div id="qb-ts-ma-window-wrap"></div>
     <input id="qb-ts-ma-window" type="number" value="3">
     <div id="qb-ts-transform-summary"></div>
+    <input id="qb-ts-acf-max-lag" type="number" value="2">
+    <div id="qb-ts-acf-warnings"></div>
+    <div id="qb-ts-acf-table"></div>
+    <div id="qb-ts-acf-interpretation"></div>
     <canvas id="qb-ts-chart"></canvas>
     <div id="qb-ts-interpretation"></div>
   `;
@@ -78,6 +83,7 @@ describe('timeseriesView helpers', () => {
     const select = document.getElementById('qb-ts-transform') as HTMLSelectElement;
     const wrap = document.getElementById('qb-ts-ma-window-wrap') as HTMLElement;
     const input = document.getElementById('qb-ts-ma-window') as HTMLInputElement;
+    const acfInput = document.getElementById('qb-ts-acf-max-lag') as HTMLInputElement;
 
     select.value = 'movingAverage';
     input.value = '4';
@@ -85,8 +91,10 @@ describe('timeseriesView helpers', () => {
 
     expect(getSelectedTimeSeriesTransformation()).toBe('movingAverage');
     expect(getMovingAverageWindow()).toBe(4);
+    expect(getACFMaxLag()).toBe(2);
     expect(wrap.style.display).toBe('');
     expect(input.max).toBe('9');
+    expect(acfInput.max).toBe('4');
 
     select.value = 'difference';
     syncTimeSeriesTransformationControls(10);
@@ -129,5 +137,55 @@ describe('timeseriesView helpers', () => {
     expect(lastChartConfig).toBeNull();
     expect(document.getElementById('qb-ts-warnings')?.textContent).toMatch(/positive/i);
     expect(document.getElementById('qb-ts-interpretation')?.textContent).toMatch(/continuously compounded/i);
+  });
+
+  it('renders ACF threshold and outside-threshold diagnostics', () => {
+    const result = runTimeSeriesAnalysis(
+      [
+        { date: '2024-01-01', close: 1 },
+        { date: '2024-01-02', close: -1 },
+        { date: '2024-01-03', close: 1 },
+        { date: '2024-01-04', close: -1 },
+        { date: '2024-01-05', close: 1 },
+        { date: '2024-01-06', close: -1 },
+      ],
+      { dateColumn: 'date', valueColumn: 'close', acfMaxLag: 1 }
+    );
+
+    renderTimeSeriesAnalysis(result);
+
+    expect(document.getElementById('qb-ts-acf-table')?.textContent).toContain('0.800167');
+    expect(document.getElementById('qb-ts-acf-table')?.textContent).toContain('Si');
+    expect(document.getElementById('qb-ts-acf-interpretation')?.textContent).toMatch(/negative autocorrelation/i);
+  });
+
+  it('updates ACF diagnostics when the transformation changes', () => {
+    const rows = [
+      { date: '2024-01-01', close: 1 },
+      { date: '2024-01-02', close: 2 },
+      { date: '2024-01-03', close: 4 },
+      { date: '2024-01-04', close: 8 },
+      { date: '2024-01-05', close: 16 },
+      { date: '2024-01-06', close: 32 },
+    ];
+
+    renderTimeSeriesAnalysis(runTimeSeriesAnalysis(rows, {
+      dateColumn: 'date',
+      valueColumn: 'close',
+      transformation: 'original',
+      acfMaxLag: 2,
+    }));
+    const originalText = document.getElementById('qb-ts-acf-table')?.textContent ?? '';
+
+    renderTimeSeriesAnalysis(runTimeSeriesAnalysis(rows, {
+      dateColumn: 'date',
+      valueColumn: 'close',
+      transformation: 'difference',
+      acfMaxLag: 99,
+    }));
+    const differenceText = document.getElementById('qb-ts-acf-table')?.textContent ?? '';
+
+    expect(originalText).not.toEqual(differenceText);
+    expect(document.getElementById('qb-ts-acf-warnings')?.textContent).toMatch(/meaningfully smaller/i);
   });
 });

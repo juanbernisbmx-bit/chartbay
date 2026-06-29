@@ -12,6 +12,7 @@ import { renderRepairLog } from './ui/diagnosticsView';
 import { renderRegressionResults } from './ui/regressionView';
 import { runTimeSeriesAnalysis } from './timeseries/service';
 import {
+  getACFMaxLag,
   getMovingAverageWindow,
   getSelectedTimeSeriesTransformation,
   renderTimeSeriesAnalysis,
@@ -497,6 +498,7 @@ function onTimeSeriesRun(): void {
     valueColumn,
     transformation: getSelectedTimeSeriesTransformation(),
     movingAverageWindow: getMovingAverageWindow(),
+    acfMaxLag: getACFMaxLag(),
   });
   renderTimeSeriesAnalysis(result);
   setText('qb-status-obs', result.summary.observations);
