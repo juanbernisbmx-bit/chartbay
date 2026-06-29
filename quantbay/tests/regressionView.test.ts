@@ -1,6 +1,9 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { renderRegressionResults } from '../src/ui/regressionView';
 import { runRLS } from '../src/rls';
+import { parseRLSRestriction } from '../src/rlsParser';
+import type { RLSConstraint } from '../src/rls';
+import { appState } from '../src/app/state';
 
 function installRegressionDom(): void {
   document.body.innerHTML = `
@@ -25,7 +28,15 @@ function installRegressionDom(): void {
 }
 
 describe('renderRegressionResults RLS outputs', () => {
-  beforeEach(() => installRegressionDom());
+  beforeEach(() => {
+    installRegressionDom();
+    // Chart.js is not available in jsdom; reset any stub instances left by other
+    // test files (e.g. timeseriesView.test.ts sets globalThis.Chart via vi.fn())
+    // so that renderChart does not try to call destroy on a non-Chart object.
+    appState.activeChart = null;
+    appState.residFittedChart = null;
+    appState.residHistChart = null;
+  });
 
   it('renders RLS coefficients, fit stats, restriction test, and interpretation from the validated result', () => {
     const X = [[1, 3], [2, 1], [3, 4], [4, 2], [5, 5], [6, 1], [7, 3], [8, 2], [9, 4], [10, 1]];
@@ -55,5 +66,22 @@ describe('renderRegressionResults RLS outputs', () => {
     expect(rlsText).toContain((result.fPValueConstraint ?? 0).toFixed(4));
     expect(interpretation).toContain('RLS');
     expect(interpretation).toContain('beta1 + beta2 = 1');
+  });
+
+  it('RLS panel becomes visible after rendering result from a parsed typed restriction', () => {
+    const X = [[1,3],[2,1],[3,4],[4,2],[5,5],[6,1],[7,3],[8,2],[9,4],[10,1]];
+    const y = X.map(([a,b]) => 1 + 0.3*a + 0.7*b + (b%2)*0.03);
+
+    const parsed = parseRLSRestriction('x1 + x2 = 1', ['x1', 'x2']) as RLSConstraint;
+    const result = runRLS({ X, y, featureNames: ['x1', 'x2'], yName: 'y' }, parsed);
+
+    // Panel starts hidden in the DOM fixture; rendering an RLS result must reveal it.
+    const panel = document.getElementById('qb-rls-panel');
+    if (panel) panel.style.display = 'none';
+
+    renderRegressionResults(result, 0, [[1, 0.2], [0.2, 1]], ['x1', 'x2'], [1.2, 1.2]);
+
+    expect(panel?.style.display).not.toBe('none');
+    expect(document.getElementById('qb-rls-content')?.textContent).toContain('x1 + x2 = 1');
   });
 });

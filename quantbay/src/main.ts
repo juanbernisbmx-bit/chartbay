@@ -1,5 +1,6 @@
 import { parseCSVFile, type ParsedCSV } from './csvParser';
 import type { RLSConstraint } from './rls';
+import { parseRLSRestriction } from './rlsParser';
 import { runRegressionMode, runAutoRegressionMode } from './modes/regressionMode';
 import { escapeHtml } from './utils/format';
 import { $, setEngineStatus, setMethodStatus, setText, showError, updateSidebarStep, writeRunLog } from './app/dom';
@@ -178,6 +179,47 @@ function clearDemoInfo(): void {
   }
 }
 
+function showRLSValidation(msg: string, type: 'ok' | 'error' | ''): void {
+  const el = $('qb-rls-validation');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = type === 'error' ? '#e55' : type === 'ok' ? '#4de3b5' : '';
+  if (msg) {
+    const details = document.getElementById('qb-rls-details') as HTMLDetailsElement | null;
+    if (details) details.open = true;
+  }
+}
+
+/**
+ * Returns the RLS constraint to use for the next run:
+ *   - The user's typed restriction (takes priority), if non-empty and valid.
+ *   - The active demo's constraint, if no typed restriction.
+ *   - undefined  → no constraint → plain OLS.
+ *   - null       → typed input was non-empty but invalid; validation error already shown.
+ */
+function getEffectiveRLSConstraint(xNames: string[]): RLSConstraint | undefined | null {
+  const typedInput = ($('qb-rls-input') as HTMLInputElement | null)?.value ?? '';
+  const trimmed = typedInput.trim();
+
+  if (trimmed) {
+    const parsed = parseRLSRestriction(trimmed, xNames);
+    if (parsed === '') return undefined; // trimmed is non-empty so this won't happen in practice
+    if (typeof parsed === 'string') {
+      showRLSValidation(parsed, 'error');
+      return null;
+    }
+    const demoHasConstraint = !!(appState.activeDemoId && DEMO_CASES[appState.activeDemoId]?.rlsConstraint);
+    const note = demoHasConstraint
+      ? '✓ Restricción manual activa — se ignora la del demo.'
+      : `✓ Restricción: ${parsed.label}`;
+    showRLSValidation(note, 'ok');
+    return parsed;
+  }
+
+  showRLSValidation('', '');
+  return appState.activeDemoId ? DEMO_CASES[appState.activeDemoId]?.rlsConstraint : undefined;
+}
+
 function isTimeSeriesMode(): boolean {
   return appState.activeMode === 'timeseries';
 }
@@ -334,7 +376,11 @@ async function onRun(): Promise<void> {
   const limitErr = checkCSVLimits(appState.csvData, xNames);
   if (limitErr) { showError(limitErr); return; }
 
-  const rlsConstraint = appState.activeDemoId ? DEMO_CASES[appState.activeDemoId]?.rlsConstraint : undefined;
+  const rlsConstraint = getEffectiveRLSConstraint(xNames);
+  if (rlsConstraint === null) {
+    showError('Corregí la restricción RLS antes de calcular.');
+    return;
+  }
 
   try {
     await technicalLoadSequence();
@@ -388,7 +434,11 @@ function onAutoRun(): void {
     return;
   }
 
-  const rlsConstraint = appState.activeDemoId ? DEMO_CASES[appState.activeDemoId]?.rlsConstraint : undefined;
+  const rlsConstraint = getEffectiveRLSConstraint(xNames);
+  if (rlsConstraint === null) {
+    showError('Corregí la restricción RLS antes de calcular.');
+    return;
+  }
 
   try {
     const output = runAutoRegressionMode(appState.csvData, yName, xNames, rlsConstraint);
@@ -488,6 +538,30 @@ function init(): void {
 
   $('qb-y')?.addEventListener('change', () => {
     applyYIndicators(($('qb-y') as HTMLSelectElement)?.value ?? '');
+  });
+
+  $('qb-rls-input')?.addEventListener('input', () => {
+    const input = ($('qb-rls-input') as HTMLInputElement | null)?.value ?? '';
+    if (!input.trim()) { showRLSValidation('', ''); return; }
+
+    const yName = ($('qb-y') as HTMLSelectElement | null)?.value ?? '';
+    const xNames = Array.from(document.querySelectorAll<HTMLInputElement>('.qb-x-cb:checked'))
+      .map(cb => cb.value)
+      .filter(v => v !== yName);
+
+    if (xNames.length === 0) {
+      showRLSValidation('Primero seleccioná al menos una variable X.', 'error');
+      return;
+    }
+
+    const result = parseRLSRestriction(input.trim(), xNames);
+    if (result === '') {
+      showRLSValidation('', '');
+    } else if (typeof result === 'string') {
+      showRLSValidation(result, 'error');
+    } else {
+      showRLSValidation(`✓ Restricción: ${result.label}`, 'ok');
+    }
   });
 
   updateModePanels();
