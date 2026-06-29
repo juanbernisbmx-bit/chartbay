@@ -228,15 +228,19 @@ function renderTransformedSummary(transformed: TimeSeriesTransformedSeries | nul
 
 function renderACFDiagnostics(acf: TimeSeriesACFDiagnostics | null): void {
   const el = $('qb-ts-acf-table');
+  const pacfEl = $('qb-ts-pacf-table');
   const ljungBoxEl = $('qb-ts-ljung-box-table');
   const warningsEl = $('qb-ts-acf-warnings');
   const interpEl = $('qb-ts-acf-interpretation');
+  const pacfInterpEl = $('qb-ts-pacf-interpretation');
 
   if (!acf) {
     if (el) el.innerHTML = '';
+    if (pacfEl) pacfEl.innerHTML = '';
     if (ljungBoxEl) ljungBoxEl.innerHTML = '';
     if (warningsEl) warningsEl.innerHTML = '';
     if (interpEl) interpEl.textContent = '';
+    if (pacfInterpEl) pacfInterpEl.textContent = '';
     return;
   }
 
@@ -266,6 +270,26 @@ function renderACFDiagnostics(acf: TimeSeriesACFDiagnostics | null): void {
     }
   }
 
+  if (pacfEl) {
+    if (acf.pacf.length === 0) {
+      pacfEl.innerHTML = '<div class="qb-interp">PACF no disponible para la serie transformada seleccionada.</div>';
+    } else {
+      pacfEl.innerHTML = `
+        <table class="ledger">
+          <thead><tr><th>Lag</th><th>PACF</th><th>Umbral aprox.</th><th>Fuera del umbral</th></tr></thead>
+          <tbody>
+            ${acf.pacf.map(row => `
+              <tr>
+                <td>${row.lag}</td>
+                <td>${formatNumber(row.partialAutocorrelation)}</td>
+                <td>+/- ${formatNumber(row.threshold)}</td>
+                <td>${row.outsideThreshold ? 'Si' : 'No'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+  }
+
   if (ljungBoxEl) {
     if (acf.ljungBox.length === 0) {
       ljungBoxEl.innerHTML = '<div class="qb-interp">Ljung-Box no disponible para las ventanas de lag seleccionadas.</div>';
@@ -287,6 +311,7 @@ function renderACFDiagnostics(acf: TimeSeriesACFDiagnostics | null): void {
   }
 
   if (interpEl) interpEl.textContent = acf.interpretation;
+  if (pacfInterpEl) pacfInterpEl.textContent = acf.pacfInterpretation;
 }
 function renderTimeSeriesSummary(summary: TimeSeriesSummary | null): void {
   const el = $('qb-ts-summary');

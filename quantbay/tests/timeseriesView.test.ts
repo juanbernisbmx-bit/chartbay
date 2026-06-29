@@ -37,6 +37,8 @@ function installTimeSeriesDom(): void {
     <input id="qb-ts-acf-max-lag" type="number" value="2">
     <div id="qb-ts-acf-warnings"></div>
     <div id="qb-ts-acf-table"></div>
+    <div id="qb-ts-pacf-table"></div>
+    <div id="qb-ts-pacf-interpretation"></div>
     <div id="qb-ts-ljung-box-table"></div>
     <div id="qb-ts-acf-interpretation"></div>
     <canvas id="qb-ts-chart"></canvas>
@@ -157,6 +159,9 @@ describe('timeseriesView helpers', () => {
 
     expect(document.getElementById('qb-ts-acf-table')?.textContent).toContain('0.800167');
     expect(document.getElementById('qb-ts-acf-table')?.textContent).toContain('Si');
+    expect(document.getElementById('qb-ts-pacf-table')?.textContent).toMatch(/PACF/i);
+    expect(document.getElementById('qb-ts-pacf-table')?.textContent).toContain('Si');
+    expect(document.getElementById('qb-ts-pacf-interpretation')?.textContent).toMatch(/AR order/i);
     expect(document.getElementById('qb-ts-ljung-box-table')?.textContent).toMatch(/p < 0.05/i);
     expect(document.getElementById('qb-ts-acf-interpretation')?.textContent).toMatch(/negative autocorrelation/i);
   });
