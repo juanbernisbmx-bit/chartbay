@@ -228,11 +228,13 @@ function renderTransformedSummary(transformed: TimeSeriesTransformedSeries | nul
 
 function renderACFDiagnostics(acf: TimeSeriesACFDiagnostics | null): void {
   const el = $('qb-ts-acf-table');
+  const ljungBoxEl = $('qb-ts-ljung-box-table');
   const warningsEl = $('qb-ts-acf-warnings');
   const interpEl = $('qb-ts-acf-interpretation');
 
   if (!acf) {
     if (el) el.innerHTML = '';
+    if (ljungBoxEl) ljungBoxEl.innerHTML = '';
     if (warningsEl) warningsEl.innerHTML = '';
     if (interpEl) interpEl.textContent = '';
     return;
@@ -258,6 +260,26 @@ function renderACFDiagnostics(acf: TimeSeriesACFDiagnostics | null): void {
                 <td>${formatNumber(row.autocorrelation)}</td>
                 <td>+/- ${formatNumber(row.threshold)}</td>
                 <td>${row.outsideThreshold ? 'Si' : 'No'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+  }
+
+  if (ljungBoxEl) {
+    if (acf.ljungBox.length === 0) {
+      ljungBoxEl.innerHTML = '<div class="qb-interp">Ljung-Box no disponible para las ventanas de lag seleccionadas.</div>';
+    } else {
+      ljungBoxEl.innerHTML = `
+        <table class="ledger">
+          <thead><tr><th>Lag</th><th>Q Ljung-Box</th><th>p-valor</th><th>Interpretacion</th></tr></thead>
+          <tbody>
+            ${acf.ljungBox.map(row => `
+              <tr>
+                <td>${row.lag}</td>
+                <td>${formatNumber(row.qStatistic)}</td>
+                <td>${formatNumber(row.pValue)}</td>
+                <td>${escapeHtml(row.interpretation)}</td>
               </tr>`).join('')}
           </tbody>
         </table>`;

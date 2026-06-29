@@ -37,6 +37,7 @@ function installTimeSeriesDom(): void {
     <input id="qb-ts-acf-max-lag" type="number" value="2">
     <div id="qb-ts-acf-warnings"></div>
     <div id="qb-ts-acf-table"></div>
+    <div id="qb-ts-ljung-box-table"></div>
     <div id="qb-ts-acf-interpretation"></div>
     <canvas id="qb-ts-chart"></canvas>
     <div id="qb-ts-interpretation"></div>
@@ -156,7 +157,26 @@ describe('timeseriesView helpers', () => {
 
     expect(document.getElementById('qb-ts-acf-table')?.textContent).toContain('0.800167');
     expect(document.getElementById('qb-ts-acf-table')?.textContent).toContain('Si');
+    expect(document.getElementById('qb-ts-ljung-box-table')?.textContent).toMatch(/p < 0.05/i);
     expect(document.getElementById('qb-ts-acf-interpretation')?.textContent).toMatch(/negative autocorrelation/i);
+  });
+
+  it('renders Ljung-Box p-value interpretation beside the ACF diagnostics', () => {
+    const rows = Array.from({ length: 40 }, (_, index) => ({
+      date: new Date(Date.UTC(2024, 0, index + 1)).toISOString().slice(0, 10),
+      close: index % 2 === 0 ? 1 : -1,
+    }));
+
+    renderTimeSeriesAnalysis(runTimeSeriesAnalysis(rows, {
+      dateColumn: 'date',
+      valueColumn: 'close',
+      acfMaxLag: 5,
+    }));
+
+    const text = document.getElementById('qb-ts-ljung-box-table')?.textContent ?? '';
+    expect(text).toContain('5');
+    expect(text).toMatch(/p < 0.05/i);
+    expect(text).toMatch(/evidence of autocorrelation remaining/i);
   });
 
   it('updates ACF diagnostics when the transformation changes', () => {

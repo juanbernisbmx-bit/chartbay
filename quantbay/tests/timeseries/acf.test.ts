@@ -46,4 +46,44 @@ describe('computeAutocorrelation', () => {
     expect(result.rows[0].threshold).toBeCloseTo(1.96 / Math.sqrt(6), 12);
     expect(result.rows[0].outsideThreshold).toBe(true);
   });
+
+  it('reports Ljung-Box evidence for a known autocorrelated series', () => {
+    const series = Array.from({ length: 40 }, (_, index) => index % 2 === 0 ? 1 : -1);
+    const result = computeAutocorrelation(series, 5);
+
+    expect(result.ljungBox.map(row => row.lag)).toEqual([5, 10, 20]);
+    expect(result.ljungBox[0].qStatistic).toBeGreaterThan(40);
+    expect(result.ljungBox[0].pValue).toBeLessThan(0.05);
+    expect(result.ljungBox[0].interpretation).toMatch(/evidence of autocorrelation remaining/i);
+  });
+
+  it('reports no strong Ljung-Box evidence for an approximately white-noise series', () => {
+    const series = [
+      0.040856, 0.464865, -0.460898, 0.352626, 0.926171, 0.411301, 1.562064, -0.885076,
+      0.067390, -0.705217, -0.783588, -0.183858, 0.221283, 0.418978, 0.508136, 2.233711,
+      0.862561, -1.594528, 0.204377, -0.623036, -0.515748, 1.306226, -0.222938, -1.951281,
+      0.310587, -0.291474, -1.174422, -0.921085, -0.625277, -0.023402, -0.426705, 0.071470,
+      1.836230, -0.800253, -0.807443, -0.249173, 1.095553, -0.706217, 1.434284, -1.308112,
+    ];
+    const result = computeAutocorrelation(series, 5);
+
+    expect(result.ljungBox.map(row => row.lag)).toEqual([5, 10, 20]);
+    expect(result.ljungBox[0].pValue).toBeGreaterThanOrEqual(0.05);
+    expect(result.ljungBox[0].interpretation).toMatch(/no strong evidence/i);
+  });
+
+  it('skips Ljung-Box lag windows that are not valid for small samples', () => {
+    const result = computeAutocorrelation([1, 2, 3, 4], 1);
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.ljungBox).toEqual([]);
+  });
+
+  it('does not report Ljung-Box rows for constant series', () => {
+    const result = computeAutocorrelation([2, 2, 2, 2, 2, 2, 2], 3);
+
+    expect(result.rows).toEqual([]);
+    expect(result.ljungBox).toEqual([]);
+    expect(result.warnings.join(' ')).toMatch(/constant/i);
+  });
 });
