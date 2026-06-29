@@ -52,12 +52,8 @@ function adfValue(adf: unknown, key: string): string | number {
   return typeof value === 'number' && Number.isFinite(value) ? value : String(value ?? 'N/D');
 }
 
-function isAvailableADF(adf: unknown): boolean {
-  return !!adf && typeof adf === 'object' && (adf as { available?: boolean }).available === true;
-}
-
 function adfUnavailableReason(result: TimeSeriesAnalysisResult): string {
-  return result.adf.available ? 'ADF no disponible para esta serie.' : result.adf.reason;
+  return result.adf.available ? result.adf.interpretation : result.adf.reason;
 }
 
 function buildTimeSeriesCSVRows(result: TimeSeriesAnalysisResult): Array<Array<string | number>> {
@@ -97,14 +93,13 @@ function buildTimeSeriesCSVRows(result: TimeSeriesAnalysisResult): Array<Array<s
     ] as Array<Array<string | number>>)
     : timeSeriesDiagnosticNote('PACF')));
 
-  const adf = (result as unknown as { adf?: unknown }).adf;
-  if (isAvailableADF(adf)) {
+  if (result.adf.available) {
     rows.push(
-      ['adf', 'statistic', '', adfValue(adf, 'statistic')],
-      ['adf', 'lag', '', adfValue(adf, 'lag')],
-      ['adf', 'p_value', '', adfValue(adf, 'pValue')],
-      ['adf', 'verdict', '', adfValue(adf, 'verdict')],
-      ['adf', 'interpretation', '', adfValue(adf, 'interpretation')]
+      ['adf', 'statistic', '', result.adf.statistic],
+      ['adf', 'lag', '', result.adf.lag],
+      ['adf', 'p_value', '', adfValue(result.adf, 'pValue')],
+      ['adf', 'verdict', '', result.adf.verdict],
+      ['adf', 'interpretation', '', result.adf.interpretation]
     );
   } else {
     rows.push(['note', 'ADF', '', adfUnavailableReason(result)]);
@@ -131,7 +126,6 @@ function exportTimeSeriesCSV(result: TimeSeriesAnalysisResult): void {
 
 function exportTimeSeriesTXT(result: TimeSeriesAnalysisResult): void {
   const warnings = timeSeriesWarnings(result);
-  const adf = (result as unknown as { adf?: unknown }).adf;
   const lines = [
     'Quant Bay - Time Series',
     '',
@@ -158,8 +152,8 @@ function exportTimeSeriesTXT(result: TimeSeriesAnalysisResult): void {
       : ['Ljung-Box no disponible para las ventanas de lag seleccionadas.']),
     '',
     'ADF',
-    isAvailableADF(adf)
-      ? `Statistic: ${adfValue(adf, 'statistic')}\tLag: ${adfValue(adf, 'lag')}\tp-value: ${adfValue(adf, 'pValue')}\t${adfValue(adf, 'verdict')}\t${adfValue(adf, 'interpretation')}`
+    result.adf.available
+      ? `Statistic: ${formatExportNumber(result.adf.statistic)}\tLag: ${result.adf.lag}\tp-value: ${adfValue(result.adf, 'pValue')}\t${result.adf.verdict}\t${result.adf.interpretation}`
       : adfUnavailableReason(result),
     '',
     'Warnings',
@@ -224,14 +218,13 @@ function exportTimeSeriesPDF(result: TimeSeriesAnalysisResult, doc: any): void {
     ? result.acf.ljungBox.map(row => [row.lag, formatExportNumber(row.qStatistic), formatExportNumber(row.pValue), row.interpretation])
     : [['N/D', 'Ljung-Box no disponible para las ventanas de lag seleccionadas.', '', '']]);
 
-  const adf = (result as unknown as { adf?: unknown }).adf;
-  table('ADF', [['Metric', 'Value']], isAvailableADF(adf)
+  table('ADF', [['Metric', 'Value']], result.adf.available
     ? [
-      ['Statistic', adfValue(adf, 'statistic')],
-      ['Lag', adfValue(adf, 'lag')],
-      ['p-value', adfValue(adf, 'pValue')],
-      ['Verdict', adfValue(adf, 'verdict')],
-      ['Interpretation', adfValue(adf, 'interpretation')],
+      ['Statistic', formatExportNumber(result.adf.statistic)],
+      ['Lag', result.adf.lag],
+      ['p-value', adfValue(result.adf, 'pValue')],
+      ['Verdict', result.adf.verdict],
+      ['Interpretation', result.adf.interpretation],
     ]
     : [['Nota', adfUnavailableReason(result)]]);
 

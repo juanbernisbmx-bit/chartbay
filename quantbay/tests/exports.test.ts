@@ -42,6 +42,17 @@ function regressionFixture(): RegressionResult {
   };
 }
 
+function randomWalkRows(length: number): Array<{ date: string; close: number }> {
+  let level = 100;
+  return Array.from({ length }, (_, index) => {
+    level += Math.sin(index * 0.73) + Math.cos(index * 0.19) * 0.4 + 0.15;
+    return {
+      date: new Date(Date.UTC(2024, 0, index + 1)).toISOString().slice(0, 10),
+      close: level,
+    };
+  });
+}
+
 describe('csvCell', () => {
   beforeEach(() => {
     downloadedBlob = null;
@@ -126,6 +137,25 @@ describe('csvCell', () => {
     expect(text).toContain('adf,p_value,,N/D');
     expect(text).toContain('adf,verdict,,');
     expect(text).toContain('Critical values');
+  });
+
+  it('exports ADF statistic and verdict for a differenced random walk with 140 observations', async () => {
+    appState.activeMode = 'timeseries';
+    appState.lastTimeSeriesResult = runTimeSeriesAnalysis(
+      randomWalkRows(140),
+      { dateColumn: 'date', valueColumn: 'close', transformation: 'difference', acfMaxLag: 12 }
+    );
+
+    exportAnalysisTXT();
+    const text = await downloadedText();
+
+    expect(appState.lastTimeSeriesResult.selectedTransformation.summary.observations).toBe(139);
+    expect(appState.lastTimeSeriesResult.adf.available).toBe(true);
+    expect(text).toContain('ADF');
+    expect(text).toMatch(/Statistic: -?\d+\.\d+/);
+    expect(text).toMatch(/Lag: \d+/);
+    expect(text).toMatch(/unit root|stationary/i);
+    expect(text).not.toContain('ADF no disponible para esta serie.');
   });
 
   it('exports readable notes when Time Series diagnostics are skipped for small samples', async () => {

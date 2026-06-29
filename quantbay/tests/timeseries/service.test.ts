@@ -169,6 +169,21 @@ describe('runTimeSeriesAnalysis', () => {
     }
   });
 
+  it('computes ADF for a valid differenced random-walk-like series with 140 source observations', () => {
+    const result = runTimeSeriesAnalysis(
+      datedRows(randomWalkValues(140)),
+      { dateColumn: 'date', valueColumn: 'close', transformation: 'difference', acfMaxLag: 12 }
+    );
+
+    expect(result.selectedTransformation.summary.observations).toBe(139);
+    expect(result.adf.available).toBe(true);
+    if (result.adf.available) {
+      expect(result.adf.observations).toBe(139);
+      expect(Number.isFinite(result.adf.statistic)).toBe(true);
+      expect(result.adf.verdict).toMatch(/unit root|stationary/i);
+    }
+  });
+
   it('keeps ADF unavailable with a safe reason for constant series', () => {
     const result = runTimeSeriesAnalysis(
       datedRows(new Array(20).fill(7)),
