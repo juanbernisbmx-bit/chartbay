@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ParsedCSV } from '../src/csvParser';
 import { runRegressionMode, runAutoRegressionMode } from '../src/modes/regressionMode';
 import type { RLSConstraint } from '../src/rls';
+import { parseRLSRestriction } from '../src/rlsParser';
 import { formatRegressionError } from '../src/ui/errors';
 
 type Row = Record<string, unknown>;
@@ -81,6 +82,21 @@ describe('runRegressionMode RLS user-facing behavior', () => {
       .toThrow(/restricci|singular/i);
     expect(() => runRegressionMode(makeCsv(validRows), 'y', ['x1', 'x2'], tooMany))
       .toThrow(/restricciones|par/i);
+  });
+
+  it('typed restriction string (via parseRLSRestriction) triggers method RLS', () => {
+    const parsed = parseRLSRestriction('x1 = x2', ['x1', 'x2']);
+    expect(typeof parsed).not.toBe('string');
+    const output = runRegressionMode(makeCsv(validRows), 'y', ['x1', 'x2'], parsed as RLSConstraint);
+    expect(output.method).toBe('RLS');
+    expect(output.result.method).toBe('RLS');
+  });
+
+  it('empty typed input (parseRLSRestriction returns "") → OLS', () => {
+    const parsed = parseRLSRestriction('', ['x1', 'x2']);
+    expect(parsed).toBe('');
+    const output = runRegressionMode(makeCsv(validRows), 'y', ['x1', 'x2'], undefined);
+    expect(output.method).toBe('OLS');
   });
 
   it('keeps auto-repair fallback explicit when a repaired model no longer matches the RLS restriction', () => {
