@@ -95,15 +95,24 @@ export interface TimeSeriesLjungBoxLag {
   interpretation: string;
 }
 
+export interface TimeSeriesPACFLag {
+  lag: number;
+  partialAutocorrelation: number;
+  threshold: number;
+  outsideThreshold: boolean;
+}
+
 export interface TimeSeriesACFDiagnostics {
   observations: number;
   requestedMaxLag: number;
   maxLag: number;
   threshold: number | null;
   rows: TimeSeriesACFLag[];
+  pacf: TimeSeriesPACFLag[];
   ljungBox: TimeSeriesLjungBoxLag[];
   warnings: string[];
   interpretation: string;
+  pacfInterpretation: string;
 }
 export interface TimeSeriesTransformedSeries {
   key: TimeSeriesTransformationKey;

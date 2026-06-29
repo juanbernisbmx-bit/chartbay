@@ -12,15 +12,24 @@ export interface LjungBoxLag {
   interpretation: string;
 }
 
+export interface PartialAutocorrelationLag {
+  lag: number;
+  partialAutocorrelation: number;
+  threshold: number;
+  outsideThreshold: boolean;
+}
+
 export interface AutocorrelationResult {
   observations: number;
   requestedMaxLag: number;
   maxLag: number;
   threshold: number | null;
   rows: AutocorrelationLag[];
+  pacf: PartialAutocorrelationLag[];
   ljungBox: LjungBoxLag[];
   warnings: string[];
   interpretation: string;
+  pacfInterpretation: string;
 }
 
 const MIN_OBSERVATIONS = 4;
@@ -50,6 +59,19 @@ function acfInterpretation(rows: AutocorrelationLag[]): string {
     return 'Negative autocorrelation suggests reversal or oscillation at that lag.';
   }
   return 'Near-zero autocorrelation suggests weak linear dependence at that lag.';
+}
+
+function pacfInterpretation(rows: PartialAutocorrelationLag[]): string {
+  if (rows.length === 0) {
+    return 'PACF is unavailable for this transformed series.';
+  }
+
+  const earlySignificant = rows.some(row => row.lag <= 3 && row.outsideThreshold);
+  if (earlySignificant) {
+    return 'Significant early PACF lags may suggest autoregressive structure. PACF cutoff patterns can help identify a possible AR order, but treat this as an educational diagnostic rather than a standalone model decision.';
+  }
+
+  return 'PACF cutoff patterns can help identify a possible AR order. No early lag clearly exceeds the approximate threshold in this view, so avoid overclaiming from PACF alone.';
 }
 
 function logGamma(value: number): number {
@@ -156,6 +178,45 @@ function computeLjungBox(
     });
 }
 
+function computePartialAutocorrelations(
+  autocorrelations: AutocorrelationLag[],
+  maxLag: number,
+  threshold: number
+): PartialAutocorrelationLag[] {
+  const rows: PartialAutocorrelationLag[] = [];
+  const rho = [1, ...autocorrelations.slice(0, maxLag).map(row => row.autocorrelation)];
+  let previousPhi: number[] = [];
+  let predictionVariance = 1;
+
+  for (let lag = 1; lag <= maxLag; lag += 1) {
+    if (predictionVariance <= EPSILON || !Number.isFinite(predictionVariance)) break;
+
+    let numerator = rho[lag];
+    for (let j = 1; j < lag; j += 1) {
+      numerator -= previousPhi[j - 1] * rho[lag - j];
+    }
+
+    const partialAutocorrelation = Math.abs(numerator) <= EPSILON ? 0 : numerator / predictionVariance;
+    if (!Number.isFinite(partialAutocorrelation)) break;
+
+    rows.push({
+      lag,
+      partialAutocorrelation,
+      threshold,
+      outsideThreshold: Math.abs(partialAutocorrelation) > threshold,
+    });
+
+    const nextPhi = previousPhi.map((value, index) =>
+      value - partialAutocorrelation * previousPhi[lag - index - 2]
+    );
+    nextPhi.push(partialAutocorrelation);
+    previousPhi = nextPhi;
+    predictionVariance *= Math.max(0, 1 - partialAutocorrelation ** 2);
+  }
+
+  return rows;
+}
+
 export function computeAutocorrelation(values: number[], requestedMaxLag?: number): AutocorrelationResult {
   const cleanValues = values.filter(Number.isFinite);
   const observations = cleanValues.length;
@@ -170,9 +231,11 @@ export function computeAutocorrelation(values: number[], requestedMaxLag?: numbe
       maxLag: 0,
       threshold: null,
       rows: [],
+      pacf: [],
       ljungBox: [],
       warnings,
       interpretation: acfInterpretation([]),
+      pacfInterpretation: pacfInterpretation([]),
     };
   }
 
@@ -196,9 +259,11 @@ export function computeAutocorrelation(values: number[], requestedMaxLag?: numbe
       maxLag,
       threshold: null,
       rows: [],
+      pacf: [],
       ljungBox: [],
       warnings,
       interpretation: acfInterpretation([]),
+      pacfInterpretation: pacfInterpretation([]),
     };
   }
 
@@ -219,6 +284,7 @@ export function computeAutocorrelation(values: number[], requestedMaxLag?: numbe
     };
   });
   const rows = autocorrelations.slice(0, maxLag);
+  const pacf = computePartialAutocorrelations(autocorrelations, maxLag, threshold);
 
   return {
     observations,
@@ -226,8 +292,10 @@ export function computeAutocorrelation(values: number[], requestedMaxLag?: numbe
     maxLag,
     threshold,
     rows,
+    pacf,
     ljungBox: computeLjungBox(autocorrelations, observations),
     warnings,
     interpretation: acfInterpretation(rows),
+    pacfInterpretation: pacfInterpretation(pacf),
   };
 }
