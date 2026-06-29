@@ -91,14 +91,14 @@ class RegressionResult(CamelModel):
     y_name: str
     n_obs: int
     n_features: int
-    std_errors: list[float]
-    t_stats: list[float]
-    p_values: list[float]
-    ci95: list[tuple[float, float]]
+    std_errors: list[float | None]
+    t_stats: list[float | None]
+    p_values: list[float | None]
+    ci95: list[tuple[float | None, float | None]]
     df: int
     sigma2: float
-    f_stat: float
-    f_p_value: float
+    f_stat: float | None
+    f_p_value: float | None
     method: str = "OLS"
     dropped_features: list[DroppedFeatureSchema] | None = None
     # ── Campos específicos de RLS (ausentes en OLS) ───────────────────────────

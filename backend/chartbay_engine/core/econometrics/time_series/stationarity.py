@@ -64,7 +64,16 @@ def run_adf(values, lag: int | None = None) -> ADFResult:
             details={"lag": lag},
         )
 
-    clean = [float(v) for v in values if np.isfinite(v)]
+    try:
+        arr = np.asarray(values, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise InvalidInputError("La serie ADF debe contener sólo valores numéricos.") from exc
+    if arr.ndim != 1:
+        raise InvalidInputError("La serie ADF debe ser un vector 1D.")
+    if not np.all(np.isfinite(arr)):
+        raise InvalidInputError("La serie ADF debe contener sólo valores finitos.")
+
+    clean = [float(v) for v in arr]
     n = len(clean)
 
     if n < MIN_OBSERVATIONS:
@@ -72,7 +81,6 @@ def run_adf(values, lag: int | None = None) -> ADFResult:
             n, f"El ADF necesita al menos {MIN_OBSERVATIONS} observaciones finitas."
         )
 
-    arr = np.asarray(clean, dtype=float)
     if float(arr.var(ddof=1)) <= _VARIANCE_EPS:
         return _unavailable(n, "El ADF no está definido para una serie constante.")
 

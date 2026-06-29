@@ -4,6 +4,11 @@ import numpy as np
 import pytest
 
 from chartbay_engine.api.json_response import to_json_safe
+from chartbay_engine.main import _cors_origins
+
+
+def _schema_allows_null(schema: dict) -> bool:
+    return any(option.get("type") == "null" for option in schema.get("anyOf", []))
 
 
 def test_health_ok(client):
@@ -21,6 +26,20 @@ def test_openapi_served(client):
     resp = client.get("/openapi.json")
     assert resp.status_code == 200
     assert resp.json()["info"]["title"] == "ChartBay Engine"
+
+
+def test_openapi_marks_non_finite_regression_fields_nullable(client):
+    schema = client.get("/openapi.json").json()["components"]["schemas"]["RegressionResult"]
+    props = schema["properties"]
+
+    for key in ("fStat", "fPValue"):
+        assert _schema_allows_null(props[key])
+
+    for key in ("stdErrors", "tStats", "pValues"):
+        assert _schema_allows_null(props[key]["items"])
+
+    for ci_item in props["ci95"]["items"]["prefixItems"]:
+        assert _schema_allows_null(ci_item)
 
 
 def _ols_payload() -> dict:
@@ -53,6 +72,19 @@ def test_ols_endpoint_contract(client):
     assert len(body["coefficients"]) == 2
     assert len(body["stdErrors"]) == 3  # intercepto + 2 pendientes
     assert body["rSquared"] > 0.99  # datos casi deterministas
+
+
+def test_ols_perfect_fit_serializes_nullable_f_stat(client):
+    payload = {
+        "X": [[float(i)] for i in range(1, 7)],
+        "y": [2.0 * i + 1.0 for i in range(1, 7)],
+        "featureNames": ["x"],
+    }
+    resp = client.post("/api/v1/regression/ols", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["fStat"] is None
+    assert body["fPValue"] == 0.0
 
 
 def test_ols_endpoint_shape_mismatch_returns_422(client):
@@ -175,6 +207,16 @@ def test_adf_endpoint_negative_lag_returns_422(client):
     assert resp.json()["code"] == "invalid_input"
 
 
+def test_adf_endpoint_non_finite_value_returns_422(client):
+    resp = client.post(
+        "/api/v1/diagnostics/adf",
+        content='{"values":[1,2,3,NaN,5,6,7,8,9]}',
+        headers={"content-type": "application/json"},
+    )
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "invalid_input"
+
+
 def test_adf_endpoint_constant_series_available_false(client):
     resp = client.post("/api/v1/diagnostics/adf", json={"values": [5.0] * 40})
     assert resp.status_code == 200
@@ -207,3 +249,19 @@ def test_autocorrelation_endpoint_optional_max_lag(client):
     assert resp.status_code == 200
     assert resp.json()["maxLag"] == 12  # default
 
+
+def test_autocorrelation_endpoint_non_finite_value_returns_422(client):
+    resp = client.post(
+        "/api/v1/diagnostics/autocorrelation",
+        content='{"values":[1,2,3,Infinity,5,6,7,8,9]}',
+        headers={"content-type": "application/json"},
+    )
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "invalid_input"
+
+
+def test_cors_default_origins_are_not_wildcard(monkeypatch):
+    monkeypatch.delenv("CHARTBAY_ENGINE_CORS_ORIGINS", raising=False)
+    origins = _cors_origins()
+    assert "*" not in origins
+    assert "http://localhost:5000" in origins
