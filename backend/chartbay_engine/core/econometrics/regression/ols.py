@@ -58,7 +58,7 @@ class OLSResult:
     dropped_features: list[DroppedFeature] | None = None
 
 
-def _format_equation(
+def format_equation(
     y_name: str, intercept: float, coefs: np.ndarray, names: Sequence[str]
 ) -> str:
     terms = "".join(
@@ -66,6 +66,19 @@ def _format_equation(
         for c, name in zip(coefs, names, strict=True)
     )
     return f"{y_name} = {intercept:.4f}{terms}"
+
+
+def qr_solve(xd: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Resuelve OLS por QR. ``xd`` ya incluye la columna de unos del intercepto.
+
+    Devuelve ``(beta, (X'X)^-1)``. Como Xd = QR con Q ortonormal, X'X = R'R y por lo
+    tanto (X'X)^-1 = R^-1 R^-T (estable, sin formar ni invertir X'X explícitamente).
+    Reutilizado por OLS y RLS para no duplicar el álgebra lineal.
+    """
+    q, r = np.linalg.qr(xd)
+    beta = solve_triangular(r, q.T @ y, lower=False)
+    r_inv = solve_triangular(r, np.eye(xd.shape[1]), lower=False)
+    return beta, r_inv @ r_inv.T
 
 
 def run_ols(
@@ -126,10 +139,7 @@ def run_ols(
         return replace(clean, dropped_features=dropped)
 
     # ── OLS por QR ────────────────────────────────────────────────────────────
-    q, r = np.linalg.qr(xd)
-    beta = solve_triangular(r, q.T @ y, lower=False)
-    r_inv = solve_triangular(r, np.eye(k + 1), lower=False)
-    xtx_inv = r_inv @ r_inv.T  # (X'X)^-1 = R^-1 R^-T
+    beta, xtx_inv = qr_solve(xd, y)
 
     predictions = xd @ beta
     residuals = y - predictions
@@ -157,7 +167,7 @@ def run_ols(
         for b, se in zip(beta, std_errors, strict=True)
     ]
 
-    f_stat = ((r_squared / k) / ((1 - r_squared) / df)) if (k > 0 and df > 0) else 0.0
+    f_stat = inference.overall_f_statistic(r_squared, k, df)
     f_p_value = inference.f_sf(f_stat, k, df)
 
     return OLSResult(
@@ -168,7 +178,7 @@ def run_ols(
         predictions=[float(v) for v in predictions],
         residuals=[float(v) for v in residuals],
         rss=rss,
-        equation=_format_equation(y_name, float(beta[0]), beta[1:], feature_names),
+        equation=format_equation(y_name, float(beta[0]), beta[1:], feature_names),
         feature_names=list(feature_names),
         y_name=y_name,
         n_obs=n,
