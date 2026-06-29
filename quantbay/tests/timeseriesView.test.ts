@@ -40,6 +40,7 @@ function installTimeSeriesDom(): void {
     <div id="qb-ts-pacf-table"></div>
     <div id="qb-ts-pacf-interpretation"></div>
     <div id="qb-ts-ljung-box-table"></div>
+    <div id="qb-ts-adf-table"></div>
     <div id="qb-ts-acf-interpretation"></div>
     <canvas id="qb-ts-chart"></canvas>
     <div id="qb-ts-interpretation"></div>

@@ -90,11 +90,6 @@ describe('csvCell', () => {
       })),
       { dateColumn: 'date', valueColumn: 'close', acfMaxLag: 3 }
     );
-    (appState.lastTimeSeriesResult as any).adf = {
-      statistic: -3.1,
-      pValue: 0.02,
-      interpretation: 'ADF suggests stationarity.',
-    };
 
     exportAnalysisCSV();
     const text = await downloadedText();
@@ -105,8 +100,32 @@ describe('csvCell', () => {
     expect(text).toContain('acf,autocorrelation,1');
     expect(text).toContain('pacf,partial_autocorrelation,1');
     expect(text).toContain('ljung_box,q_statistic,5');
-    expect(text).toContain("adf,statistic,,'-3.1");
     expect(text).toContain('interpretation,pacf');
+  });
+
+  it('exports the computed ADF result when available', async () => {
+    appState.activeMode = 'timeseries';
+    let previous = 0;
+    appState.lastTimeSeriesResult = runTimeSeriesAnalysis(
+      Array.from({ length: 140 }, (_, index) => {
+        previous = 0.55 * previous + Math.sin(index * 1.7) + Math.cos(index * 0.4) * 0.3;
+        return {
+          date: new Date(Date.UTC(2024, 0, index + 1)).toISOString().slice(0, 10),
+          close: previous,
+        };
+      }),
+      { dateColumn: 'date', valueColumn: 'close', acfMaxLag: 12 }
+    );
+
+    exportAnalysisCSV();
+    const text = await downloadedText();
+
+    expect(appState.lastTimeSeriesResult.adf.available).toBe(true);
+    expect(text).toContain('adf,statistic,,');
+    expect(text).toContain('adf,lag,,');
+    expect(text).toContain('adf,p_value,,N/D');
+    expect(text).toContain('adf,verdict,,');
+    expect(text).toContain('Critical values');
   });
 
   it('exports readable notes when Time Series diagnostics are skipped for small samples', async () => {

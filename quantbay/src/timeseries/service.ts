@@ -8,6 +8,7 @@ import type {
   TimeSeriesTransformations,
 } from './types';
 import { computeAutocorrelation } from './acf';
+import { computeADF } from './adf';
 import { logReturn, normalizeBase100, percentReturn, simpleDifference, simpleMovingAverage } from './transforms';
 import { interpretTimeSeriesSummary } from './interpretation';
 import { validateTimeSeriesDataset } from './validation';
@@ -220,6 +221,7 @@ export function runTimeSeriesAnalysis(
     selectedTransformation.points.map(point => point.value),
     options.acfMaxLag
   );
+  const adf = computeADF(selectedTransformation.points.map(point => point.value));
   if (selectedTransformation.summary.frequency === 'irregular') {
     acf.warnings.push('Irregular frequency should be interpreted carefully when reading ACF lags.');
   }
@@ -231,6 +233,7 @@ export function runTimeSeriesAnalysis(
     transformations,
     selectedTransformation,
     acf,
+    adf,
     interpretation: interpretTimeSeriesSummary(summary, validation),
   };
 }

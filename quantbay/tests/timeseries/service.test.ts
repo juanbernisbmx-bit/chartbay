@@ -2,6 +2,34 @@ import { describe, expect, it } from 'vitest';
 import { runTimeSeriesAnalysis } from '../../src/timeseries/service';
 
 describe('runTimeSeriesAnalysis', () => {
+  function datedRows(values: number[]): Array<{ date: string; close: number }> {
+    return values.map((close, index) => ({
+      date: new Date(Date.UTC(2024, 0, index + 1)).toISOString().slice(0, 10),
+      close,
+    }));
+  }
+
+  function arOneValues(length: number): number[] {
+    const values: number[] = [];
+    let previous = 0;
+    for (let index = 0; index < length; index += 1) {
+      const shock = Math.sin(index * 1.7) + Math.cos(index * 0.4) * 0.3;
+      previous = 0.55 * previous + shock;
+      values.push(previous);
+    }
+    return values;
+  }
+
+  function randomWalkValues(length: number): number[] {
+    const values: number[] = [];
+    let level = 0;
+    for (let index = 0; index < length; index += 1) {
+      level += Math.sin(index * 0.9) + 0.2;
+      values.push(level);
+    }
+    return values;
+  }
+
   it('returns a sorted dataset, summary, validation and transformations', () => {
     const result = runTimeSeriesAnalysis(
       [
@@ -109,5 +137,48 @@ describe('runTimeSeriesAnalysis', () => {
     expect(result.acf.maxLag).toBe(2);
     expect(result.acf.rows).toHaveLength(2);
     expect(result.acf.warnings.join(' ')).toMatch(/between 1 and 2/i);
+  });
+
+  it('computes ADF for a valid stationary AR(1)-like series', () => {
+    const result = runTimeSeriesAnalysis(
+      datedRows(arOneValues(140)),
+      { dateColumn: 'date', valueColumn: 'close', acfMaxLag: 12 }
+    );
+
+    expect(result.adf.available).toBe(true);
+    if (result.adf.available) {
+      expect(result.adf.observations).toBe(140);
+      expect(result.adf.lag).toBeGreaterThanOrEqual(0);
+      expect(Number.isFinite(result.adf.statistic)).toBe(true);
+      expect(result.adf.verdict).toMatch(/unit root|stationary/i);
+      expect(result.adf.interpretation).toMatch(/Critical values/i);
+    }
+  });
+
+  it('computes ADF for a valid random-walk-like series', () => {
+    const result = runTimeSeriesAnalysis(
+      datedRows(randomWalkValues(140)),
+      { dateColumn: 'date', valueColumn: 'close', acfMaxLag: 12 }
+    );
+
+    expect(result.adf.available).toBe(true);
+    if (result.adf.available) {
+      expect(result.adf.observations).toBe(140);
+      expect(Number.isFinite(result.adf.statistic)).toBe(true);
+      expect(result.adf.verdict).toMatch(/unit root|stationary/i);
+    }
+  });
+
+  it('keeps ADF unavailable with a safe reason for constant series', () => {
+    const result = runTimeSeriesAnalysis(
+      datedRows(new Array(20).fill(7)),
+      { dateColumn: 'date', valueColumn: 'close', acfMaxLag: 3 }
+    );
+
+    expect(result.adf.available).toBe(false);
+    if (!result.adf.available) {
+      expect(result.adf.reason).toMatch(/constant transformed series/i);
+      expect(result.adf.statistic).toBeNull();
+    }
   });
 });
