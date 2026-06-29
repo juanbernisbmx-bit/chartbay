@@ -81,6 +81,22 @@ export interface TimeSeriesTransformedPoint {
   value: number;
 }
 
+export interface TimeSeriesACFLag {
+  lag: number;
+  autocorrelation: number;
+  threshold: number;
+  outsideThreshold: boolean;
+}
+
+export interface TimeSeriesACFDiagnostics {
+  observations: number;
+  requestedMaxLag: number;
+  maxLag: number;
+  threshold: number | null;
+  rows: TimeSeriesACFLag[];
+  warnings: string[];
+  interpretation: string;
+}
 export interface TimeSeriesTransformedSeries {
   key: TimeSeriesTransformationKey;
   label: string;
@@ -97,5 +113,6 @@ export interface TimeSeriesAnalysisResult {
   summary: TimeSeriesSummary;
   transformations: TimeSeriesTransformations;
   selectedTransformation: TimeSeriesTransformedSeries;
+  acf: TimeSeriesACFDiagnostics;
   interpretation: string[];
 }
