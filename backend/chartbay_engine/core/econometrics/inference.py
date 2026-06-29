@@ -43,3 +43,14 @@ def chi2_sf(x: float, df: float) -> float:
     if not math.isfinite(x) or x < 0 or df <= 0:
         return float("nan")
     return float(stats.chi2.sf(x, df))
+
+
+def overall_f_statistic(r_squared: float, k: int, df: int) -> float:
+    """F global del modelo: (R²/k) / ((1-R²)/df). Inf ante ajuste perfecto (R²=1)."""
+    if k <= 0 or df <= 0:
+        return 0.0
+    denom = (1.0 - r_squared) / df
+    num = r_squared / k
+    if denom == 0.0:
+        return float("inf") if num > 0 else 0.0
+    return num / denom
