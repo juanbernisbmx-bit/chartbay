@@ -14,16 +14,12 @@
       <div class="ship" aria-hidden="true"></div>
       <p class="classic-site-name">The Chart Bay</p>
       <nav class="mainnav classic-nav">
-        <a href="{{ url_for('chartbay') }}">Hub</a><span class="sep">.</span>
-        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">.</span>
-        <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">.</span>
-        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">.</span>
-        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">.</span>
-        <a href="{{ url_for('guia') }}">Guia</a><span class="sep">.</span>
-        <a href="{{ url_for('econometria') }}">Econometria</a><span class="sep">.</span>
-        <strong>Finanzas</strong><span class="sep">.</span>
-        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">.</span>
-        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">.</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
+        <a href="{{ url_for('dashboard') }}">Inicio</a><span class="sep">.</span>
+        <a href="{{ url_for('econometria') }}">Econometría</a><span class="sep">.</span>
+        <strong>Finanzas Quant</strong><span class="sep">.</span>
+        <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
+        <a href="{{ url_for('guia') }}">Documentación</a><span class="sep">.</span>
+        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% endif %}
       </nav>
     </header>
 
@@ -50,39 +46,38 @@
       </section>
 
       <section class="classic-panel">
-        <h2>2. Mercado de referencia</h2>
-        <table class="classic-table">
-          <thead>
-            <tr><th>Activo</th><th>Precio</th><th>Variacion</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>SPX</td><td>6,142.20</td><td class="classic-up">+0.42%</td></tr>
-            <tr><td>BTC</td><td>61,840</td><td class="classic-down">-1.18%</td></tr>
-            <tr><td>GOLD</td><td>2,338.50</td><td class="classic-up">+0.31%</td></tr>
-            <tr><td>USDARS</td><td>1,245.00</td><td class="classic-up">+0.09%</td></tr>
-            <tr><td>VIX</td><td>14.82</td><td class="classic-down">-2.10%</td></tr>
-          </tbody>
-        </table>
+        <h2>2. Datos disponibles</h2>
+        <ul class="classic-list classic-columns">
+          <li>FRED — ~60 indicadores macroeconómicos de EE.UU.</li>
+          <li>World Bank — inflación, PIB, desempleo por país</li>
+          <li>BCRA — en desarrollo</li>
+          <li>OECD — en desarrollo</li>
+          <li>IMF — en desarrollo</li>
+        </ul>
+        <p style="margin-top:12px">Todos los datos se descargan con caché diario. Disponibles en <a href="{{ url_for('frequent_data') }}">la sección Datos</a>.</p>
       </section>
 
       <section class="classic-panel">
-        <h2>3. Proximamente</h2>
+        <h2>3. Roadmap cuantitativo</h2>
         <ul class="classic-list classic-columns">
-          <li>calculo de retornos</li>
-          <li>volatilidad</li>
+          <li>Retornos simples y logarítmicos</li>
+          <li>Volatilidad histórica y EWMA</li>
+          <li>Drawdown máximo</li>
           <li>Sharpe ratio</li>
-          <li>drawdown</li>
-          <li>beta</li>
+          <li>Sortino ratio</li>
+          <li>Beta vs benchmark</li>
           <li>CAPM</li>
-          <li>valuacion basica</li>
-          <li>backtesting simple</li>
-          <li>analisis de portafolios</li>
+          <li>VaR histórico y paramétrico</li>
+          <li>CVaR / Expected Shortfall</li>
+          <li>Frontera eficiente (Markowitz)</li>
+          <li>Backtesting de estrategias</li>
+          <li>Valuación DCF</li>
         </ul>
       </section>
 
       <section class="classic-panel">
         <h2>4. Nota</h2>
-        <p>Esta seccion esta en desarrollo. Las herramientas financieras se iran integrando sin modificar el modulo de Econometria.</p>
+        <p>Esta sección está en desarrollo. Los módulos financieros se irán integrando al motor Python/FastAPI sin modificar el módulo de Econometría.</p>
       </section>
     </main>
   </div>
