@@ -326,6 +326,11 @@ def dashboard():
     )
 
 
+@app.route("/chartbay")
+def chartbay():
+    return render_template("chartbay.html")
+
+
 @app.route("/reports")
 def reports():
     files = []
