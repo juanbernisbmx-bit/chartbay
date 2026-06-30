@@ -8,16 +8,14 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <div class="wrap cb-hub-wrap">
+  <div class="wrap classic-page hub-classic-page">
     {% include 'alfa_banner.html' %}
-    <header class="masthead">
+    <header class="masthead classic-header">
       <div class="ship" aria-hidden="true"></div>
-      <h1 class="wordmark" aria-label="Chart Bay">Chart Bay</h1>
-      <p class="tagline">Hub central para mercados, datos, modelos y aprendizaje.</p>
-      <nav class="mainnav">
+      <p class="classic-site-name">The Chart Bay</p>
+      <nav class="mainnav classic-nav">
         <strong>Hub</strong><span class="sep">.</span>
         <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">.</span>
-        <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
         <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">.</span>
         <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">.</span>
         <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">.</span>
@@ -29,73 +27,53 @@
       </nav>
     </header>
 
-    <main class="cb-hub">
-      <section class="cb-hub-hero">
-        <p class="cb-hub-kicker">ChartBay</p>
-        <h2>Dos areas claras para analizar mejor</h2>
-        <p>
-          ChartBay separa el laboratorio econometrico del trabajo financiero:
-          modelos estadisticos por un lado, mercados y Quant Finance por el otro.
-        </p>
-        <div class="cb-hub-actions">
-          <a class="btn-ink cb-hub-primary" href="{{ url_for('econometria') }}">Abrir Econometria</a>
-          <a class="btn-ink" href="{{ url_for('finanzas') }}">Abrir Finanzas</a>
-          <a class="cb-hub-link" href="{{ url_for('guia') }}#aprender">Curso Aprender</a>
+    <main class="classic-container">
+      <section class="classic-intro">
+        <h1>ChartBay</h1>
+        <p>Econometria, finanzas y herramientas cuantitativas en una sola bahia.</p>
+      </section>
+
+      <section class="classic-panel hub-lab-panel">
+        <h2>Entrar al laboratorio</h2>
+        <div class="classic-grid classic-grid-two">
+          <a class="classic-card classic-card-large" href="{{ url_for('econometria') }}">
+            <h3>Econometria</h3>
+            <p>Regresion OLS, restricciones RLS, diagnosticos, tests estadisticos y series de tiempo.</p>
+          </a>
+          <a class="classic-card classic-card-large" href="{{ url_for('finanzas') }}">
+            <h3>Finanzas</h3>
+            <p>Valuacion, riesgo, portafolios, backtesting y analisis cuantitativo.</p>
+          </a>
         </div>
       </section>
 
-      <section class="cb-branches" aria-label="Areas principales de ChartBay">
-        <a class="cb-branch-card" href="{{ url_for('econometria') }}">
-          <span>01</span>
-          <h3>Econometria</h3>
-          <p>Herramientas econometricas para CSV, OLS, RLS, diagnosticos, series de tiempo, tests estadisticos y validacion de modelos.</p>
-          <strong>Herramientas econometricas</strong>
-          <strong>Aprender econometria</strong>
-        </a>
-        <a class="cb-branch-card" href="{{ url_for('finanzas') }}">
-          <span>02</span>
-          <h3>Finanzas</h3>
-          <p>Herramientas financieras para mercados, comparacion, heatmap, indicadores tecnicos y roadmap de Quant Finance.</p>
-          <strong>Herramientas financieras</strong>
-          <strong>Aprender finanzas / Quant Finance</strong>
-        </a>
-      </section>
-
-      <section class="cb-hub-grid" aria-label="Accesos de ChartBay">
-        <a class="cb-hub-card" href="{{ url_for('dashboard') }}">
-          <span>03</span>
-          <h3>Mercados</h3>
-          <p>Scanner tecnico con watchlist, tendencias, indicadores, noticias y veredicto IA cuando este configurado.</p>
-        </a>
-        <a class="cb-hub-card" href="{{ url_for('frequent_data') }}">
-          <span>04</span>
-          <h3>Datos</h3>
-          <p>Catalogo de series macro oficiales listo para buscar, revisar y descargar en CSV o JSON.</p>
-        </a>
-        <a class="cb-hub-card" href="{{ url_for('guia') }}">
-          <span>05</span>
-          <h3>Guia y curso</h3>
-          <p>Conceptos de econometria, finanzas y el curso Aprender completo con modulos, temas y estados.</p>
-        </a>
-        <a class="cb-hub-card" href="{{ url_for('reports') }}">
-          <span>06</span>
-          <h3>Reportes</h3>
-          <p>Archivo de informes generados para revisar analisis anteriores y volver sobre conclusiones.</p>
-        </a>
-        <a class="cb-hub-card" href="{{ url_for('community') }}">
-          <span>07</span>
-          <h3>Comunidad</h3>
-          <p>Publica, explora y evalua bots de trading con reglas, mercados, timeframes y resenas.</p>
-        </a>
-      </section>
-
-      <section class="cb-hub-strip">
-        <div>
-          <strong>Flujo sugerido</strong>
-          <p>Econometria para modelar relaciones y Finanzas para leer mercados, riesgo y decisiones de cartera.</p>
+      <section class="classic-panel">
+        <h2>Modulos disponibles</h2>
+        <div class="classic-grid">
+          <a class="classic-card" href="{{ url_for('econometria') }}"><h3>Econometria</h3><p>Modelos, restricciones y diagnosticos.</p></a>
+          <a class="classic-card" href="{{ url_for('finanzas') }}"><h3>Finanzas</h3><p>Herramientas financieras en desarrollo.</p></a>
+          <a class="classic-card" href="{{ url_for('guia') }}"><h3>Guia</h3><p>Conceptos y curso de trabajo.</p></a>
+          <a class="classic-card" href="{{ url_for('compare_view') }}"><h3>Comparar</h3><p>Vista paralela de activos.</p></a>
+          <a class="classic-card" href="{{ url_for('reports') }}"><h3>Reportes</h3><p>Archivo de analisis generados.</p></a>
         </div>
-        <a href="{{ url_for('compare_view') }}">Comparar activos</a>
-        <a href="{{ url_for('heatmap') }}">Ver heatmap</a>
+      </section>
+
+      <section class="classic-panel">
+        <h2>En desarrollo</h2>
+        <ul class="classic-list classic-columns">
+          <li>Portfolio analytics</li>
+          <li>Risk metrics</li>
+          <li>Valuation</li>
+          <li>Backtesting</li>
+          <li>Fixed income</li>
+          <li>Derivatives</li>
+          <li>Factor models</li>
+        </ul>
+      </section>
+
+      <section class="classic-panel">
+        <h2>Que es ChartBay</h2>
+        <p>ChartBay es un laboratorio abierto para analizar datos, modelos y mercados desde el navegador.</p>
       </section>
     </main>
   </div>
