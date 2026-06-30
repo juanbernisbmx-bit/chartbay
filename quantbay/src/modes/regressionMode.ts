@@ -2,11 +2,13 @@ import { runQuantAnalysis, type LeakageSignal, type LogisticResult } from '../se
 import { runRLS, validateRLSConstraint, type RLSConstraint } from '../rls';
 import { getValidRows, type ParsedCSV } from '../csvParser';
 import { autoRepairAndAnalyze, type AutoRepairResult } from '../services/autoRepair';
-import type { RegressionResult } from '../regression';
+import { runOLS, type RegressionResult } from '../regression';
+import { applyFunctionalTransform, type FunctionalForm } from '../functionalForms';
 
 export interface RegressionModeOutput {
   result: RegressionResult;
   method: 'OLS' | 'RLS';
+  functionalForm: FunctionalForm;
   corrMatrix: number[][];
   corrColumns: string[];
   vifValues: number[];
@@ -20,6 +22,7 @@ export interface RegressionModeOutput {
 export interface AutoRegressionModeOutput {
   result: RegressionResult;
   method: 'OLS' | 'RLS';
+  functionalForm: FunctionalForm;
   corrMatrix: number[][];
   corrColumns: string[];
   vifValues: number[];
@@ -33,23 +36,36 @@ export function runRegressionMode(
   yName: string,
   xNames: string[],
   rlsConstraint: RLSConstraint | undefined,
+  functionalForm: FunctionalForm = 'lin-lin',
 ): RegressionModeOutput {
+  // Run full analysis on original scale — provides validation, diagnostics, VIF, correlation.
   const analysis = runQuantAnalysis(csvData, yName, xNames);
 
-  let finalResult = analysis.result;
+  // Get valid rows and apply the functional transform (identity for lin-lin).
+  // applyFunctionalTransform throws clearly if log-domain values are invalid (<=0).
+  const { X: rawX, y: rawY } = getValidRows(csvData.rows, yName, xNames);
+  const transformed = applyFunctionalTransform(rawY, rawX, yName, xNames, functionalForm);
+
+  let finalResult = functionalForm === 'lin-lin'
+    ? analysis.result
+    : runOLS({ X: transformed.X, y: transformed.y, featureNames: transformed.xNames, yName: transformed.yName });
+
   let method: 'OLS' | 'RLS' = 'OLS';
   const logEntries = [
     'Leyendo datos... OK',
     'Filtrando valores faltantes... OK',
     'Construyendo matriz de diseño... OK',
+    `Forma funcional: ${functionalForm}... OK`,
     'Estimando coeficientes OLS... OK',
   ];
 
   if (rlsConstraint) {
     try {
-      validateRLSConstraint(rlsConstraint, xNames.length + 1);
-      const { X, y } = getValidRows(csvData.rows, yName, xNames);
-      finalResult = runRLS({ X, y, featureNames: xNames, yName }, rlsConstraint);
+      validateRLSConstraint(rlsConstraint, transformed.xNames.length + 1);
+      finalResult = runRLS(
+        { X: transformed.X, y: transformed.y, featureNames: transformed.xNames, yName: transformed.yName },
+        rlsConstraint
+      );
       logEntries.push(`Aplicando restricción RLS: ${rlsConstraint.label}... OK`);
       method = 'RLS';
     } catch (rlsErr) {
@@ -63,6 +79,7 @@ export function runRegressionMode(
   return {
     result: finalResult,
     method,
+    functionalForm,
     corrMatrix: analysis.corrMatrix,
     corrColumns: analysis.corrColumns,
     vifValues: analysis.vifValues,
@@ -79,17 +96,25 @@ export function runAutoRegressionMode(
   yName: string,
   xNames: string[],
   rlsConstraint: RLSConstraint | undefined,
+  functionalForm: FunctionalForm = 'lin-lin',
 ): AutoRegressionModeOutput {
   const analysis = autoRepairAndAnalyze(csvData, yName, xNames);
 
-  let finalResult = analysis.result;
+  // After auto-repair, use the surviving feature names for the functional transform.
+  const survivingXNames = analysis.result.featureNames;
+  const { X: rawX, y: rawY } = getValidRows(csvData.rows, yName, survivingXNames);
+  const transformed = applyFunctionalTransform(rawY, rawX, yName, survivingXNames, functionalForm);
+
+  let finalResult = functionalForm === 'lin-lin'
+    ? analysis.result
+    : runOLS({ X: transformed.X, y: transformed.y, featureNames: transformed.xNames, yName: transformed.yName });
+
   let method: 'OLS' | 'RLS' = 'OLS';
   let rlsFallbackNote = '';
 
   if (rlsConstraint) {
-    const finalXNames = finalResult.featureNames;
     const expectedParams = rlsConstraint.R[0]?.length ?? 0;
-    const modelParams = finalXNames.length + 1;
+    const modelParams = transformed.xNames.length + 1;
     if (expectedParams !== modelParams) {
       rlsFallbackNote =
         `El modelo reparado se estimó como OLS porque la restricción "${rlsConstraint.label}" ` +
@@ -97,8 +122,10 @@ export function runAutoRegressionMode(
         `(la reparación eliminó variables incluidas en la restricción).`;
     } else {
       try {
-        const { X, y } = getValidRows(csvData.rows, yName, finalXNames);
-        finalResult = runRLS({ X, y, featureNames: finalXNames, yName }, rlsConstraint);
+        finalResult = runRLS(
+          { X: transformed.X, y: transformed.y, featureNames: transformed.xNames, yName: transformed.yName },
+          rlsConstraint
+        );
         method = 'RLS';
       } catch (rlsErr) {
         rlsFallbackNote =
@@ -111,6 +138,7 @@ export function runAutoRegressionMode(
   return {
     result: finalResult,
     method,
+    functionalForm,
     corrMatrix: analysis.corrMatrix,
     corrColumns: analysis.corrColumns,
     vifValues: analysis.vifValues,
