@@ -14,16 +14,12 @@
       <div class="ship" aria-hidden="true"></div>
       <p class="classic-site-name">The Chart Bay</p>
       <nav class="mainnav classic-nav">
-        <strong>Hub</strong><span class="sep">.</span>
-        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">.</span>
-        <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">.</span>
-        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">.</span>
-        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">.</span>
-        <a href="{{ url_for('guia') }}">Guia</a><span class="sep">.</span>
-        <a href="{{ url_for('econometria') }}">Econometria</a><span class="sep">.</span>
-        <a href="{{ url_for('finanzas') }}">Finanzas</a><span class="sep">.</span>
-        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">.</span>
-        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">.</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
+        <a href="{{ url_for('dashboard') }}">Inicio</a><span class="sep">.</span>
+        <a href="{{ url_for('econometria') }}">Econometría</a><span class="sep">.</span>
+        <a href="{{ url_for('finanzas') }}">Finanzas Quant</a><span class="sep">.</span>
+        <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
+        <a href="{{ url_for('guia') }}">Documentación</a><span class="sep">.</span>
+        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% endif %}
       </nav>
     </header>
 
@@ -50,11 +46,10 @@
       <section class="classic-panel">
         <h2>Modulos disponibles</h2>
         <div class="classic-grid">
-          <a class="classic-card" href="{{ url_for('econometria') }}"><h3>Econometria</h3><p>Modelos, restricciones y diagnosticos.</p></a>
-          <a class="classic-card" href="{{ url_for('finanzas') }}"><h3>Finanzas</h3><p>Herramientas financieras en desarrollo.</p></a>
-          <a class="classic-card" href="{{ url_for('guia') }}"><h3>Guia</h3><p>Conceptos y curso de trabajo.</p></a>
-          <a class="classic-card" href="{{ url_for('compare_view') }}"><h3>Comparar</h3><p>Vista paralela de activos.</p></a>
-          <a class="classic-card" href="{{ url_for('reports') }}"><h3>Reportes</h3><p>Archivo de analisis generados.</p></a>
+          <a class="classic-card" href="{{ url_for('econometria') }}"><h3>Econometría</h3><p>OLS, RLS, series de tiempo, diagnósticos y exportaciones.</p></a>
+          <a class="classic-card" href="{{ url_for('finanzas') }}"><h3>Finanzas Quant</h3><p>Retornos, riesgo, portafolios y backtesting — en desarrollo.</p></a>
+          <a class="classic-card" href="{{ url_for('frequent_data') }}"><h3>Datos macro</h3><p>FRED, World Bank y más fuentes oficiales.</p></a>
+          <a class="classic-card" href="{{ url_for('guia') }}"><h3>Documentación</h3><p>Conceptos y guía de uso del laboratorio.</p></a>
         </div>
       </section>
 
@@ -72,8 +67,8 @@
       </section>
 
       <section class="classic-panel">
-        <h2>Que es ChartBay</h2>
-        <p>ChartBay es un laboratorio abierto para analizar datos, modelos y mercados desde el navegador.</p>
+        <h2>Que es ChartBay Engine</h2>
+        <p>ChartBay Engine es un motor web de cálculo para econometría y finanzas cuantitativas. El núcleo Python/FastAPI valida cada resultado contra statsmodels y scipy.</p>
       </section>
     </main>
   </div>

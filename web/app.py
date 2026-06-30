@@ -1,5 +1,5 @@
 """
-ChartBay — aplicación web: herramienta de análisis + comunidad de bots.
+ChartBay Engine — motor web de cálculo para econometría y finanzas cuantitativas.
 Reutiliza los módulos del pipeline (data, indicators, analyze) del proyecto.
 
 Arrancar en local:
@@ -316,7 +316,7 @@ def logout():
 @app.route("/")
 def dashboard():
     return render_template(
-        "dashboard.html",
+        "home.html",
         tickers=config.TICKERS,
         tradingview=getattr(config, "TRADINGVIEW", {}),
         nombres=getattr(config, "NOMBRES", {}),
@@ -342,6 +342,11 @@ def reports():
     if REPORTS_DIR.exists():
         files = sorted([p.name for p in REPORTS_DIR.glob("*.md")], reverse=True)
     return render_template("reports.html", files=files)
+
+
+@app.route("/reportes")
+def reportes_alias():
+    return redirect(url_for("reports"))
 
 
 @app.route("/reports/<path:name>")
@@ -596,6 +601,11 @@ def compare_view():
     a = sanitize_ticker(request.args.get("a", ""))
     b = sanitize_ticker(request.args.get("b", ""))
     return render_template("compare.html", a=a, b=b)
+
+
+@app.route("/comparar")
+def comparar_alias():
+    return redirect(url_for("compare_view"))
 
 
 @app.route("/heatmap")
