@@ -8,35 +8,14 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <div class="wrap cb-hub-wrap cb-terminal-hub">
+  <div class="wrap classic-page hub-classic-page">
     {% include 'alfa_banner.html' %}
-    <header class="masthead cb-terminal-head">
-      <svg class="ship" viewBox="0 0 260 170" aria-hidden="true">
-        <path class="ship-wake" d="M28 144c18-9 31 7 49-2 17-8 31 7 49-1 18-8 31 8 50 0 18-8 33 4 56-3"/>
-        <path class="hull" d="M51 122c41 7 100 7 155-1-10 20-35 31-76 34-38-1-66-11-79-33z"/>
-        <path class="hull-line" d="M69 128c33 6 84 6 121 0"/>
-        <path class="mast" d="M128 122V16"/>
-        <path class="yard" d="M79 55c37-9 74-11 110-6"/>
-        <path class="yard" d="M67 93c42-8 91-9 133-3"/>
-        <path class="sail sail-main" d="M130 28c28 16 42 38 47 61-15 0-35-3-55-11 2-18 4-33 8-50z"/>
-        <path class="sail sail-left" d="M122 38c-25 19-39 42-45 70 15 0 32-5 48-16-2-18-3-35-3-54z"/>
-        <path class="sail sail-low" d="M126 83c29 11 53 15 74 13-16 15-38 24-67 28-3-12-5-26-7-41z"/>
-        <path class="rig" d="M128 18 72 119M128 18l91 109M82 56l-19 64M188 50l21 77"/>
-        <path class="flagbg" d="M130 15c22-4 39-1 54 8-8 8-8 17-1 27-17-8-33-10-53-5z"/>
-        <circle class="jolly" cx="157" cy="30" r="7"/>
-        <circle class="eye" cx="154.5" cy="28.8" r="1.2"/>
-        <circle class="eye" cx="159.5" cy="28.8" r="1.2"/>
-        <path class="jolly" d="M151 37h12v3h-12z"/>
-        <path class="jolly-line" d="M145 45l25-15M145 30l25 16"/>
-        <path class="chart" d="M103 108l10-12 11 6 15-22 13 8 18-27"/>
-        <path class="chart" d="M170 61h-15m15 0v15"/>
-      </svg>
-      <h1 class="wordmark" aria-label="Chart Bay">ℭ𝔥𝔞𝔯𝔱 <span class="bay">𝔅𝔞𝔶</span></h1>
-      <p class="tagline">Econometria, finanzas y herramientas cuantitativas en una sola bahia.</p>
-      <nav class="mainnav">
+    <header class="masthead classic-header">
+      <div class="ship" aria-hidden="true"></div>
+      <p class="classic-site-name">The Chart Bay</p>
+      <nav class="mainnav classic-nav">
         <strong>Hub</strong><span class="sep">.</span>
         <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">.</span>
-        <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
         <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">.</span>
         <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">.</span>
         <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">.</span>
@@ -48,89 +27,53 @@
       </nav>
     </header>
 
-    <main class="cb-hub cb-terminal-main">
-      <section class="hub-command-panel" aria-label="Entrada principal a ChartBay">
-        <div class="hub-hero-copy">
-          <p class="hub-kicker">CHARTBAY://OPEN_LAB</p>
-          <h2>ChartBay</h2>
-          <p>Un laboratorio abierto para analizar datos, modelos y mercados sin depender de software cerrado.</p>
-        </div>
-        <div class="hub-direct-index" aria-label="Entrar al laboratorio">
-          <p>Entrar al laboratorio</p>
-          <a href="{{ url_for('econometria') }}"><span>01</span> Econometria</a>
-          <a href="{{ url_for('finanzas') }}"><span>02</span> Finanzas</a>
-        </div>
+    <main class="classic-container">
+      <section class="classic-intro">
+        <h1>ChartBay</h1>
+        <p>Econometria, finanzas y herramientas cuantitativas en una sola bahia.</p>
       </section>
 
-      <section class="hub-market-strip" aria-label="Pulso de mercado">
-        <span>SPX 6,142.20 <strong class="up">+0.42%</strong></span>
-        <span>BTC 61,840 <strong class="down">-1.18%</strong></span>
-        <span>GOLD 2,338.50 <strong class="up">+0.31%</strong></span>
-        <span>USDARS 1,245.00 <strong class="up">+0.09%</strong></span>
-        <span>VIX 14.82 <strong class="down">-2.10%</strong></span>
-      </section>
-
-      <section class="hub-section">
-        <div class="hub-section-head">
-          <p>Modulos disponibles</p>
-          <span>Herramientas vivas</span>
-        </div>
-        <div class="hub-module-grid">
-          <a class="hub-module-card hub-module-primary" href="{{ url_for('econometria') }}">
-            <span>Disponible</span>
+      <section class="classic-panel hub-lab-panel">
+        <h2>Entrar al laboratorio</h2>
+        <div class="classic-grid classic-grid-two">
+          <a class="classic-card classic-card-large" href="{{ url_for('econometria') }}">
             <h3>Econometria</h3>
-            <p>Regresion, restricciones, diagnosticos y series de tiempo.</p>
+            <p>Regresion OLS, restricciones RLS, diagnosticos, tests estadisticos y series de tiempo.</p>
           </a>
-          <a class="hub-module-card hub-module-primary" href="{{ url_for('finanzas') }}">
-            <span>Terminal</span>
+          <a class="classic-card classic-card-large" href="{{ url_for('finanzas') }}">
             <h3>Finanzas</h3>
-            <p>Riesgo, valuacion, portafolios, backtesting y analisis cuantitativo.</p>
-          </a>
-          <a class="hub-module-card" href="{{ url_for('dashboard') }}">
-            <span>Market</span>
-            <h3>Mercados</h3>
-            <p>Watchlist, indicadores tecnicos, noticias y veredicto IA.</p>
-          </a>
-          <a class="hub-module-card" href="{{ url_for('frequent_data') }}">
-            <span>Data</span>
-            <h3>Datos frecuentes</h3>
-            <p>Series macro oficiales listas para inspeccionar y descargar.</p>
-          </a>
-          <a class="hub-module-card" href="{{ url_for('reports') }}">
-            <span>Archive</span>
-            <h3>Reportes</h3>
-            <p>Archivo de informes y analisis generados.</p>
-          </a>
-          <a class="hub-module-card" href="{{ url_for('community') }}">
-            <span>Bots</span>
-            <h3>Comunidad</h3>
-            <p>Reglas, bots de trading, resenas y experimentos compartidos.</p>
+            <p>Valuacion, riesgo, portafolios, backtesting y analisis cuantitativo.</p>
           </a>
         </div>
       </section>
 
-      <section class="hub-lower-grid">
-        <div class="hub-info-panel">
-          <p>Que es ChartBay</p>
-          <strong>ChartBay no intenta reemplazar el estudio: intenta poner las herramientas en la mesa.</strong>
-          <span>Modelos, mercados, datos y bitacora tecnica en una bahia de trabajo directa.</span>
+      <section class="classic-panel">
+        <h2>Modulos disponibles</h2>
+        <div class="classic-grid">
+          <a class="classic-card" href="{{ url_for('econometria') }}"><h3>Econometria</h3><p>Modelos, restricciones y diagnosticos.</p></a>
+          <a class="classic-card" href="{{ url_for('finanzas') }}"><h3>Finanzas</h3><p>Herramientas financieras en desarrollo.</p></a>
+          <a class="classic-card" href="{{ url_for('guia') }}"><h3>Guia</h3><p>Conceptos y curso de trabajo.</p></a>
+          <a class="classic-card" href="{{ url_for('compare_view') }}"><h3>Comparar</h3><p>Vista paralela de activos.</p></a>
+          <a class="classic-card" href="{{ url_for('reports') }}"><h3>Reportes</h3><p>Archivo de analisis generados.</p></a>
         </div>
-        <div class="hub-info-panel">
-          <p>En desarrollo</p>
-          <ul>
-            <li>Risk lab y valuacion</li>
-            <li>Backtesting cuantitativo</li>
-            <li>Dashboards macro</li>
-            <li>Senales y factor models</li>
-          </ul>
-        </div>
-        <div class="hub-info-panel hub-roadmap">
-          <p>Roadmap</p>
-          <span>01 Finanzas terminal</span>
-          <span>02 Datos macro extendidos</span>
-          <span>03 Reportes reproducibles</span>
-          <span>04 Bots auditables</span>
-        </div>
+      </section>
+
+      <section class="classic-panel">
+        <h2>En desarrollo</h2>
+        <ul class="classic-list classic-columns">
+          <li>Portfolio analytics</li>
+          <li>Risk metrics</li>
+          <li>Valuation</li>
+          <li>Backtesting</li>
+          <li>Fixed income</li>
+          <li>Derivatives</li>
+          <li>Factor models</li>
+        </ul>
+      </section>
+
+      <section class="classic-panel">
+        <h2>Que es ChartBay</h2>
+        <p>ChartBay es un laboratorio abierto para analizar datos, modelos y mercados desde el navegador.</p>
       </section>
     </main>
   </div>

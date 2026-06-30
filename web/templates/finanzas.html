@@ -8,38 +8,14 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <div class="wrap cb-hub-wrap cb-finance-wrap terminal-finance">
+  <div class="wrap classic-page finance-classic-page">
     {% include 'alfa_banner.html' %}
-    <header class="masthead cb-terminal-head finance-topbar">
-      <svg class="ship" viewBox="0 0 260 170" aria-hidden="true">
-        <path class="ship-wake" d="M28 144c18-9 31 7 49-2 17-8 31 7 49-1 18-8 31 8 50 0 18-8 33 4 56-3"/>
-        <path class="hull" d="M51 122c41 7 100 7 155-1-10 20-35 31-76 34-38-1-66-11-79-33z"/>
-        <path class="hull-line" d="M69 128c33 6 84 6 121 0"/>
-        <path class="mast" d="M128 122V16"/>
-        <path class="yard" d="M79 55c37-9 74-11 110-6"/>
-        <path class="yard" d="M67 93c42-8 91-9 133-3"/>
-        <path class="sail sail-main" d="M130 28c28 16 42 38 47 61-15 0-35-3-55-11 2-18 4-33 8-50z"/>
-        <path class="sail sail-left" d="M122 38c-25 19-39 42-45 70 15 0 32-5 48-16-2-18-3-35-3-54z"/>
-        <path class="sail sail-low" d="M126 83c29 11 53 15 74 13-16 15-38 24-67 28-3-12-5-26-7-41z"/>
-        <path class="rig" d="M128 18 72 119M128 18l91 109M82 56l-19 64M188 50l21 77"/>
-        <path class="flagbg" d="M130 15c22-4 39-1 54 8-8 8-8 17-1 27-17-8-33-10-53-5z"/>
-        <circle class="jolly" cx="157" cy="30" r="7"/>
-        <circle class="eye" cx="154.5" cy="28.8" r="1.2"/>
-        <circle class="eye" cx="159.5" cy="28.8" r="1.2"/>
-        <path class="jolly" d="M151 37h12v3h-12z"/>
-        <path class="jolly-line" d="M145 45l25-15M145 30l25 16"/>
-        <path class="chart" d="M103 108l10-12 11 6 15-22 13 8 18-27"/>
-        <path class="chart" d="M170 61h-15m15 0v15"/>
-      </svg>
-      <h1 class="wordmark" aria-label="Chart Bay">ℭ𝔥𝔞𝔯𝔱 <span class="bay">𝔅𝔞𝔶</span></h1>
-      <div class="finance-title-block">
-        <p>Finanzas</p>
-        <span>Market lab, risk tools &amp; valuation</span>
-      </div>
-      <nav class="mainnav">
+    <header class="masthead classic-header">
+      <div class="ship" aria-hidden="true"></div>
+      <p class="classic-site-name">The Chart Bay</p>
+      <nav class="mainnav classic-nav">
         <a href="{{ url_for('chartbay') }}">Hub</a><span class="sep">.</span>
         <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">.</span>
-        <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
         <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">.</span>
         <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">.</span>
         <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">.</span>
@@ -51,120 +27,62 @@
       </nav>
     </header>
 
-    <main class="finance-terminal">
-      <section class="market-tape" aria-label="Cinta de mercado">
-        <div><span>SPX</span><strong>6,142.20</strong><em class="up">+0.42%</em></div>
-        <div><span>BTC</span><strong>61,840</strong><em class="down">-1.18%</em></div>
-        <div><span>GOLD</span><strong>2,338.50</strong><em class="up">+0.31%</em></div>
-        <div><span>USDARS</span><strong>1,245.00</strong><em class="up">+0.09%</em></div>
-        <div><span>NASDAQ</span><strong>19,870.75</strong><em class="down">-0.22%</em></div>
-        <div><span>VIX</span><strong>14.82</strong><em class="down">-2.10%</em></div>
+    <main class="classic-container">
+      <section class="classic-intro">
+        <h1>Finanzas</h1>
+        <p>Laboratorio financiero para riesgo, valuacion, portafolios, backtesting y analisis cuantitativo.</p>
       </section>
 
-      <section class="finance-hero-terminal">
-        <div>
-          <p class="finance-kicker">CHARTBAY FINANCE DESK</p>
-          <h2>Terminal financiera para riesgo, mercados y modelos cuantitativos.</h2>
-          <p>Widgets densos, roadmap de herramientas y accesos directos al laboratorio de mercado.</p>
-        </div>
-        <div class="finance-actions">
-          <a href="{{ url_for('dashboard') }}">Mercados</a>
-          <a href="{{ url_for('compare_view') }}">Comparar</a>
-          <a href="{{ url_for('heatmap') }}">Heatmap</a>
+      <section class="classic-panel">
+        <h2>1. Modulos financieros</h2>
+        <div class="classic-grid finance-classic-modules">
+          <div class="classic-card"><h3>Portfolio Analytics</h3><p>Pesos, diversificacion y lectura de cartera.</p></div>
+          <div class="classic-card"><h3>Risk Metrics</h3><p>Volatilidad, perdida esperada y drawdowns.</p></div>
+          <div class="classic-card"><h3>Valuation</h3><p>Flujos, supuestos y sensibilidad.</p></div>
+          <div class="classic-card"><h3>Backtesting</h3><p>Reglas, costos y evaluacion historica.</p></div>
+          <div class="classic-card"><h3>Macro Dashboard</h3><p>Datos macro y contexto de mercado.</p></div>
+          <div class="classic-card"><h3>Fixed Income</h3><p>Curvas, duration y escenarios de tasa.</p></div>
+          <div class="classic-card"><h3>Derivatives</h3><p>Opciones, payoff y griegas.</p></div>
+          <div class="classic-card"><h3>Factor Models</h3><p>Exposiciones, betas y atribucion.</p></div>
+          <div class="classic-card"><h3>Trading Signals</h3><p>Senales tecnicas y filtros.</p></div>
+          <div class="classic-card"><h3>Quant Finance</h3><p>Modelos cuantitativos aplicados.</p></div>
         </div>
       </section>
 
-      <section class="finance-layout">
-        <div class="finance-module-grid" aria-label="Modulos financieros">
-          <a class="finance-module available" href="{{ url_for('dashboard') }}">
-            <span>LIVE</span>
-            <h3>Market Scanner</h3>
-            <p>Watchlist, tendencia, RSI, MACD, ATR, volumen y noticias.</p>
-            <strong class="up">ONLINE</strong>
-          </a>
-          <a class="finance-module available" href="{{ url_for('compare_view') }}">
-            <span>LIVE</span>
-            <h3>Portfolio Analytics</h3>
-            <p>Comparacion de activos y lectura paralela de instrumentos.</p>
-            <strong class="up">READY</strong>
-          </a>
-          <a class="finance-module available" href="{{ url_for('heatmap') }}">
-            <span>LIVE</span>
-            <h3>Macro Dashboard</h3>
-            <p>Mapa rapido de variaciones y pulso de watchlist.</p>
-            <strong class="up">READY</strong>
-          </a>
-          <div class="finance-module">
-            <span>ROADMAP</span>
-            <h3>Valuation</h3>
-            <p>DCF, multiples, escenarios y sensibilidad de supuestos.</p>
-            <strong>Q3</strong>
-          </div>
-          <div class="finance-module">
-            <span>ROADMAP</span>
-            <h3>Risk Metrics</h3>
-            <p>Volatilidad, VaR, CVaR, drawdown y stress testing.</p>
-            <strong>BUILD</strong>
-          </div>
-          <div class="finance-module">
-            <span>ROADMAP</span>
-            <h3>Quant Finance</h3>
-            <p>Modelos estocasticos, retornos, senales y research notebooks.</p>
-            <strong>LAB</strong>
-          </div>
-          <div class="finance-module">
-            <span>ROADMAP</span>
-            <h3>Backtesting</h3>
-            <p>Reglas, costos, slippage, drawdowns y bitacora de estrategias.</p>
-            <strong>SOON</strong>
-          </div>
-          <div class="finance-module">
-            <span>ROADMAP</span>
-            <h3>Fixed Income</h3>
-            <p>Curvas, duration, convexidad, spreads y escenarios de tasa.</p>
-            <strong>DESK</strong>
-          </div>
-          <div class="finance-module">
-            <span>ROADMAP</span>
-            <h3>Derivatives</h3>
-            <p>Opciones, griegas, volatilidad implicita y payoff maps.</p>
-            <strong>DESK</strong>
-          </div>
-          <div class="finance-module">
-            <span>ROADMAP</span>
-            <h3>Factor Models</h3>
-            <p>Exposiciones, betas, factores macro y atribucion de retornos.</p>
-            <strong>MODEL</strong>
-          </div>
-          <div class="finance-module">
-            <span>ROADMAP</span>
-            <h3>Trading Signals</h3>
-            <p>Senales tecnicas, filtros, alertas y evaluacion historica.</p>
-            <strong>SIGNAL</strong>
-          </div>
-        </div>
+      <section class="classic-panel">
+        <h2>2. Mercado de referencia</h2>
+        <table class="classic-table">
+          <thead>
+            <tr><th>Activo</th><th>Precio</th><th>Variacion</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>SPX</td><td>6,142.20</td><td class="classic-up">+0.42%</td></tr>
+            <tr><td>BTC</td><td>61,840</td><td class="classic-down">-1.18%</td></tr>
+            <tr><td>GOLD</td><td>2,338.50</td><td class="classic-up">+0.31%</td></tr>
+            <tr><td>USDARS</td><td>1,245.00</td><td class="classic-up">+0.09%</td></tr>
+            <tr><td>VIX</td><td>14.82</td><td class="classic-down">-2.10%</td></tr>
+          </tbody>
+        </table>
+      </section>
 
-        <aside class="finance-side-panel" aria-label="Roadmap financiero">
-          <div class="finance-side-section">
-            <p>Proximamente</p>
-            <ol>
-              <li><span>01</span> Risk engine</li>
-              <li><span>02</span> Valuation sheets</li>
-              <li><span>03</span> Portfolio optimizer</li>
-              <li><span>04</span> Backtesting lab</li>
-            </ol>
-          </div>
-          <div class="finance-side-section">
-            <p>Herramientas en desarrollo</p>
-            <div class="finance-metric"><span>VaR module</span><strong>62%</strong></div>
-            <div class="finance-metric"><span>DCF engine</span><strong>41%</strong></div>
-            <div class="finance-metric"><span>Factor desk</span><strong>28%</strong></div>
-          </div>
-          <div class="finance-side-section finance-roadmap-note">
-            <p>Roadmap financiero</p>
-            <span>Mas terminal, menos landing. Datos primero, adornos despues.</span>
-          </div>
-        </aside>
+      <section class="classic-panel">
+        <h2>3. Proximamente</h2>
+        <ul class="classic-list classic-columns">
+          <li>calculo de retornos</li>
+          <li>volatilidad</li>
+          <li>Sharpe ratio</li>
+          <li>drawdown</li>
+          <li>beta</li>
+          <li>CAPM</li>
+          <li>valuacion basica</li>
+          <li>backtesting simple</li>
+          <li>analisis de portafolios</li>
+        </ul>
+      </section>
+
+      <section class="classic-panel">
+        <h2>4. Nota</h2>
+        <p>Esta seccion esta en desarrollo. Las herramientas financieras se iran integrando sin modificar el modulo de Econometria.</p>
       </section>
     </main>
   </div>

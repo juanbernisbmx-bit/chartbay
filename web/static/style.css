@@ -2695,3 +2695,147 @@ body:has(.terminal-finance){
     margin-top:14px;
   }
 }
+
+/* ===========================================================
+   Classic ChartBay pages: Hub + Finanzas.
+   Uses the same plain visual language as Econometria without touching .qb-*.
+   =========================================================== */
+.classic-page{
+  width:min(760px,calc(100% - 20px));
+}
+.classic-site-name{
+  margin:0 0 6px;
+  color:#1b120c;
+  font-family:Georgia,"Times New Roman",serif;
+  font-size:26px;
+  font-weight:700;
+  text-align:center;
+}
+.classic-container{
+  margin:0 auto;
+}
+.classic-intro{
+  margin:10px auto 12px;
+  text-align:center;
+}
+.classic-intro h1{
+  margin:4px 0;
+  color:#000;
+  font-family:Georgia,"Times New Roman",serif;
+  font-size:32px;
+  font-weight:700;
+}
+.classic-intro p{
+  max-width:620px;
+  margin:0 auto;
+  color:#222;
+  font-size:13px;
+  line-height:1.6;
+}
+.classic-panel{
+  margin:10px 0;
+  padding:10px;
+  border:1px solid var(--pb-line);
+  background:#fff;
+  color:#111;
+}
+.classic-panel h2{
+  margin:0 0 8px;
+  color:#000;
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:15px;
+  font-weight:700;
+}
+.classic-panel p{
+  margin:0;
+  color:#222;
+  font-size:13px;
+  line-height:1.6;
+}
+.classic-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+.classic-grid-two{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.classic-card{
+  display:block;
+  min-height:82px;
+  padding:9px 10px;
+  border:1px solid #c9c9bf;
+  background:#f8f8f4;
+  color:#111;
+  text-decoration:none;
+}
+.classic-card:visited{color:#111}
+.classic-card:hover{
+  background:#f1f1ea;
+  color:#111;
+  border-color:#aaa;
+  text-decoration:none;
+}
+.classic-card-large{
+  min-height:112px;
+}
+.classic-card h3{
+  margin:0 0 5px;
+  color:#000;
+  font-family:Georgia,"Times New Roman",serif;
+  font-size:19px;
+  line-height:1.15;
+}
+.classic-card p{
+  margin:0;
+  color:#333;
+  font-size:13px;
+  line-height:1.45;
+}
+.classic-list{
+  margin:0;
+  padding-left:20px;
+  color:#222;
+  font-size:13px;
+  line-height:1.7;
+}
+.classic-columns{
+  columns:2;
+  column-gap:28px;
+}
+.classic-table{
+  width:100%;
+  border-collapse:collapse;
+  border:1px solid var(--pb-line);
+  background:#fff;
+  color:#000;
+  font-size:13px;
+}
+.classic-table th,
+.classic-table td{
+  padding:5px 7px;
+  border:1px solid #d0d0c8;
+  text-align:left;
+}
+.classic-table th{
+  background:#e8e8df;
+  font-weight:700;
+}
+.classic-table td:nth-child(2),
+.classic-table td:nth-child(3){
+  text-align:right;
+  font-family:Arial,Helvetica,sans-serif;
+}
+.classic-up{color:#0a5d2e}
+.classic-down{color:#8b0000}
+
+@media(max-width:760px){
+  .classic-page{width:calc(100% - 14px)}
+  .classic-grid,
+  .classic-grid-two{
+    grid-template-columns:1fr;
+  }
+  .classic-columns{
+    columns:1;
+  }
+}
