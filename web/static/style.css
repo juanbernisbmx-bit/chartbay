@@ -1794,6 +1794,62 @@ input,select,textarea,.search input,.compare-input,.filterbar input[type=text],.
   max-width:980px;
   margin:0 auto;
 }
+.cb-branches{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  max-width:980px;
+  margin:0 auto 14px;
+}
+.cb-branch-card{
+  display:block;
+  min-height:210px;
+  padding:18px;
+  background:#fff;
+  border:1px solid var(--pb-line);
+  color:#111;
+}
+.cb-branch-card:visited{color:#111}
+.cb-branch-card:hover{
+  color:#111;
+  background:#faf9f4;
+  border-color:#b9ab92;
+}
+.cb-branch-card span,.cb-area-label,.cb-roadmap-card span{
+  display:block;
+  margin:0 0 10px;
+  color:var(--pb-brown);
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.cb-branch-card h3{
+  margin:0 0 8px;
+  color:#000;
+  font-family:Georgia,"Times New Roman",serif;
+  font-size:30px;
+  line-height:1.1;
+}
+.cb-branch-card p{
+  margin:0 0 14px;
+  color:#333;
+  font-size:14px;
+  line-height:1.55;
+}
+.cb-branch-card strong{
+  display:inline-flex;
+  min-height:24px;
+  align-items:center;
+  margin:0 6px 6px 0;
+  padding:3px 9px;
+  border:1px solid #d8cdb3;
+  border-radius:12px;
+  background:#f6f1e4;
+  color:#5a4632;
+  font-size:11px;
+}
 .cb-hub-card{
   display:block;
   min-height:150px;
@@ -1860,6 +1916,7 @@ input,select,textarea,.search input,.compare-input,.filterbar input[type=text],.
 }
 
 @media (max-width:820px){
+  .cb-branches{grid-template-columns:1fr}
   .cb-hub-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .cb-hub-strip{align-items:flex-start;flex-direction:column}
 }
@@ -2007,6 +2064,28 @@ body:has(.cb-hub-wrap){
   color:#a7b0bd;
   text-decoration:none;
 }
+.cb-hub-wrap .cb-branch-card{
+  background:#0d1117;
+  border-color:#202a36;
+  color:#e6edf3;
+}
+.cb-hub-wrap .cb-branch-card:visited{color:#e6edf3}
+.cb-hub-wrap .cb-branch-card:hover{
+  color:#e6edf3;
+  background:#111821;
+  border-color:#344253;
+}
+.cb-hub-wrap .cb-branch-card span{color:#4de3b5}
+.cb-hub-wrap .cb-branch-card h3{
+  color:#e6edf3;
+  font-family:Inter,"Segoe UI",Roboto,Arial,sans-serif;
+}
+.cb-hub-wrap .cb-branch-card p{color:#a7b0bd}
+.cb-hub-wrap .cb-branch-card strong{
+  border-color:#263345;
+  background:#111821;
+  color:#c6d1de;
+}
 .cb-hub-wrap .cb-hub-strip{
   background:#0d1117;
   border-color:#202a36;
@@ -2025,4 +2104,42 @@ body:has(.cb-hub-wrap){
     font-size:10px;
   }
   .cb-hub-wrap .cb-hub{padding-top:16px}
+}
+
+/* Finanzas area */
+.cb-area-hero{max-width:860px}
+.cb-area-split{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+  max-width:980px;
+  margin:0 auto;
+}
+.cb-area-column{min-width:0}
+.cb-area-column .cb-hub-card,.cb-roadmap-card{
+  min-height:128px;
+  margin:0 0 10px;
+}
+.cb-roadmap-card{
+  display:block;
+  padding:14px;
+  background:#0d1117;
+  border:1px dashed #344253;
+  color:#e6edf3;
+}
+.cb-roadmap-card h3{
+  margin:0 0 7px;
+  color:#e6edf3;
+  font-size:21px;
+  line-height:1.15;
+}
+.cb-roadmap-card p{
+  margin:0;
+  color:#a7b0bd;
+  font-size:13px;
+  line-height:1.55;
+}
+.cb-finance-wrap .cb-area-label,.cb-finance-wrap .cb-roadmap-card span{color:#4de3b5}
+@media (max-width:760px){
+  .cb-area-split{grid-template-columns:1fr}
 }

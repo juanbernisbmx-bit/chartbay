@@ -331,6 +331,11 @@ def chartbay():
     return render_template("chartbay.html")
 
 
+@app.route("/finanzas")
+def finanzas():
+    return render_template("finanzas.html")
+
+
 @app.route("/reports")
 def reports():
     files = []
@@ -605,9 +610,14 @@ def guia():
     return render_template("guia.html")
 
 
+@app.route("/econometria")
+def econometria():
+    return render_template("quantbay.html")
+
+
 @app.route("/quantbay")
 def quantbay():
-    return render_template("quantbay.html")
+    return redirect(url_for("econometria"))
 
 
 @app.route("/datasets/<path:name>")

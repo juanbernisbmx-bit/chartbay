@@ -20,7 +20,8 @@
         <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">.</span>
         <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">.</span>
         <strong>Guia</strong><span class="sep">.</span>
-        <a href="{{ url_for('quantbay') }}">Quant</a><span class="sep">.</span>
+        <a href="{{ url_for('econometria') }}">Econometria</a><span class="sep">.</span>
+        <a href="{{ url_for('finanzas') }}">Finanzas</a><span class="sep">.</span>
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">.</span>
         {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">.</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
       </nav>
@@ -206,7 +207,7 @@
             <details class="guia-sub"><summary>Flujo de trabajo</summary><div class="guia-sub-body">
               <p><strong>Que es.</strong> El recorrido tipico de un analisis.</p>
               <p><strong>Como.</strong> Subi un CSV &rarr; elegi Y y X &rarr; (opcional) restriccion &rarr; calcula &rarr; revisa diagnosticos &rarr; exporta.</p>
-              <p><strong>En ChartBay.</strong> Todo en la pagina Quant.</p>
+              <p><strong>En ChartBay.</strong> Todo en el area Econometria.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
@@ -417,7 +418,7 @@
             <details class="guia-sub"><summary>Indicadores tecnicos</summary><div class="guia-sub-body">
               <p><strong>Que es.</strong> Señales sobre precio y volumen (RSI, MACD, etc.).</p>
               <p><strong>Como se interpreta.</strong> Ver el area Finanzas para cada uno.</p>
-              <p><strong>En ChartBay.</strong> Pestaña Finanzas y panel Mercados.</p>
+              <p><strong>En ChartBay.</strong> Area Finanzas y panel Mercados.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
@@ -468,7 +469,7 @@
 
             <details class="guia-sub"><summary>Antes de empezar</summary><div class="guia-sub-body">
               <p><strong>Que es.</strong> Datos listos para probar sin armar nada.</p>
-              <p><strong>En ChartBay.</strong> "Descargar ejemplo CSV" en Quant, o la "Demo guiada" de un click.</p>
+              <p><strong>En ChartBay.</strong> "Descargar ejemplo CSV" en Econometria, o la "Demo guiada" de un click.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
