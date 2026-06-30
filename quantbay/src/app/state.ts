@@ -2,11 +2,13 @@ import type { ParsedCSV } from '../csvParser';
 import type { RegressionResult } from '../regression';
 import type { LogisticResult } from '../services/analysisService';
 import type { TimeSeriesAnalysisResult } from '../timeseries/types';
+import type { FunctionalForm } from '../functionalForms';
 
 export type QuantBayMode = 'regression' | 'timeseries';
 
 export interface QuantBayAppState {
   activeMode: QuantBayMode;
+  activeFunctionalForm: FunctionalForm;
   csvData: ParsedCSV | null;
   activeChart: any;
   residFittedChart: any;
@@ -23,6 +25,7 @@ export interface QuantBayAppState {
 
 export const appState: QuantBayAppState = {
   activeMode: 'regression',
+  activeFunctionalForm: 'lin-lin',
   csvData: null,
   activeChart: null,
   residFittedChart: null,

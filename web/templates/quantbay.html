@@ -137,6 +137,15 @@
               <div id="qb-x-checks"></div>
             </div>
           </div>
+          <div style="margin-top:14px">
+            <label for="qb-form" class="qb-label">Forma funcional</label>
+            <select id="qb-form" style="width:100%;max-width:240px;margin-top:4px">
+              <option value="lin-lin">Lin-Lin &mdash; efecto marginal</option>
+              <option value="log-lin">Log-Lin &mdash; semi-elasticidad en Y</option>
+              <option value="lin-log">Lin-Log &mdash; semi-elasticidad en X</option>
+              <option value="log-log">Log-Log &mdash; elasticidad directa</option>
+            </select>
+          </div>
           <details id="qb-rls-details" style="margin-top:14px">
             <summary style="cursor:pointer;font-weight:600;font-size:13px;user-select:none">
               Restricción RLS <span class="muted" style="font-weight:400">(opcional)</span>
@@ -261,6 +270,7 @@
 
           <p class="qb-label">Ecuación estimada</p>
           <div class="qb-eq" id="qb-equation"></div>
+          <div id="qb-form-note" class="qb-interp" style="display:none;margin-top:6px;font-size:12px"></div>
 
           <div class="qb-results-grid">
             <div>

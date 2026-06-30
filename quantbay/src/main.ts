@@ -403,7 +403,7 @@ async function onRun(): Promise<void> {
 
   try {
     await technicalLoadSequence();
-    const output = runRegressionMode(appState.csvData, yName, xNames, rlsConstraint);
+    const output = runRegressionMode(appState.csvData, yName, xNames, rlsConstraint, appState.activeFunctionalForm);
 
     appState.lastResult = output.result;
     appState.lastCorr = output.corrMatrix;
@@ -422,6 +422,7 @@ async function onRun(): Promise<void> {
         binary: output.binary,
         leaks: output.leaks,
         logitResult: output.logitResult,
+        functionalForm: output.functionalForm,
       }
     );
     setText('qb-status-obs', output.result.nObs);
@@ -463,7 +464,7 @@ function onAutoRun(): void {
   }
 
   try {
-    const output = runAutoRegressionMode(appState.csvData, yName, xNames, rlsConstraint);
+    const output = runAutoRegressionMode(appState.csvData, yName, xNames, rlsConstraint, appState.activeFunctionalForm);
 
     appState.lastResult   = output.result;
     appState.lastCorr     = output.corrMatrix;
@@ -478,7 +479,8 @@ function onAutoRun(): void {
       output.dropped,
       output.corrMatrix,
       output.corrColumns,
-      output.vifValues
+      output.vifValues,
+      { functionalForm: output.functionalForm }
     );
 
     setEngineStatus('COMPLETADO');
@@ -573,6 +575,13 @@ function init(): void {
 
   $('qb-y')?.addEventListener('change', () => {
     applyYIndicators(($('qb-y') as HTMLSelectElement)?.value ?? '');
+  });
+
+  $('qb-form')?.addEventListener('change', () => {
+    const val = ($('qb-form') as HTMLSelectElement)?.value ?? 'lin-lin';
+    if (val === 'lin-lin' || val === 'log-lin' || val === 'lin-log' || val === 'log-log') {
+      appState.activeFunctionalForm = val;
+    }
   });
 
   $('qb-rls-input')?.addEventListener('input', () => {

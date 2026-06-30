@@ -1,5 +1,6 @@
 import type { RegressionResult } from '../regression';
 import type { LeakageSignal, LogisticResult } from '../services/analysisService';
+import type { FunctionalForm } from '../functionalForms';
 import { interpret } from '../interpretation';
 import { $ } from '../app/dom';
 import { appState } from '../app/state';
@@ -19,15 +20,17 @@ export function renderRegressionResults(
     binary?: boolean;
     leaks?: LeakageSignal[];
     logitResult?: LogisticResult | null;
+    functionalForm?: FunctionalForm;
   } = {}
 ): void {
-  const { binary = false, leaks = [], logitResult = null } = checks;
+  const { binary = false, leaks = [], logitResult = null, functionalForm = 'lin-lin' } = checks;
   appState.lastDropped = dropped;
   renderBinaryWarn(binary, result.yName);
   renderLeakageWarn(leaks);
   const eq = $('qb-equation');
   if (eq) eq.textContent = result.equation;
 
+  renderFunctionalFormNote(functionalForm);
   renderCoefTable(result);
   renderStatsTable(result, dropped);
   renderRLSPanel(result);
@@ -53,6 +56,20 @@ export function renderRegressionResults(
           )
           .join('')}</tbody>
       </table>`;
+}
+
+function renderFunctionalFormNote(form: FunctionalForm): void {
+  const el = $('qb-form-note');
+  if (!el) return;
+  const notes: Record<FunctionalForm, string> = {
+    'lin-lin': '',
+    'log-lin': 'Modelo log-lin: Y está en logaritmos. Cada β es una semi-elasticidad — un incremento unitario en X cambia Y en ≈ 100·β%. Efecto exacto: 100·(e^β − 1)%.',
+    'lin-log': 'Modelo lin-log: los regresores están en logaritmos. Cada β mide el cambio en Y ante un incremento del 1% en X, en ≈ β/100 unidades.',
+    'log-log': 'Modelo log-log: Y y los regresores están en logaritmos. Cada β es una elasticidad — un incremento del 1% en X cambia Y en ≈ β%.',
+  };
+  const note = notes[form];
+  el.textContent = note;
+  el.style.display = note ? '' : 'none';
 }
 
 function renderRLSPanel(result: RegressionResult): void {
