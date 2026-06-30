@@ -1,0 +1,54 @@
+{
+  "description": "Series transforms validated against pandas / numpy",
+  "source": "pandas Series.diff / pct_change / rolling, numpy.log",
+  "tolerance_notes": "~1e-9; nulls where the transform is undefined at the first/early index",
+  "data": {
+    "levels": [
+      100.0,
+      102.0,
+      99.0,
+      105.0,
+      108.0,
+      104.0,
+      110.0
+    ]
+  },
+  "expected": {
+    "simpleDifference": [
+      null,
+      2.0,
+      -3.0,
+      6.0,
+      3.0,
+      -4.0,
+      6.0
+    ],
+    "percentReturn": [
+      null,
+      2.0000000000000018,
+      -2.941176470588236,
+      6.060606060606055,
+      2.857142857142847,
+      -3.703703703703709,
+      5.769230769230771
+    ],
+    "logReturn": [
+      null,
+      0.01980262729617973,
+      -0.02985296314968116,
+      0.058840500022933395,
+      0.028170876966696224,
+      -0.037740327982847086,
+      0.05608946665104358
+    ],
+    "simpleMovingAverage_window3": [
+      null,
+      null,
+      100.33333333333333,
+      102.0,
+      104.0,
+      105.66666666666667,
+      107.33333333333333
+    ]
+  }
+}
