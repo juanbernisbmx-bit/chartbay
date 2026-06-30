@@ -324,6 +324,113 @@ def make_transforms():
     })
 
 
+# ---------------------------------------------------------------------------
+# Functional forms
+# ---------------------------------------------------------------------------
+
+def make_functional_forms():
+    """Fixtures for lin-lin, log-lin, lin-log, log-log.
+
+    All datasets use small, fixed, POSITIVE values so every form is valid.
+    statsmodels always receives the already-transformed arrays; it adds the
+    constant via sm.add_constant (ChartBay does the same internally in runOLS).
+    """
+
+    # Small dataset: all values strictly positive — required for log transforms.
+    x_raw = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+    y_raw = [2.1, 4.2, 5.9, 8.3, 10.4, 12.1, 14.2, 16.0, 17.8, 20.1]
+
+    # Two-regressor dataset — also all positive.
+    x1_raw = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]
+    x2_raw = [2.0, 3.0, 2.5, 4.0, 3.5, 5.0, 4.5, 6.0, 5.5, 7.0, 6.5, 8.0]
+    y2_raw = [1.5, 2.8, 3.1, 4.5, 5.2, 6.8, 7.3, 8.9, 9.4, 11.0, 11.5, 13.1]
+
+    cases = []
+
+    # ── lin-lin ──────────────────────────────────────────────────────────────
+    ref = ols_reference([[x] for x in x_raw], y_raw)
+    cases.append({
+        "form": "lin-lin",
+        "description": "lin-lin: Y = b0 + b1*X (no transform), statsmodels.OLS",
+        "data": {"x": x_raw, "y": y_raw},
+        "transformNote": "No transformation applied. Y and X passed as-is.",
+        "expected": ref,
+        "interpretation": {
+            "kind": "absolute",
+            "approxRule": "A 1-unit increase in X changes Y by beta units."
+        }
+    })
+
+    # ── log-lin ──────────────────────────────────────────────────────────────
+    ln_y = [math.log(v) for v in y_raw]
+    ref = ols_reference([[x] for x in x_raw], ln_y)
+    cases.append({
+        "form": "log-lin",
+        "description": "log-lin: ln(Y) = b0 + b1*X, statsmodels.OLS on transformed data",
+        "data": {"x": x_raw, "y": y_raw},
+        "transformNote": "Y is log-transformed. X is passed as-is.",
+        "expected": ref,
+        "interpretation": {
+            "kind": "semielasticity",
+            "approxRule": "A 1-unit increase in X changes Y by approximately 100*beta %.",
+            "exactRule": "Exact: 100*(exp(beta)-1) %."
+        }
+    })
+
+    # ── lin-log ──────────────────────────────────────────────────────────────
+    ln_x = [math.log(v) for v in x_raw]
+    ref = ols_reference([[lx] for lx in ln_x], y_raw)
+    cases.append({
+        "form": "lin-log",
+        "description": "lin-log: Y = b0 + b1*ln(X), statsmodels.OLS on transformed data",
+        "data": {"x": x_raw, "y": y_raw},
+        "transformNote": "X is log-transformed. Y is passed as-is.",
+        "expected": ref,
+        "interpretation": {
+            "kind": "semielasticity-x",
+            "approxRule": "A 1% increase in X changes Y by approximately beta/100 units."
+        }
+    })
+
+    # ── log-log ───────────────────────────────────────────────────────────────
+    ref = ols_reference([[lx] for lx in ln_x], ln_y)
+    cases.append({
+        "form": "log-log",
+        "description": "log-log: ln(Y) = b0 + b1*ln(X) (elasticity), statsmodels.OLS",
+        "data": {"x": x_raw, "y": y_raw},
+        "transformNote": "Both Y and X are log-transformed.",
+        "expected": ref,
+        "interpretation": {
+            "kind": "elasticity",
+            "approxRule": "A 1% increase in X changes Y by approximately beta %."
+        }
+    })
+
+    # ── log-log with two regressors ───────────────────────────────────────────
+    ln_x1 = [math.log(v) for v in x1_raw]
+    ln_x2 = [math.log(v) for v in x2_raw]
+    ln_y2 = [math.log(v) for v in y2_raw]
+    ref2 = ols_reference([[a, b] for a, b in zip(ln_x1, ln_x2)], ln_y2)
+    cases.append({
+        "form": "log-log",
+        "description": "log-log two regressors: ln(Y) = b0 + b1*ln(X1) + b2*ln(X2)",
+        "data": {"x1": x1_raw, "x2": x2_raw, "y": y2_raw},
+        "transformNote": "Y, X1 and X2 all log-transformed.",
+        "expected": ref2,
+        "interpretation": {
+            "kind": "elasticity",
+            "approxRule": "Each beta is an elasticity with respect to its regressor."
+        }
+    })
+
+    write("functional_forms_statsmodels.json", {
+        "description": "Functional forms (lin-lin, log-lin, lin-log, log-log) reference via statsmodels.OLS",
+        "source": "Python statsmodels / numpy — np.log, sm.add_constant, OLS.fit()",
+        "tolerance_notes": "coeffs/fitted/resid/R2 ~1e-9; std errors ~1e-7; t/F/p ~1e-6",
+        "cases": cases,
+    })
+
+
 if __name__ == "__main__":
     make_ols_simple()
     make_ols_multiple()
@@ -331,4 +438,5 @@ if __name__ == "__main__":
     make_rls()
     make_time_series()
     make_transforms()
+    make_functional_forms()
     print("All fixtures generated.")
