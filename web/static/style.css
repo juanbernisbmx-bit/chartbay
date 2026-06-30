@@ -1869,3 +1869,160 @@ input,select,textarea,.search input,.compare-input,.filterbar input[type=text],.
   .cb-hub-grid{grid-template-columns:1fr}
   .cb-hub-card{min-height:auto}
 }
+
+/* Hub dark skin: scoped so the Guia/Aprender paper skin stays untouched. */
+.cb-hub-wrap{
+  background:rgba(13,17,23,.92);
+  border-color:#202a36;
+  color:#e6edf3;
+}
+body:has(.cb-hub-wrap){
+  background:
+    linear-gradient(180deg,rgba(122,167,255,.035),transparent 260px),
+    linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px),
+    linear-gradient(180deg,rgba(255,255,255,.02) 1px,transparent 1px),
+    #07090d;
+  background-size:auto,48px 48px,48px 48px,auto;
+}
+.cb-hub-wrap a{text-decoration:none}
+.cb-hub-wrap .alfa-banner{
+  background:#0b1119;
+  color:#f2c94c;
+  border-bottom:1px solid rgba(242,201,76,.28);
+}
+.cb-hub-wrap .masthead{
+  padding:18px 20px 0;
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:6px 24px;
+  align-items:end;
+  text-align:left;
+}
+.cb-hub-wrap .ship{display:none}
+.cb-hub-wrap .wordmark{
+  display:block;
+  margin:0;
+  color:#e6edf3;
+  font-family:Inter,"Segoe UI",Roboto,Arial,sans-serif;
+  font-size:31px;
+  font-weight:750;
+  line-height:1;
+  letter-spacing:0;
+  text-shadow:none;
+}
+.cb-hub-wrap .tagline{
+  grid-column:1/-1;
+  max-width:720px;
+  margin:2px 0 12px;
+  color:#7d8896;
+  font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace;
+  font-size:12px;
+}
+.cb-hub-wrap .mainnav{
+  justify-self:end;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:4px;
+  flex-wrap:wrap;
+  padding:0 0 8px;
+  margin:0;
+  background:transparent;
+  border:0;
+  text-align:left;
+}
+.cb-hub-wrap .mainnav a,.cb-hub-wrap .mainnav strong{
+  display:inline-flex;
+  align-items:center;
+  min-height:30px;
+  padding:0 10px;
+  border:1px solid transparent;
+  border-radius:5px;
+  color:#7d8896;
+  background:transparent;
+  font-family:Inter,"Segoe UI",Roboto,Arial,sans-serif;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  text-decoration:none;
+}
+.cb-hub-wrap .mainnav a:visited{color:#7d8896}
+.cb-hub-wrap .mainnav a:hover,.cb-hub-wrap .mainnav strong{
+  color:#e6edf3;
+  background:#111821;
+  border-color:#202a36;
+}
+.cb-hub-wrap .mainnav .sep{display:none}
+.cb-hub-wrap .cb-hub{
+  padding:20px 20px 26px;
+  border-top:1px solid #151d27;
+}
+.cb-hub-wrap .cb-hub-hero h2{
+  color:#e6edf3;
+  font-family:Inter,"Segoe UI",Roboto,Arial,sans-serif;
+  font-size:38px;
+  font-weight:760;
+}
+.cb-hub-wrap .cb-hub-hero p{color:#a7b0bd}
+.cb-hub-wrap .cb-hub-kicker{color:#4de3b5}
+.cb-hub-wrap .cb-hub-actions .btn-ink{
+  min-height:36px;
+  border:1px solid rgba(77,227,181,.48);
+  border-radius:5px;
+  background:#4de3b5;
+  color:#04110d;
+  padding:8px 14px;
+  font-family:Inter,"Segoe UI",Roboto,Arial,sans-serif;
+  font-size:12px;
+  font-weight:800;
+  box-shadow:none;
+}
+.cb-hub-wrap .cb-hub-actions .btn-ink:hover{filter:brightness(1.07)}
+.cb-hub-wrap .cb-hub-link{
+  color:#7aa7ff;
+  font-weight:800;
+}
+.cb-hub-wrap .cb-hub-link:hover{color:#4de3b5}
+.cb-hub-wrap .cb-hub-card{
+  background:#0d1117;
+  border-color:#202a36;
+  color:#e6edf3;
+  box-shadow:none;
+}
+.cb-hub-wrap .cb-hub-card:visited{color:#e6edf3}
+.cb-hub-wrap .cb-hub-card:hover{
+  color:#e6edf3;
+  background:#111821;
+  border-color:#344253;
+}
+.cb-hub-wrap .cb-hub-card span{color:#4de3b5}
+.cb-hub-wrap .cb-hub-card h3{
+  color:#e6edf3;
+  font-family:Inter,"Segoe UI",Roboto,Arial,sans-serif;
+  font-size:21px;
+  text-decoration:none;
+}
+.cb-hub-wrap .cb-hub-card p{
+  color:#a7b0bd;
+  text-decoration:none;
+}
+.cb-hub-wrap .cb-hub-strip{
+  background:#0d1117;
+  border-color:#202a36;
+}
+.cb-hub-wrap .cb-hub-strip strong{color:#e6edf3}
+.cb-hub-wrap .cb-hub-strip p{color:#a7b0bd}
+
+@media (max-width:720px){
+  .cb-hub-wrap .masthead{display:block;text-align:center}
+  .cb-hub-wrap .wordmark{font-size:28px}
+  .cb-hub-wrap .tagline{margin:7px auto 10px}
+  .cb-hub-wrap .mainnav{justify-content:center;text-align:center}
+  .cb-hub-wrap .mainnav a,.cb-hub-wrap .mainnav strong{
+    min-height:28px;
+    padding:0 8px;
+    font-size:10px;
+  }
+  .cb-hub-wrap .cb-hub{padding-top:16px}
+}
