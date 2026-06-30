@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ChartBay - Quant Bay</title>
+  <title>ChartBay - Econometria</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -39,7 +39,8 @@
         <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">.</span>
         <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">.</span>
         <a href="{{ url_for('guia') }}">Guía</a><span class="sep">.</span>
-        <strong>Quant</strong><span class="sep">.</span>
+        <strong>Econometria</strong><span class="sep">.</span>
+        <a href="{{ url_for('finanzas') }}">Finanzas</a><span class="sep">.</span>
         <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">.</span>
         {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">.</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
       </nav>
@@ -47,11 +48,11 @@
 
     <section class="qb-shell-head">
       <div>
-        <p class="qb-kicker">Chart Bay / Quant</p>
-        <h2>Quant Bay</h2>
-        <p>Cargá un CSV, elegí tus variables y obtenés una regresión OLS completa: coeficientes, gráficos e interpretación automática. Todo corre en tu navegador — tus datos no salen de tu computadora.</p>
+        <p class="qb-kicker">Chart Bay / Econometria</p>
+        <h2>Econometria</h2>
+        <p>Laboratorio econometrico para CSV, regresion OLS, restricciones RLS, diagnosticos, tests estadisticos y series de tiempo. Todo corre en tu navegador: tus datos no salen de tu computadora.</p>
       </div>
-      <div class="qb-terminal-chip">Regresión OLS</div>
+      <div class="qb-terminal-chip">OLS / RLS / Series</div>
     </section>
 
     <section class="qb-section" id="qb-mode-panel">
@@ -76,7 +77,7 @@
     <div id="qb-error" style="display:none"></div>
 
     <div class="qb-workspace">
-      <aside class="qb-sidebar" aria-label="Quant Bay modules">
+      <aside class="qb-sidebar" aria-label="Modulos de Econometria">
         <div class="qb-side-label">Pasos</div>
         <a href="#qb-upload-panel">1. CSV</a>
         <a href="#qb-vars">2. Variables</a>
@@ -96,7 +97,7 @@
             <input type="file" id="qb-file" accept=".csv" style="display:none">
             <span id="qb-filename" class="muted">Todavía no subiste un archivo</span>
           </div>
-          <p class="muted qb-help">El archivo tiene que tener nombres de columnas en la primera fila. Quant Bay detecta automáticamente las columnas numéricas. &nbsp;<a href="/datasets/01_simple_linear.csv" download="ejemplo_quant.csv" class="muted" style="text-decoration:underline">Descargar ejemplo CSV</a></p>
+          <p class="muted qb-help">El archivo tiene que tener nombres de columnas en la primera fila. Econometria detecta automaticamente las columnas numericas. &nbsp;<a href="/datasets/01_simple_linear.csv" download="ejemplo_econometria.csv" class="muted" style="text-decoration:underline">Descargar ejemplo CSV</a></p>
           <div class="qb-runlog" id="qb-runlog" aria-live="polite"></div>
         </section>
 
@@ -105,7 +106,7 @@
             <p class="qb-subtitle">Demo guiada</p>
             <span>Ejemplos de un click</span>
           </div>
-          <div class="qb-demo-grid" aria-label="Ejemplos de Quant Bay">
+          <div class="qb-demo-grid" aria-label="Ejemplos de Econometria">
             <button class="btn-ink qb-demo-btn" data-demo="ols-simple">OLS simple</button>
             <button class="btn-ink qb-demo-btn" data-demo="rls-beta1-zero">RLS beta1 = 0</button>
             <button class="btn-ink qb-demo-btn" data-demo="rls-beta1-beta2">RLS beta1 = beta2</button>

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay - Finanzas</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="wrap cb-hub-wrap cb-finance-wrap">
+    {% include 'alfa_banner.html' %}
+    <header class="masthead">
+      <div class="ship" aria-hidden="true"></div>
+      <h1 class="wordmark" aria-label="Chart Bay">Chart Bay</h1>
+      <p class="tagline">Area financiera: mercados, riesgo, portafolio y Quant Finance.</p>
+      <nav class="mainnav">
+        <a href="{{ url_for('chartbay') }}">Hub</a><span class="sep">.</span>
+        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">.</span>
+        <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
+        <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">.</span>
+        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">.</span>
+        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">.</span>
+        <a href="{{ url_for('guia') }}">Guia</a><span class="sep">.</span>
+        <a href="{{ url_for('econometria') }}">Econometria</a><span class="sep">.</span>
+        <strong>Finanzas</strong><span class="sep">.</span>
+        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">.</span>
+        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">.</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
+      </nav>
+    </header>
+
+    <main class="cb-hub">
+      <section class="cb-hub-hero cb-area-hero">
+        <p class="cb-hub-kicker">ChartBay / Finanzas</p>
+        <h2>Herramientas financieras y Quant Finance</h2>
+        <p>
+          Esta area separa el trabajo financiero del laboratorio econometrico:
+          lectura de mercados, indicadores tecnicos, riesgo, portafolio, valuacion
+          y aprendizaje aplicado a finanzas cuantitativas.
+        </p>
+        <div class="cb-hub-actions">
+          <a class="btn-ink cb-hub-primary" href="{{ url_for('dashboard') }}">Abrir mercados</a>
+          <a class="btn-ink" href="{{ url_for('guia') }}#area-finanzas">Aprender finanzas</a>
+          <a class="cb-hub-link" href="{{ url_for('econometria') }}">Ir a Econometria</a>
+        </div>
+      </section>
+
+      <section class="cb-area-split" aria-label="Finanzas en ChartBay">
+        <div class="cb-area-column">
+          <p class="cb-area-label">Herramientas financieras</p>
+          <a class="cb-hub-card" href="{{ url_for('dashboard') }}">
+            <span>Disponible</span>
+            <h3>Mercados</h3>
+            <p>Scanner tecnico con tendencia, RSI, MACD, ATR, volumen, noticias y veredicto IA cuando este configurado.</p>
+          </a>
+          <a class="cb-hub-card" href="{{ url_for('compare_view') }}">
+            <span>Disponible</span>
+            <h3>Comparar activos</h3>
+            <p>Vista paralela para revisar dos instrumentos y contrastar contexto de mercado.</p>
+          </a>
+          <a class="cb-hub-card" href="{{ url_for('heatmap') }}">
+            <span>Disponible</span>
+            <h3>Heatmap</h3>
+            <p>Mapa rapido de variaciones y tendencias de la watchlist.</p>
+          </a>
+        </div>
+
+        <div class="cb-area-column">
+          <p class="cb-area-label">Quant Finance</p>
+          <div class="cb-roadmap-card">
+            <span>Roadmap</span>
+            <h3>Portafolio</h3>
+            <p>Pesos, diversificacion, frontera eficiente y optimizacion de cartera.</p>
+          </div>
+          <div class="cb-roadmap-card">
+            <span>Roadmap</span>
+            <h3>Riesgo</h3>
+            <p>Volatilidad, VaR, drawdown, stress tests y metricas de perdida.</p>
+          </div>
+          <div class="cb-roadmap-card">
+            <span>Roadmap</span>
+            <h3>Valuacion</h3>
+            <p>Modelos de valor, supuestos, flujos descontados y sensibilidad.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
