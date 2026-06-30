@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay - Hub</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="wrap cb-hub-wrap">
+    {% include 'alfa_banner.html' %}
+    <header class="masthead">
+      <div class="ship" aria-hidden="true"></div>
+      <h1 class="wordmark" aria-label="Chart Bay">Chart Bay</h1>
+      <p class="tagline">Hub central para mercados, datos, modelos y aprendizaje.</p>
+      <nav class="mainnav">
+        <strong>Hub</strong><span class="sep">.</span>
+        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">.</span>
+        <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
+        <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">.</span>
+        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">.</span>
+        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">.</span>
+        <a href="{{ url_for('guia') }}">Guia</a><span class="sep">.</span>
+        <a href="{{ url_for('quantbay') }}">Quant</a><span class="sep">.</span>
+        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">.</span>
+        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">.</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
+      </nav>
+    </header>
+
+    <main class="cb-hub">
+      <section class="cb-hub-hero">
+        <p class="cb-hub-kicker">ChartBay</p>
+        <h2>Tu mesa de analisis en un solo lugar</h2>
+        <p>
+          Entra por aca para escanear activos, descargar datos, correr modelos econometricos,
+          estudiar el curso de Aprender y compartir bots con la comunidad.
+        </p>
+        <div class="cb-hub-actions">
+          <a class="btn-ink cb-hub-primary" href="{{ url_for('dashboard') }}">Abrir mercados</a>
+          <a class="btn-ink" href="{{ url_for('quantbay') }}">Ir a Quant Bay</a>
+          <a class="cb-hub-link" href="{{ url_for('guia') }}#aprender">Curso Aprender</a>
+        </div>
+      </section>
+
+      <section class="cb-hub-grid" aria-label="Areas principales de ChartBay">
+        <a class="cb-hub-card" href="{{ url_for('dashboard') }}">
+          <span>01</span>
+          <h3>Mercados</h3>
+          <p>Scanner tecnico con watchlist, tendencias, indicadores, noticias y veredicto IA cuando este configurado.</p>
+        </a>
+        <a class="cb-hub-card" href="{{ url_for('quantbay') }}">
+          <span>02</span>
+          <h3>Quant Bay</h3>
+          <p>CSV, OLS, RLS, diagnosticos, series de tiempo, transformaciones y ejemplos guiados de un click.</p>
+        </a>
+        <a class="cb-hub-card" href="{{ url_for('frequent_data') }}">
+          <span>03</span>
+          <h3>Datos</h3>
+          <p>Catalogo de series macro oficiales listo para buscar, revisar y descargar en CSV o JSON.</p>
+        </a>
+        <a class="cb-hub-card" href="{{ url_for('guia') }}">
+          <span>04</span>
+          <h3>Guia y curso</h3>
+          <p>Conceptos de econometria, finanzas y el curso Aprender completo con modulos, temas y estados.</p>
+        </a>
+        <a class="cb-hub-card" href="{{ url_for('reports') }}">
+          <span>05</span>
+          <h3>Reportes</h3>
+          <p>Archivo de informes generados para revisar analisis anteriores y volver sobre conclusiones.</p>
+        </a>
+        <a class="cb-hub-card" href="{{ url_for('community') }}">
+          <span>06</span>
+          <h3>Comunidad</h3>
+          <p>Publica, explora y evalua bots de trading con reglas, mercados, timeframes y resenas.</p>
+        </a>
+      </section>
+
+      <section class="cb-hub-strip">
+        <div>
+          <strong>Flujo sugerido</strong>
+          <p>Mercados para mirar contexto, Datos para conseguir series, Quant para modelar, Guia para interpretar.</p>
+        </div>
+        <a href="{{ url_for('compare_view') }}">Comparar activos</a>
+        <a href="{{ url_for('heatmap') }}">Ver heatmap</a>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
