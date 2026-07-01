@@ -24,6 +24,8 @@ import {
   resetTimeSeriesView,
   syncTimeSeriesTransformationControls,
 } from './ui/timeseriesView';
+import { getVersionConfig, validateCsvFileSize, type ChartBayVersion } from './versioning/chartbayVersions';
+import { renderVersionInfo } from './ui/versionView';
 
 interface QuantDemoCase {
   id: string;
@@ -232,6 +234,15 @@ function isTimeSeriesMode(): boolean {
   return appState.activeMode === 'timeseries';
 }
 
+function checkActiveEngineReady(): boolean {
+  const config = getVersionConfig(appState.activeVersion);
+  if (config.engine === 'typescript') return true;
+  showError(
+    `El motor ${config.label} todavía está en preparación. Para ejecutar este análisis ahora, usá ChartBay Lite.`
+  );
+  return false;
+}
+
 function updateExportButtonState(): void {
   const regressionReady = !!appState.lastResult;
   const timeSeriesReady = !!appState.lastTimeSeriesResult;
@@ -278,6 +289,12 @@ function setActiveMode(mode: 'regression' | 'timeseries'): void {
   showError('');
   updateModePanels();
   updateExportButtonState();
+}
+
+function setActiveVersion(version: ChartBayVersion): void {
+  appState.activeVersion = version;
+  showError('');
+  renderVersionInfo(getVersionConfig(version));
 }
 async function loadDemoCase(id: string): Promise<void> {
   const demo = DEMO_CASES[id];
@@ -330,17 +347,13 @@ async function loadDemoCase(id: string): Promise<void> {
 }
 // ── Upload ────────────────────────────────────────────────────────────────────
 
-const MAX_CSV_BYTES = 2 * 1024 * 1024; // 2 MB — checked before PapaParse so a huge file never freezes the browser
-
 async function onFileChange(e: Event): Promise<void> {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
 
-  if (file.size > MAX_CSV_BYTES) {
-    showError(
-      `El archivo pesa ${(file.size / 1024 / 1024).toFixed(1)} MB. ` +
-      `El máximo soportado es 2 MB. Reducí el CSV antes de cargarlo.`
-    );
+  const sizeCheck = validateCsvFileSize(file.size, getVersionConfig(appState.activeVersion));
+  if (!sizeCheck.ok) {
+    showError(sizeCheck.message);
     return;
   }
 
@@ -393,6 +406,7 @@ async function onFileChange(e: Event): Promise<void> {
 async function onRun(): Promise<void> {
   if (isTimeSeriesMode()) return;
   if (!appState.csvData) return;
+  if (!checkActiveEngineReady()) return;
   appState.lastTimeSeriesResult = null;
   updateExportButtonState();
   showError('');
@@ -463,6 +477,7 @@ async function onRun(): Promise<void> {
 function onAutoRun(): void {
   if (isTimeSeriesMode()) return;
   if (!appState.csvData) return;
+  if (!checkActiveEngineReady()) return;
   appState.lastTimeSeriesResult = null;
   updateExportButtonState();
   showError('');
@@ -533,6 +548,7 @@ function onTimeSeriesDateChange(): void {
 }
 
 function onTimeSeriesRun(): void {
+  if (!checkActiveEngineReady()) return;
   if (!appState.csvData) {
     appState.lastTimeSeriesResult = null;
     updateExportButtonState();
@@ -612,6 +628,11 @@ function init(): void {
     const mode = (event.target as HTMLSelectElement).value === 'timeseries' ? 'timeseries' : 'regression';
     setActiveMode(mode);
   });
+  $('qb-version')?.addEventListener('change', event => {
+    const value = (event.target as HTMLSelectElement).value;
+    const version: ChartBayVersion = value === 'pro' || value === 'mega_pro' ? value : 'lite';
+    setActiveVersion(version);
+  });
   $('qb-ts-date')?.addEventListener('change', onTimeSeriesDateChange);
   $('qb-ts-run')?.addEventListener('click', onTimeSeriesRun);
   $('qb-ts-transform')?.addEventListener('change', onTimeSeriesTransformationChange);
@@ -672,6 +693,7 @@ function init(): void {
     }
   });
 
+  renderVersionInfo(getVersionConfig(appState.activeVersion));
   updateModePanels();
   updateExportButtonState();
 }

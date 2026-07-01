@@ -5,11 +5,13 @@ import type { TimeSeriesAnalysisResult } from '../timeseries/types';
 import type { FunctionalForm } from '../functionalForms';
 import type { CategoricalVariableInfo } from '../categoricalEncoding';
 import type { BreuschPaganResult } from '../heteroskedasticity';
+import type { ChartBayVersion } from '../versioning/chartbayVersions';
 
 export type QuantBayMode = 'regression' | 'timeseries';
 
 export interface QuantBayAppState {
   activeMode: QuantBayMode;
+  activeVersion: ChartBayVersion;
   activeFunctionalForm: FunctionalForm;
   csvData: ParsedCSV | null;
   activeChart: any;
@@ -30,6 +32,7 @@ export interface QuantBayAppState {
 
 export const appState: QuantBayAppState = {
   activeMode: 'regression',
+  activeVersion: 'lite',
   activeFunctionalForm: 'lin-lin',
   csvData: null,
   activeChart: null,
