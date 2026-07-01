@@ -10,6 +10,8 @@ import { checkCSVLimits, formatRegressionError } from './ui/errors';
 import { renderPreview, renderVarSelectors } from './ui/tables';
 import { renderRepairLog } from './ui/diagnosticsView';
 import { renderRegressionResults } from './ui/regressionView';
+import { recommendFunctionalForm } from './services/formRecommender';
+import { renderFormRecommendation } from './ui/formRecommendView';
 import { runTimeSeriesAnalysis } from './timeseries/service';
 import {
   getACFMaxLag,
@@ -304,6 +306,7 @@ async function loadDemoCase(id: string): Promise<void> {
     renderVarSelectors(appState.csvData.numericColumns);
     setVariableSelection(demo.yName, demo.xNames);
     renderDemoInfo(demo);
+    runFormRecommendation();
 
     const preview = $('qb-preview'), vars = $('qb-vars'), results = $('qb-results'), repair = $('qb-repair-log');
     if (preview) preview.style.display = '';
@@ -551,6 +554,28 @@ function onTimeSeriesTransformationChange(): void {
     onTimeSeriesRun();
   }
 }
+function runFormRecommendation(): void {
+  if (!appState.csvData || isTimeSeriesMode()) {
+    renderFormRecommendation(null);
+    return;
+  }
+  const yName = ($('qb-y') as HTMLSelectElement | null)?.value ?? '';
+  const xNames = Array.from(document.querySelectorAll<HTMLInputElement>('.qb-x-cb:checked'))
+    .map(cb => cb.value)
+    .filter(v => v !== yName);
+
+  if (!yName || xNames.length === 0) {
+    renderFormRecommendation(null);
+    return;
+  }
+
+  try {
+    renderFormRecommendation(recommendFunctionalForm(appState.csvData, yName, xNames));
+  } catch {
+    renderFormRecommendation(null);
+  }
+}
+
 function init(): void {
   $('qb-file')?.addEventListener('change', onFileChange as EventListener);
   document.querySelectorAll<HTMLButtonElement>('.qb-demo-btn').forEach(btn => {
@@ -575,6 +600,20 @@ function init(): void {
 
   $('qb-y')?.addEventListener('change', () => {
     applyYIndicators(($('qb-y') as HTMLSelectElement)?.value ?? '');
+    runFormRecommendation();
+  });
+
+  $('qb-x-checks')?.addEventListener('change', runFormRecommendation);
+
+  $('qb-form-apply')?.addEventListener('click', () => {
+    const form = ($('qb-form-apply') as HTMLButtonElement | null)?.dataset.form ?? '';
+    if (form === 'lin-lin' || form === 'log-lin' || form === 'lin-log' || form === 'log-log') {
+      const sel = $('qb-form') as HTMLSelectElement | null;
+      if (sel) {
+        sel.value = form;
+        appState.activeFunctionalForm = form;
+      }
+    }
   });
 
   $('qb-form')?.addEventListener('change', () => {
