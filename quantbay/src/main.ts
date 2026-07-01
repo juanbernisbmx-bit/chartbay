@@ -28,7 +28,7 @@ import { getVersionConfig, validateCsvFileSize, type ChartBayVersion } from './v
 import { renderVersionInfo } from './ui/versionView';
 import { resolveEngineAction } from './pro/engineRouting';
 import { runPyodideOls } from './pro/pyodide/pythonOlsRunner';
-import { hideProPanel, renderProResult, showProPanel, showProStatus, type ProComparisonRow } from './ui/proView';
+import { hideProPanel, renderProResult, showProPanel, showProStatus, type ProComparison } from './ui/proView';
 
 interface QuantDemoCase {
   id: string;
@@ -499,8 +499,9 @@ async function onRun(): Promise<void> {
 // ── ChartBay Pro (Pyodide POC) ───────────────────────────────────────────────
 
 // Best-effort cross-check: runs the Lite engine on the same selection (lin-lin,
-// no RLS) and pairs coefficients by name. Any Lite failure just skips the table.
-function buildLiteComparison(yName: string, xNames: string[], proResult: { coefficients?: Array<{ name: string; estimate: number }> }): ProComparisonRow[] | null {
+// no RLS) and pairs coefficients by name, plus R² and n. Any Lite failure just
+// skips the comparison.
+function buildLiteComparison(yName: string, xNames: string[], proResult: { coefficients?: Array<{ name: string; estimate: number }> }): ProComparison | null {
   if (!appState.csvData || !proResult.coefficients) return null;
   try {
     const lite = runRegressionMode(appState.csvData, yName, xNames, undefined, 'lin-lin');
@@ -511,7 +512,11 @@ function buildLiteComparison(yName: string, xNames: string[], proResult: { coeff
     const rows = proResult.coefficients
       .filter(c => liteByName.has(c.name))
       .map(c => ({ name: c.name, liteEstimate: liteByName.get(c.name)!, proEstimate: c.estimate }));
-    return rows.length > 0 ? rows : null;
+    return {
+      rows,
+      liteRSquared: Number.isFinite(lite.result.rSquared) ? lite.result.rSquared : null,
+      liteNobs: lite.result.nObs,
+    };
   } catch {
     return null;
   }
@@ -543,8 +548,8 @@ async function onRunPro(yName: string, xNames: string[]): Promise<void> {
       { csvText: appState.csvText, yName, xNames },
       phase => {
         if (phase === 'loading-pyodide') showProStatus('Cargando Python en navegador…');
-        else if (phase === 'loading-packages') showProStatus('Cargando numpy y pandas…');
-        else showProStatus('Ejecutando OLS con Pyodide…');
+        else if (phase === 'loading-packages') showProStatus('Cargando numpy, pandas y statsmodels…');
+        else showProStatus('Ejecutando OLS con statsmodels…');
       }
     );
 
@@ -554,7 +559,7 @@ async function onRunPro(yName: string, xNames: string[]): Promise<void> {
     writeRunLog(
       result.ok
         ? [
-            'ChartBay Pro (experimental): OLS ejecutado con Pyodide... OK',
+            'ChartBay Pro (experimental): OLS ejecutado con statsmodels (Pyodide)... OK',
             `Observaciones: ${result.nobs}`,
             ...result.warnings,
           ]

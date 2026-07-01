@@ -8,7 +8,19 @@ export type ProComparisonRow = {
   proEstimate: number;
 };
 
-const fmt = (value: number): string => (Number.isFinite(value) ? value.toFixed(6) : '—');
+export type ProComparison = {
+  rows: ProComparisonRow[];
+  liteRSquared: number | null;
+  liteNobs: number | null;
+};
+
+const fmt = (value: number): string => {
+  if (!Number.isFinite(value)) return '—';
+  // Perfect fits produce astronomically large t/F values; keep them readable.
+  return Math.abs(value) >= 1e6 ? value.toExponential(4) : value.toFixed(6);
+};
+const fmtOpt = (value: number | null | undefined): string =>
+  value === null || value === undefined ? '—' : fmt(value);
 
 export function showProPanel(): void {
   const panel = $('qb-pro-results');
@@ -42,7 +54,7 @@ function showProError(message: string): void {
   if (content) content.style.display = 'none';
 }
 
-export function renderProResult(result: PyodideOlsResult, comparison?: ProComparisonRow[] | null): void {
+export function renderProResult(result: PyodideOlsResult, comparison?: ProComparison | null): void {
   showProPanel();
   showProStatus('');
 
@@ -57,7 +69,7 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
   const coefBody = $('qb-pro-coef-body');
   if (coefBody) {
     coefBody.innerHTML = (result.coefficients ?? [])
-      .map(c => `<tr><td>${escapeHtml(c.name)}</td><td>${fmt(c.estimate)}</td></tr>`)
+      .map(c => `<tr><td>${escapeHtml(c.name)}</td><td>${fmt(c.estimate)}</td><td>${fmtOpt(c.stdError)}</td><td>${fmtOpt(c.tStat)}</td><td>${fmtOpt(c.pValue)}</td></tr>`)
       .join('');
   }
 
@@ -65,9 +77,13 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
   if (statsBody) {
     const rows: Array<[string, string]> = [
       ['Observaciones (n)', String(result.nobs ?? '—')],
-      ['R²', result.rSquared === undefined ? '—' : fmt(result.rSquared)],
-      ['Error estándar residual', result.residualStdError === undefined ? '—' : fmt(result.residualStdError)],
-      ['Motor', 'Python / Pyodide (navegador)'],
+      ['R²', fmtOpt(result.rSquared)],
+      ['R² ajustado', fmtOpt(result.rSquaredAdj)],
+      ['F-stat', fmtOpt(result.fStat)],
+      ['p-value (F)', fmtOpt(result.fPValue)],
+      ['Grados de libertad (residual)', result.dfResid === undefined ? '—' : String(result.dfResid)],
+      ['Error estándar residual', fmtOpt(result.residualStdError)],
+      ['Motor', 'Python / statsmodels (Pyodide en navegador)'],
     ];
     statsBody.innerHTML = rows
       .map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`)
@@ -84,26 +100,49 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
 
   const comparisonEl = $('qb-pro-comparison');
   if (comparisonEl) {
-    if (comparison && comparison.length > 0) {
-      const rows = comparison
-        .map(row => {
-          const diff = Math.abs(row.proEstimate - row.liteEstimate);
-          return `<tr><td>${escapeHtml(row.name)}</td><td>${fmt(row.liteEstimate)}</td><td>${fmt(row.proEstimate)}</td><td>${diff.toExponential(2)}</td></tr>`;
-        })
-        .join('');
-      comparisonEl.innerHTML = `
-        <p class="qb-label" style="margin-top:10px">Comparación Lite vs Pro (lin-lin, sin restricción)</p>
-        <div class="qb-table-scroll">
-          <table class="ledger">
-            <thead><tr><th>Variable</th><th>Lite (TS)</th><th>Pro (Python)</th><th>|Δ|</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>`;
-    } else {
-      comparisonEl.innerHTML = '';
-    }
+    comparisonEl.innerHTML = comparison ? buildComparisonHtml(result, comparison) : '';
   }
 
   const content = $('qb-pro-content');
   if (content) content.style.display = '';
+}
+
+function buildComparisonHtml(result: PyodideOlsResult, comparison: ProComparison): string {
+  const sections: string[] = [];
+
+  if (comparison.rows.length > 0) {
+    const rows = comparison.rows
+      .map(row => {
+        const diff = Math.abs(row.proEstimate - row.liteEstimate);
+        return `<tr><td>${escapeHtml(row.name)}</td><td>${fmt(row.liteEstimate)}</td><td>${fmt(row.proEstimate)}</td><td>${diff.toExponential(2)}</td></tr>`;
+      })
+      .join('');
+    sections.push(`
+      <div class="qb-table-scroll">
+        <table class="ledger">
+          <thead><tr><th>Variable</th><th>Lite (TS)</th><th>Pro (statsmodels)</th><th>|Δ|</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`);
+  }
+
+  const metricRows: string[] = [];
+  if (comparison.liteRSquared !== null) {
+    metricRows.push(`<tr><td>R²</td><td>${fmt(comparison.liteRSquared)}</td><td>${fmtOpt(result.rSquared)}</td></tr>`);
+  }
+  if (comparison.liteNobs !== null) {
+    metricRows.push(`<tr><td>Observaciones (n)</td><td>${comparison.liteNobs}</td><td>${result.nobs ?? '—'}</td></tr>`);
+  }
+  if (metricRows.length > 0) {
+    sections.push(`
+      <div class="qb-table-scroll">
+        <table class="ledger">
+          <thead><tr><th>Métrica</th><th>Lite (TS)</th><th>Pro (statsmodels)</th></tr></thead>
+          <tbody>${metricRows.join('')}</tbody>
+        </table>
+      </div>`);
+  }
+
+  if (sections.length === 0) return '';
+  return `<p class="qb-label" style="margin-top:10px">Comparación Lite vs Pro (lin-lin, sin restricción)</p>${sections.join('')}`;
 }
