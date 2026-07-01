@@ -75,6 +75,54 @@ export function tQuantile(alpha: number, df: number): number {
   return (lo + hi) / 2;
 }
 
+// Regularized lower incomplete gamma P(a,x) via series expansion (valid for x < a+1)
+function gammaSeries(a: number, x: number): number {
+  const gln = gammaLn(a);
+  let ap = a;
+  let sum = 1 / a;
+  let del = sum;
+  for (let n = 0; n < 200; n++) {
+    ap += 1;
+    del *= x / ap;
+    sum += del;
+    if (Math.abs(del) < Math.abs(sum) * 1e-12) break;
+  }
+  return sum * Math.exp(-x + a * Math.log(x) - gln);
+}
+
+// Regularized upper incomplete gamma Q(a,x) via continued fraction (valid for x >= a+1)
+function gammaContinuedFraction(a: number, x: number): number {
+  const gln = gammaLn(a);
+  const FPMIN = 1e-30;
+  let b = x + 1 - a;
+  let c = 1 / FPMIN;
+  let d = 1 / b;
+  let h = d;
+  for (let i = 1; i <= 200; i++) {
+    const an = -i * (i - a);
+    b += 2;
+    d = an * d + b;
+    if (Math.abs(d) < FPMIN) d = FPMIN;
+    c = b + an / c;
+    if (Math.abs(c) < FPMIN) c = FPMIN;
+    d = 1 / d;
+    const del = d * c;
+    h *= del;
+    if (Math.abs(del - 1) < 1e-12) break;
+  }
+  return Math.exp(-x + a * Math.log(x) - gln) * h;
+}
+
+// Upper-tail p-value from chi-square distribution: P(X > x) with `df` degrees of freedom
+export function chi2PValue(x: number, df: number): number {
+  if (df <= 0) return NaN;
+  if (!isFinite(x)) return x > 0 ? 0 : 1;
+  if (x <= 0) return 1;
+  const a = df / 2;
+  const half = x / 2;
+  return half < a + 1 ? 1 - gammaSeries(a, half) : gammaContinuedFraction(a, half);
+}
+
 // Pearson correlation matrix; columns[i] is the i-th variable's observations
 export function pearsonMatrix(columns: number[][]): number[][] {
   const k = columns.length;

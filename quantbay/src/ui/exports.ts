@@ -1,5 +1,6 @@
 import type { RegressionResult } from '../regression';
 import type { TimeSeriesAnalysisResult } from '../timeseries/types';
+import { BREUSCH_PAGAN_NOTE, type BreuschPaganResult } from '../heteroskedasticity';
 import { interpret } from '../interpretation';
 import { significanceLabel } from '../utils/format';
 import { $, showError } from '../app/dom';
@@ -31,6 +32,46 @@ export function csvCell(value: string | number): string {
 
 function formatExportNumber(value: number | null | undefined): string {
   return value === null || value === undefined || !Number.isFinite(value) ? 'N/D' : value.toFixed(6);
+}
+
+function heteroskedasticityCSVRows(bp: BreuschPaganResult | null): Array<Array<string | number>> {
+  if (!bp || !bp.available) {
+    return [
+      ['heteroskedasticity', 'test', '', 'Breusch-Pagan'],
+      ['heteroskedasticity', 'available', '', 'No'],
+      ['heteroskedasticity', 'message', '', bp?.message ?? 'Diagnóstico no disponible.'],
+    ];
+  }
+  return [
+    ['heteroskedasticity', 'test', '', 'Breusch-Pagan'],
+    ['heteroskedasticity', 'bp_lm', '', bp.statistic ?? 'N/D'],
+    ['heteroskedasticity', 'bp_df', '', bp.df ?? 'N/D'],
+    ['heteroskedasticity', 'bp_p_value', '', bp.pValue ?? 'N/D'],
+    ['heteroskedasticity', 'bp_r_squared_aux', '', bp.rSquaredAux ?? 'N/D'],
+    ['heteroskedasticity', 'bp_result', '', bp.verdict],
+    ['heteroskedasticity', 'message', '', bp.message],
+    ['heteroskedasticity', 'note', '', BREUSCH_PAGAN_NOTE],
+  ];
+}
+
+function heteroskedasticityTXTLines(bp: BreuschPaganResult | null): string[] {
+  if (!bp || !bp.available) {
+    return [
+      'Diagnostico de heterocedasticidad',
+      'Test: Breusch-Pagan',
+      bp?.message ?? 'Diagnóstico no disponible.',
+    ];
+  }
+  return [
+    'Diagnostico de heterocedasticidad',
+    'Test: Breusch-Pagan',
+    `LM: ${formatExportNumber(bp.statistic)}`,
+    `df: ${bp.df ?? 'N/D'}`,
+    `p-value: ${formatExportNumber(bp.pValue)}`,
+    `Resultado: ${bp.verdict}`,
+    bp.message,
+    `Nota: ${BREUSCH_PAGAN_NOTE}`,
+  ];
 }
 
 function timeSeriesDiagnosticNote(name: string): Array<Array<string | number>> {
@@ -302,6 +343,7 @@ export function exportAnalysisCSV(): void {
       ['categorical', 'dummies', c.originalName, c.createdDummies.join('; ')],
     ] as Array<Array<string | number>>),
     ...appState.lastCategoricalWarnings.map(w => ['categorical', 'warning', '', w] as Array<string | number>),
+    ...heteroskedasticityCSVRows(appState.lastHeteroskedasticity),
     ['conclusion', 'text', '', conclusion],
   ];
 
@@ -366,6 +408,8 @@ export function exportAnalysisTXT(): void {
           '',
         ]
       : []),
+    ...heteroskedasticityTXTLines(appState.lastHeteroskedasticity),
+    '',
     'Conclusion textual',
     interpret(result),
     '',
@@ -516,6 +560,28 @@ export function exportPDF(): void {
     doc.autoTable({
       head: [['Variable', 'Categoría base', 'Dummies creadas']],
       body: appState.lastCategoricalInfo.map(c => [c.originalName, c.baseCategory, c.createdDummies.join(', ')]),
+      startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [27, 58, 107] }, margin: { left: 10, right: 10 },
+    });
+    y = doc.lastAutoTable.finalY + 5;
+  }
+
+  if (doc.autoTable) {
+    const bp = appState.lastHeteroskedasticity;
+    if (y > 220) { doc.addPage(); y = 15; }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Diagnóstico de Heterocedasticidad (Breusch-Pagan)', 10, y);
+    y += 4;
+    doc.autoTable({
+      head: [['Indicador', 'Valor']],
+      body: bp && bp.available
+        ? [
+          ['Estadístico LM', formatExportNumber(bp.statistic)],
+          ['Grados de libertad', String(bp.df ?? 'N/D')],
+          ['p-value', formatExportNumber(bp.pValue)],
+          ['Resultado', bp.verdict],
+        ]
+        : [['Nota', bp?.message ?? 'Diagnóstico no disponible.']],
       startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [27, 58, 107] }, margin: { left: 10, right: 10 },
     });
     y = doc.lastAutoTable.finalY + 5;

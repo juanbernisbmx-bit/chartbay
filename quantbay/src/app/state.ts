@@ -4,6 +4,7 @@ import type { LogisticResult } from '../services/analysisService';
 import type { TimeSeriesAnalysisResult } from '../timeseries/types';
 import type { FunctionalForm } from '../functionalForms';
 import type { CategoricalVariableInfo } from '../categoricalEncoding';
+import type { BreuschPaganResult } from '../heteroskedasticity';
 
 export type QuantBayMode = 'regression' | 'timeseries';
 
@@ -24,6 +25,7 @@ export interface QuantBayAppState {
   activeDemoId: string | null;
   lastCategoricalInfo: CategoricalVariableInfo[];
   lastCategoricalWarnings: string[];
+  lastHeteroskedasticity: BreuschPaganResult | null;
 }
 
 export const appState: QuantBayAppState = {
@@ -43,4 +45,5 @@ export const appState: QuantBayAppState = {
   activeDemoId: null,
   lastCategoricalInfo: [],
   lastCategoricalWarnings: [],
+  lastHeteroskedasticity: null,
 };

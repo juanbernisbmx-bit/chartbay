@@ -2,6 +2,7 @@ import type { RegressionResult } from '../regression';
 import type { LeakageSignal, LogisticResult } from '../services/analysisService';
 import type { FunctionalForm } from '../functionalForms';
 import type { CategoricalVariableInfo } from '../categoricalEncoding';
+import { BREUSCH_PAGAN_NOTE, type BreuschPaganResult } from '../heteroskedasticity';
 import { interpret } from '../interpretation';
 import { $ } from '../app/dom';
 import { appState } from '../app/state';
@@ -24,6 +25,7 @@ export function renderRegressionResults(
     functionalForm?: FunctionalForm;
     categoricalInfo?: CategoricalVariableInfo[];
     categoricalWarnings?: string[];
+    heteroskedasticity?: BreuschPaganResult | null;
   } = {}
 ): void {
   const {
@@ -33,6 +35,7 @@ export function renderRegressionResults(
     functionalForm = 'lin-lin',
     categoricalInfo = [],
     categoricalWarnings = [],
+    heteroskedasticity = null,
   } = checks;
   appState.lastDropped = dropped;
   renderBinaryWarn(binary, result.yName);
@@ -50,6 +53,7 @@ export function renderRegressionResults(
   renderCorrMatrix(corrMatrix, corrCols);
   renderVIF(vifValues, result.featureNames);
   renderResidDiag(result);
+  renderHeteroskedasticityPanel(heteroskedasticity);
 
   const interp = $('qb-interpretation');
   if (interp) interp.textContent = interpret(result);
@@ -149,6 +153,42 @@ function renderRLSPanel(result: RegressionResult): void {
       </table>
     </div>
     <p class="qb-interp" style="margin-top:8px">${verdict}</p>`;
+}
+
+function renderHeteroskedasticityPanel(bp: BreuschPaganResult | null): void {
+  const content = $('qb-heterosk-content');
+  if (!content) return;
+
+  if (!bp || !bp.available) {
+    content.innerHTML = `<p class="qb-interp" style="margin:0">${escapeHtml(bp?.message ?? 'Diagnóstico no disponible.')}</p>`;
+    return;
+  }
+
+  const f4 = (n: number | undefined) => (n !== undefined && isFinite(n) ? n.toFixed(4) : '—');
+  const isEvidence = bp.verdict === 'evidence';
+
+  const warningsHtml = bp.warnings
+    .map(w => `<p class="qb-interp" style="margin:4px 0 0;font-size:11px;color:#f2c94c">${escapeHtml(w)}</p>`)
+    .join('');
+
+  content.innerHTML = `
+    <div class="qb-table-scroll">
+      <table class="ledger">
+        <thead><tr><th>Indicador</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Test</td><td>Breusch-Pagan</td></tr>
+          <tr><td>Estadístico LM</td><td>${f4(bp.statistic)}</td></tr>
+          <tr><td>Grados de libertad</td><td>${bp.df ?? '—'}</td></tr>
+          <tr><td>p-value</td><td>${f4(bp.pValue)}</td></tr>
+          <tr><td>R² auxiliar</td><td>${f4(bp.rSquaredAux)}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="${isEvidence ? 'qb-warn-yellow' : ''}" style="margin-top:8px">
+      <p class="qb-interp" style="margin:0">${escapeHtml(bp.message)}</p>
+    </div>
+    ${warningsHtml}
+    <p class="muted" style="font-size:11px;margin-top:6px">${escapeHtml(BREUSCH_PAGAN_NOTE)}</p>`;
 }
 
 function renderChart(result: RegressionResult): void {
