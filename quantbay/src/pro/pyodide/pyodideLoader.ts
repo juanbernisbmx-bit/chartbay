@@ -20,8 +20,12 @@ function injectPyodideScript(): Promise<void> {
     script.src = PYODIDE_SCRIPT_URL;
     script.async = true;
     script.onload = () => resolve();
-    script.onerror = () =>
+    script.onerror = () => {
+      // Remove the failed tag so a retry (getPyodide() after an error resets
+      // the cached promise) doesn't pile up orphan <script> tags in <head>.
+      script.remove();
       reject(new Error(`No se pudo descargar Pyodide desde ${PYODIDE_SCRIPT_URL}. Revisá la conexión a internet.`));
+    };
     document.head.appendChild(script);
   });
 }

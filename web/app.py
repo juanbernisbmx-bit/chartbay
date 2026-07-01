@@ -97,17 +97,31 @@ REGISTRATION_OPEN = False  # cambiar a True para reabrir el registro
 
 _CSP = (
     "default-src 'self'; "
-    # 'wasm-unsafe-eval' habilita solo la compilación de WebAssembly (Pyodide,
-    # ChartBay Pro) sin permitir eval() de JavaScript como haría 'unsafe-eval'.
+    "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com s3.tradingview.com; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob:; "
+    "connect-src 'self' *.tradingview.com wss://*.tradingview.com; "
+    "frame-src s3.tradingview.com *.tradingview.com; "
+    "frame-ancestors 'none'"
+)
+
+# ChartBay Pro (Pyodide) necesita compilar WebAssembly y bajar su runtime y los
+# wheels de numpy/pandas vía fetch() desde jsdelivr. Ese permiso queda acotado
+# a la página que carga quantbay.bundle.js — el resto de la app mantiene el CSP
+# más estricto de arriba.
+# 'wasm-unsafe-eval' solo habilita compilar WebAssembly; no habilita eval() de
+# JavaScript como haría 'unsafe-eval'.
+_CSP_QUANTBAY = (
+    "default-src 'self'; "
     "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' cdn.jsdelivr.net cdnjs.cloudflare.com s3.tradingview.com; "
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: blob:; "
-    # cdn.jsdelivr.net en connect-src: Pyodide descarga su runtime y los wheels
-    # de numpy/pandas vía fetch() desde ese CDN.
     "connect-src 'self' cdn.jsdelivr.net *.tradingview.com wss://*.tradingview.com; "
     "frame-src s3.tradingview.com *.tradingview.com; "
     "frame-ancestors 'none'"
 )
+
+_QUANTBAY_PATHS = {"/econometria"}
 
 
 @app.after_request
@@ -115,7 +129,8 @@ def add_security_headers(response):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    response.headers.setdefault("Content-Security-Policy", _CSP)
+    csp = _CSP_QUANTBAY if request.path in _QUANTBAY_PATHS else _CSP
+    response.headers.setdefault("Content-Security-Policy", csp)
     return response
 
 

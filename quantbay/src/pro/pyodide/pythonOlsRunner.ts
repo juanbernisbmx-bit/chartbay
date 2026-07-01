@@ -31,6 +31,9 @@ def _chartbay_pro_ols():
     if missing:
         return fail("Columnas faltantes en el CSV: " + ", ".join(missing) + ".")
 
+    if len(df) == 0:
+        return fail("El CSV no tiene filas de datos.")
+
     warnings = []
     numeric = {}
     for col in [y_name] + x_names:
