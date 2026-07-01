@@ -51,6 +51,25 @@
       <div class="qb-terminal-chip">OLS / RLS / Series</div>
     </section>
 
+    <section class="qb-section" id="qb-version-panel">
+      <div class="qb-panel-head">
+        <p class="qb-subtitle">Versión</p>
+        <span>ChartBay</span>
+      </div>
+      <label for="qb-version" class="qb-label">Versión actual</label>
+      <select id="qb-version" style="width:100%;max-width:260px">
+        <option value="lite">Lite</option>
+        <option value="pro">Pro</option>
+        <option value="mega_pro">Mega Pro</option>
+      </select>
+      <div class="qb-runlog" style="margin-top:8px">
+        <div>Motor: <strong id="qb-version-engine"></strong></div>
+        <div>Límite CSV: <strong id="qb-version-limit"></strong></div>
+        <div>Estado: <strong id="qb-version-status"></strong></div>
+      </div>
+      <p class="muted qb-help" id="qb-version-desc"></p>
+    </section>
+
     <section class="qb-section" id="qb-mode-panel">
       <div class="qb-panel-head">
         <p class="qb-subtitle">Modo</p>
