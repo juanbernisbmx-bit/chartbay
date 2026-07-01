@@ -404,8 +404,8 @@
             <p class="qb-subtitle">Resultado ChartBay Pro experimental</p>
             <span>PYODIDE · PYTHON EN NAVEGADOR</span>
           </div>
-          <p class="muted qb-help">ChartBay Pro está en etapa experimental. Esta prueba ejecuta OLS básico con Python/Pyodide en el navegador.</p>
-          <p class="muted qb-help">La POC Pro no aplica restricciones RLS, formas funcionales ni variables categóricas: solo OLS lin-lin básico.</p>
+          <p class="muted qb-help">ChartBay Pro está en etapa experimental. Ejecuta OLS con statsmodels (Python/Pyodide) en el navegador.</p>
+          <p class="muted qb-help">Pro no aplica restricciones RLS, formas funcionales ni variables categóricas: solo OLS lin-lin con intercepto automático.</p>
           <div id="qb-pro-status" class="qb-interp" style="display:none"></div>
           <div id="qb-pro-error" style="display:none;color:#e55"></div>
           <div id="qb-pro-content" style="display:none">
@@ -414,7 +414,7 @@
                 <p class="qb-label">Coeficientes</p>
                 <div class="qb-table-scroll">
                   <table class="ledger">
-                    <thead><tr><th>Variable</th><th>Coef.</th></tr></thead>
+                    <thead><tr><th>Variable</th><th>Coef.</th><th>Err. Est.</th><th>t</th><th>p-value</th></tr></thead>
                     <tbody id="qb-pro-coef-body"></tbody>
                   </table>
                 </div>

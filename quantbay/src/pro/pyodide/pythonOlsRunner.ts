@@ -3,21 +3,32 @@ import { normalizePyodideOlsResult, proError, type PyodideOlsResult } from './pr
 
 export type PyodideOlsPhase = 'loading-pyodide' | 'loading-packages' | 'running';
 
-// OLS via NumPy lstsq — deliberately minimal: the goal of this POC is to prove
-// the JS↔Python bridge, not to replace the Lite engine or match statsmodels.
+// OLS con statsmodels.api.OLS — Fase 1 del Pro MVP. Solo lin-lin con intercepto
+// automático: nada de robustos, RLS, formas funcionales ni dummies todavía.
 // Validation errors are returned as {ok: false, error} dicts (never raised) so
-// the TS side always receives a parseable JSON payload.
+// the TS side always receives a parseable JSON payload. Non-finite statistics
+// (perfect fit, constant Y) are serialized as null because JSON.parse rejects
+// NaN/Infinity literals.
 const PYTHON_OLS_SCRIPT = `
 import io
 import json
+import math
 
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 
 
 def _chartbay_pro_ols():
     def fail(message):
         return {"ok": False, "engine": "pyodide", "warnings": [], "error": message}
+
+    def finite_or_none(value):
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return None
+        return value if math.isfinite(value) else None
 
     y_name = chartbay_y_name
     x_names = json.loads(chartbay_x_names_json)
@@ -43,10 +54,14 @@ def _chartbay_pro_ols():
             return fail("La columna " + kind + ' "' + col + '" no contiene valores numéricos.')
         numeric[col] = converted
 
-    data = pd.DataFrame(numeric).dropna()
+    # ±inf cuenta como valor inválido igual que NaN: se descarta la fila entera.
+    data = pd.DataFrame(numeric).replace([np.inf, -np.inf], np.nan).dropna()
     n_dropped = len(df) - len(data)
     if n_dropped > 0:
-        warnings.append("Se descartaron " + str(n_dropped) + " filas con valores faltantes o no numéricos.")
+        warnings.append(
+            "Se descartaron " + str(n_dropped)
+            + " filas con valores faltantes, no numéricos o infinitos."
+        )
 
     n_params = len(x_names) + 1
     if len(data) < n_params + 1:
@@ -56,7 +71,7 @@ def _chartbay_pro_ols():
         )
 
     y = data[y_name].to_numpy(dtype=float)
-    X = np.column_stack([np.ones(len(y))] + [data[c].to_numpy(dtype=float) for c in x_names])
+    X = sm.add_constant(data[x_names].to_numpy(dtype=float), has_constant="add")
 
     if np.linalg.matrix_rank(X) < X.shape[1]:
         return fail(
@@ -64,25 +79,62 @@ def _chartbay_pro_ols():
             "hay variables X constantes o perfectamente colineales."
         )
 
-    beta, _, _, _ = np.linalg.lstsq(X, y, rcond=None)
-    fitted = X @ beta
-    resid = y - fitted
-    rss = float(np.sum(resid ** 2))
-    tss = float(np.sum((y - np.mean(y)) ** 2))
-    r2 = None if tss <= 0 else 1.0 - rss / tss
-    dof = max(len(y) - X.shape[1], 1)
+    try:
+        results = sm.OLS(y, X).fit()
+    except Exception as exc:
+        return fail("statsmodels no pudo estimar el modelo OLS: " + str(exc) + ".")
+
     names = ["Intercept"] + x_names
+    coefficients = []
+    for i in range(len(names)):
+        estimate = finite_or_none(results.params[i])
+        if estimate is None:
+            return fail(
+                "statsmodels devolvió un coeficiente no finito para \\"" + names[i]
+                + "\\": el modelo no es estimable con estos datos."
+            )
+        coefficients.append({
+            "name": names[i],
+            "estimate": estimate,
+            "stdError": finite_or_none(results.bse[i]),
+            "tStat": finite_or_none(results.tvalues[i]),
+            "pValue": finite_or_none(results.pvalues[i]),
+        })
+
+    residuals = [finite_or_none(v) for v in results.resid]
+    fitted = [finite_or_none(v) for v in results.fittedvalues]
+    if any(v is None for v in residuals) or any(v is None for v in fitted):
+        return fail("statsmodels devolvió residuos o valores ajustados no finitos.")
+
+    scale = finite_or_none(results.scale)
+    residual_std_error = math.sqrt(scale) if scale is not None and scale >= 0 else None
+    if residual_std_error is None:
+        return fail("statsmodels devolvió una varianza residual no finita.")
+
+    r_squared = finite_or_none(results.rsquared)
+    f_stat = finite_or_none(results.fvalue)
+    f_pvalue = finite_or_none(results.f_pvalue)
+    # Con Y casi constante, la TSS centrada es ~0 y el F-stat de statsmodels
+    # puede dar un número finito pero sin sentido (incluso negativo), ya que
+    # es un cociente de sumas de cuadrados y nunca puede ser < 0. Si R² no
+    # está definido o el F-stat es negativo, ambos se anulan como el R².
+    if r_squared is None or (f_stat is not None and f_stat < 0):
+        f_stat = None
+        f_pvalue = None
 
     return {
         "ok": True,
         "engine": "pyodide",
-        "nobs": int(len(y)),
-        "coefficients": [
-            {"name": names[i], "estimate": float(beta[i])}
-            for i in range(len(names))
-        ],
-        "rSquared": None if r2 is None else float(r2),
-        "residualStdError": float(np.sqrt(rss / dof)),
+        "nobs": int(results.nobs),
+        "coefficients": coefficients,
+        "rSquared": r_squared,
+        "rSquaredAdj": finite_or_none(results.rsquared_adj),
+        "fStat": f_stat,
+        "fPValue": f_pvalue,
+        "dfResid": int(results.df_resid),
+        "residualStdError": residual_std_error,
+        "residuals": residuals,
+        "fitted": fitted,
         "warnings": warnings,
     }
 
@@ -95,7 +147,7 @@ function errorMessage(err: unknown): string {
 }
 
 /**
- * Runs a basic OLS regression in Python (Pyodide) in the browser.
+ * Runs an OLS regression with statsmodels in Python (Pyodide) in the browser.
  * Never throws — every failure mode is returned as {ok: false, error}.
  */
 export async function runPyodideOls(
@@ -122,9 +174,9 @@ export async function runPyodideOls(
 
   try {
     onPhase?.('loading-packages');
-    await pyodide.loadPackage(['numpy', 'pandas']);
+    await pyodide.loadPackage(['numpy', 'pandas', 'statsmodels']);
   } catch (err) {
-    return proError(`No se pudieron cargar numpy/pandas en el navegador: ${errorMessage(err)}`);
+    return proError(`No se pudieron cargar numpy/pandas/statsmodels en el navegador: ${errorMessage(err)}`);
   }
 
   try {
@@ -135,6 +187,6 @@ export async function runPyodideOls(
     const raw = await pyodide.runPythonAsync(PYTHON_OLS_SCRIPT);
     return normalizePyodideOlsResult(raw);
   } catch (err) {
-    return proError(`Error ejecutando OLS en Python: ${errorMessage(err)}`);
+    return proError(`Error ejecutando OLS con statsmodels en Python: ${errorMessage(err)}`);
   }
 }
