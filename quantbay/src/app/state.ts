@@ -14,6 +14,8 @@ export interface QuantBayAppState {
   activeVersion: ChartBayVersion;
   activeFunctionalForm: FunctionalForm;
   csvData: ParsedCSV | null;
+  /** Raw CSV text of the loaded file/demo — needed by the Pro (Pyodide) engine. */
+  csvText: string | null;
   activeChart: any;
   residFittedChart: any;
   residHistChart: any;
@@ -35,6 +37,7 @@ export const appState: QuantBayAppState = {
   activeVersion: 'lite',
   activeFunctionalForm: 'lin-lin',
   csvData: null,
+  csvText: null,
   activeChart: null,
   residFittedChart: null,
   residHistChart: null,

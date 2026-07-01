@@ -398,6 +398,39 @@
             <div id="qb-pred-table" style="overflow-x:auto;margin-top:6px"></div>
           </details>
         </section>
+
+        <section class="qb-section" id="qb-pro-results" style="display:none">
+          <div class="qb-panel-head">
+            <p class="qb-subtitle">Resultado ChartBay Pro experimental</p>
+            <span>PYODIDE · PYTHON EN NAVEGADOR</span>
+          </div>
+          <p class="muted qb-help">ChartBay Pro está en etapa experimental. Esta prueba ejecuta OLS básico con Python/Pyodide en el navegador.</p>
+          <p class="muted qb-help">La POC Pro no aplica restricciones RLS, formas funcionales ni variables categóricas: solo OLS lin-lin básico.</p>
+          <div id="qb-pro-status" class="qb-interp" style="display:none"></div>
+          <div id="qb-pro-error" style="display:none;color:#e55"></div>
+          <div id="qb-pro-content" style="display:none">
+            <div class="qb-results-grid">
+              <div>
+                <p class="qb-label">Coeficientes</p>
+                <div class="qb-table-scroll">
+                  <table class="ledger">
+                    <thead><tr><th>Variable</th><th>Coef.</th></tr></thead>
+                    <tbody id="qb-pro-coef-body"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div>
+                <p class="qb-label">Resumen del modelo</p>
+                <table class="ledger">
+                  <thead><tr><th>Indicador</th><th>Valor</th></tr></thead>
+                  <tbody id="qb-pro-stats-body"></tbody>
+                </table>
+              </div>
+            </div>
+            <div id="qb-pro-warnings"></div>
+            <div id="qb-pro-comparison"></div>
+          </div>
+        </section>
       </main>
     </div>
 
