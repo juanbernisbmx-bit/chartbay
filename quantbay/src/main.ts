@@ -426,6 +426,7 @@ async function onRun(): Promise<void> {
     appState.lastLogit = output.logitResult;
     appState.lastCategoricalInfo = output.categoricalInfo;
     appState.lastCategoricalWarnings = output.categoricalWarnings;
+    appState.lastHeteroskedasticity = output.heteroskedasticity;
 
     setMethodStatus(output.method);
     renderRegressionResults(
@@ -441,6 +442,7 @@ async function onRun(): Promise<void> {
         functionalForm: output.functionalForm,
         categoricalInfo: output.categoricalInfo,
         categoricalWarnings: output.categoricalWarnings,
+        heteroskedasticity: output.heteroskedasticity,
       }
     );
     setText('qb-status-obs', output.result.nObs);
@@ -491,6 +493,7 @@ function onAutoRun(): void {
     appState.lastLogit    = null;
     appState.lastCategoricalInfo = output.categoricalInfo;
     appState.lastCategoricalWarnings = output.categoricalWarnings;
+    appState.lastHeteroskedasticity = output.heteroskedasticity;
 
     setMethodStatus(output.method);
     renderRepairLog(output.repairResult, output.rlsFallbackNote);
@@ -504,6 +507,7 @@ function onAutoRun(): void {
         functionalForm: output.functionalForm,
         categoricalInfo: output.categoricalInfo,
         categoricalWarnings: output.categoricalWarnings,
+        heteroskedasticity: output.heteroskedasticity,
       }
     );
 

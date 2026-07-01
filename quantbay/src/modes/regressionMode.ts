@@ -5,6 +5,7 @@ import { autoRepairAndAnalyze, type AutoRepairResult } from '../services/autoRep
 import { runOLS, type RegressionResult } from '../regression';
 import { applyFunctionalTransform, type FunctionalForm } from '../functionalForms';
 import { assertNumericY, encodeCategoricalX, type CategoricalVariableInfo } from '../categoricalEncoding';
+import { breuschPaganTest, type BreuschPaganResult } from '../heteroskedasticity';
 
 export interface RegressionModeOutput {
   result: RegressionResult;
@@ -20,6 +21,7 @@ export interface RegressionModeOutput {
   logEntries: string[];
   categoricalInfo: CategoricalVariableInfo[];
   categoricalWarnings: string[];
+  heteroskedasticity: BreuschPaganResult;
 }
 
 export interface AutoRegressionModeOutput {
@@ -34,6 +36,7 @@ export interface AutoRegressionModeOutput {
   rlsFallbackNote: string;
   categoricalInfo: CategoricalVariableInfo[];
   categoricalWarnings: string[];
+  heteroskedasticity: BreuschPaganResult;
 }
 
 export function runRegressionMode(
@@ -91,6 +94,12 @@ export function runRegressionMode(
   }
   logEntries.push('Calculando diagnósticos... OK');
 
+  const heteroskedasticity = breuschPaganTest({
+    residuals: finalResult.residuals,
+    designMatrix: transformed.X,
+    regressorNames: transformed.xNames,
+  });
+
   return {
     result: finalResult,
     method,
@@ -105,6 +114,7 @@ export function runRegressionMode(
     logEntries,
     categoricalInfo: encoding.categoricalInfo,
     categoricalWarnings: encoding.warnings,
+    heteroskedasticity,
   };
 }
 
@@ -161,6 +171,12 @@ export function runAutoRegressionMode(
     }
   }
 
+  const heteroskedasticity = breuschPaganTest({
+    residuals: finalResult.residuals,
+    designMatrix: transformed.X,
+    regressorNames: transformed.xNames,
+  });
+
   return {
     result: finalResult,
     method,
@@ -173,5 +189,6 @@ export function runAutoRegressionMode(
     rlsFallbackNote,
     categoricalInfo: encoding.categoricalInfo,
     categoricalWarnings: encoding.warnings,
+    heteroskedasticity,
   };
 }
