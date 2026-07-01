@@ -309,6 +309,7 @@ async function loadDemoCase(id: string): Promise<void> {
   const demo = DEMO_CASES[id];
   if (!demo) return;
   showError('');
+  hideProPanel();
   appState.activeDemoId = id;
   setEngineStatus('LEYENDO');
   writeRunLog([`Cargando demo: ${demo.label}`]);
@@ -516,41 +517,56 @@ function buildLiteComparison(yName: string, xNames: string[], proResult: { coeff
   }
 }
 
+// Pyodide runs Python in a single shared interpreter: two concurrent runs would
+// both write to the same global variable names (chartbay_csv_text, etc.) and
+// could race. Guard against double-clicking "Calcular" while a run is in flight.
+let proRunInFlight = false;
+
 async function onRunPro(yName: string, xNames: string[]): Promise<void> {
+  if (proRunInFlight) return;
   if (!appState.csvText) {
     showError('No hay CSV original disponible para el motor Pro. Volvé a cargar el archivo.');
     return;
   }
 
-  showProPanel();
-  setEngineStatus('CALCULANDO');
-  showProStatus('Cargando Python en navegador…');
-  writeRunLog(['ChartBay Pro (experimental): preparando Python en el navegador…']);
+  proRunInFlight = true;
+  const runButton = $('qb-run') as HTMLButtonElement | null;
+  if (runButton) runButton.disabled = true;
 
-  const result = await runPyodideOls(
-    { csvText: appState.csvText, yName, xNames },
-    phase => {
-      if (phase === 'loading-pyodide') showProStatus('Cargando Python en navegador…');
-      else if (phase === 'loading-packages') showProStatus('Cargando numpy y pandas…');
-      else showProStatus('Ejecutando OLS con Pyodide…');
-    }
-  );
+  try {
+    showProPanel();
+    setEngineStatus('CALCULANDO');
+    showProStatus('Cargando Python en navegador…');
+    writeRunLog(['ChartBay Pro (experimental): preparando Python en el navegador…']);
 
-  const comparison = result.ok ? buildLiteComparison(yName, xNames, result) : null;
-  renderProResult(result, comparison);
-  setEngineStatus(result.ok ? 'COMPLETADO' : 'ERROR');
-  writeRunLog(
-    result.ok
-      ? [
-          'ChartBay Pro (experimental): OLS ejecutado con Pyodide... OK',
-          `Observaciones: ${result.nobs}`,
-          ...result.warnings,
-        ]
-      : [`ChartBay Pro (experimental): error — ${result.error ?? 'desconocido'}`]
-  );
-  const panel = $('qb-pro-results');
-  if (panel) panel.scrollIntoView({ behavior: 'smooth' });
-  updateSidebarStep(3);
+    const result = await runPyodideOls(
+      { csvText: appState.csvText, yName, xNames },
+      phase => {
+        if (phase === 'loading-pyodide') showProStatus('Cargando Python en navegador…');
+        else if (phase === 'loading-packages') showProStatus('Cargando numpy y pandas…');
+        else showProStatus('Ejecutando OLS con Pyodide…');
+      }
+    );
+
+    const comparison = result.ok ? buildLiteComparison(yName, xNames, result) : null;
+    renderProResult(result, comparison);
+    setEngineStatus(result.ok ? 'COMPLETADO' : 'ERROR');
+    writeRunLog(
+      result.ok
+        ? [
+            'ChartBay Pro (experimental): OLS ejecutado con Pyodide... OK',
+            `Observaciones: ${result.nobs}`,
+            ...result.warnings,
+          ]
+        : [`ChartBay Pro (experimental): error — ${result.error ?? 'desconocido'}`]
+    );
+    const panel = $('qb-pro-results');
+    if (panel) panel.scrollIntoView({ behavior: 'smooth' });
+    updateSidebarStep(3);
+  } finally {
+    proRunInFlight = false;
+    if (runButton) runButton.disabled = false;
+  }
 }
 
 // ── Results ───────────────────────────────────────────────────────────────────
