@@ -3,6 +3,7 @@ import type { RegressionResult } from '../regression';
 import type { LogisticResult } from '../services/analysisService';
 import type { TimeSeriesAnalysisResult } from '../timeseries/types';
 import type { FunctionalForm } from '../functionalForms';
+import type { CategoricalVariableInfo } from '../categoricalEncoding';
 
 export type QuantBayMode = 'regression' | 'timeseries';
 
@@ -21,6 +22,8 @@ export interface QuantBayAppState {
   lastTimeSeriesResult: TimeSeriesAnalysisResult | null;
   lastDropped: number;
   activeDemoId: string | null;
+  lastCategoricalInfo: CategoricalVariableInfo[];
+  lastCategoricalWarnings: string[];
 }
 
 export const appState: QuantBayAppState = {
@@ -38,4 +41,6 @@ export const appState: QuantBayAppState = {
   lastTimeSeriesResult: null,
   lastDropped: 0,
   activeDemoId: null,
+  lastCategoricalInfo: [],
+  lastCategoricalWarnings: [],
 };

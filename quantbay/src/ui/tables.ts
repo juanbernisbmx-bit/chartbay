@@ -23,16 +23,18 @@ export function renderPreview({ headers, rows, numericColumns }: ParsedCSV): voi
 }
 
 
-export function renderVarSelectors(cols: string[]): void {
+export function renderVarSelectors(cols: string[], categoricalCols: string[] = []): void {
   const yEl = $('qb-y') as HTMLSelectElement | null;
   const xEl = $('qb-x-checks');
+  const categoricalSet = new Set(categoricalCols);
   if (yEl) yEl.innerHTML = cols.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   const defaultY = cols[0] ?? '';
   if (xEl)
     xEl.innerHTML = cols
       .map((c, i) => {
         const isY = c === defaultY;
-        return `<label class="qb-x-check" style="${isY ? 'opacity:0.4' : ''}"><input type="checkbox" class="qb-x-cb" value="${escapeHtml(c)}" ${i > 0 ? 'checked' : ''} ${isY ? 'disabled title="Ya seleccionada como variable Y"' : ''}> ${escapeHtml(c)}<span class="qb-y-badge"${isY ? '' : ' style="display:none"'}> (Y)</span></label>`;
+        const catBadge = categoricalSet.has(c) ? '<span class="qb-cat-badge" style="opacity:0.6;font-size:11px"> (categórica)</span>' : '';
+        return `<label class="qb-x-check" style="${isY ? 'opacity:0.4' : ''}"><input type="checkbox" class="qb-x-cb" value="${escapeHtml(c)}" ${i > 0 ? 'checked' : ''} ${isY ? 'disabled title="Ya seleccionada como variable Y"' : ''}> ${escapeHtml(c)}${catBadge}<span class="qb-y-badge"${isY ? '' : ' style="display:none"'}> (Y)</span></label>`;
       })
       .join('');
 }

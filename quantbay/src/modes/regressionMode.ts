@@ -4,6 +4,7 @@ import { getValidRows, type ParsedCSV } from '../csvParser';
 import { autoRepairAndAnalyze, type AutoRepairResult } from '../services/autoRepair';
 import { runOLS, type RegressionResult } from '../regression';
 import { applyFunctionalTransform, type FunctionalForm } from '../functionalForms';
+import { assertNumericY, encodeCategoricalX, type CategoricalVariableInfo } from '../categoricalEncoding';
 
 export interface RegressionModeOutput {
   result: RegressionResult;
@@ -17,6 +18,8 @@ export interface RegressionModeOutput {
   leaks: LeakageSignal[];
   dropped: number;
   logEntries: string[];
+  categoricalInfo: CategoricalVariableInfo[];
+  categoricalWarnings: string[];
 }
 
 export interface AutoRegressionModeOutput {
@@ -29,6 +32,8 @@ export interface AutoRegressionModeOutput {
   dropped: number;
   repairResult: AutoRepairResult;
   rlsFallbackNote: string;
+  categoricalInfo: CategoricalVariableInfo[];
+  categoricalWarnings: string[];
 }
 
 export function runRegressionMode(
@@ -38,13 +43,23 @@ export function runRegressionMode(
   rlsConstraint: RLSConstraint | undefined,
   functionalForm: FunctionalForm = 'lin-lin',
 ): RegressionModeOutput {
+  assertNumericY(csvData.rows, yName);
+
+  // Expand categorical X columns into k-1 dummies before anything else touches
+  // the design matrix. Numeric X columns pass through unchanged.
+  const encoding = encodeCategoricalX(csvData.rows, xNames);
+  const effectiveCsvData: ParsedCSV = { ...csvData, rows: encoding.rows };
+  const effectiveXNames = encoding.expandedXNames;
+  const dummyNames = new Set(encoding.categoricalInfo.flatMap(c => c.createdDummies));
+
   // Run full analysis on original scale — provides validation, diagnostics, VIF, correlation.
-  const analysis = runQuantAnalysis(csvData, yName, xNames);
+  const analysis = runQuantAnalysis(effectiveCsvData, yName, effectiveXNames);
 
   // Get valid rows and apply the functional transform (identity for lin-lin).
   // applyFunctionalTransform throws clearly if log-domain values are invalid (<=0).
-  const { X: rawX, y: rawY } = getValidRows(csvData.rows, yName, xNames);
-  const transformed = applyFunctionalTransform(rawY, rawX, yName, xNames, functionalForm);
+  // Dummy columns are excluded from the log-X transform (they must stay 0/1).
+  const { X: rawX, y: rawY } = getValidRows(effectiveCsvData.rows, yName, effectiveXNames);
+  const transformed = applyFunctionalTransform(rawY, rawX, yName, effectiveXNames, functionalForm, dummyNames);
 
   let finalResult = functionalForm === 'lin-lin'
     ? analysis.result
@@ -88,6 +103,8 @@ export function runRegressionMode(
     leaks: analysis.leaks,
     dropped: analysis.dropped,
     logEntries,
+    categoricalInfo: encoding.categoricalInfo,
+    categoricalWarnings: encoding.warnings,
   };
 }
 
@@ -98,12 +115,21 @@ export function runAutoRegressionMode(
   rlsConstraint: RLSConstraint | undefined,
   functionalForm: FunctionalForm = 'lin-lin',
 ): AutoRegressionModeOutput {
-  const analysis = autoRepairAndAnalyze(csvData, yName, xNames);
+  assertNumericY(csvData.rows, yName);
+
+  // Expand categorical X columns into k-1 dummies before auto-repair runs.
+  // Auto-repair treats dummy columns like any other numeric column — a
+  // high-VIF or perfectly-collinear dummy can still be pruned.
+  const encoding = encodeCategoricalX(csvData.rows, xNames);
+  const effectiveCsvData: ParsedCSV = { ...csvData, rows: encoding.rows };
+  const dummyNames = new Set(encoding.categoricalInfo.flatMap(c => c.createdDummies));
+
+  const analysis = autoRepairAndAnalyze(effectiveCsvData, yName, encoding.expandedXNames);
 
   // After auto-repair, use the surviving feature names for the functional transform.
   const survivingXNames = analysis.result.featureNames;
-  const { X: rawX, y: rawY } = getValidRows(csvData.rows, yName, survivingXNames);
-  const transformed = applyFunctionalTransform(rawY, rawX, yName, survivingXNames, functionalForm);
+  const { X: rawX, y: rawY } = getValidRows(effectiveCsvData.rows, yName, survivingXNames);
+  const transformed = applyFunctionalTransform(rawY, rawX, yName, survivingXNames, functionalForm, dummyNames);
 
   let finalResult = functionalForm === 'lin-lin'
     ? analysis.result
@@ -145,5 +171,7 @@ export function runAutoRegressionMode(
     dropped: analysis.dropped,
     repairResult: analysis,
     rlsFallbackNote,
+    categoricalInfo: encoding.categoricalInfo,
+    categoricalWarnings: encoding.warnings,
   };
 }

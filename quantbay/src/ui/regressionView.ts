@@ -1,6 +1,7 @@
 import type { RegressionResult } from '../regression';
 import type { LeakageSignal, LogisticResult } from '../services/analysisService';
 import type { FunctionalForm } from '../functionalForms';
+import type { CategoricalVariableInfo } from '../categoricalEncoding';
 import { interpret } from '../interpretation';
 import { $ } from '../app/dom';
 import { appState } from '../app/state';
@@ -21,9 +22,18 @@ export function renderRegressionResults(
     leaks?: LeakageSignal[];
     logitResult?: LogisticResult | null;
     functionalForm?: FunctionalForm;
+    categoricalInfo?: CategoricalVariableInfo[];
+    categoricalWarnings?: string[];
   } = {}
 ): void {
-  const { binary = false, leaks = [], logitResult = null, functionalForm = 'lin-lin' } = checks;
+  const {
+    binary = false,
+    leaks = [],
+    logitResult = null,
+    functionalForm = 'lin-lin',
+    categoricalInfo = [],
+    categoricalWarnings = [],
+  } = checks;
   appState.lastDropped = dropped;
   renderBinaryWarn(binary, result.yName);
   renderLeakageWarn(leaks);
@@ -31,6 +41,7 @@ export function renderRegressionResults(
   if (eq) eq.textContent = result.equation;
 
   renderFunctionalFormNote(functionalForm);
+  renderCategoricalNote(categoricalInfo, categoricalWarnings);
   renderCoefTable(result);
   renderStatsTable(result, dropped);
   renderRLSPanel(result);
@@ -70,6 +81,39 @@ function renderFunctionalFormNote(form: FunctionalForm): void {
   const note = notes[form];
   el.textContent = note;
   el.style.display = note ? '' : 'none';
+}
+
+function renderCategoricalNote(info: CategoricalVariableInfo[], warnings: string[]): void {
+  const el = $('qb-categorical-note');
+  if (!el) return;
+  if (info.length === 0 && warnings.length === 0) {
+    el.innerHTML = '';
+    el.style.display = 'none';
+    return;
+  }
+
+  let html = '';
+  if (info.length > 0) {
+    html += `<p class="qb-label" style="margin-bottom:4px">Variables categóricas detectadas</p>`;
+    html += info
+      .map(
+        c => `<p class="qb-interp" style="margin:0 0 4px;font-size:12px">
+          <strong>${escapeHtml(c.originalName)}</strong> &mdash;
+          categoría base: <code>${escapeHtml(c.baseCategory)}</code> &middot;
+          dummies creadas: ${c.createdDummies.map(d => `<code>${escapeHtml(d)}</code>`).join(', ')}
+        </p>`
+      )
+      .join('');
+    html += `<p class="muted" style="font-size:11px;margin:2px 0 8px">Cada coeficiente dummy mide la diferencia estimada contra la categoría base, manteniendo constantes las demás variables.</p>`;
+  }
+  if (warnings.length > 0) {
+    html += warnings
+      .map(w => `<p class="qb-interp" style="margin:0 0 4px;font-size:12px;color:#f2c94c">${escapeHtml(w)}</p>`)
+      .join('');
+  }
+
+  el.innerHTML = html;
+  el.style.display = '';
 }
 
 function renderRLSPanel(result: RegressionResult): void {
