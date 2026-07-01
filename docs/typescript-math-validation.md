@@ -176,3 +176,47 @@ the pending items below.
   yet.
 - Wider numerical stress testing of ill-conditioned designs beyond the current
   near-singular cases.
+
+## Functional form recommendation from CSV data
+
+After a CSV is loaded and the user selects Y and X variables, ChartBay estimates
+all valid functional forms and recommends one based on prediction error in the
+original Y scale. The logic lives in `quantbay/src/services/formRecommender.ts`.
+
+The candidate forms are:
+
+- **Lin-Lin** — always a candidate if the data are numeric and the matrix is not singular.
+- **Log-Lin** — candidate only when all Y values are strictly positive.
+- **Lin-Log** — candidate only when all selected X values are strictly positive.
+- **Log-Log** — candidate only when both Y and all X values are strictly positive.
+
+### Ranking criterion
+
+1. **Primary** — lowest RMSE in the original Y scale.  
+   Log-Y models are back-transformed with `exp(fitted)` before computing RMSE.  
+   No Duan smearing correction is applied in this phase.
+2. **Secondary** — lowest MAE in the original Y scale (tiebreaker within 1% RMSE).
+3. **Tertiary** — highest adjusted R² of the estimated model.
+4. **Fallback** — simplest form (Lin-Lin > Log-Lin > Lin-Log > Log-Log).
+
+When the best and second-best candidates differ by less than 1% in RMSE, a
+pedagogical warning is shown recommending the simpler model unless economic
+theory justifies the transformation.
+
+### UX behavior
+
+- The recommendation fires live when the user selects or changes Y or X.
+- ChartBay **recommends** but does not auto-apply the form.
+- A "Usar forma sugerida" button lets the user adopt the recommendation in one
+  click without re-running the regression automatically.
+- The recommendation panel shows a ranked table with RMSE, MAE, and adjusted R²
+  for all valid candidates, and the reason for each invalid candidate.
+
+### Current limitations
+
+- Log-Y models are back-transformed with `exp(fitted)`; Duan smearing correction
+  is not implemented.
+- Lin-Log and Log-Log apply the logarithm to **all** selected X variables; partial
+  log transforms (e.g. `ln(X1)` but not `ln(X2)`) are not supported in this phase.
+- The recommendation is a statistical guide only. The final choice should consider
+  economic theory, interpretability, and residual diagnostics.
