@@ -26,6 +26,9 @@ import {
 } from './ui/timeseriesView';
 import { getVersionConfig, validateCsvFileSize, type ChartBayVersion } from './versioning/chartbayVersions';
 import { renderVersionInfo } from './ui/versionView';
+import { resolveEngineAction } from './pro/engineRouting';
+import { runPyodideOls } from './pro/pyodide/pythonOlsRunner';
+import { hideProPanel, renderProResult, showProPanel, showProStatus, type ProComparisonRow } from './ui/proView';
 
 interface QuantDemoCase {
   id: string;
@@ -234,11 +237,15 @@ function isTimeSeriesMode(): boolean {
   return appState.activeMode === 'timeseries';
 }
 
+// Guards the flows the Pro POC does NOT cover yet (auto-run, time series).
+// The standard regression run has its own routing in onRun via resolveEngineAction.
 function checkActiveEngineReady(): boolean {
   const config = getVersionConfig(appState.activeVersion);
   if (config.engine === 'typescript') return true;
   showError(
-    `El motor ${config.label} todavía está en preparación. Para ejecutar este análisis ahora, usá ChartBay Lite.`
+    config.engine === 'pyodide'
+      ? 'ChartBay Pro (experimental) solo soporta el cálculo OLS estándar por ahora. Para esta función, usá ChartBay Lite.'
+      : `El motor ${config.label} todavía está en preparación. Para ejecutar este análisis ahora, usá ChartBay Lite.`
   );
   return false;
 }
@@ -272,6 +279,7 @@ function updateModePanels(): void {
   if (results && ts) results.style.display = 'none';
   if (repair && ts) repair.style.display = 'none';
   if (tsPanel) tsPanel.style.display = ts ? '' : 'none';
+  if (ts) hideProPanel();
 
   if (ts) {
     if (appState.csvData) renderTimeSeriesSelectors(appState.csvData);
@@ -294,6 +302,7 @@ function setActiveMode(mode: 'regression' | 'timeseries'): void {
 function setActiveVersion(version: ChartBayVersion): void {
   appState.activeVersion = version;
   showError('');
+  if (version !== 'pro') hideProPanel();
   renderVersionInfo(getVersionConfig(version));
 }
 async function loadDemoCase(id: string): Promise<void> {
@@ -307,7 +316,9 @@ async function loadDemoCase(id: string): Promise<void> {
   try {
     const response = await fetch(`/datasets/${encodeURIComponent(demo.file)}`, { cache: 'no-store' });
     if (!response.ok) throw new Error(`No se pudo cargar ${demo.file}`);
-    appState.csvData = parseDemoCsv(await response.text());
+    const demoCsvText = await response.text();
+    appState.csvText = demoCsvText;
+    appState.csvData = parseDemoCsv(demoCsvText);
     if (appState.csvData.numericColumns.length < 2) {
       throw new Error('El CSV de ejemplo necesita al menos 2 columnas numéricas.');
     }
@@ -358,6 +369,7 @@ async function onFileChange(e: Event): Promise<void> {
   }
 
   showError('');
+  hideProPanel();
   appState.activeDemoId = null;
   appState.lastTimeSeriesResult = null;
   updateExportButtonState();
@@ -369,6 +381,7 @@ async function onFileChange(e: Event): Promise<void> {
   writeRunLog(['Leyendo archivo CSV...']);
 
   try {
+    appState.csvText = await file.text();
     appState.csvData = await parseCSVFile(file);
     if (!isTimeSeriesMode() && appState.csvData.numericColumns.length < 2) {
       showError('El CSV necesita al menos 2 columnas numéricas.');
@@ -406,7 +419,12 @@ async function onFileChange(e: Event): Promise<void> {
 async function onRun(): Promise<void> {
   if (isTimeSeriesMode()) return;
   if (!appState.csvData) return;
-  if (!checkActiveEngineReady()) return;
+  const engineAction = resolveEngineAction(appState.activeVersion);
+  if (engineAction === 'blocked') {
+    const config = getVersionConfig(appState.activeVersion);
+    showError(`El motor ${config.label} todavía está en preparación. Para ejecutar este análisis ahora, usá ChartBay Lite.`);
+    return;
+  }
   appState.lastTimeSeriesResult = null;
   updateExportButtonState();
   showError('');
@@ -422,6 +440,11 @@ async function onRun(): Promise<void> {
 
   const limitErr = checkCSVLimits(appState.csvData, xNames);
   if (limitErr) { showError(limitErr); return; }
+
+  if (engineAction === 'pro_pyodide') {
+    await onRunPro(yName, xNames);
+    return;
+  }
 
   const rlsConstraint = getEffectiveRLSConstraint(xNames);
   if (rlsConstraint === null) {
@@ -470,6 +493,64 @@ async function onRun(): Promise<void> {
     setEngineStatus('ERROR');
     showError(formatRegressionError(err));
   }
+}
+
+// ── ChartBay Pro (Pyodide POC) ───────────────────────────────────────────────
+
+// Best-effort cross-check: runs the Lite engine on the same selection (lin-lin,
+// no RLS) and pairs coefficients by name. Any Lite failure just skips the table.
+function buildLiteComparison(yName: string, xNames: string[], proResult: { coefficients?: Array<{ name: string; estimate: number }> }): ProComparisonRow[] | null {
+  if (!appState.csvData || !proResult.coefficients) return null;
+  try {
+    const lite = runRegressionMode(appState.csvData, yName, xNames, undefined, 'lin-lin');
+    const liteByName = new Map<string, number>([
+      ['Intercept', lite.result.intercept],
+      ...lite.result.featureNames.map((name, i) => [name, lite.result.coefficients[i]] as [string, number]),
+    ]);
+    const rows = proResult.coefficients
+      .filter(c => liteByName.has(c.name))
+      .map(c => ({ name: c.name, liteEstimate: liteByName.get(c.name)!, proEstimate: c.estimate }));
+    return rows.length > 0 ? rows : null;
+  } catch {
+    return null;
+  }
+}
+
+async function onRunPro(yName: string, xNames: string[]): Promise<void> {
+  if (!appState.csvText) {
+    showError('No hay CSV original disponible para el motor Pro. Volvé a cargar el archivo.');
+    return;
+  }
+
+  showProPanel();
+  setEngineStatus('CALCULANDO');
+  showProStatus('Cargando Python en navegador…');
+  writeRunLog(['ChartBay Pro (experimental): preparando Python en el navegador…']);
+
+  const result = await runPyodideOls(
+    { csvText: appState.csvText, yName, xNames },
+    phase => {
+      if (phase === 'loading-pyodide') showProStatus('Cargando Python en navegador…');
+      else if (phase === 'loading-packages') showProStatus('Cargando numpy y pandas…');
+      else showProStatus('Ejecutando OLS con Pyodide…');
+    }
+  );
+
+  const comparison = result.ok ? buildLiteComparison(yName, xNames, result) : null;
+  renderProResult(result, comparison);
+  setEngineStatus(result.ok ? 'COMPLETADO' : 'ERROR');
+  writeRunLog(
+    result.ok
+      ? [
+          'ChartBay Pro (experimental): OLS ejecutado con Pyodide... OK',
+          `Observaciones: ${result.nobs}`,
+          ...result.warnings,
+        ]
+      : [`ChartBay Pro (experimental): error — ${result.error ?? 'desconocido'}`]
+  );
+  const panel = $('qb-pro-results');
+  if (panel) panel.scrollIntoView({ behavior: 'smooth' });
+  updateSidebarStep(3);
 }
 
 // ── Results ───────────────────────────────────────────────────────────────────

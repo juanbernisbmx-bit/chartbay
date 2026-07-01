@@ -97,10 +97,14 @@ REGISTRATION_OPEN = False  # cambiar a True para reabrir el registro
 
 _CSP = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com s3.tradingview.com; "
+    # 'wasm-unsafe-eval' habilita solo la compilación de WebAssembly (Pyodide,
+    # ChartBay Pro) sin permitir eval() de JavaScript como haría 'unsafe-eval'.
+    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' cdn.jsdelivr.net cdnjs.cloudflare.com s3.tradingview.com; "
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: blob:; "
-    "connect-src 'self' *.tradingview.com wss://*.tradingview.com; "
+    # cdn.jsdelivr.net en connect-src: Pyodide descarga su runtime y los wheels
+    # de numpy/pandas vía fetch() desde ese CDN.
+    "connect-src 'self' cdn.jsdelivr.net *.tradingview.com wss://*.tradingview.com; "
     "frame-src s3.tradingview.com *.tradingview.com; "
     "frame-ancestors 'none'"
 )
