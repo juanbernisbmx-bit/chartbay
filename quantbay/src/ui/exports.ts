@@ -297,6 +297,11 @@ export function exportAnalysisCSV(): void {
       ['coefficient', 't_stat', name, infVal(result.tStats[index + 1])],
       ['coefficient', 'p_value', name, infVal(result.pValues[index + 1])],
     ] as Array<Array<string | number>>),
+    ...appState.lastCategoricalInfo.flatMap(c => [
+      ['categorical', 'base_category', c.originalName, c.baseCategory],
+      ['categorical', 'dummies', c.originalName, c.createdDummies.join('; ')],
+    ] as Array<Array<string | number>>),
+    ...appState.lastCategoricalWarnings.map(w => ['categorical', 'warning', '', w] as Array<string | number>),
     ['conclusion', 'text', '', conclusion],
   ];
 
@@ -351,6 +356,16 @@ export function exportAnalysisTXT(): void {
     `Grados de libertad: ${result.df}`,
     `Filas omitidas: ${appState.lastDropped}`,
     '',
+    ...(appState.lastCategoricalInfo.length > 0 || appState.lastCategoricalWarnings.length > 0
+      ? [
+          'Variables categoricas',
+          ...appState.lastCategoricalInfo.map(
+            c => `${c.originalName}: categoria base = ${c.baseCategory} | dummies = ${c.createdDummies.join(', ')}`
+          ),
+          ...appState.lastCategoricalWarnings,
+          '',
+        ]
+      : []),
     'Conclusion textual',
     interpret(result),
     '',
@@ -487,6 +502,20 @@ export function exportPDF(): void {
         !isFinite(v) ? '>999' : v.toFixed(2),
         v >= 10 ? 'Severo' : v >= 5 ? 'Precaución' : 'Aceptable',
       ]),
+      startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [27, 58, 107] }, margin: { left: 10, right: 10 },
+    });
+    y = doc.lastAutoTable.finalY + 5;
+  }
+
+  if (appState.lastCategoricalInfo.length > 0 && doc.autoTable) {
+    if (y > 220) { doc.addPage(); y = 15; }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Variables Categóricas (Dummies)', 10, y);
+    y += 4;
+    doc.autoTable({
+      head: [['Variable', 'Categoría base', 'Dummies creadas']],
+      body: appState.lastCategoricalInfo.map(c => [c.originalName, c.baseCategory, c.createdDummies.join(', ')]),
       startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [27, 58, 107] }, margin: { left: 10, right: 10 },
     });
     y = doc.lastAutoTable.finalY + 5;

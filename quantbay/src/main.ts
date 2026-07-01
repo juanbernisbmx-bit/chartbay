@@ -12,6 +12,7 @@ import { renderRepairLog } from './ui/diagnosticsView';
 import { renderRegressionResults } from './ui/regressionView';
 import { recommendFunctionalForm } from './services/formRecommender';
 import { renderFormRecommendation } from './ui/formRecommendView';
+import { detectCategoricalColumns } from './categoricalEncoding';
 import { runTimeSeriesAnalysis } from './timeseries/service';
 import {
   getACFMaxLag,
@@ -130,6 +131,10 @@ function parseDemoCsv(text: string): ParsedCSV {
       })
     ),
   };
+}
+
+function categoricalColumnsFor(csvData: ParsedCSV): string[] {
+  return detectCategoricalColumns(csvData.rows, csvData.headers, csvData.numericColumns);
 }
 
 function applyYIndicators(yName: string): void {
@@ -303,7 +308,10 @@ async function loadDemoCase(id: string): Promise<void> {
     ]);
 
     renderPreview(appState.csvData);
-    renderVarSelectors(appState.csvData.numericColumns);
+    {
+      const categoricalCols = categoricalColumnsFor(appState.csvData);
+      renderVarSelectors([...appState.csvData.numericColumns, ...categoricalCols], categoricalCols);
+    }
     setVariableSelection(demo.yName, demo.xNames);
     renderDemoInfo(demo);
     runFormRecommendation();
@@ -362,7 +370,10 @@ async function onFileChange(e: Event): Promise<void> {
       isTimeSeriesMode() ? 'Motor de Time Series listo.' : 'Motor de regresión listo.',
     ]);
     renderPreview(appState.csvData);
-    renderVarSelectors(appState.csvData.numericColumns);
+    {
+      const categoricalCols = categoricalColumnsFor(appState.csvData);
+      renderVarSelectors([...appState.csvData.numericColumns, ...categoricalCols], categoricalCols);
+    }
     updateModePanels();
     const preview = $('qb-preview'), vars = $('qb-vars'), results = $('qb-results');
     if (preview) preview.style.display = '';
@@ -413,6 +424,8 @@ async function onRun(): Promise<void> {
     appState.lastCorrCols = output.corrColumns;
     appState.lastVIF = output.vifValues;
     appState.lastLogit = output.logitResult;
+    appState.lastCategoricalInfo = output.categoricalInfo;
+    appState.lastCategoricalWarnings = output.categoricalWarnings;
 
     setMethodStatus(output.method);
     renderRegressionResults(
@@ -426,6 +439,8 @@ async function onRun(): Promise<void> {
         leaks: output.leaks,
         logitResult: output.logitResult,
         functionalForm: output.functionalForm,
+        categoricalInfo: output.categoricalInfo,
+        categoricalWarnings: output.categoricalWarnings,
       }
     );
     setText('qb-status-obs', output.result.nObs);
@@ -474,6 +489,8 @@ function onAutoRun(): void {
     appState.lastCorrCols = output.corrColumns;
     appState.lastVIF      = output.vifValues;
     appState.lastLogit    = null;
+    appState.lastCategoricalInfo = output.categoricalInfo;
+    appState.lastCategoricalWarnings = output.categoricalWarnings;
 
     setMethodStatus(output.method);
     renderRepairLog(output.repairResult, output.rlsFallbackNote);
@@ -483,7 +500,11 @@ function onAutoRun(): void {
       output.corrMatrix,
       output.corrColumns,
       output.vifValues,
-      { functionalForm: output.functionalForm }
+      {
+        functionalForm: output.functionalForm,
+        categoricalInfo: output.categoricalInfo,
+        categoricalWarnings: output.categoricalWarnings,
+      }
     );
 
     setEngineStatus('COMPLETADO');

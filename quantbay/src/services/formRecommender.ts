@@ -1,6 +1,7 @@
 import { getValidRows, type ParsedCSV } from '../csvParser';
 import { runOLS } from '../regression';
 import { applyFunctionalTransform, type FunctionalForm } from '../functionalForms';
+import { assertNumericY, encodeCategoricalX } from '../categoricalEncoding';
 
 export interface FunctionalFormCandidate {
   form: FunctionalForm;
@@ -64,9 +65,17 @@ export function recommendFunctionalForm(
   yName: string,
   xNames: string[],
 ): FunctionalFormRecommendation {
-  const { X: rawX, y: rawY } = getValidRows(csvData.rows, yName, xNames);
+  assertNumericY(csvData.rows, yName);
+
+  // Expand categorical X into k-1 dummies so the recommender can compare
+  // forms even when the selection mixes numeric and categorical variables.
+  const encoding = encodeCategoricalX(csvData.rows, xNames);
+  const effectiveXNames = encoding.expandedXNames;
+  const dummyNames = new Set(encoding.categoricalInfo.flatMap(c => c.createdDummies));
+
+  const { X: rawX, y: rawY } = getValidRows(encoding.rows, yName, effectiveXNames);
   const n = rawY.length;
-  const k = xNames.length;
+  const k = effectiveXNames.length;
   const notEnoughObs = n < k + 2;
 
   const candidates: FunctionalFormCandidate[] = [];
@@ -91,7 +100,9 @@ export function recommendFunctionalForm(
       continue;
     }
 
-    if (needsLogX && rawX.some(row => row.some(v => v <= 0))) {
+    // Dummy columns (0/1) are excluded from the log-X domain check — they are
+    // never logged, so a 0 there does not invalidate lin-log / log-log.
+    if (needsLogX && rawX.some(row => row.some((v, colIdx) => !dummyNames.has(effectiveXNames[colIdx]) && v <= 0))) {
       const label = form === 'lin-log' ? 'Lin-Log' : 'Log-Log';
       candidates.push({
         form,
@@ -102,7 +113,7 @@ export function recommendFunctionalForm(
     }
 
     try {
-      const transformed = applyFunctionalTransform(rawY, rawX, yName, xNames, form);
+      const transformed = applyFunctionalTransform(rawY, rawX, yName, effectiveXNames, form, dummyNames);
       const result = runOLS({
         X: transformed.X,
         y: transformed.y,

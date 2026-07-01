@@ -51,15 +51,25 @@ function validateFinite(values: number[], label: string): void {
 // Transform y and X arrays according to the chosen functional form.
 // Does NOT mutate the inputs.
 // Throws a clear, pedagogical error on invalid values.
+//
+// noLogXNames: X columns to exclude from the log-X transform even when the
+// form calls for it (lin-log / log-log). Used for dummy columns from
+// categorical encoding — a 0/1 dummy must never be logged.
 export function applyFunctionalTransform(
   y: number[],
   X: number[][],
   yName: string,
   xNames: string[],
-  form: FunctionalForm
+  form: FunctionalForm,
+  noLogXNames: ReadonlySet<string> = new Set()
 ): TransformResult {
   const logY = form === 'log-lin' || form === 'log-log';
-  const logX = form === 'lin-log' || form === 'log-log';
+  const logXBase = form === 'lin-log' || form === 'log-log';
+  const shouldLogX = (name: string): boolean => logXBase && !noLogXNames.has(name);
+  const loggedXIndices = xNames.reduce<number[]>((acc, name, i) => {
+    if (shouldLogX(name)) acc.push(i);
+    return acc;
+  }, []);
 
   // Validate Y
   if (logY) {
@@ -72,7 +82,7 @@ export function applyFunctionalTransform(
             `"${name}" contiene un valor no finito (${v}) en la fila ${rowIndex}.`
           );
         }
-        return logX ? (() => {
+        return shouldLogX(name) ? (() => {
           if (v <= 0) throw new Error(`"${name}" tiene un valor <= 0 en la fila ${rowIndex} (valor: ${v}). El logaritmo no está definido para valores no positivos.`);
           return Math.log(v);
         })() : v;
@@ -82,9 +92,9 @@ export function applyFunctionalTransform(
       y: transformedY,
       X: transformedX,
       yName: `ln(${yName})`,
-      xNames: logX ? xNames.map(n => `ln(${n})`) : [...xNames],
+      xNames: xNames.map(n => shouldLogX(n) ? `ln(${n})` : n),
       yLogged: true,
-      loggedXIndices: logX ? xNames.map((_, i) => i) : [],
+      loggedXIndices,
     };
   }
 
@@ -93,7 +103,7 @@ export function applyFunctionalTransform(
   const transformedX = X.map((row, rowIndex) =>
     row.map((v, colIndex) => {
       const name = xNames[colIndex];
-      if (logX) {
+      if (shouldLogX(name)) {
         if (!Number.isFinite(v)) {
           throw new Error(`"${name}" contiene un valor no finito (${v}) en la fila ${rowIndex}.`);
         }
@@ -112,9 +122,9 @@ export function applyFunctionalTransform(
     y: [...y],
     X: transformedX,
     yName,
-    xNames: logX ? xNames.map(n => `ln(${n})`) : [...xNames],
+    xNames: xNames.map(n => shouldLogX(n) ? `ln(${n})` : n),
     yLogged: false,
-    loggedXIndices: logX ? xNames.map((_, i) => i) : [],
+    loggedXIndices,
   };
 }
 
