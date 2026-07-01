@@ -611,7 +611,7 @@ function init(): void {
       const sel = $('qb-form') as HTMLSelectElement | null;
       if (sel) {
         sel.value = form;
-        appState.activeFunctionalForm = form;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }
   });
