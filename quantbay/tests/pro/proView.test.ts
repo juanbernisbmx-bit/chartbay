@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  clearProResult,
   getSelectedProStandardErrorType,
   renderProResult,
   setProSeSelectorVisible,
+  showProStatus,
   type ProComparison,
 } from '../../src/ui/proView';
 import type { PyodideOlsResult } from '../../src/pro/pyodide/proResultTypes';
@@ -221,5 +223,67 @@ describe('selector de errores estándar Pro', () => {
   it('sin selector montado (flujo Lite) devuelve classic y no rompe', () => {
     document.body.innerHTML = '';
     expect(getSelectedProStandardErrorType()).toBe('classic');
+  });
+});
+
+describe('re-run del panel Pro no deja resultados viejos visibles', () => {
+  beforeEach(() => {
+    mountProPanel();
+  });
+
+  it('clearProResult oculta el contenido anterior y vacía coeficientes, resumen, advertencias y comparación', () => {
+    const comparison: ProComparison = {
+      rows: [{ name: 'x', liteEstimate: 2.0, proEstimate: 2.0 }],
+      liteRSquared: 0.999,
+      liteNobs: 5,
+    };
+    renderProResult(okResult, comparison);
+    expect(document.getElementById('qb-pro-content')?.style.display).toBe('');
+    expect(document.getElementById('qb-pro-coef-body')?.innerHTML).not.toBe('');
+
+    clearProResult();
+
+    expect(document.getElementById('qb-pro-content')?.style.display).toBe('none');
+    expect(document.getElementById('qb-pro-coef-body')?.innerHTML).toBe('');
+    expect(document.getElementById('qb-pro-stats-body')?.innerHTML).toBe('');
+    expect(document.getElementById('qb-pro-warnings')?.innerHTML).toBe('');
+    expect(document.getElementById('qb-pro-comparison')?.innerHTML).toBe('');
+  });
+
+  it('clearProResult también oculta un error previo', () => {
+    renderProResult({ ok: false, engine: 'pyodide', warnings: [], error: 'Columna Y faltante.' });
+    expect(document.getElementById('qb-pro-error')?.style.display).toBe('');
+
+    clearProResult();
+
+    const error = document.getElementById('qb-pro-error');
+    expect(error?.style.display).toBe('none');
+    expect(error?.textContent).toBe('');
+  });
+
+  it('el estado de carga se puede mostrar justo después de limpiar el resultado previo', () => {
+    renderProResult(okResult);
+    clearProResult();
+    showProStatus('Cargando Python en navegador…');
+
+    const status = document.getElementById('qb-pro-status');
+    expect(status?.textContent).toBe('Cargando Python en navegador…');
+    expect(status?.style.display).toBe('');
+    // Ni coeficientes ni resumen del cálculo anterior deben seguir visibles
+    // mientras se muestra el estado de carga del nuevo cálculo.
+    expect(document.getElementById('qb-pro-content')?.style.display).toBe('none');
+  });
+
+  it('el resultado nuevo se renderiza normalmente después de limpiar uno anterior', () => {
+    renderProResult({ ...okResult, coefficients: [{ name: 'x', estimate: 99.0, stdError: 1.0, tStat: 99.0, pValue: 0.01 }] });
+    clearProResult();
+
+    renderProResult(okResult);
+
+    const cells = Array.from(document.querySelectorAll('#qb-pro-coef-body td')).map(td => td.textContent);
+    // El coeficiente viejo (99.0) no debe aparecer; solo los del resultado nuevo.
+    expect(cells).not.toContain('99.000000');
+    expect(cells).toContain('2.000000');
+    expect(document.getElementById('qb-pro-content')?.style.display).toBe('');
   });
 });

@@ -30,6 +30,7 @@ import { resolveEngineAction } from './pro/engineRouting';
 import { runPyodideOls } from './pro/pyodide/pythonOlsRunner';
 import { DEFAULT_PRO_STANDARD_ERROR_TYPE, PRO_STANDARD_ERROR_LABELS } from './pro/pyodide/proResultTypes';
 import {
+  clearProResult,
   getSelectedProStandardErrorType,
   hideProPanel,
   renderProResult,
@@ -550,6 +551,7 @@ async function onRunPro(yName: string, xNames: string[]): Promise<void> {
 
   try {
     showProPanel();
+    clearProResult();
     setEngineStatus('CALCULANDO');
     showProStatus('Cargando Python en navegador…');
     writeRunLog(['ChartBay Pro (experimental): preparando Python en el navegador…']);
