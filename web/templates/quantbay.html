@@ -404,14 +404,14 @@
             <p class="qb-subtitle">Resultado ChartBay Pro experimental</p>
             <span>PYODIDE · PYTHON EN NAVEGADOR</span>
           </div>
-          <p class="muted qb-help">ChartBay Pro está en etapa experimental. Ejecuta OLS con statsmodels (Python/Pyodide) en el navegador.</p>
-          <p class="muted qb-help">Pro no aplica restricciones RLS, formas funcionales ni variables categóricas: solo OLS lin-lin con intercepto automático.</p>
+          <p class="muted qb-help">ChartBay Pro está en etapa experimental. Ejecuta OLS con statsmodels (Python/Pyodide) en el navegador, con las 4 formas funcionales (lin-lin, log-lin, lin-log, log-log), intercepto automático y test de restricciones lineales (Rβ = q) vía statsmodels.</p>
+          <p class="muted qb-help">El test de restricción evalúa si Rβ = q es compatible con los datos (Wald/F), pero los coeficientes que se muestran son siempre del OLS no restringido: Pro no re-estima β bajo la restricción como sí lo hace Lite. Pro todavía no soporta variables categóricas ni errores robustos. Si tenés alguna de esas opciones activas, el cálculo se bloquea con un aviso — no se ignora en silencio.</p>
           <div id="qb-pro-status" class="qb-interp" style="display:none"></div>
           <div id="qb-pro-error" style="display:none;color:#e55"></div>
           <div id="qb-pro-content" style="display:none">
             <div class="qb-results-grid">
               <div>
-                <p class="qb-label">Coeficientes</p>
+                <p class="qb-label">Coeficientes (OLS no restringido)</p>
                 <div class="qb-table-scroll">
                   <table class="ledger">
                     <thead><tr><th>Variable</th><th>Coef.</th><th>Err. Est.</th><th>t</th><th>p-value</th></tr></thead>
@@ -427,6 +427,7 @@
                 </table>
               </div>
             </div>
+            <div id="qb-pro-rls-test"></div>
             <div id="qb-pro-warnings"></div>
             <div id="qb-pro-comparison"></div>
           </div>

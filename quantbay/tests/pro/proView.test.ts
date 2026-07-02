@@ -10,6 +10,7 @@ function mountProPanel(): void {
       <div id="qb-pro-content" style="display:none">
         <table><tbody id="qb-pro-coef-body"></tbody></table>
         <table><tbody id="qb-pro-stats-body"></tbody></table>
+        <div id="qb-pro-rls-test"></div>
         <div id="qb-pro-warnings"></div>
         <div id="qb-pro-comparison"></div>
       </div>
@@ -19,6 +20,9 @@ function mountProPanel(): void {
 const okResult: PyodideOlsResult = {
   ok: true,
   engine: 'pyodide',
+  functionalForm: 'lin-lin',
+  yName: 'y',
+  xNames: ['x'],
   nobs: 5,
   coefficients: [
     { name: 'Intercept', estimate: 1.0, stdError: 0.1, tStat: 10.0, pValue: 0.002145 },
@@ -68,6 +72,8 @@ describe('renderProResult (statsmodels)', () => {
     renderProResult(okResult);
 
     const text = document.getElementById('qb-pro-stats-body')?.textContent ?? '';
+    expect(text).toContain('Forma funcional');
+    expect(text).toContain('Lin-Lin');
     expect(text).toContain('Observaciones (n)');
     expect(text).toContain('5');
     expect(text).toContain('R²');
@@ -94,15 +100,87 @@ describe('renderProResult (statsmodels)', () => {
 
     const html = document.getElementById('qb-pro-comparison')?.innerHTML ?? '';
     expect(html).toContain('Comparación Lite vs Pro');
+    expect(html).toContain('Lin-Lin');
     expect(html).toContain('Intercept');
     expect(html).toContain('Métrica');
     expect(html).toContain('R²');
     expect(html).toContain('Observaciones (n)');
   });
 
+  it('labels the comparison with the functional form actually estimated, never a mismatched one', () => {
+    const comparison: ProComparison = {
+      rows: [
+        { name: 'Intercept', liteEstimate: 1.0, proEstimate: 1.0 },
+        { name: 'ln(x)', liteEstimate: 2.0, proEstimate: 2.0 },
+      ],
+      liteRSquared: 0.95,
+      liteNobs: 5,
+    };
+    renderProResult({ ...okResult, functionalForm: 'log-log', yName: 'ln(y)', xNames: ['ln(x)'] }, comparison);
+
+    const html = document.getElementById('qb-pro-comparison')?.innerHTML ?? '';
+    expect(html).toContain('Log-Log');
+    expect(html).not.toContain('Lin-Lin');
+  });
+
   it('clears the comparison block when no comparison is available', () => {
     renderProResult(okResult, null);
     expect(document.getElementById('qb-pro-comparison')?.innerHTML).toBe('');
+  });
+
+  it('renders the RLS test section with H0, F-stat, p-value and the reject/no-reject verdict', () => {
+    renderProResult({
+      ...okResult,
+      rlsTest: { label: 'beta1 = 0', fStat: 4.2, fPValue: 0.03, dfNum: 1, dfDenom: 3, reject: true },
+    });
+
+    const html = document.getElementById('qb-pro-rls-test')?.innerHTML ?? '';
+    expect(html).toContain('beta1 = 0');
+    expect(html).toContain('4.200000');
+    expect(html).toContain('0.030000');
+    expect(html).toContain('Se rechaza H0 al 5%');
+  });
+
+  it('shows "no se rechaza" when the restriction test does not reject at 5%', () => {
+    renderProResult({
+      ...okResult,
+      rlsTest: { label: 'beta1 = 0', fStat: 0.1, fPValue: 0.9, dfNum: 1, dfDenom: 3, reject: false },
+    });
+
+    const html = document.getElementById('qb-pro-rls-test')?.innerHTML ?? '';
+    expect(html).toContain('No se rechaza H0 al 5%');
+  });
+
+  it('clears the RLS test section when no restriction was evaluated', () => {
+    renderProResult(okResult);
+    expect(document.getElementById('qb-pro-rls-test')?.innerHTML).toBe('');
+  });
+
+  it('includes the Lite-vs-Pro restriction test comparison when provided', () => {
+    const comparison: ProComparison = {
+      rows: [],
+      liteRSquared: null,
+      liteNobs: null,
+      rlsTest: { label: 'beta1 = 0', liteFStat: 4.19, litePValue: 0.031 },
+    };
+    renderProResult(
+      { ...okResult, rlsTest: { label: 'beta1 = 0', fStat: 4.2, fPValue: 0.03, dfNum: 1, dfDenom: 3, reject: true } },
+      comparison
+    );
+
+    const html = document.getElementById('qb-pro-rls-test')?.innerHTML ?? '';
+    expect(html).toContain('4.190000');
+    expect(html).toContain('4.200000');
+  });
+
+  it('never re-estimates coefficients under the restriction: the note says so explicitly', () => {
+    renderProResult({
+      ...okResult,
+      rlsTest: { label: 'beta1 = 0', fStat: 4.2, fPValue: 0.03, dfNum: 1, dfDenom: 3, reject: true },
+    });
+
+    const html = document.getElementById('qb-pro-rls-test')?.innerHTML ?? '';
+    expect(html).toContain('no re-estima los coeficientes');
   });
 
   it('shows the error block and hides content on ok:false results', () => {

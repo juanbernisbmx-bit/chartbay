@@ -4,6 +4,9 @@ import { normalizePyodideOlsResult, proError } from '../../src/pro/pyodide/proRe
 const validPayload = {
   ok: true,
   engine: 'pyodide',
+  functionalForm: 'lin-lin',
+  yName: 'y',
+  xNames: ['x'],
   nobs: 5,
   coefficients: [
     { name: 'Intercept', estimate: 1.0, stdError: 0.1, tStat: 10.0, pValue: 0.001 },
@@ -34,6 +37,9 @@ describe('normalizePyodideOlsResult', () => {
   it('parses a valid statsmodels JSON payload from Python', () => {
     const result = normalizePyodideOlsResult(JSON.stringify(validPayload));
     expect(result.ok).toBe(true);
+    expect(result.functionalForm).toBe('lin-lin');
+    expect(result.yName).toBe('y');
+    expect(result.xNames).toEqual(['x']);
     expect(result.nobs).toBe(5);
     expect(result.coefficients).toEqual(validPayload.coefficients);
     expect(result.rSquared).toBeCloseTo(0.999);
@@ -197,5 +203,121 @@ describe('normalizePyodideOlsResult', () => {
     const result = normalizePyodideOlsResult(raw);
     expect(result.ok).toBe(false);
     expect(result.error).toBe('Error desconocido en el motor Python.');
+  });
+
+  it('leaves rlsTest undefined when Python reports null (no restriction was evaluated)', () => {
+    const raw = JSON.stringify({ ...validPayload, rlsTest: null });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(true);
+    expect(result.rlsTest).toBeUndefined();
+  });
+
+  it('leaves rlsTest undefined when Python omits the field entirely', () => {
+    const result = normalizePyodideOlsResult(JSON.stringify(validPayload));
+    expect(result.ok).toBe(true);
+    expect(result.rlsTest).toBeUndefined();
+  });
+
+  it('parses a well-formed rlsTest (Wald/F test on the unrestricted fit)', () => {
+    const raw = JSON.stringify({
+      ...validPayload,
+      rlsTest: { label: 'beta1 = 0', fStat: 4.2, fPValue: 0.03, dfNum: 1, dfDenom: 3, reject: true },
+    });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(true);
+    expect(result.rlsTest).toEqual({ label: 'beta1 = 0', fStat: 4.2, fPValue: 0.03, dfNum: 1, dfDenom: 3, reject: true });
+  });
+
+  it('accepts a null fStat/fPValue in rlsTest (statsmodels degenerate case)', () => {
+    const raw = JSON.stringify({
+      ...validPayload,
+      rlsTest: { label: 'beta1 = 0', fStat: null, fPValue: null, dfNum: 1, dfDenom: 3, reject: false },
+    });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(true);
+    expect(result.rlsTest?.fStat).toBeNull();
+    expect(result.rlsTest?.fPValue).toBeNull();
+  });
+
+  it('rejects a malformed rlsTest (missing label)', () => {
+    const raw = JSON.stringify({
+      ...validPayload,
+      rlsTest: { fStat: 1, fPValue: 0.5, dfNum: 1, dfDenom: 3, reject: false },
+    });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('restricción RLS inválido');
+  });
+
+  it('rejects a malformed rlsTest (reject is not a boolean)', () => {
+    const raw = JSON.stringify({
+      ...validPayload,
+      rlsTest: { label: 'beta1 = 0', fStat: 1, fPValue: 0.5, dfNum: 1, dfDenom: 3, reject: 'yes' },
+    });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('restricción RLS inválido');
+  });
+
+  it('rejects a non-object rlsTest', () => {
+    const raw = JSON.stringify({ ...validPayload, rlsTest: 'beta1 = 0' });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('restricción RLS inválido');
+  });
+
+  it('accepts each of the 4 functional forms', () => {
+    for (const form of ['lin-lin', 'log-lin', 'lin-log', 'log-log']) {
+      const raw = JSON.stringify({ ...validPayload, functionalForm: form });
+      const result = normalizePyodideOlsResult(raw);
+      expect(result.ok).toBe(true);
+      expect(result.functionalForm).toBe(form);
+    }
+  });
+
+  it('rejects missing functionalForm', () => {
+    const { functionalForm: _functionalForm, ...rest } = validPayload;
+    const result = normalizePyodideOlsResult(JSON.stringify(rest));
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('forma funcional inválida');
+  });
+
+  it('rejects an unknown functionalForm value', () => {
+    const raw = JSON.stringify({ ...validPayload, functionalForm: 'quadratic' });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('forma funcional inválida');
+  });
+
+  it('rejects missing yName', () => {
+    const { yName: _yName, ...rest } = validPayload;
+    const result = normalizePyodideOlsResult(JSON.stringify(rest));
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('nombre de Y inválido');
+  });
+
+  it('rejects missing or empty xNames', () => {
+    const raw = JSON.stringify({ ...validPayload, xNames: [] });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('nombres de X inválidos');
+  });
+
+  it('carries the transformed (ln-prefixed) yName/xNames through for log forms', () => {
+    const raw = JSON.stringify({
+      ...validPayload,
+      functionalForm: 'log-log',
+      yName: 'ln(y)',
+      xNames: ['ln(x)'],
+      coefficients: [
+        { name: 'Intercept', estimate: 1.0, stdError: 0.1, tStat: 10.0, pValue: 0.001 },
+        { name: 'ln(x)', estimate: 2.0, stdError: 0.05, tStat: 40.0, pValue: 0.0001 },
+      ],
+    });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(true);
+    expect(result.yName).toBe('ln(y)');
+    expect(result.xNames).toEqual(['ln(x)']);
+    expect(result.coefficients?.[1].name).toBe('ln(x)');
   });
 });

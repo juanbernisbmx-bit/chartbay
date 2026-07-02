@@ -1,6 +1,7 @@
 import { $ } from '../app/dom';
 import { escapeHtml } from '../utils/format';
-import type { PyodideOlsResult } from '../pro/pyodide/proResultTypes';
+import type { PyodideOlsResult, PyodideRlsTest } from '../pro/pyodide/proResultTypes';
+import { FORM_LABELS } from './formRecommendView';
 
 export type ProComparisonRow = {
   name: string;
@@ -8,10 +9,23 @@ export type ProComparisonRow = {
   proEstimate: number;
 };
 
+// Comparison of the restriction test itself (Lite's classical restricted-vs-
+// unrestricted F-test, from rls.ts, against Pro's Wald/F test via statsmodels'
+// f_test). These use different code paths but the same formula, so they are
+// expected to agree numerically — unlike coefficients, which are NEVER
+// compared while a restriction is active (Lite re-estimates β under Rβ = q,
+// Pro does not).
+export type ProRlsComparison = {
+  label: string;
+  liteFStat: number | null;
+  litePValue: number | null;
+};
+
 export type ProComparison = {
   rows: ProComparisonRow[];
   liteRSquared: number | null;
   liteNobs: number | null;
+  rlsTest?: ProRlsComparison | null;
 };
 
 const fmt = (value: number): string => {
@@ -76,6 +90,7 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
   const statsBody = $('qb-pro-stats-body');
   if (statsBody) {
     const rows: Array<[string, string]> = [
+      ['Forma funcional', result.functionalForm ? FORM_LABELS[result.functionalForm] : '—'],
       ['Observaciones (n)', String(result.nobs ?? '—')],
       ['R²', fmtOpt(result.rSquared)],
       ['R² ajustado', fmtOpt(result.rSquaredAdj)],
@@ -88,6 +103,11 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
     statsBody.innerHTML = rows
       .map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`)
       .join('');
+  }
+
+  const rlsTestEl = $('qb-pro-rls-test');
+  if (rlsTestEl) {
+    rlsTestEl.innerHTML = result.rlsTest ? buildRlsTestHtml(result.rlsTest, comparison?.rlsTest) : '';
   }
 
   const warningsEl = $('qb-pro-warnings');
@@ -144,5 +164,40 @@ function buildComparisonHtml(result: PyodideOlsResult, comparison: ProComparison
   }
 
   if (sections.length === 0) return '';
-  return `<p class="qb-label" style="margin-top:10px">Comparación Lite vs Pro (lin-lin, sin restricción)</p>${sections.join('')}`;
+  const formLabel = result.functionalForm ? FORM_LABELS[result.functionalForm] : '—';
+  return (
+    `<p class="qb-label" style="margin-top:10px">Comparación Lite vs Pro (${escapeHtml(formLabel)}, coeficientes OLS no restringidos)</p>` +
+    sections.join('')
+  );
+}
+
+function buildRlsTestHtml(rlsTest: PyodideRlsTest, comparison?: ProRlsComparison | null): string {
+  const verdict = rlsTest.reject ? 'Se rechaza H0 al 5%' : 'No se rechaza H0 al 5%';
+  const df = `${rlsTest.dfNum ?? '—'}, ${rlsTest.dfDenom ?? '—'}`;
+
+  let table = '';
+  if (comparison) {
+    table = `
+      <div class="qb-table-scroll" style="margin-top:6px">
+        <table class="ledger">
+          <thead><tr><th></th><th>Lite (RSS restringido vs no restringido)</th><th>Pro (statsmodels f_test)</th></tr></thead>
+          <tbody>
+            <tr><td>F-stat</td><td>${fmtOpt(comparison.liteFStat)}</td><td>${fmtOpt(rlsTest.fStat)}</td></tr>
+            <tr><td>p-value</td><td>${fmtOpt(comparison.litePValue)}</td><td>${fmtOpt(rlsTest.fPValue)}</td></tr>
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  return `
+    <p class="qb-label" style="margin-top:10px">Test de restricción (Wald/F, statsmodels)</p>
+    <div class="qb-interp">
+      H0: ${escapeHtml(rlsTest.label)}<br>
+      F = ${fmtOpt(rlsTest.fStat)} (df = ${escapeHtml(df)}) · p-value = ${fmtOpt(rlsTest.fPValue)}<br>
+      <strong>${verdict}</strong><br>
+      <span class="muted" style="font-size:11px">
+        Este test no re-estima los coeficientes bajo la restricción — sólo evalúa si Rβ = q es compatible con los datos.
+        Los coeficientes de la tabla de arriba son siempre el OLS no restringido.
+      </span>
+    </div>${table}`;
 }
