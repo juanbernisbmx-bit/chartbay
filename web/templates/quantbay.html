@@ -196,6 +196,17 @@
               <div id="qb-rls-validation" style="margin-top:4px;font-size:12px"></div>
             </div>
           </details>
+          <div id="qb-pro-se-wrap" style="display:none;margin-top:10px">
+            <label for="qb-pro-se" class="qb-label">Errores estándar Pro</label>
+            <select id="qb-pro-se" style="width:100%;max-width:260px;margin-top:4px;display:block">
+              <option value="classic" selected>Clásicos</option>
+              <option value="HC1">Robustos HC1</option>
+              <option value="HC3">Robustos HC3</option>
+            </select>
+            <p class="muted" style="font-size:11px;margin:4px 0 0">
+              Solo aplica al motor Pro (statsmodels). Los coeficientes no cambian; solo la inferencia (errores estándar, t, p-values).
+            </p>
+          </div>
           <div style="margin-top:10px">
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
               <button class="btn-ink" id="qb-run" style="font-weight:700">Calcular regresión</button>
@@ -404,8 +415,8 @@
             <p class="qb-subtitle">Resultado ChartBay Pro experimental</p>
             <span>PYODIDE · PYTHON EN NAVEGADOR</span>
           </div>
-          <p class="muted qb-help">ChartBay Pro está en etapa experimental. Ejecuta OLS con statsmodels (Python/Pyodide) en el navegador, con las 4 formas funcionales (lin-lin, log-lin, lin-log, log-log), intercepto automático y test de restricciones lineales (Rβ = q) vía statsmodels.</p>
-          <p class="muted qb-help">El test de restricción evalúa si Rβ = q es compatible con los datos (Wald/F), pero los coeficientes que se muestran son siempre del OLS no restringido: Pro no re-estima β bajo la restricción como sí lo hace Lite. Pro todavía no soporta variables categóricas ni errores robustos. Si tenés alguna de esas opciones activas, el cálculo se bloquea con un aviso — no se ignora en silencio.</p>
+          <p class="muted qb-help">ChartBay Pro está en etapa experimental. Ejecuta OLS con statsmodels (Python/Pyodide) en el navegador, con las 4 formas funcionales (lin-lin, log-lin, lin-log, log-log), intercepto automático, errores estándar clásicos o robustos (HC1/HC3) y test de restricciones lineales (Rβ = q) vía statsmodels.</p>
+          <p class="muted qb-help">El test de restricción evalúa si Rβ = q es compatible con los datos (Wald/F), pero los coeficientes que se muestran son siempre del OLS no restringido: Pro no re-estima β bajo la restricción como sí lo hace Lite. Pro todavía no soporta variables categóricas. Si tenés esa opción activa, el cálculo se bloquea con un aviso — no se ignora en silencio.</p>
           <div id="qb-pro-status" class="qb-interp" style="display:none"></div>
           <div id="qb-pro-error" style="display:none;color:#e55"></div>
           <div id="qb-pro-content" style="display:none">

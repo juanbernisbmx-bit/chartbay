@@ -233,6 +233,87 @@ describe('runPyodideOls (statsmodels)', () => {
     expect(result.error).toBe('Columnas faltantes en el CSV: z.');
   });
 
+  it('usa errores estándar clásicos por defecto (sin standardErrorType)', async () => {
+    const fake = makeFakePyodide();
+    mocks.getPyodide.mockResolvedValue(fake);
+
+    const result = await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin' });
+
+    expect(result.ok).toBe(true);
+    expect(fake.globals.set).toHaveBeenCalledWith('chartbay_se_type', 'classic');
+  });
+
+  it('acepta classic explícito y lo pasa a Python', async () => {
+    const fake = makeFakePyodide();
+    mocks.getPyodide.mockResolvedValue(fake);
+
+    await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin', standardErrorType: 'classic' });
+
+    expect(fake.globals.set).toHaveBeenCalledWith('chartbay_se_type', 'classic');
+  });
+
+  it('pasa cov_type="HC1" al script de statsmodels cuando se pide HC1', async () => {
+    const fake = makeFakePyodide({
+      runPythonAsync: vi.fn().mockResolvedValue(JSON.stringify({ ...VALID_STATSMODELS_PAYLOAD, seType: 'HC1' })),
+    });
+    mocks.getPyodide.mockResolvedValue(fake);
+
+    const result = await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin', standardErrorType: 'HC1' });
+
+    expect(result.ok).toBe(true);
+    expect(result.standardErrorType).toBe('HC1');
+    expect(fake.globals.set).toHaveBeenCalledWith('chartbay_se_type', 'HC1');
+    const script = (fake.runPythonAsync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(script).toContain('sm.OLS(y, X).fit(cov_type=se_type)');
+    expect(script).toContain('"HC1"');
+  });
+
+  it('pasa cov_type="HC3" al script de statsmodels cuando se pide HC3', async () => {
+    const fake = makeFakePyodide({
+      runPythonAsync: vi.fn().mockResolvedValue(JSON.stringify({ ...VALID_STATSMODELS_PAYLOAD, seType: 'HC3' })),
+    });
+    mocks.getPyodide.mockResolvedValue(fake);
+
+    const result = await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin', standardErrorType: 'HC3' });
+
+    expect(result.ok).toBe(true);
+    expect(result.standardErrorType).toBe('HC3');
+    expect(fake.globals.set).toHaveBeenCalledWith('chartbay_se_type', 'HC3');
+    const script = (fake.runPythonAsync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(script).toContain('sm.OLS(y, X).fit(cov_type=se_type)');
+    expect(script).toContain('"HC3"');
+  });
+
+  it('el script sigue usando fit() sin cov_type para classic', async () => {
+    const fake = makeFakePyodide();
+    mocks.getPyodide.mockResolvedValue(fake);
+
+    await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin', standardErrorType: 'classic' });
+
+    const script = (fake.runPythonAsync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(script).toContain('sm.OLS(y, X).fit()');
+  });
+
+  it('rechaza un tipo de errores estándar inválido sin cargar ni ejecutar Python', async () => {
+    const result = await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin', standardErrorType: 'HC2' });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('Tipo de errores estándar inválido');
+    expect(result.error).toContain('classic, HC1, HC3');
+    expect(mocks.getPyodide).not.toHaveBeenCalled();
+  });
+
+  it('el script de Python valida se_type por su cuenta (defensa en profundidad)', async () => {
+    const fake = makeFakePyodide();
+    mocks.getPyodide.mockResolvedValue(fake);
+
+    await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin' });
+
+    const script = (fake.runPythonAsync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(script).toContain('se_type not in ("classic", "HC1", "HC3")');
+    expect(script).toContain('Tipo de errores estándar no soportado');
+  });
+
   it('passes Python-side empty-CSV errors through', async () => {
     const fake = makeFakePyodide({
       runPythonAsync: vi.fn().mockResolvedValue(

@@ -28,8 +28,16 @@ import { getVersionConfig, validateCsvFileSize, type ChartBayVersion } from './v
 import { renderVersionInfo } from './ui/versionView';
 import { resolveEngineAction } from './pro/engineRouting';
 import { runPyodideOls } from './pro/pyodide/pythonOlsRunner';
-import { proError } from './pro/pyodide/proResultTypes';
-import { hideProPanel, renderProResult, showProPanel, showProStatus } from './ui/proView';
+import { DEFAULT_PRO_STANDARD_ERROR_TYPE, PRO_STANDARD_ERROR_LABELS, proError } from './pro/pyodide/proResultTypes';
+import {
+  clearProResult,
+  getSelectedProStandardErrorType,
+  hideProPanel,
+  renderProResult,
+  setProSeSelectorVisible,
+  showProPanel,
+  showProStatus,
+} from './ui/proView';
 import { checkProCapability } from './pro/proCapability';
 import { checkProFunctionalDomain } from './pro/proDomainCheck';
 import { buildLiteComparison } from './pro/liteComparison';
@@ -309,6 +317,7 @@ function setActiveVersion(version: ChartBayVersion): void {
   showError('');
   if (version !== 'pro') hideProPanel();
   renderVersionInfo(getVersionConfig(version));
+  setProSeSelectorVisible(resolveEngineAction(version) === 'pro_pyodide');
 }
 async function loadDemoCase(id: string): Promise<void> {
   const demo = DEMO_CASES[id];
@@ -538,6 +547,7 @@ async function onRunPro(
 
   try {
     showProPanel();
+    clearProResult();
     setEngineStatus('CALCULANDO');
 
     // Fail fast on an invalid log domain (Y/X <= 0) before paying the cost of
@@ -555,7 +565,7 @@ async function onRunPro(
     writeRunLog(['ChartBay Pro (experimental): preparando Python en el navegador…']);
 
     const result = await runPyodideOls(
-      { csvText: appState.csvText, yName, xNames, form, rlsConstraint },
+      { csvText: appState.csvText, yName, xNames, form, rlsConstraint, standardErrorType: getSelectedProStandardErrorType() },
       phase => {
         if (phase === 'loading-pyodide') showProStatus('Cargando Python en navegador…');
         else if (phase === 'loading-packages') showProStatus('Cargando numpy, pandas y statsmodels…');
@@ -573,6 +583,7 @@ async function onRunPro(
         ? [
             'ChartBay Pro (experimental): OLS ejecutado con statsmodels (Pyodide)... OK',
             `Observaciones: ${result.nobs}`,
+            `Inferencia: ${PRO_STANDARD_ERROR_LABELS[result.standardErrorType ?? DEFAULT_PRO_STANDARD_ERROR_TYPE]}`,
             ...result.warnings,
           ]
         : [`ChartBay Pro (experimental): error — ${result.error ?? 'desconocido'}`]
@@ -808,6 +819,7 @@ function init(): void {
   });
 
   renderVersionInfo(getVersionConfig(appState.activeVersion));
+  setProSeSelectorVisible(resolveEngineAction(appState.activeVersion) === 'pro_pyodide');
   updateModePanels();
   updateExportButtonState();
 }
