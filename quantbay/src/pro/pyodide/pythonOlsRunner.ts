@@ -1,10 +1,18 @@
 import { getPyodide } from './pyodideLoader';
-import { normalizePyodideOlsResult, proError, type PyodideOlsResult } from './proResultTypes';
+import {
+  DEFAULT_PRO_STANDARD_ERROR_TYPE,
+  PRO_STANDARD_ERROR_TYPES,
+  isProStandardErrorType,
+  normalizePyodideOlsResult,
+  proError,
+  type PyodideOlsResult,
+} from './proResultTypes';
 
 export type PyodideOlsPhase = 'loading-pyodide' | 'loading-packages' | 'running';
 
-// OLS con statsmodels.api.OLS — Fase 1 del Pro MVP. Solo lin-lin con intercepto
-// automático: nada de robustos, RLS, formas funcionales ni dummies todavía.
+// OLS con statsmodels.api.OLS — Fase 2 del Pro MVP. Lin-lin con intercepto
+// automático y errores estándar clásicos o robustos HC1/HC3 (cov_type de
+// statsmodels): nada de RLS, formas funcionales ni dummies todavía.
 // Validation errors are returned as {ok: false, error} dicts (never raised) so
 // the TS side always receives a parseable JSON payload. Non-finite statistics
 // (perfect fit, constant Y) are serialized as null because JSON.parse rejects
@@ -32,6 +40,12 @@ def _chartbay_pro_ols():
 
     y_name = chartbay_y_name
     x_names = json.loads(chartbay_x_names_json)
+    se_type = chartbay_se_type
+
+    # El lado TS ya valida esto antes de ejecutar Python; se repite acá para que
+    # un valor corrupto nunca llegue a statsmodels como cov_type arbitrario.
+    if se_type not in ("classic", "HC1", "HC3"):
+        return fail('Tipo de errores estándar no soportado: "' + str(se_type) + '". Usá classic, HC1 o HC3.')
 
     try:
         df = pd.read_csv(io.StringIO(chartbay_csv_text))
@@ -80,7 +94,11 @@ def _chartbay_pro_ols():
         )
 
     try:
-        results = sm.OLS(y, X).fit()
+        if se_type == "classic":
+            results = sm.OLS(y, X).fit()
+        else:
+            # HC1/HC3: mismos betas, covarianza robusta a heterocedasticidad.
+            results = sm.OLS(y, X).fit(cov_type=se_type)
     except Exception as exc:
         return fail("statsmodels no pudo estimar el modelo OLS: " + str(exc) + ".")
 
@@ -125,6 +143,7 @@ def _chartbay_pro_ols():
     return {
         "ok": True,
         "engine": "pyodide",
+        "seType": se_type,
         "nobs": int(results.nobs),
         "coefficients": coefficients,
         "rSquared": r_squared,
@@ -149,9 +168,11 @@ function errorMessage(err: unknown): string {
 /**
  * Runs an OLS regression with statsmodels in Python (Pyodide) in the browser.
  * Never throws — every failure mode is returned as {ok: false, error}.
+ * standardErrorType llega como string crudo (viene de un <select>) y se valida
+ * acá: un valor inválido devuelve error sin cargar ni ejecutar Python.
  */
 export async function runPyodideOls(
-  args: { csvText: string; yName: string; xNames: string[] },
+  args: { csvText: string; yName: string; xNames: string[]; standardErrorType?: string },
   onPhase?: (phase: PyodideOlsPhase) => void
 ): Promise<PyodideOlsResult> {
   if (!args.csvText || args.csvText.trim() === '') {
@@ -162,6 +183,12 @@ export async function runPyodideOls(
   }
   if (args.xNames.length === 0) {
     return proError('Seleccioná al menos una variable X antes de ejecutar.');
+  }
+  const seType = args.standardErrorType ?? DEFAULT_PRO_STANDARD_ERROR_TYPE;
+  if (!isProStandardErrorType(seType)) {
+    return proError(
+      `Tipo de errores estándar inválido: "${seType}". Valores permitidos: ${PRO_STANDARD_ERROR_TYPES.join(', ')}.`
+    );
   }
 
   let pyodide;
@@ -184,6 +211,7 @@ export async function runPyodideOls(
     pyodide.globals.set('chartbay_csv_text', args.csvText);
     pyodide.globals.set('chartbay_y_name', args.yName);
     pyodide.globals.set('chartbay_x_names_json', JSON.stringify(args.xNames));
+    pyodide.globals.set('chartbay_se_type', seType);
     const raw = await pyodide.runPythonAsync(PYTHON_OLS_SCRIPT);
     return normalizePyodideOlsResult(raw);
   } catch (err) {

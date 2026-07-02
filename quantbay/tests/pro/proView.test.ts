@@ -1,9 +1,21 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { renderProResult, type ProComparison } from '../../src/ui/proView';
+import {
+  getSelectedProStandardErrorType,
+  renderProResult,
+  setProSeSelectorVisible,
+  type ProComparison,
+} from '../../src/ui/proView';
 import type { PyodideOlsResult } from '../../src/pro/pyodide/proResultTypes';
 
 function mountProPanel(): void {
   document.body.innerHTML = `
+    <div id="qb-pro-se-wrap" style="display:none">
+      <select id="qb-pro-se">
+        <option value="classic" selected>Clásicos</option>
+        <option value="HC1">Robustos HC1</option>
+        <option value="HC3">Robustos HC3</option>
+      </select>
+    </div>
     <section id="qb-pro-results" style="display:none">
       <div id="qb-pro-status" style="display:none"></div>
       <div id="qb-pro-error" style="display:none"></div>
@@ -114,6 +126,62 @@ describe('renderProResult (statsmodels)', () => {
     expect(document.getElementById('qb-pro-content')?.style.display).toBe('none');
   });
 
+  it('muestra inferencia clásica en el resumen cuando no hay tipo explícito (default)', () => {
+    renderProResult(okResult);
+
+    const text = document.getElementById('qb-pro-stats-body')?.textContent ?? '';
+    expect(text).toContain('Inferencia');
+    expect(text).toContain('errores estándar clásicos');
+  });
+
+  it('muestra inferencia clásica explícita en el resumen', () => {
+    renderProResult({ ...okResult, standardErrorType: 'classic' });
+
+    const text = document.getElementById('qb-pro-stats-body')?.textContent ?? '';
+    expect(text).toContain('errores estándar clásicos');
+  });
+
+  it('muestra inferencia robusta HC1 en el resumen', () => {
+    renderProResult({ ...okResult, standardErrorType: 'HC1' });
+
+    const text = document.getElementById('qb-pro-stats-body')?.textContent ?? '';
+    expect(text).toContain('errores estándar robustos HC1');
+  });
+
+  it('muestra inferencia robusta HC3 en el resumen', () => {
+    renderProResult({ ...okResult, standardErrorType: 'HC3' });
+
+    const text = document.getElementById('qb-pro-stats-body')?.textContent ?? '';
+    expect(text).toContain('errores estándar robustos HC3');
+  });
+
+  it('la comparación Lite vs Pro sigue renderizando con Pro robusto y aclara los errores estándar', () => {
+    const comparison: ProComparison = {
+      rows: [{ name: 'x', liteEstimate: 2.0, proEstimate: 2.0 }],
+      liteRSquared: 0.999,
+      liteNobs: 5,
+    };
+    renderProResult({ ...okResult, standardErrorType: 'HC3' }, comparison);
+
+    const html = document.getElementById('qb-pro-comparison')?.innerHTML ?? '';
+    expect(html).toContain('Comparación Lite vs Pro');
+    expect(html).toContain('Lite usa errores estándar clásicos');
+    expect(html).toContain('errores estándar robustos HC3');
+  });
+
+  it('la comparación con Pro clásico no agrega la aclaración de robustos', () => {
+    const comparison: ProComparison = {
+      rows: [{ name: 'x', liteEstimate: 2.0, proEstimate: 2.0 }],
+      liteRSquared: 0.999,
+      liteNobs: 5,
+    };
+    renderProResult({ ...okResult, standardErrorType: 'classic' }, comparison);
+
+    const html = document.getElementById('qb-pro-comparison')?.innerHTML ?? '';
+    expect(html).toContain('Comparación Lite vs Pro');
+    expect(html).not.toContain('Lite usa errores estándar clásicos y Pro está usando');
+  });
+
   it('escapes HTML in variable names and warnings', () => {
     renderProResult({
       ...okResult,
@@ -123,5 +191,35 @@ describe('renderProResult (statsmodels)', () => {
 
     expect(document.querySelector('#qb-pro-coef-body img')).toBeNull();
     expect(document.querySelector('#qb-pro-warnings script')).toBeNull();
+  });
+});
+
+describe('selector de errores estándar Pro', () => {
+  it('setProSeSelectorVisible muestra el selector cuando el motor Pro está activo', () => {
+    setProSeSelectorVisible(true);
+    expect(document.getElementById('qb-pro-se-wrap')?.style.display).toBe('');
+  });
+
+  it('setProSeSelectorVisible oculta el selector para Lite / Mega Pro', () => {
+    setProSeSelectorVisible(true);
+    setProSeSelectorVisible(false);
+    expect(document.getElementById('qb-pro-se-wrap')?.style.display).toBe('none');
+  });
+
+  it('getSelectedProStandardErrorType devuelve el valor elegido en el selector', () => {
+    const select = document.getElementById('qb-pro-se') as HTMLSelectElement;
+    select.value = 'HC3';
+    expect(getSelectedProStandardErrorType()).toBe('HC3');
+    select.value = 'HC1';
+    expect(getSelectedProStandardErrorType()).toBe('HC1');
+  });
+
+  it('el default del selector es classic', () => {
+    expect(getSelectedProStandardErrorType()).toBe('classic');
+  });
+
+  it('sin selector montado (flujo Lite) devuelve classic y no rompe', () => {
+    document.body.innerHTML = '';
+    expect(getSelectedProStandardErrorType()).toBe('classic');
   });
 });

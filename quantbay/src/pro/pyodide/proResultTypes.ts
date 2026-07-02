@@ -1,3 +1,21 @@
+// Tipo de errores estándar del OLS Pro: clásicos (nonrobust) o robustos a
+// heterocedasticidad (HC1/HC3 de statsmodels). Los betas no cambian entre modos.
+export type ProStandardErrorType = 'classic' | 'HC1' | 'HC3';
+
+export const PRO_STANDARD_ERROR_TYPES: readonly ProStandardErrorType[] = ['classic', 'HC1', 'HC3'];
+
+export const DEFAULT_PRO_STANDARD_ERROR_TYPE: ProStandardErrorType = 'classic';
+
+export const PRO_STANDARD_ERROR_LABELS: Record<ProStandardErrorType, string> = {
+  classic: 'errores estándar clásicos',
+  HC1: 'errores estándar robustos HC1',
+  HC3: 'errores estándar robustos HC3',
+};
+
+export function isProStandardErrorType(value: unknown): value is ProStandardErrorType {
+  return value === 'classic' || value === 'HC1' || value === 'HC3';
+}
+
 export type PyodideOlsCoefficient = {
   name: string;
   estimate: number;
@@ -10,6 +28,8 @@ export type PyodideOlsCoefficient = {
 export type PyodideOlsResult = {
   ok: boolean;
   engine: 'pyodide';
+  // Ausente en payloads previos a HC1/HC3; el runner siempre lo pide explícito.
+  standardErrorType?: ProStandardErrorType;
   nobs?: number;
   coefficients?: PyodideOlsCoefficient[];
   rSquared?: number;
@@ -96,6 +116,16 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
     return { ok: false, engine: 'pyodide', warnings, error };
   }
 
+  // seType ausente = payload previo a HC1/HC3 (retrocompatible → undefined);
+  // presente pero fuera de {classic, HC1, HC3} = payload corrupto → rechazo.
+  let standardErrorType: ProStandardErrorType | undefined;
+  if (obj.seType !== undefined && obj.seType !== null) {
+    if (!isProStandardErrorType(obj.seType)) {
+      return proError('El motor Python devolvió un tipo de errores estándar inválido.');
+    }
+    standardErrorType = obj.seType;
+  }
+
   const coefficients = parseCoefficients(obj.coefficients);
   if (!coefficients) {
     return proError('El motor Python devolvió coeficientes inválidos.');
@@ -147,6 +177,7 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
   return {
     ok: true,
     engine: 'pyodide',
+    standardErrorType,
     nobs: obj.nobs,
     coefficients,
     rSquared: rSquared ?? undefined,
