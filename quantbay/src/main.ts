@@ -28,7 +28,12 @@ import { getVersionConfig, validateCsvFileSize, type ChartBayVersion } from './v
 import { renderVersionInfo } from './ui/versionView';
 import { resolveEngineAction } from './pro/engineRouting';
 import { runPyodideOls } from './pro/pyodide/pythonOlsRunner';
-import { hideProPanel, renderProResult, showProPanel, showProStatus, type ProComparison } from './ui/proView';
+import { proError } from './pro/pyodide/proResultTypes';
+import { hideProPanel, renderProResult, showProPanel, showProStatus } from './ui/proView';
+import { checkProCapability } from './pro/proCapability';
+import { checkProFunctionalDomain } from './pro/proDomainCheck';
+import { buildLiteComparison } from './pro/liteComparison';
+import type { FunctionalForm } from './functionalForms';
 
 interface QuantDemoCase {
   id: string;
@@ -443,7 +448,19 @@ async function onRun(): Promise<void> {
   if (limitErr) { showError(limitErr); return; }
 
   if (engineAction === 'pro_pyodide') {
-    await onRunPro(yName, xNames);
+    const rlsConstraint = getEffectiveRLSConstraint(xNames);
+    if (rlsConstraint === null) {
+      showError('Corregí la restricción RLS antes de calcular.');
+      return;
+    }
+    const categoricalXNames = xNames.filter(name => categoricalColumnsFor(appState.csvData!).includes(name));
+    const capabilityBlock = checkProCapability({ rlsConstraint, categoricalXNames, parameterCount: xNames.length + 1 });
+    if (capabilityBlock) {
+      hideProPanel();
+      showError(capabilityBlock.message);
+      return;
+    }
+    await onRunPro(yName, xNames, appState.activeFunctionalForm, rlsConstraint);
     return;
   }
 
@@ -498,38 +515,19 @@ async function onRun(): Promise<void> {
 
 // ── ChartBay Pro (Pyodide POC) ───────────────────────────────────────────────
 
-// Best-effort cross-check: runs the Lite engine on the same selection (lin-lin,
-// no RLS) and pairs coefficients by name, plus R² and n. Any Lite failure just
-// skips the comparison.
-function buildLiteComparison(yName: string, xNames: string[], proResult: { coefficients?: Array<{ name: string; estimate: number }> }): ProComparison | null {
-  if (!appState.csvData || !proResult.coefficients) return null;
-  try {
-    const lite = runRegressionMode(appState.csvData, yName, xNames, undefined, 'lin-lin');
-    const liteByName = new Map<string, number>([
-      ['Intercept', lite.result.intercept],
-      ...lite.result.featureNames.map((name, i) => [name, lite.result.coefficients[i]] as [string, number]),
-    ]);
-    const rows = proResult.coefficients
-      .filter(c => liteByName.has(c.name))
-      .map(c => ({ name: c.name, liteEstimate: liteByName.get(c.name)!, proEstimate: c.estimate }));
-    return {
-      rows,
-      liteRSquared: Number.isFinite(lite.result.rSquared) ? lite.result.rSquared : null,
-      liteNobs: lite.result.nObs,
-    };
-  } catch {
-    return null;
-  }
-}
-
 // Pyodide runs Python in a single shared interpreter: two concurrent runs would
 // both write to the same global variable names (chartbay_csv_text, etc.) and
 // could race. Guard against double-clicking "Calcular" while a run is in flight.
 let proRunInFlight = false;
 
-async function onRunPro(yName: string, xNames: string[]): Promise<void> {
+async function onRunPro(
+  yName: string,
+  xNames: string[],
+  form: FunctionalForm,
+  rlsConstraint: RLSConstraint | undefined
+): Promise<void> {
   if (proRunInFlight) return;
-  if (!appState.csvText) {
+  if (!appState.csvText || !appState.csvData) {
     showError('No hay CSV original disponible para el motor Pro. Volvé a cargar el archivo.');
     return;
   }
@@ -541,11 +539,23 @@ async function onRunPro(yName: string, xNames: string[]): Promise<void> {
   try {
     showProPanel();
     setEngineStatus('CALCULANDO');
+
+    // Fail fast on an invalid log domain (Y/X <= 0) before paying the cost of
+    // loading Pyodide/numpy/pandas/statsmodels. The Python script re-validates
+    // the same domain on its own parsed data as a second line of defense.
+    const domainError = checkProFunctionalDomain(appState.csvData, yName, xNames, form);
+    if (domainError) {
+      renderProResult(proError(domainError));
+      setEngineStatus('ERROR');
+      writeRunLog([`ChartBay Pro (experimental): error de dominio — ${domainError}`]);
+      return;
+    }
+
     showProStatus('Cargando Python en navegador…');
     writeRunLog(['ChartBay Pro (experimental): preparando Python en el navegador…']);
 
     const result = await runPyodideOls(
-      { csvText: appState.csvText, yName, xNames },
+      { csvText: appState.csvText, yName, xNames, form, rlsConstraint },
       phase => {
         if (phase === 'loading-pyodide') showProStatus('Cargando Python en navegador…');
         else if (phase === 'loading-packages') showProStatus('Cargando numpy, pandas y statsmodels…');
@@ -553,7 +563,9 @@ async function onRunPro(yName: string, xNames: string[]): Promise<void> {
       }
     );
 
-    const comparison = result.ok ? buildLiteComparison(yName, xNames, result) : null;
+    const comparison = result.ok
+      ? buildLiteComparison(appState.csvData, yName, xNames, form, result, rlsConstraint)
+      : null;
     renderProResult(result, comparison);
     setEngineStatus(result.ok ? 'COMPLETADO' : 'ERROR');
     writeRunLog(

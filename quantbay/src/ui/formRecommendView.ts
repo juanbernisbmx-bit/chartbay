@@ -3,7 +3,7 @@ import type { FunctionalForm } from '../functionalForms';
 import { $ } from '../app/dom';
 import { escapeHtml } from '../utils/format';
 
-const FORM_LABELS: Record<FunctionalForm, string> = {
+export const FORM_LABELS: Record<FunctionalForm, string> = {
   'lin-lin': 'Lin-Lin',
   'log-lin': 'Log-Lin',
   'lin-log': 'Lin-Log',

@@ -1,3 +1,5 @@
+import type { FunctionalForm } from '../../functionalForms';
+
 export type PyodideOlsCoefficient = {
   name: string;
   estimate: number;
@@ -7,9 +9,27 @@ export type PyodideOlsCoefficient = {
   pValue: number | null;
 };
 
+// Wald/F test of a linear restriction (Rβ = q) against the UNRESTRICTED OLS
+// fit above (statsmodels results.f_test). This does NOT re-estimate β under
+// the restriction — see the note in pro/pyodide/pythonOlsRunner.ts for why
+// that's a deliberate difference from Lite's true restricted estimator.
+export type PyodideRlsTest = {
+  label: string;
+  fStat: number | null;
+  fPValue: number | null;
+  dfNum: number | null;
+  dfDenom: number | null;
+  reject: boolean;
+};
+
 export type PyodideOlsResult = {
   ok: boolean;
   engine: 'pyodide';
+  // Forma funcional efectivamente estimada por Python. Sólo presente en
+  // resultados ok:true (ver normalizePyodideOlsResult).
+  functionalForm?: FunctionalForm;
+  yName?: string;
+  xNames?: string[];
   nobs?: number;
   coefficients?: PyodideOlsCoefficient[];
   rSquared?: number;
@@ -22,7 +42,11 @@ export type PyodideOlsResult = {
   fitted?: number[];
   warnings: string[];
   error?: string;
+  // Only present when a valid RLS constraint was passed in for this run.
+  rlsTest?: PyodideRlsTest;
 };
+
+const VALID_FUNCTIONAL_FORMS: ReadonlySet<string> = new Set(['lin-lin', 'log-lin', 'lin-log', 'log-log']);
 
 export function proError(message: string): PyodideOlsResult {
   return { ok: false, engine: 'pyodide', warnings: [], error: message };
@@ -52,6 +76,33 @@ function parseCoefficients(raw: unknown): PyodideOlsCoefficient[] | null {
     coefficients.push({ name, estimate, stdError, tStat, pValue });
   }
   return coefficients;
+}
+
+// null/undefined means "no restriction was evaluated" (the common case for a
+// plain OLS run) — that's valid and yields rlsTest: undefined, not an error.
+// Anything else must be a well-formed object, or the whole payload is rejected
+// (a malformed RLS test is just as untrustworthy as malformed coefficients).
+function parseRlsTest(raw: unknown): { ok: true; value: PyodideRlsTest | undefined } | { ok: false } {
+  if (raw === null || raw === undefined) return { ok: true, value: undefined };
+  if (typeof raw !== 'object' || Array.isArray(raw)) return { ok: false };
+
+  const record = raw as Record<string, unknown>;
+  if (typeof record.label !== 'string' || record.label.trim() === '') return { ok: false };
+
+  const fStat = finiteOrNull(record.fStat);
+  const fPValue = finiteOrNull(record.fPValue);
+  if (fStat === undefined || fPValue === undefined) return { ok: false };
+
+  const dfNum = finiteOrNull(record.dfNum);
+  const dfDenom = finiteOrNull(record.dfDenom);
+  if (dfNum === undefined || dfDenom === undefined) return { ok: false };
+
+  if (typeof record.reject !== 'boolean') return { ok: false };
+
+  return {
+    ok: true,
+    value: { label: record.label, fStat, fPValue, dfNum, dfDenom, reject: record.reject },
+  };
 }
 
 function parseFiniteArray(raw: unknown, expectedLength: number): number[] | null {
@@ -96,6 +147,17 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
     return { ok: false, engine: 'pyodide', warnings, error };
   }
 
+  if (typeof obj.functionalForm !== 'string' || !VALID_FUNCTIONAL_FORMS.has(obj.functionalForm)) {
+    return proError('El motor Python devolvió una forma funcional inválida.');
+  }
+  const functionalForm = obj.functionalForm as FunctionalForm;
+  if (typeof obj.yName !== 'string' || obj.yName.trim() === '') {
+    return proError('El motor Python devolvió un nombre de Y inválido.');
+  }
+  if (!Array.isArray(obj.xNames) || obj.xNames.length === 0 || !obj.xNames.every((n): n is string => typeof n === 'string')) {
+    return proError('El motor Python devolvió nombres de X inválidos.');
+  }
+
   const coefficients = parseCoefficients(obj.coefficients);
   if (!coefficients) {
     return proError('El motor Python devolvió coeficientes inválidos.');
@@ -116,6 +178,11 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
   const fitted = parseFiniteArray(obj.fitted, obj.nobs);
   if (!fitted) {
     return proError('El motor Python devolvió valores ajustados inválidos.');
+  }
+
+  const rlsTestParsed = parseRlsTest(obj.rlsTest);
+  if (!rlsTestParsed.ok) {
+    return proError('El motor Python devolvió un test de restricción RLS inválido.');
   }
 
   // R², R² ajustado, F y su p-value pueden ser legítimamente null
@@ -147,6 +214,9 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
   return {
     ok: true,
     engine: 'pyodide',
+    functionalForm,
+    yName: obj.yName,
+    xNames: obj.xNames,
     nobs: obj.nobs,
     coefficients,
     rSquared: rSquared ?? undefined,
@@ -158,5 +228,6 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
     residuals,
     fitted,
     warnings,
+    rlsTest: rlsTestParsed.value,
   };
 }
