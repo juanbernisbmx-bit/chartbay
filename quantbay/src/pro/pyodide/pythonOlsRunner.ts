@@ -1,12 +1,20 @@
 import { getPyodide } from './pyodideLoader';
-import { normalizePyodideOlsResult, proError, type PyodideOlsResult } from './proResultTypes';
+import {
+  DEFAULT_PRO_STANDARD_ERROR_TYPE,
+  PRO_STANDARD_ERROR_TYPES,
+  isProStandardErrorType,
+  normalizePyodideOlsResult,
+  proError,
+  type PyodideOlsResult,
+} from './proResultTypes';
 import type { FunctionalForm } from '../../functionalForms';
 import type { RLSConstraint } from '../../rls';
 
 export type PyodideOlsPhase = 'loading-pyodide' | 'loading-packages' | 'running';
 
 // OLS con statsmodels.api.OLS — con las 4 formas funcionales (lin-lin,
-// log-lin, lin-log, log-log) y test de restricciones lineales (Rβ = q) vía
+// log-lin, lin-log, log-log), errores estándar clásicos o robustos HC1/HC3
+// (cov_type de statsmodels) y test de restricciones lineales (Rβ = q) vía
 // statsmodels' f_test. IMPORTANTE: el modelo estimado y devuelto (coeficientes,
 // residuos, R², etc.) es SIEMPRE el OLS no restringido — la restricción no
 // re-estima los coeficientes, sólo evalúa (Wald/F) si es compatible con los
@@ -15,8 +23,8 @@ export type PyodideOlsPhase = 'loading-pyodide' | 'loading-packages' | 'running'
 // Lite, en cambio, sí re-estima β bajo la restricción (ver rls.ts) — por eso
 // nunca se comparan los coeficientes de Lite-RLS contra los de Pro; sólo se
 // compara el test de restricción en sí (ver pro/liteComparison.ts).
-// Todavía sin errores robustos ni dummies categóricas (ver pro/proCapability.ts,
-// que bloquea esa segunda selección antes de llegar acá).
+// Todavía sin dummies categóricas (ver pro/proCapability.ts, que bloquea esa
+// selección antes de llegar acá).
 // Validation errors are returned as {ok: false, error} dicts (never raised) so
 // the TS side always receives a parseable JSON payload. Non-finite statistics
 // (perfect fit, constant Y) are serialized as null because JSON.parse rejects
@@ -47,6 +55,12 @@ def _chartbay_pro_ols():
     form = chartbay_functional_form
     log_y = form in ("log-lin", "log-log")
     log_x = form in ("lin-log", "log-log")
+    se_type = chartbay_se_type
+
+    # El lado TS ya valida esto antes de ejecutar Python; se repite acá para que
+    # un valor corrupto nunca llegue a statsmodels como cov_type arbitrario.
+    if se_type not in ("classic", "HC1", "HC3"):
+        return fail('Tipo de errores estándar no soportado: "' + str(se_type) + '". Usá classic, HC1 o HC3.')
 
     try:
         df = pd.read_csv(io.StringIO(chartbay_csv_text))
@@ -136,14 +150,19 @@ def _chartbay_pro_ols():
         )
 
     try:
-        results = sm.OLS(y, X).fit()
+        if se_type == "classic":
+            results = sm.OLS(y, X).fit()
+        else:
+            # HC1/HC3: mismos betas, covarianza robusta a heterocedasticidad.
+            results = sm.OLS(y, X).fit(cov_type=se_type)
     except Exception as exc:
         return fail("statsmodels no pudo estimar el modelo OLS: " + str(exc) + ".")
 
     # Test de restricción lineal Rβ = q sobre el OLS no restringido (Wald/F test
-    # de statsmodels). No re-estima β: sólo evalúa si la restricción es
-    # compatible con los datos. R actúa sobre [Intercept, x_labels...] en ese
-    # orden, igual que en Lite (quantbay/src/rls.ts).
+    # de statsmodels, que ya usa la covarianza robusta cuando se_type != classic).
+    # No re-estima β: sólo evalúa si la restricción es compatible con los datos.
+    # R actúa sobre [Intercept, x_labels...] en ese orden, igual que en Lite
+    # (quantbay/src/rls.ts).
     rls_json = chartbay_rls_constraint_json
     rls_test = None
     if rls_json:
@@ -234,6 +253,7 @@ def _chartbay_pro_ols():
         "functionalForm": form,
         "yName": y_label,
         "xNames": x_labels,
+        "seType": se_type,
         "nobs": int(results.nobs),
         "coefficients": coefficients,
         "rSquared": r_squared,
@@ -259,9 +279,18 @@ function errorMessage(err: unknown): string {
 /**
  * Runs an OLS regression with statsmodels in Python (Pyodide) in the browser.
  * Never throws — every failure mode is returned as {ok: false, error}.
+ * standardErrorType llega como string crudo (viene de un <select>) y se valida
+ * acá: un valor inválido devuelve error sin cargar ni ejecutar Python.
  */
 export async function runPyodideOls(
-  args: { csvText: string; yName: string; xNames: string[]; form: FunctionalForm; rlsConstraint?: RLSConstraint },
+  args: {
+    csvText: string;
+    yName: string;
+    xNames: string[];
+    form: FunctionalForm;
+    rlsConstraint?: RLSConstraint;
+    standardErrorType?: string;
+  },
   onPhase?: (phase: PyodideOlsPhase) => void
 ): Promise<PyodideOlsResult> {
   if (!args.csvText || args.csvText.trim() === '') {
@@ -272,6 +301,12 @@ export async function runPyodideOls(
   }
   if (args.xNames.length === 0) {
     return proError('Seleccioná al menos una variable X antes de ejecutar.');
+  }
+  const seType = args.standardErrorType ?? DEFAULT_PRO_STANDARD_ERROR_TYPE;
+  if (!isProStandardErrorType(seType)) {
+    return proError(
+      `Tipo de errores estándar inválido: "${seType}". Valores permitidos: ${PRO_STANDARD_ERROR_TYPES.join(', ')}.`
+    );
   }
 
   let pyodide;
@@ -299,6 +334,7 @@ export async function runPyodideOls(
       'chartbay_rls_constraint_json',
       args.rlsConstraint ? JSON.stringify(args.rlsConstraint) : ''
     );
+    pyodide.globals.set('chartbay_se_type', seType);
     const raw = await pyodide.runPythonAsync(PYTHON_OLS_SCRIPT);
     return normalizePyodideOlsResult(raw);
   } catch (err) {
