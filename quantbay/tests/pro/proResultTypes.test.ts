@@ -192,6 +192,77 @@ describe('normalizePyodideOlsResult', () => {
     expect(result.fPValue).toBeUndefined();
   });
 
+  it('acepta un payload robusto HC1 válido y expone standardErrorType', () => {
+    const raw = JSON.stringify({
+      ...validPayload,
+      seType: 'HC1',
+      coefficients: [
+        { name: 'Intercept', estimate: 1.0, stdError: 0.15, tStat: 6.7, pValue: 0.006 },
+        { name: 'x', estimate: 2.0, stdError: 0.08, tStat: 25.0, pValue: 0.0002 },
+      ],
+    });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(true);
+    expect(result.standardErrorType).toBe('HC1');
+    // Los betas son los mismos que en classic; solo cambia la inferencia.
+    expect(result.coefficients?.map(c => c.estimate)).toEqual([1.0, 2.0]);
+  });
+
+  it('acepta un payload robusto HC3 válido y expone standardErrorType', () => {
+    const raw = JSON.stringify({ ...validPayload, seType: 'HC3' });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(true);
+    expect(result.standardErrorType).toBe('HC3');
+  });
+
+  it('acepta un payload classic y expone standardErrorType classic', () => {
+    const raw = JSON.stringify({ ...validPayload, seType: 'classic' });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(true);
+    expect(result.standardErrorType).toBe('classic');
+  });
+
+  it('deja standardErrorType undefined cuando el payload no lo trae (retrocompatibilidad)', () => {
+    const result = normalizePyodideOlsResult(JSON.stringify(validPayload));
+    expect(result.ok).toBe(true);
+    expect(result.standardErrorType).toBeUndefined();
+  });
+
+  it('rechaza un seType fuera de classic/HC1/HC3', () => {
+    const raw = JSON.stringify({ ...validPayload, seType: 'HC7' });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('tipo de errores estándar inválido');
+  });
+
+  it('acepta null en stdError/tStat/pValue de resultados robustos (no finito → null)', () => {
+    const raw = JSON.stringify({
+      ...validPayload,
+      seType: 'HC3',
+      coefficients: [
+        { name: 'Intercept', estimate: 1.0, stdError: null, tStat: null, pValue: null },
+        { name: 'x', estimate: 2.0, stdError: null, tStat: null, pValue: null },
+      ],
+      fStat: null,
+      fPValue: null,
+    });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(true);
+    expect(result.coefficients?.[0].stdError).toBeNull();
+    expect(result.fStat).toBeUndefined();
+  });
+
+  it('rechaza no finitos serializados como string en resultados robustos', () => {
+    const raw = JSON.stringify({
+      ...validPayload,
+      seType: 'HC1',
+      coefficients: [{ name: 'x', estimate: 2.0, stdError: 'NaN', tStat: 1.0, pValue: 0.5 }],
+    });
+    const result = normalizePyodideOlsResult(raw);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('coeficientes inválidos');
+  });
+
   it('uses a fallback message when ok:false has no error text', () => {
     const raw = JSON.stringify({ ok: false });
     const result = normalizePyodideOlsResult(raw);

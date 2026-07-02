@@ -1,6 +1,10 @@
 import { $ } from '../app/dom';
 import { escapeHtml } from '../utils/format';
-import type { PyodideOlsResult } from '../pro/pyodide/proResultTypes';
+import {
+  DEFAULT_PRO_STANDARD_ERROR_TYPE,
+  PRO_STANDARD_ERROR_LABELS,
+  type PyodideOlsResult,
+} from '../pro/pyodide/proResultTypes';
 
 export type ProComparisonRow = {
   name: string;
@@ -25,6 +29,23 @@ const fmtOpt = (value: number | null | undefined): string =>
 export function showProPanel(): void {
   const panel = $('qb-pro-results');
   if (panel) panel.style.display = '';
+}
+
+// El selector de errores estándar solo tiene sentido cuando el motor Pro
+// (Pyodide) está activo: oculto para Lite (siempre clásicos) y Mega Pro (bloqueado).
+export function setProSeSelectorVisible(visible: boolean): void {
+  const wrap = $('qb-pro-se-wrap');
+  if (wrap) wrap.style.display = visible ? '' : 'none';
+}
+
+/**
+ * Lee el valor crudo del selector de errores estándar Pro. Devuelve el default
+ * ('classic') si el selector no existe (ej: flujo Lite sin el control montado);
+ * la validación real del valor la hace el runner antes de ejecutar Python.
+ */
+export function getSelectedProStandardErrorType(): string {
+  const select = $('qb-pro-se') as HTMLSelectElement | null;
+  return select?.value ?? DEFAULT_PRO_STANDARD_ERROR_TYPE;
 }
 
 export function hideProPanel(): void {
@@ -83,6 +104,7 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
       ['p-value (F)', fmtOpt(result.fPValue)],
       ['Grados de libertad (residual)', result.dfResid === undefined ? '—' : String(result.dfResid)],
       ['Error estándar residual', fmtOpt(result.residualStdError)],
+      ['Inferencia', PRO_STANDARD_ERROR_LABELS[result.standardErrorType ?? DEFAULT_PRO_STANDARD_ERROR_TYPE]],
       ['Motor', 'Python / statsmodels (Pyodide en navegador)'],
     ];
     statsBody.innerHTML = rows
@@ -144,5 +166,16 @@ function buildComparisonHtml(result: PyodideOlsResult, comparison: ProComparison
   }
 
   if (sections.length === 0) return '';
+
+  // La comparación solo cubre coeficientes, R² y n, que no dependen del tipo de
+  // errores estándar. Con Pro robusto se aclara que los SE no son comparables.
+  const seType = result.standardErrorType ?? DEFAULT_PRO_STANDARD_ERROR_TYPE;
+  if (seType !== 'classic') {
+    sections.push(
+      `<p class="muted qb-help">Lite usa errores estándar clásicos y Pro está usando ${escapeHtml(PRO_STANDARD_ERROR_LABELS[seType])}: ` +
+      'los coeficientes, R² y n son comparables; los errores estándar no.</p>'
+    );
+  }
+
   return `<p class="qb-label" style="margin-top:10px">Comparación Lite vs Pro (lin-lin, sin restricción)</p>${sections.join('')}`;
 }

@@ -28,7 +28,16 @@ import { getVersionConfig, validateCsvFileSize, type ChartBayVersion } from './v
 import { renderVersionInfo } from './ui/versionView';
 import { resolveEngineAction } from './pro/engineRouting';
 import { runPyodideOls } from './pro/pyodide/pythonOlsRunner';
-import { hideProPanel, renderProResult, showProPanel, showProStatus, type ProComparison } from './ui/proView';
+import { DEFAULT_PRO_STANDARD_ERROR_TYPE, PRO_STANDARD_ERROR_LABELS } from './pro/pyodide/proResultTypes';
+import {
+  getSelectedProStandardErrorType,
+  hideProPanel,
+  renderProResult,
+  setProSeSelectorVisible,
+  showProPanel,
+  showProStatus,
+  type ProComparison,
+} from './ui/proView';
 
 interface QuantDemoCase {
   id: string;
@@ -304,6 +313,7 @@ function setActiveVersion(version: ChartBayVersion): void {
   showError('');
   if (version !== 'pro') hideProPanel();
   renderVersionInfo(getVersionConfig(version));
+  setProSeSelectorVisible(resolveEngineAction(version) === 'pro_pyodide');
 }
 async function loadDemoCase(id: string): Promise<void> {
   const demo = DEMO_CASES[id];
@@ -545,7 +555,7 @@ async function onRunPro(yName: string, xNames: string[]): Promise<void> {
     writeRunLog(['ChartBay Pro (experimental): preparando Python en el navegador…']);
 
     const result = await runPyodideOls(
-      { csvText: appState.csvText, yName, xNames },
+      { csvText: appState.csvText, yName, xNames, standardErrorType: getSelectedProStandardErrorType() },
       phase => {
         if (phase === 'loading-pyodide') showProStatus('Cargando Python en navegador…');
         else if (phase === 'loading-packages') showProStatus('Cargando numpy, pandas y statsmodels…');
@@ -561,6 +571,7 @@ async function onRunPro(yName: string, xNames: string[]): Promise<void> {
         ? [
             'ChartBay Pro (experimental): OLS ejecutado con statsmodels (Pyodide)... OK',
             `Observaciones: ${result.nobs}`,
+            `Inferencia: ${PRO_STANDARD_ERROR_LABELS[result.standardErrorType ?? DEFAULT_PRO_STANDARD_ERROR_TYPE]}`,
             ...result.warnings,
           ]
         : [`ChartBay Pro (experimental): error — ${result.error ?? 'desconocido'}`]
@@ -796,6 +807,7 @@ function init(): void {
   });
 
   renderVersionInfo(getVersionConfig(appState.activeVersion));
+  setProSeSelectorVisible(resolveEngineAction(appState.activeVersion) === 'pro_pyodide');
   updateModePanels();
   updateExportButtonState();
 }

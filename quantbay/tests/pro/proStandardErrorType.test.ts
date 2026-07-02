@@ -1,0 +1,42 @@
+import { describe, expect, it } from 'vitest';
+import {
+  DEFAULT_PRO_STANDARD_ERROR_TYPE,
+  PRO_STANDARD_ERROR_LABELS,
+  PRO_STANDARD_ERROR_TYPES,
+  isProStandardErrorType,
+} from '../../src/pro/pyodide/proResultTypes';
+
+describe('ProStandardErrorType', () => {
+  it('el default es classic', () => {
+    expect(DEFAULT_PRO_STANDARD_ERROR_TYPE).toBe('classic');
+    expect(isProStandardErrorType(DEFAULT_PRO_STANDARD_ERROR_TYPE)).toBe(true);
+  });
+
+  it('acepta classic', () => {
+    expect(isProStandardErrorType('classic')).toBe(true);
+  });
+
+  it('acepta HC1', () => {
+    expect(isProStandardErrorType('HC1')).toBe(true);
+  });
+
+  it('acepta HC3', () => {
+    expect(isProStandardErrorType('HC3')).toBe(true);
+  });
+
+  it('rechaza cualquier otro valor', () => {
+    for (const invalid of ['HC0', 'HC2', 'hc1', 'CLASSIC', 'robust', '', ' HC1', null, undefined, 1, {}, ['HC1']]) {
+      expect(isProStandardErrorType(invalid)).toBe(false);
+    }
+  });
+
+  it('la lista de tipos permitidos es exactamente classic, HC1 y HC3', () => {
+    expect(PRO_STANDARD_ERROR_TYPES).toEqual(['classic', 'HC1', 'HC3']);
+  });
+
+  it('cada tipo tiene una etiqueta de inferencia en español', () => {
+    expect(PRO_STANDARD_ERROR_LABELS.classic).toBe('errores estándar clásicos');
+    expect(PRO_STANDARD_ERROR_LABELS.HC1).toBe('errores estándar robustos HC1');
+    expect(PRO_STANDARD_ERROR_LABELS.HC3).toBe('errores estándar robustos HC3');
+  });
+});
