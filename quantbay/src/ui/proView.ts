@@ -65,6 +65,26 @@ export function showProStatus(text: string): void {
   el.style.display = text ? '' : 'none';
 }
 
+/**
+ * Clears any previous Pro result before a new run starts, so stale
+ * coefficients/R²/inferencia/comparación from a prior calculation are never
+ * visible while the new run is loading or executing.
+ */
+export function clearProResult(): void {
+  const content = $('qb-pro-content');
+  if (content) content.style.display = 'none';
+  const error = $('qb-pro-error');
+  if (error) { error.textContent = ''; error.style.display = 'none'; }
+  const coefBody = $('qb-pro-coef-body');
+  if (coefBody) coefBody.innerHTML = '';
+  const statsBody = $('qb-pro-stats-body');
+  if (statsBody) statsBody.innerHTML = '';
+  const warningsEl = $('qb-pro-warnings');
+  if (warningsEl) warningsEl.innerHTML = '';
+  const comparisonEl = $('qb-pro-comparison');
+  if (comparisonEl) comparisonEl.innerHTML = '';
+}
+
 function showProError(message: string): void {
   const error = $('qb-pro-error');
   if (error) {
