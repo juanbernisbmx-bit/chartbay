@@ -69,6 +69,26 @@ export function buildLiteComparison(
         ? buildRlsTestComparison(csvData, yName, xNames, form, rlsConstraint, proResult.rlsTest)
         : undefined;
 
+    // Zero coefficients matched by name even though Pro reported some: Lite
+    // and Pro built different design matrices for this Y/X/form selection
+    // (e.g. a categorical variable that ended up encoded into different
+    // dummies on each side). In practice this shouldn't happen — both engines
+    // call the same encodeCategoricalX — but this is the safety net so a
+    // divergence surfaces as an explicit message instead of a silently
+    // meaningless R²/coefficient comparison (comparing stats across designs
+    // that don't share a single coefficient is not "approximately right", it's
+    // wrong).
+    if (rows.length === 0 && proResult.coefficients.length > 0) {
+      return {
+        rows: [],
+        liteRSquared: null,
+        liteNobs: null,
+        rlsTest,
+        designMismatch:
+          'La comparación Lite vs Pro se omitió porque los motores no construyeron la misma matriz de diseño.',
+      };
+    }
+
     return {
       rows,
       liteRSquared: Number.isFinite(lite.result.rSquared) ? lite.result.rSquared : null,

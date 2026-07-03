@@ -9,6 +9,7 @@ import {
   type PyodideRlsTest,
   type ProStandardErrorType,
 } from '../pro/pyodide/proResultTypes';
+import type { CategoricalVariableInfo } from '../categoricalEncoding';
 import { FORM_LABELS } from './formRecommendView';
 
 export type ProComparisonRow = {
@@ -34,6 +35,10 @@ export type ProComparison = {
   liteRSquared: number | null;
   liteNobs: number | null;
   rlsTest?: ProRlsComparison | null;
+  // Present when Lite and Pro built different design matrices for this run
+  // (e.g. a categorical divergence) — the comparison is skipped entirely and
+  // this message is shown instead of a coefficient/R² table.
+  designMismatch?: string;
 };
 
 const fmt = (value: number): string => {
@@ -99,6 +104,8 @@ export function clearProResult(): void {
   if (statsBody) statsBody.innerHTML = '';
   const inferenceEl = $('qb-pro-inference');
   if (inferenceEl) inferenceEl.innerHTML = '';
+  const categoricalEl = $('qb-pro-categorical');
+  if (categoricalEl) categoricalEl.innerHTML = '';
   const rlsTestEl = $('qb-pro-rls-test');
   if (rlsTestEl) rlsTestEl.innerHTML = '';
   const bpTestEl = $('qb-pro-bp-test');
@@ -130,6 +137,13 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
 
   const error = $('qb-pro-error');
   if (error) { error.textContent = ''; error.style.display = 'none'; }
+
+  const categoricalEl = $('qb-pro-categorical');
+  if (categoricalEl) {
+    categoricalEl.innerHTML = result.categoricalInfo && result.categoricalInfo.length > 0
+      ? buildCategoricalHtml(result.categoricalInfo)
+      : '';
+  }
 
   const coefBody = $('qb-pro-coef-body');
   if (coefBody) {
@@ -192,6 +206,13 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
 }
 
 function buildComparisonHtml(result: PyodideOlsResult, comparison: ProComparison): string {
+  if (comparison.designMismatch) {
+    return (
+      `<p class="qb-label" style="margin-top:10px">Comparación Lite vs Pro</p>` +
+      `<div class="qb-interp">${escapeHtml(comparison.designMismatch)}</div>`
+    );
+  }
+
   const sections: string[] = [];
 
   if (comparison.rows.length > 0) {
@@ -244,6 +265,25 @@ function buildComparisonHtml(result: PyodideOlsResult, comparison: ProComparison
     `<p class="qb-label" style="margin-top:10px">Comparación Lite vs Pro (${escapeHtml(formLabel)}, coeficientes OLS no restringidos)</p>` +
     sections.join('')
   );
+}
+
+function buildCategoricalHtml(info: CategoricalVariableInfo[]): string {
+  const variables = info
+    .map(
+      c => `<p class="qb-interp" style="margin:0 0 4px;font-size:12px">
+        <strong>${escapeHtml(c.originalName)}</strong><br>
+        Categoría base: <code>${escapeHtml(c.baseCategory)}</code><br>
+        Dummies creadas: ${c.createdDummies.map(d => `<code>${escapeHtml(d)}</code>`).join(', ')}
+      </p>`
+    )
+    .join('');
+  return `
+    <p class="qb-label" style="margin-top:10px">Variables categóricas</p>
+    ${variables}
+    <p class="muted" style="font-size:11px;margin:2px 0 8px">
+      La categoría base se omite para evitar la trampa de dummies. Los coeficientes de las dummies se
+      interpretan como diferencias respecto de esa categoría base, manteniendo constantes las demás variables.
+    </p>`;
 }
 
 function buildInferenceHtml(seType: ProStandardErrorType): string {

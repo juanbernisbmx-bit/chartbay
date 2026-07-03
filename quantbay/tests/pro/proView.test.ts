@@ -22,6 +22,7 @@ function mountProPanel(): void {
       <div id="qb-pro-status" style="display:none"></div>
       <div id="qb-pro-error" style="display:none"></div>
       <div id="qb-pro-content" style="display:none">
+        <div id="qb-pro-categorical"></div>
         <table><tbody id="qb-pro-coef-body"></tbody></table>
         <table><tbody id="qb-pro-stats-body"></tbody></table>
         <div id="qb-pro-inference"></div>
@@ -368,6 +369,93 @@ describe('renderProResult (statsmodels)', () => {
 
       const html = document.getElementById('qb-pro-bp-test')?.innerHTML ?? '';
       expect(html).not.toContain('Probá HC3');
+    });
+  });
+
+  describe('sección de variables categóricas (qb-pro-categorical)', () => {
+    const categoricalInfo = [
+      { originalName: 'region', baseCategory: 'Centro', createdDummies: ['region_Norte', 'region_Sur'], categories: ['Centro', 'Norte', 'Sur'] },
+    ];
+
+    it('muestra el nombre de la variable, la categoría base y las dummies creadas', () => {
+      renderProResult({ ...okResult, categoricalInfo });
+
+      const html = document.getElementById('qb-pro-categorical')?.innerHTML ?? '';
+      expect(html).toContain('Variables categóricas');
+      expect(html).toContain('region');
+      expect(html).toContain('Centro');
+      expect(html).toContain('region_Norte');
+      expect(html).toContain('region_Sur');
+    });
+
+    it('incluye la nota pedagógica sobre la categoría base y la trampa de dummies', () => {
+      renderProResult({ ...okResult, categoricalInfo });
+
+      const html = document.getElementById('qb-pro-categorical')?.innerHTML ?? '';
+      expect(html).toContain('trampa de dummies');
+      expect(html).toContain('categoría base');
+    });
+
+    it('renders one block per categorical variable when there is more than one', () => {
+      renderProResult({
+        ...okResult,
+        categoricalInfo: [
+          ...categoricalInfo,
+          { originalName: 'sector', baseCategory: 'Comercio', createdDummies: ['sector_Finanzas'], categories: ['Comercio', 'Finanzas'] },
+        ],
+      });
+
+      const html = document.getElementById('qb-pro-categorical')?.innerHTML ?? '';
+      expect(html).toContain('region');
+      expect(html).toContain('sector');
+      expect(html).toContain('sector_Finanzas');
+    });
+
+    it('clears the categorical section when there is no categorical info for this run', () => {
+      renderProResult(okResult);
+      expect(document.getElementById('qb-pro-categorical')?.innerHTML).toBe('');
+    });
+
+    it('clears the categorical section when categoricalInfo is an empty array', () => {
+      renderProResult({ ...okResult, categoricalInfo: [] });
+      expect(document.getElementById('qb-pro-categorical')?.innerHTML).toBe('');
+    });
+
+    it('escapes HTML in categorical variable/category/dummy names', () => {
+      renderProResult({
+        ...okResult,
+        categoricalInfo: [
+          { originalName: '<img src=x>', baseCategory: 'A', createdDummies: ['<script>alert(1)</script>'], categories: ['A', 'B'] },
+        ],
+      });
+
+      expect(document.querySelector('#qb-pro-categorical img')).toBeNull();
+      expect(document.querySelector('#qb-pro-categorical script')).toBeNull();
+    });
+
+    it('clearProResult empties the categorical section', () => {
+      renderProResult({ ...okResult, categoricalInfo });
+      expect(document.getElementById('qb-pro-categorical')?.innerHTML).not.toBe('');
+
+      clearProResult();
+
+      expect(document.getElementById('qb-pro-categorical')?.innerHTML).toBe('');
+    });
+  });
+
+  describe('comparación Lite vs Pro omitida por diseño distinto (designMismatch)', () => {
+    it('muestra el mensaje explícito y no la tabla de coeficientes ni de métricas', () => {
+      const comparison: ProComparison = {
+        rows: [],
+        liteRSquared: null,
+        liteNobs: null,
+        designMismatch: 'La comparación Lite vs Pro se omitió porque los motores no construyeron la misma matriz de diseño.',
+      };
+      renderProResult(okResult, comparison);
+
+      const html = document.getElementById('qb-pro-comparison')?.innerHTML ?? '';
+      expect(html).toContain('se omitió porque los motores no construyeron la misma matriz de diseño');
+      expect(html).not.toContain('<table');
     });
   });
 

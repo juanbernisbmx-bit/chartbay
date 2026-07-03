@@ -9,7 +9,7 @@ vi.mock('../../src/pro/pyodide/pyodideLoader', () => ({
   getPyodide: mocks.getPyodide,
 }));
 
-import { runPyodideOls } from '../../src/pro/pyodide/pythonOlsRunner';
+import { runPyodideOls, buildEncodedCsvText } from '../../src/pro/pyodide/pythonOlsRunner';
 
 const CSV = 'y,x\n3,1\n5,2\n7,3\n9,4\n11,5\n';
 
@@ -380,5 +380,88 @@ describe('runPyodideOls (statsmodels)', () => {
     const result = await runPyodideOls({ csvText: 'y,x\n', yName: 'y', xNames: ['x'], form: 'lin-lin' });
     expect(result.ok).toBe(false);
     expect(result.error).toBe('El CSV no tiene filas de datos.');
+  });
+
+  describe('categorical dummies (dummyNames)', () => {
+    it('sends an empty dummy-names global when none are passed', async () => {
+      const fake = makeFakePyodide();
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin' });
+
+      expect(fake.globals.set).toHaveBeenCalledWith('chartbay_dummy_names_json', JSON.stringify([]));
+    });
+
+    it('serializes dummyNames as JSON for the Python globals', async () => {
+      const fake = makeFakePyodide({
+        runPythonAsync: vi.fn().mockResolvedValue(
+          JSON.stringify({ ...VALID_STATSMODELS_PAYLOAD, xNames: ['ingreso', 'region_Norte', 'region_Sur'] })
+        ),
+      });
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      await runPyodideOls({
+        csvText: 'y,ingreso,region_Norte,region_Sur\n1,10,0,0\n2,20,1,0\n3,30,0,1\n',
+        yName: 'y',
+        xNames: ['ingreso', 'region_Norte', 'region_Sur'],
+        dummyNames: ['region_Norte', 'region_Sur'],
+        form: 'lin-lin',
+      });
+
+      expect(fake.globals.set).toHaveBeenCalledWith(
+        'chartbay_dummy_names_json',
+        JSON.stringify(['region_Norte', 'region_Sur'])
+      );
+    });
+
+    it('the Python script never logs a column that is in dummy_names, even under a log-X form', async () => {
+      const fake = makeFakePyodide();
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'log-log', dummyNames: ['x'] });
+
+      const script = (fake.runPythonAsync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(script).toContain('dummy_names = set(json.loads(chartbay_dummy_names_json))');
+      expect(script).toContain('if log_x and col not in dummy_names:');
+    });
+
+    it('the Python script never runs pd.get_dummies — encoding is done entirely in TypeScript', async () => {
+      const fake = makeFakePyodide();
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin' });
+
+      const script = (fake.runPythonAsync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(script).not.toContain('get_dummies');
+    });
+  });
+});
+
+describe('buildEncodedCsvText', () => {
+  it('serializes rows for the given columns into CSV text with a header row', () => {
+    const rows = [
+      { y: 10, ingreso: 1000, region_Norte: 0, region_Sur: 1 },
+      { y: 20, ingreso: 2000, region_Norte: 1, region_Sur: 0 },
+    ];
+    const csv = buildEncodedCsvText(rows, ['y', 'ingreso', 'region_Norte', 'region_Sur']);
+    expect(csv).toBe('y,ingreso,region_Norte,region_Sur\n10,1000,0,1\n20,2000,1,0');
+  });
+
+  it('only includes the requested columns, in the requested order', () => {
+    const rows = [{ a: 1, b: 2, c: 3 }];
+    const csv = buildEncodedCsvText(rows, ['c', 'a']);
+    expect(csv).toBe('c,a\n3,1');
+  });
+
+  it('serializes null/undefined as an empty field', () => {
+    const rows = [{ y: 1, x: null }, { y: 2, x: undefined }];
+    const csv = buildEncodedCsvText(rows, ['y', 'x']);
+    expect(csv).toBe('y,x\n1,\n2,');
+  });
+
+  it('quotes values containing commas, quotes or newlines', () => {
+    const rows = [{ label: 'a,b' }, { label: 'say "hi"' }, { label: 'line1\nline2' }];
+    const csv = buildEncodedCsvText(rows, ['label']);
+    expect(csv).toBe('label\n"a,b"\n"say ""hi"""\n"line1\nline2"');
   });
 });

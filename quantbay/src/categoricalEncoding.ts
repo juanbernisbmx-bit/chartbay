@@ -72,9 +72,18 @@ function sanitizeToken(raw: string): string {
     .replace(/[^a-zA-Z0-9_]/g, '');
 }
 
-function buildDummyName(originalName: string, category: string, used: Set<string>): string {
+// The sanitized "originalName_category" token a dummy would use, before
+// collision-suffix resolution. Exported so callers that only have a category
+// label (e.g. Pro's RLS error messages, matching a restriction against the
+// omitted base category) can recognize the same token without recreating the
+// sanitization rules.
+export function dummyBaseName(originalName: string, category: string): string {
   const base = `${sanitizeToken(originalName)}_${sanitizeToken(category)}`;
-  const safeBase = base.replace(/^_+|_+$/g, '') || `${sanitizeToken(originalName) || 'var'}_cat`;
+  return base.replace(/^_+|_+$/g, '') || `${sanitizeToken(originalName) || 'var'}_cat`;
+}
+
+function buildDummyName(originalName: string, category: string, used: Set<string>): string {
+  const safeBase = dummyBaseName(originalName, category);
 
   let candidate = safeBase;
   let suffix = 2;

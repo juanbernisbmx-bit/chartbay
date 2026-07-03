@@ -54,10 +54,10 @@ export const CHARTBAY_VERSIONS: Record<ChartBayVersion, ChartBayVersionConfig> =
     status: 'experimental',
     description:
       'ChartBay Pro (experimental) hoy ejecuta OLS con statsmodels vía Pyodide (Python en el navegador), con las ' +
-      '4 formas funcionales (lin-lin, log-lin, lin-log, log-log), intercepto automático, errores estándar clásicos ' +
-      'o robustos (HC1/HC3) y test de restricciones lineales Rβ = q (Wald/F vía statsmodels, sin re-estimar los ' +
-      'coeficientes bajo la restricción). Todavía NO ejecuta variables categóricas ni el test de Breusch-Pagan: ' +
-      'para eso usá Lite.',
+      '4 formas funcionales (lin-lin, log-lin, lin-log, log-log), variables categóricas vía dummies (misma ' +
+      'lógica que Lite), intercepto automático, errores estándar clásicos o robustos (HC1/HC3), diagnóstico ' +
+      'Breusch-Pagan y test de restricciones lineales Rβ = q (Wald/F vía statsmodels, sin re-estimar los ' +
+      'coeficientes bajo la restricción).',
     maxCsvSizeMb: 10,
     engine: 'pyodide',
     features: {

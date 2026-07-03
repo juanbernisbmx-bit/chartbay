@@ -12,7 +12,7 @@ import { renderRepairLog } from './ui/diagnosticsView';
 import { renderRegressionResults } from './ui/regressionView';
 import { recommendFunctionalForm } from './services/formRecommender';
 import { renderFormRecommendation } from './ui/formRecommendView';
-import { detectCategoricalColumns } from './categoricalEncoding';
+import { detectCategoricalColumns, encodeCategoricalX, dummyBaseName, type CategoricalVariableInfo } from './categoricalEncoding';
 import { runTimeSeriesAnalysis } from './timeseries/service';
 import {
   getACFMaxLag,
@@ -27,7 +27,7 @@ import {
 import { getVersionConfig, validateCsvFileSize, type ChartBayVersion } from './versioning/chartbayVersions';
 import { renderVersionInfo } from './ui/versionView';
 import { resolveEngineAction } from './pro/engineRouting';
-import { runPyodideOls } from './pro/pyodide/pythonOlsRunner';
+import { runPyodideOls, buildEncodedCsvText } from './pro/pyodide/pythonOlsRunner';
 import { DEFAULT_PRO_STANDARD_ERROR_TYPE, PRO_STANDARD_ERROR_LABELS, proError } from './pro/pyodide/proResultTypes';
 import {
   clearProResult,
@@ -222,8 +222,15 @@ function showRLSValidation(msg: string, type: 'ok' | 'error' | ''): void {
  *   - The active demo's constraint, if no typed restriction.
  *   - undefined  → no constraint → plain OLS.
  *   - null       → typed input was non-empty but invalid; validation error already shown.
+ *
+ * refineError optionally rewrites rlsParser's generic "not among the selected
+ * regressors" message into something more specific before it's shown (used by
+ * the Pro path to explain a base-category or renamed-by-dummies reference).
  */
-function getEffectiveRLSConstraint(xNames: string[]): RLSConstraint | undefined | null {
+function getEffectiveRLSConstraint(
+  xNames: string[],
+  refineError?: (message: string) => string
+): RLSConstraint | undefined | null {
   const typedInput = ($('qb-rls-input') as HTMLInputElement | null)?.value ?? '';
   const trimmed = typedInput.trim();
 
@@ -231,7 +238,7 @@ function getEffectiveRLSConstraint(xNames: string[]): RLSConstraint | undefined 
     const parsed = parseRLSRestriction(trimmed, xNames);
     if (parsed === '') return undefined; // trimmed is non-empty so this won't happen in practice
     if (typeof parsed === 'string') {
-      showRLSValidation(parsed, 'error');
+      showRLSValidation(refineError ? refineError(parsed) : parsed, 'error');
       return null;
     }
     const demoHasConstraint = !!(appState.activeDemoId && DEMO_CASES[appState.activeDemoId]?.rlsConstraint);
@@ -244,6 +251,31 @@ function getEffectiveRLSConstraint(xNames: string[]): RLSConstraint | undefined 
 
   showRLSValidation('', '');
   return appState.activeDemoId ? DEMO_CASES[appState.activeDemoId]?.rlsConstraint : undefined;
+}
+
+// Gives a pedagogical reason when a typed RLS restriction (parsed against the
+// EXPANDED post-dummy coefficient names — see the Pro branch of onRun)
+// references either the omitted base category or the original categorical
+// column name. Falls back to rlsParser's own generic message for anything
+// else (e.g. a genuine typo or an unrelated missing variable).
+function refineCategoricalRlsError(message: string, categoricalInfo: CategoricalVariableInfo[]): string {
+  for (const c of categoricalInfo) {
+    const baseToken = dummyBaseName(c.originalName, c.baseCategory);
+    if (message.includes(`"${baseToken}"`)) {
+      return (
+        `La categoría "${c.baseCategory}" es la categoría base de "${c.originalName}" y no tiene coeficiente ` +
+        `propio en el modelo (se omitió para evitar la trampa de dummies). Restricciones válidas usan las ` +
+        `dummies creadas: ${c.createdDummies.join(', ')}.`
+      );
+    }
+    if (message.includes(`"${c.originalName}"`)) {
+      return (
+        `La variable "${c.originalName}" fue reemplazada por sus dummies (${c.createdDummies.join(', ')}). ` +
+        `Escribí la restricción usando el nombre de una dummy específica, por ejemplo "${c.createdDummies[0]} = 0".`
+      );
+    }
+  }
+  return message;
 }
 
 function isTimeSeriesMode(): boolean {
@@ -457,13 +489,28 @@ async function onRun(): Promise<void> {
   if (limitErr) { showError(limitErr); return; }
 
   if (engineAction === 'pro_pyodide') {
-    const rlsConstraint = getEffectiveRLSConstraint(xNames);
+    // Same encoding Lite uses internally (regressionMode.ts) — computed here
+    // so both the RLS restriction and the capability check operate on the
+    // FINAL post-dummy coefficient names, not the raw pre-encoding selection.
+    const encoding = encodeCategoricalX(appState.csvData.rows, xNames);
+    const invalidCategoricalNames = xNames.filter(
+      name =>
+        categoricalColumnsFor(appState.csvData!).includes(name) &&
+        !encoding.categoricalInfo.some(c => c.originalName === name)
+    );
+
+    const rlsConstraint = getEffectiveRLSConstraint(encoding.expandedXNames, msg =>
+      refineCategoricalRlsError(msg, encoding.categoricalInfo)
+    );
     if (rlsConstraint === null) {
       showError('Corregí la restricción RLS antes de calcular.');
       return;
     }
-    const categoricalXNames = xNames.filter(name => categoricalColumnsFor(appState.csvData!).includes(name));
-    const capabilityBlock = checkProCapability({ rlsConstraint, categoricalXNames, parameterCount: xNames.length + 1 });
+    const capabilityBlock = checkProCapability({
+      rlsConstraint,
+      invalidCategoricalNames,
+      parameterCount: encoding.expandedXNames.length + 1,
+    });
     if (capabilityBlock) {
       hideProPanel();
       showError(capabilityBlock.message);
@@ -550,10 +597,33 @@ async function onRunPro(
     clearProResult();
     setEngineStatus('CALCULANDO');
 
+    // Same encoding Lite uses internally (regressionMode.ts) — recomputed
+    // here rather than threaded from onRun so this function stays
+    // self-contained; encodeCategoricalX is pure/deterministic, so this
+    // reproduces exactly what the pre-flight capability check already
+    // validated.
+    const encoding = encodeCategoricalX(appState.csvData.rows, xNames);
+    const dummyNames = encoding.categoricalInfo.flatMap(c => c.createdDummies);
+    const hasCategorical = encoding.categoricalInfo.length > 0;
+    // Only re-serialize to CSV when dummies actually exist — the common
+    // numeric-only case keeps sending the original upload's csvText
+    // untouched (byte-for-byte, same as before this feature existed).
+    const effectiveCsvText = hasCategorical
+      ? buildEncodedCsvText(encoding.rows, [yName, ...encoding.expandedXNames])
+      : appState.csvText;
+    const effectiveCsvData: ParsedCSV = { ...appState.csvData, rows: encoding.rows };
+
     // Fail fast on an invalid log domain (Y/X <= 0) before paying the cost of
     // loading Pyodide/numpy/pandas/statsmodels. The Python script re-validates
     // the same domain on its own parsed data as a second line of defense.
-    const domainError = checkProFunctionalDomain(appState.csvData, yName, xNames, form);
+    // Dummy columns are excluded (they're always 0/1, never log-transformed).
+    const domainError = checkProFunctionalDomain(
+      effectiveCsvData,
+      yName,
+      encoding.expandedXNames,
+      form,
+      new Set(dummyNames)
+    );
     if (domainError) {
       renderProResult(proError(domainError));
       setEngineStatus('ERROR');
@@ -564,14 +634,26 @@ async function onRunPro(
     showProStatus('Cargando Python en navegador…');
     writeRunLog(['ChartBay Pro (experimental): preparando Python en el navegador…']);
 
-    const result = await runPyodideOls(
-      { csvText: appState.csvText, yName, xNames, form, rlsConstraint, standardErrorType: getSelectedProStandardErrorType() },
+    const rawResult = await runPyodideOls(
+      {
+        csvText: effectiveCsvText,
+        yName,
+        xNames: encoding.expandedXNames,
+        dummyNames,
+        form,
+        rlsConstraint,
+        standardErrorType: getSelectedProStandardErrorType(),
+      },
       phase => {
         if (phase === 'loading-pyodide') showProStatus('Cargando Python en navegador…');
         else if (phase === 'loading-packages') showProStatus('Cargando numpy, pandas y statsmodels…');
         else showProStatus('Ejecutando OLS con statsmodels…');
       }
     );
+    // Categorical metadata (base category, dummies created) is a TS-side
+    // concern end to end — attached here for display, never round-tripped
+    // through Python's JSON payload (see proResultTypes.ts).
+    const result = rawResult.ok ? { ...rawResult, categoricalInfo: encoding.categoricalInfo } : rawResult;
 
     const comparison = result.ok
       ? buildLiteComparison(appState.csvData, yName, xNames, form, result, rlsConstraint)
