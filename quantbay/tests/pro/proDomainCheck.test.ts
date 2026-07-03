@@ -53,3 +53,48 @@ describe('checkProFunctionalDomain', () => {
     expect(checkProFunctionalDomain(csv, 'y', ['x'], 'log-log')).not.toBeNull();
   });
 });
+
+describe('checkProFunctionalDomain — categorical dummies (noLogXNames)', () => {
+  it('does not reject a dummy column containing 0 under lin-log, when excluded via noLogXNames', () => {
+    const csv = csvOf([{ y: 1, x: 1, sector_B: 0 }, { y: 2, x: 2, sector_B: 1 }, { y: 3, x: 3, sector_B: 0 }]);
+    const error = checkProFunctionalDomain(csv, 'y', ['x', 'sector_B'], 'lin-log', new Set(['sector_B']));
+    expect(error).toBeNull();
+  });
+
+  it('does not reject a dummy column containing 0 under log-log, when excluded via noLogXNames', () => {
+    const csv = csvOf([{ y: 1, x: 1, sector_B: 0 }, { y: 2, x: 2, sector_B: 1 }, { y: 3, x: 3, sector_B: 0 }]);
+    const error = checkProFunctionalDomain(csv, 'y', ['x', 'sector_B'], 'log-log', new Set(['sector_B']));
+    expect(error).toBeNull();
+  });
+
+  it('still rejects a genuinely non-positive NUMERIC X even when a dummy is also present', () => {
+    const csv = csvOf([{ y: 1, x: -1, sector_B: 0 }, { y: 2, x: 2, sector_B: 1 }, { y: 3, x: 3, sector_B: 0 }]);
+    const error = checkProFunctionalDomain(csv, 'y', ['x', 'sector_B'], 'lin-log', new Set(['sector_B']));
+    expect(error).not.toBeNull();
+    expect(error).toContain('x');
+  });
+
+  it('blocks log-X when X is purely categorical (every selected X is a dummy) instead of silently skipping the log', () => {
+    const csv = csvOf([{ y: 1, sector_B: 0 }, { y: 2, sector_B: 1 }, { y: 3, sector_B: 0 }]);
+    const error = checkProFunctionalDomain(csv, 'y', ['sector_B'], 'lin-log', new Set(['sector_B']));
+    expect(error).toBe('No se puede aplicar log(X) a una variable categórica. Usá lin-lin/log-lin o agregá una X numérica.');
+  });
+
+  it('blocks log-log the same way when X is purely categorical', () => {
+    const csv = csvOf([{ y: 1, sector_B: 0, sector_C: 0 }, { y: 2, sector_B: 1, sector_C: 0 }, { y: 3, sector_B: 0, sector_C: 1 }]);
+    const error = checkProFunctionalDomain(csv, 'y', ['sector_B', 'sector_C'], 'log-log', new Set(['sector_B', 'sector_C']));
+    expect(error).toContain('No se puede aplicar log(X) a una variable categórica');
+  });
+
+  it('does NOT block log-lin when X is purely categorical (log-lin only logs Y, never X)', () => {
+    const csv = csvOf([{ y: 1, sector_B: 0 }, { y: 2, sector_B: 1 }, { y: 3, sector_B: 0 }]);
+    const error = checkProFunctionalDomain(csv, 'y', ['sector_B'], 'log-lin', new Set(['sector_B']));
+    expect(error).toBeNull();
+  });
+
+  it('does NOT block log-X when at least one numeric X is present alongside dummies', () => {
+    const csv = csvOf([{ y: 1, x: 1, sector_B: 0 }, { y: 2, x: 2, sector_B: 1 }, { y: 3, x: 3, sector_B: 0 }]);
+    const error = checkProFunctionalDomain(csv, 'y', ['x', 'sector_B'], 'log-log', new Set(['sector_B']));
+    expect(error).toBeNull();
+  });
+});

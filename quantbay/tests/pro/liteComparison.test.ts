@@ -63,6 +63,36 @@ describe('buildLiteComparison', () => {
     expect(comparison?.rows).toHaveLength(0);
   });
 
+  describe('design-matrix mismatch (designMismatch)', () => {
+    it('does not set designMismatch when coefficient names line up normally', () => {
+      const lite = runRegressionMode(csv, 'y', ['x'], undefined, 'lin-lin');
+      const proResult = {
+        coefficients: [
+          { name: 'Intercept', estimate: lite.result.intercept },
+          { name: 'x', estimate: lite.result.coefficients[0] },
+        ],
+      };
+
+      const comparison = buildLiteComparison(csv, 'y', ['x'], 'lin-lin', proResult);
+
+      expect(comparison?.designMismatch).toBeUndefined();
+    });
+
+    it('shows the explicit skip message and suppresses rows/R²/n when nothing matches by name', () => {
+      const proResult = { coefficients: [{ name: 'ln(x)', estimate: 2.0 }] };
+
+      const comparison = buildLiteComparison(csv, 'y', ['x'], 'lin-lin', proResult);
+
+      expect(comparison).not.toBeNull();
+      expect(comparison?.rows).toHaveLength(0);
+      expect(comparison?.liteRSquared).toBeNull();
+      expect(comparison?.liteNobs).toBeNull();
+      expect(comparison?.designMismatch).toBe(
+        'La comparación Lite vs Pro se omitió porque los motores no construyeron la misma matriz de diseño.'
+      );
+    });
+  });
+
   it('returns null when there are no Pro coefficients', () => {
     expect(buildLiteComparison(csv, 'y', ['x'], 'lin-lin', {})).toBeNull();
   });

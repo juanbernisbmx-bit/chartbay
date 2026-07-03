@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertNumericY,
   detectCategoricalColumns,
+  dummyBaseName,
   encodeCategoricalX,
   isCategoricalColumn,
 } from '../src/categoricalEncoding';
@@ -196,6 +197,24 @@ describe('encodeCategoricalX — dummy name sanitization', () => {
     expect(new Set(dummies).size).toBe(dummies.length);
     expect(dummies).toContain('sector_A');
     expect(dummies.some(d => d === 'sector_A_2')).toBe(true);
+  });
+});
+
+// ── dummyBaseName: the sanitized token a dummy would use, exposed for callers ──
+// that only have a category label (Pro's RLS error messages recognize a
+// restriction pointing at the omitted base category by recreating this token).
+
+describe('dummyBaseName', () => {
+  it('matches the token encodeCategoricalX actually assigns to a created dummy', () => {
+    const rows = [{ y: 1, region: 'Centro' }, { y: 2, region: 'Norte' }, { y: 3, region: 'Sur' }];
+    const result = encodeCategoricalX(rows, ['region']);
+    expect(result.categoricalInfo[0].createdDummies).toContain(dummyBaseName('region', 'Norte'));
+    expect(result.categoricalInfo[0].createdDummies).toContain(dummyBaseName('region', 'Sur'));
+  });
+
+  it('sanitizes spaces and diacritics the same way as the dummies it names', () => {
+    expect(dummyBaseName('tipo_cliente', 'Cliente premium')).toBe('tipo_cliente_Cliente_premium');
+    expect(dummyBaseName('sector', 'Tecnología')).toBe('sector_Tecnologia');
   });
 });
 

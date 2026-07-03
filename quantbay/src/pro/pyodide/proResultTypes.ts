@@ -1,4 +1,5 @@
 import type { FunctionalForm } from '../../functionalForms';
+import type { CategoricalVariableInfo } from '../../categoricalEncoding';
 
 // Tipo de errores estándar del OLS Pro: clásicos (nonrobust) o robustos a
 // heterocedasticidad (HC1/HC3 de statsmodels). Los betas no cambian entre modos.
@@ -110,6 +111,11 @@ export type PyodideOlsResult = {
   rlsTest?: PyodideRlsTest;
   // Absent only if statsmodels couldn't compute it (see warnings in that case).
   breuschPagan?: PyodideBreuschPagan;
+  // Categorical X variables expanded into dummies for this run (encoding
+  // happens entirely in TypeScript — see categoricalEncoding.ts — so this is
+  // attached by the caller alongside the Python result, never parsed from
+  // Python's JSON payload). Empty/absent when no categorical X was selected.
+  categoricalInfo?: CategoricalVariableInfo[];
 };
 
 const VALID_FUNCTIONAL_FORMS: ReadonlySet<string> = new Set(['lin-lin', 'log-lin', 'lin-log', 'log-log']);

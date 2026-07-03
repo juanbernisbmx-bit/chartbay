@@ -24,8 +24,12 @@ export type PyodideOlsPhase = 'loading-pyodide' | 'loading-packages' | 'running'
 // Lite, en cambio, sí re-estima β bajo la restricción (ver rls.ts) — por eso
 // nunca se comparan los coeficientes de Lite-RLS contra los de Pro; sólo se
 // compara el test de restricción en sí (ver pro/liteComparison.ts).
-// Todavía sin dummies categóricas (ver pro/proCapability.ts, que bloquea esa
-// selección antes de llegar acá).
+// Variables categóricas: el encoding a dummies (drop_first, categoría base,
+// nombres) se hace SIEMPRE en TypeScript (categoricalEncoding.ts, la misma
+// lógica que usa Lite) antes de llegar acá — Python nunca ve una columna de
+// texto ni corre pd.get_dummies. xNames ya viene expandido a las dummies
+// finales (0/1) y dummyNames indica cuáles de esas columnas son dummies, para
+// no aplicarles log() bajo lin-log/log-log (ver el loop de log_x más abajo).
 // Validation errors are returned as {ok: false, error} dicts (never raised) so
 // the TS side always receives a parseable JSON payload. Non-finite statistics
 // (perfect fit, constant Y) are serialized as null because JSON.parse rejects
@@ -54,6 +58,10 @@ def _chartbay_pro_ols():
 
     y_name = chartbay_y_name
     x_names = json.loads(chartbay_x_names_json)
+    # Columns within x_names that are 0/1 dummies from categorical encoding
+    # (already built in TypeScript) — never log-transformed, see the x_columns
+    # loop below.
+    dummy_names = set(json.loads(chartbay_dummy_names_json))
     form = chartbay_functional_form
     log_y = form in ("log-lin", "log-log")
     log_x = form in ("lin-log", "log-log")
@@ -124,7 +132,7 @@ def _chartbay_pro_ols():
     x_labels = []
     x_columns = []
     for col in x_names:
-        if log_x:
+        if log_x and col not in dummy_names:
             bad_row = first_non_positive_index(data[col])
             if bad_row is not None:
                 return fail(
@@ -313,6 +321,25 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+// Serializes already-encoded rows (categorical dummies already added as 0/1
+// columns, via categoricalEncoding.ts) back into CSV text so Python's
+// pd.read_csv pipeline can consume them unchanged — Python never builds
+// dummies itself. Only needed when categorical encoding actually created
+// dummy columns; plain numeric-only runs keep sending the original upload's
+// csvText untouched (see main.ts).
+export function buildEncodedCsvText(rows: Record<string, unknown>[], columns: string[]): string {
+  const escapeCsvValue = (value: unknown): string => {
+    if (value === null || value === undefined) return '';
+    const text = String(value);
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  const lines = [columns.join(',')];
+  for (const row of rows) {
+    lines.push(columns.map(col => escapeCsvValue(row[col])).join(','));
+  }
+  return lines.join('\n');
+}
+
 /**
  * Runs an OLS regression with statsmodels in Python (Pyodide) in the browser.
  * Never throws — every failure mode is returned as {ok: false, error}.
@@ -324,6 +351,10 @@ export async function runPyodideOls(
     csvText: string;
     yName: string;
     xNames: string[];
+    // Subset of xNames that are 0/1 dummy columns from categorical encoding —
+    // excluded from the log-X transform under lin-log/log-log. Defaults to
+    // none (plain numeric run).
+    dummyNames?: string[];
     form: FunctionalForm;
     rlsConstraint?: RLSConstraint;
     standardErrorType?: string;
@@ -366,6 +397,7 @@ export async function runPyodideOls(
     pyodide.globals.set('chartbay_csv_text', args.csvText);
     pyodide.globals.set('chartbay_y_name', args.yName);
     pyodide.globals.set('chartbay_x_names_json', JSON.stringify(args.xNames));
+    pyodide.globals.set('chartbay_dummy_names_json', JSON.stringify(args.dummyNames ?? []));
     pyodide.globals.set('chartbay_functional_form', args.form);
     pyodide.globals.set(
       'chartbay_rls_constraint_json',

@@ -1,13 +1,14 @@
 // Guards ChartBay Pro (Pyodide) against silently ignoring a user selection it
-// cannot execute yet. resolveEngineAction() already blocks whole run modes
-// (auto-repair, time series); this covers selections *within* a regular run.
-// Functional forms and RLS restrictions are executed for real (see
-// pro/pyodide/pythonOlsRunner.ts); categorical dummies are still not
-// implemented in Pro and remain a hard block.
+// cannot execute yet, or executing something ambiguous. resolveEngineAction()
+// already blocks whole run modes (auto-repair, time series); this covers
+// selections *within* a regular run. Functional forms, RLS restrictions and
+// categorical dummies (see pro/pyodide/pythonOlsRunner.ts, categoricalEncoding.ts)
+// are all executed for real now — this module only blocks the specific cases
+// that would be ambiguous or misleading to run.
 
 import { validateRLSConstraint, type RLSConstraint } from '../rls';
 
-export type ProCapabilityReason = 'rls-invalid' | 'categorical';
+export type ProCapabilityReason = 'rls-invalid' | 'categorical-invalid';
 
 export interface ProCapabilityBlock {
   reason: ProCapabilityReason;
@@ -16,16 +17,22 @@ export interface ProCapabilityBlock {
 
 export function checkProCapability(args: {
   rlsConstraint: RLSConstraint | null | undefined;
-  categoricalXNames: string[];
+  // Categorical X columns the user selected that could NOT be turned into
+  // dummies (e.g. a single useful category after accounting for missing
+  // values) — encodeCategoricalX() already drops these silently with a
+  // warning for Lite; Pro is stricter and blocks the run instead, since
+  // silently estimating without a variable the user explicitly selected
+  // would be a misleading result.
+  invalidCategoricalNames: string[];
   parameterCount: number;
 }): ProCapabilityBlock | null {
-  if (args.categoricalXNames.length > 0) {
-    const plural = args.categoricalXNames.length > 1;
+  if (args.invalidCategoricalNames.length > 0) {
+    const plural = args.invalidCategoricalNames.length > 1;
     return {
-      reason: 'categorical',
+      reason: 'categorical-invalid',
       message:
-        `El modo Pro actual todavía no ejecuta esta opción (variable${plural ? 's' : ''} categórica${plural ? 's' : ''}: ` +
-        `${args.categoricalXNames.join(', ')}). Para evitar resultados engañosos, usá ChartBay Lite o ` +
+        `La variable categórica${plural ? 's' : ''} ${args.invalidCategoricalNames.join(', ')} no ` +
+        `tiene${plural ? 'n' : ''} suficientes categorías válidas para crear dummies. Revisá los datos o ` +
         `deseleccioná esa${plural ? 's' : ''} variable${plural ? 's' : ''} antes de calcular en Pro.`,
     };
   }
