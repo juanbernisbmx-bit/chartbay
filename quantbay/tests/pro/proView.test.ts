@@ -24,7 +24,9 @@ function mountProPanel(): void {
       <div id="qb-pro-content" style="display:none">
         <table><tbody id="qb-pro-coef-body"></tbody></table>
         <table><tbody id="qb-pro-stats-body"></tbody></table>
+        <div id="qb-pro-inference"></div>
         <div id="qb-pro-rls-test"></div>
+        <div id="qb-pro-bp-test"></div>
         <div id="qb-pro-warnings"></div>
         <div id="qb-pro-comparison"></div>
       </div>
@@ -197,6 +199,42 @@ describe('renderProResult (statsmodels)', () => {
     expect(html).toContain('no re-estima los coeficientes');
   });
 
+  it('RLS + classical: says the F should match Lite\'s classical F save for minor numerical differences', () => {
+    renderProResult({
+      ...okResult,
+      standardErrorType: 'classic',
+      rlsTest: { label: 'beta1 = 0', fStat: 4.2, fPValue: 0.03, dfNum: 1, dfDenom: 3, reject: true },
+    });
+
+    const html = document.getElementById('qb-pro-rls-test')?.innerHTML ?? '';
+    expect(html).toContain('debería coincidir con el F clásico de Lite');
+  });
+
+  it('RLS + HC3: warns that the restriction test uses the robust covariance and may differ from Lite\'s classical F', () => {
+    renderProResult({
+      ...okResult,
+      standardErrorType: 'HC3',
+      rlsTest: { label: 'beta1 = 0', fStat: 4.2, fPValue: 0.03, dfNum: 1, dfDenom: 3, reject: true },
+    });
+
+    const html = document.getElementById('qb-pro-rls-test')?.innerHTML ?? '';
+    expect(html).toContain('matriz de covarianza robusta seleccionada');
+    expect(html).toContain('errores estándar robustos HC3');
+    expect(html).toContain('puede diferir del F clásico de Lite');
+  });
+
+  it('RLS + HC1: same robust-covariance caveat, naming HC1', () => {
+    renderProResult({
+      ...okResult,
+      standardErrorType: 'HC1',
+      rlsTest: { label: 'beta1 = 0', fStat: 4.2, fPValue: 0.03, dfNum: 1, dfDenom: 3, reject: true },
+    });
+
+    const html = document.getElementById('qb-pro-rls-test')?.innerHTML ?? '';
+    expect(html).toContain('errores estándar robustos HC1');
+    expect(html).toContain('puede diferir del F clásico de Lite');
+  });
+
   it('shows the error block and hides content on ok:false results', () => {
     renderProResult({ ok: false, engine: 'pyodide', warnings: [], error: 'Columna Y faltante.' });
 
@@ -233,6 +271,104 @@ describe('renderProResult (statsmodels)', () => {
 
     const text = document.getElementById('qb-pro-stats-body')?.textContent ?? '';
     expect(text).toContain('errores estándar robustos HC3');
+  });
+
+  describe('sección dedicada de inferencia (qb-pro-inference)', () => {
+    it('classical: explica que t-stats, p-values, intervalos y tests asumen homocedasticidad', () => {
+      renderProResult({ ...okResult, standardErrorType: 'classic' });
+
+      const html = document.getElementById('qb-pro-inference')?.innerHTML ?? '';
+      expect(html).toContain('Inferencia: errores estándar clásicos');
+      expect(html).toContain('homocedasticidad');
+    });
+
+    it('HC3: explica que t-stats, p-values, intervalos y tests usan la covarianza HC3', () => {
+      renderProResult({ ...okResult, standardErrorType: 'HC3' });
+
+      const html = document.getElementById('qb-pro-inference')?.innerHTML ?? '';
+      expect(html).toContain('Inferencia: errores estándar robustos HC3');
+      expect(html).toContain('HC3');
+    });
+
+    it('HC1: explica que t-stats, p-values, intervalos y tests usan la covarianza HC1', () => {
+      renderProResult({ ...okResult, standardErrorType: 'HC1' });
+
+      const html = document.getElementById('qb-pro-inference')?.innerHTML ?? '';
+      expect(html).toContain('Inferencia: errores estándar robustos HC1');
+      expect(html).toContain('HC1');
+    });
+
+    it('se renderiza incluso sin standardErrorType explícito (default classic)', () => {
+      renderProResult(okResult);
+
+      const html = document.getElementById('qb-pro-inference')?.innerHTML ?? '';
+      expect(html).toContain('errores estándar clásicos');
+    });
+  });
+
+  describe('Test Breusch-Pagan (qb-pro-bp-test)', () => {
+    const bpReject = {
+      lmStatistic: 8.2,
+      lmPValue: 0.017,
+      fStatistic: 9.4,
+      fPValue: 0.032,
+      rejectAt5: true,
+      interpretation: 'Se rechaza homocedasticidad al 5% (evidencia de heterocedasticidad).',
+    };
+    const bpNoReject = {
+      lmStatistic: 0.6,
+      lmPValue: 0.74,
+      fStatistic: 0.5,
+      fPValue: 0.71,
+      rejectAt5: false,
+      interpretation: 'No se rechaza homocedasticidad al 5% (sin evidencia suficiente de heterocedasticidad).',
+    };
+
+    it('muestra H0, LM y F statistics, p-values y la conclusión', () => {
+      renderProResult({ ...okResult, breuschPagan: bpReject });
+
+      const html = document.getElementById('qb-pro-bp-test')?.innerHTML ?? '';
+      expect(html).toContain('varianza constante de los errores');
+      expect(html).toContain('8.200000');
+      expect(html).toContain('0.017000');
+      expect(html).toContain('9.400000');
+      expect(html).toContain('0.032000');
+      expect(html).toContain('Se rechaza homocedasticidad al 5%');
+    });
+
+    it('muestra la conclusión de no-rechazo cuando el p-value (F) es >= 0.05', () => {
+      renderProResult({ ...okResult, breuschPagan: bpNoReject });
+
+      const html = document.getElementById('qb-pro-bp-test')?.innerHTML ?? '';
+      expect(html).toContain('No se rechaza homocedasticidad al 5%');
+    });
+
+    it('clears the Breusch-Pagan section when it was not computed for this run', () => {
+      renderProResult(okResult);
+      expect(document.getElementById('qb-pro-bp-test')?.innerHTML).toBe('');
+    });
+
+    it('classical + BP rechaza: sugiere probar HC3', () => {
+      renderProResult({ ...okResult, standardErrorType: 'classic', breuschPagan: bpReject });
+
+      const html = document.getElementById('qb-pro-bp-test')?.innerHTML ?? '';
+      expect(html).toContain('Breusch-Pagan sugiere heterocedasticidad');
+      expect(html).toContain('Probá HC3');
+    });
+
+    it('classical + BP no rechaza: no sugiere HC3', () => {
+      renderProResult({ ...okResult, standardErrorType: 'classic', breuschPagan: bpNoReject });
+
+      const html = document.getElementById('qb-pro-bp-test')?.innerHTML ?? '';
+      expect(html).not.toContain('Probá HC3');
+    });
+
+    it('HC3 + BP rechaza: no repite la sugerencia (ya está en HC3)', () => {
+      renderProResult({ ...okResult, standardErrorType: 'HC3', breuschPagan: bpReject });
+
+      const html = document.getElementById('qb-pro-bp-test')?.innerHTML ?? '';
+      expect(html).not.toContain('Probá HC3');
+    });
   });
 
   it('la comparación Lite vs Pro sigue renderizando con Pro robusto y aclara los errores estándar', () => {
@@ -326,6 +462,31 @@ describe('re-run del panel Pro no deja resultados viejos visibles', () => {
     expect(document.getElementById('qb-pro-stats-body')?.innerHTML).toBe('');
     expect(document.getElementById('qb-pro-warnings')?.innerHTML).toBe('');
     expect(document.getElementById('qb-pro-comparison')?.innerHTML).toBe('');
+  });
+
+  it('clearProResult también vacía la sección de inferencia, el test RLS y el test Breusch-Pagan', () => {
+    renderProResult({
+      ...okResult,
+      standardErrorType: 'HC3',
+      rlsTest: { label: 'beta1 = 0', fStat: 4.2, fPValue: 0.03, dfNum: 1, dfDenom: 3, reject: true },
+      breuschPagan: {
+        lmStatistic: 8.2,
+        lmPValue: 0.017,
+        fStatistic: 9.4,
+        fPValue: 0.032,
+        rejectAt5: true,
+        interpretation: 'Se rechaza homocedasticidad al 5% (evidencia de heterocedasticidad).',
+      },
+    });
+    expect(document.getElementById('qb-pro-inference')?.innerHTML).not.toBe('');
+    expect(document.getElementById('qb-pro-rls-test')?.innerHTML).not.toBe('');
+    expect(document.getElementById('qb-pro-bp-test')?.innerHTML).not.toBe('');
+
+    clearProResult();
+
+    expect(document.getElementById('qb-pro-inference')?.innerHTML).toBe('');
+    expect(document.getElementById('qb-pro-rls-test')?.innerHTML).toBe('');
+    expect(document.getElementById('qb-pro-bp-test')?.innerHTML).toBe('');
   });
 
   it('clearProResult también oculta un error previo', () => {

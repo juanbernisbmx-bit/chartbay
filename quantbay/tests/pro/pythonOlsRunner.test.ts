@@ -112,6 +112,62 @@ describe('runPyodideOls (statsmodels)', () => {
     expect(script).toContain('r_squared is None');
   });
 
+  it('the Python script computes Breusch-Pagan on the effectively estimated model, after the OLS fit', async () => {
+    const fake = makeFakePyodide();
+    mocks.getPyodide.mockResolvedValue(fake);
+
+    await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin' });
+
+    const script = (fake.runPythonAsync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(script).toContain('from statsmodels.stats.diagnostic import het_breuschpagan');
+    expect(script).toContain('het_breuschpagan(results.resid, results.model.exog)');
+    expect(script).toContain('"rejectAt5": bp_reject');
+    expect(script.indexOf('results = sm.OLS(y, X).fit()')).toBeLessThan(script.indexOf('het_breuschpagan('));
+  });
+
+  it('the Python script derives the Breusch-Pagan conclusion from the F p-value at the 5% threshold', async () => {
+    const fake = makeFakePyodide();
+    mocks.getPyodide.mockResolvedValue(fake);
+
+    await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin' });
+
+    const script = (fake.runPythonAsync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(script).toContain('bp_reject = bp_f_pvalue < 0.05');
+    expect(script).toContain('Se rechaza homocedasticidad al 5%');
+    expect(script).toContain('No se rechaza homocedasticidad al 5%');
+  });
+
+  it('the Python script never aborts the whole OLS result when Breusch-Pagan fails, and warns instead', async () => {
+    const fake = makeFakePyodide();
+    mocks.getPyodide.mockResolvedValue(fake);
+
+    await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin' });
+
+    const script = (fake.runPythonAsync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(script).toContain('except Exception as exc:\n        breusch_pagan = None');
+    expect(script).toContain('No se pudo calcular Breusch-Pagan');
+  });
+
+  it('threads a Breusch-Pagan payload from Python straight through to the normalized result', async () => {
+    const bp = {
+      lmStatistic: 8.2,
+      lmPValue: 0.017,
+      fStatistic: 9.4,
+      fPValue: 0.032,
+      rejectAt5: true,
+      interpretation: 'Se rechaza homocedasticidad al 5% (evidencia de heterocedasticidad).',
+    };
+    const fake = makeFakePyodide({
+      runPythonAsync: vi.fn().mockResolvedValue(JSON.stringify({ ...VALID_STATSMODELS_PAYLOAD, breuschPagan: bp })),
+    });
+    mocks.getPyodide.mockResolvedValue(fake);
+
+    const result = await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin' });
+
+    expect(result.ok).toBe(true);
+    expect(result.breuschPagan).toEqual(bp);
+  });
+
   it('sends an empty RLS constraint global when no restriction is active', async () => {
     const fake = makeFakePyodide();
     mocks.getPyodide.mockResolvedValue(fake);

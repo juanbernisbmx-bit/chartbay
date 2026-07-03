@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizePyodideOlsResult, proError } from '../../src/pro/pyodide/proResultTypes';
+import { getProCovarianceInfo, normalizePyodideOlsResult, proError } from '../../src/pro/pyodide/proResultTypes';
 
 const validPayload = {
   ok: true,
@@ -390,5 +390,110 @@ describe('normalizePyodideOlsResult', () => {
     expect(result.yName).toBe('ln(y)');
     expect(result.xNames).toEqual(['ln(x)']);
     expect(result.coefficients?.[1].name).toBe('ln(x)');
+  });
+
+  describe('breuschPagan', () => {
+    const bpReject = {
+      lmStatistic: 8.2,
+      lmPValue: 0.017,
+      fStatistic: 9.4,
+      fPValue: 0.032,
+      rejectAt5: true,
+      interpretation: 'Se rechaza homocedasticidad al 5% (evidencia de heterocedasticidad).',
+    };
+    const bpNoReject = {
+      lmStatistic: 0.6,
+      lmPValue: 0.74,
+      fStatistic: 0.5,
+      fPValue: 0.71,
+      rejectAt5: false,
+      interpretation: 'No se rechaza homocedasticidad al 5% (sin evidencia suficiente de heterocedasticidad).',
+    };
+
+    it('leaves breuschPagan undefined when Python reports null (statsmodels could not compute it)', () => {
+      const raw = JSON.stringify({ ...validPayload, breuschPagan: null });
+      const result = normalizePyodideOlsResult(raw);
+      expect(result.ok).toBe(true);
+      expect(result.breuschPagan).toBeUndefined();
+    });
+
+    it('leaves breuschPagan undefined when Python omits the field entirely', () => {
+      const result = normalizePyodideOlsResult(JSON.stringify(validPayload));
+      expect(result.ok).toBe(true);
+      expect(result.breuschPagan).toBeUndefined();
+    });
+
+    it('parses a well-formed Breusch-Pagan result that rejects homoscedasticity (p < 0.05)', () => {
+      const raw = JSON.stringify({ ...validPayload, breuschPagan: bpReject });
+      const result = normalizePyodideOlsResult(raw);
+      expect(result.ok).toBe(true);
+      expect(result.breuschPagan).toEqual(bpReject);
+      expect(result.breuschPagan?.rejectAt5).toBe(true);
+    });
+
+    it('parses a well-formed Breusch-Pagan result that does not reject (p >= 0.05)', () => {
+      const raw = JSON.stringify({ ...validPayload, breuschPagan: bpNoReject });
+      const result = normalizePyodideOlsResult(raw);
+      expect(result.ok).toBe(true);
+      expect(result.breuschPagan?.rejectAt5).toBe(false);
+    });
+
+    it('rejects a Breusch-Pagan payload with a non-finite statistic', () => {
+      const raw = JSON.stringify({ ...validPayload, breuschPagan: { ...bpReject, fStatistic: 'NaN' } });
+      const result = normalizePyodideOlsResult(raw);
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('Breusch-Pagan inválido');
+    });
+
+    it('rejects a Breusch-Pagan payload with rejectAt5 not a boolean', () => {
+      const raw = JSON.stringify({ ...validPayload, breuschPagan: { ...bpReject, rejectAt5: 'true' } });
+      const result = normalizePyodideOlsResult(raw);
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('Breusch-Pagan inválido');
+    });
+
+    it('rejects a Breusch-Pagan payload with a missing interpretation', () => {
+      const { interpretation: _interpretation, ...rest } = bpReject;
+      const raw = JSON.stringify({ ...validPayload, breuschPagan: rest });
+      const result = normalizePyodideOlsResult(raw);
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('Breusch-Pagan inválido');
+    });
+
+    it('rejects a non-object breuschPagan', () => {
+      const raw = JSON.stringify({ ...validPayload, breuschPagan: 'p=0.03' });
+      const result = normalizePyodideOlsResult(raw);
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('Breusch-Pagan inválido');
+    });
+  });
+});
+
+describe('getProCovarianceInfo', () => {
+  it('returns the classic label and a homoscedasticity-assumption description', () => {
+    const info = getProCovarianceInfo('classic');
+    expect(info.type).toBe('classic');
+    expect(info.label).toBe('errores estándar clásicos');
+    expect(info.description).toContain('homocedasticidad');
+  });
+
+  it('returns the HC1 label and a robust-covariance description naming HC1', () => {
+    const info = getProCovarianceInfo('HC1');
+    expect(info.type).toBe('HC1');
+    expect(info.label).toBe('errores estándar robustos HC1');
+    expect(info.description).toContain('HC1');
+  });
+
+  it('returns the HC3 label and a robust-covariance description naming HC3', () => {
+    const info = getProCovarianceInfo('HC3');
+    expect(info.type).toBe('HC3');
+    expect(info.label).toBe('errores estándar robustos HC3');
+    expect(info.description).toContain('HC3');
+  });
+
+  it('every description mentions the RLS restriction test, since it shares the same covariance', () => {
+    for (const type of ['classic', 'HC1', 'HC3'] as const) {
+      expect(getProCovarianceInfo(type).description).toContain('restricción');
+    }
   });
 });

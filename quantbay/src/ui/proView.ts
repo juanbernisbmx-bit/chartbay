@@ -3,8 +3,11 @@ import { escapeHtml } from '../utils/format';
 import {
   DEFAULT_PRO_STANDARD_ERROR_TYPE,
   PRO_STANDARD_ERROR_LABELS,
+  getProCovarianceInfo,
+  type PyodideBreuschPagan,
   type PyodideOlsResult,
   type PyodideRlsTest,
+  type ProStandardErrorType,
 } from '../pro/pyodide/proResultTypes';
 import { FORM_LABELS } from './formRecommendView';
 
@@ -94,8 +97,12 @@ export function clearProResult(): void {
   if (coefBody) coefBody.innerHTML = '';
   const statsBody = $('qb-pro-stats-body');
   if (statsBody) statsBody.innerHTML = '';
+  const inferenceEl = $('qb-pro-inference');
+  if (inferenceEl) inferenceEl.innerHTML = '';
   const rlsTestEl = $('qb-pro-rls-test');
   if (rlsTestEl) rlsTestEl.innerHTML = '';
+  const bpTestEl = $('qb-pro-bp-test');
+  if (bpTestEl) bpTestEl.innerHTML = '';
   const warningsEl = $('qb-pro-warnings');
   if (warningsEl) warningsEl.innerHTML = '';
   const comparisonEl = $('qb-pro-comparison');
@@ -150,9 +157,21 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
       .join('');
   }
 
+  const seType = result.standardErrorType ?? DEFAULT_PRO_STANDARD_ERROR_TYPE;
+
+  const inferenceEl = $('qb-pro-inference');
+  if (inferenceEl) {
+    inferenceEl.innerHTML = buildInferenceHtml(seType);
+  }
+
   const rlsTestEl = $('qb-pro-rls-test');
   if (rlsTestEl) {
-    rlsTestEl.innerHTML = result.rlsTest ? buildRlsTestHtml(result.rlsTest, comparison?.rlsTest) : '';
+    rlsTestEl.innerHTML = result.rlsTest ? buildRlsTestHtml(result.rlsTest, seType, comparison?.rlsTest) : '';
+  }
+
+  const bpTestEl = $('qb-pro-bp-test');
+  if (bpTestEl) {
+    bpTestEl.innerHTML = result.breuschPagan ? buildBpTestHtml(result.breuschPagan, seType) : '';
   }
 
   const warningsEl = $('qb-pro-warnings');
@@ -227,9 +246,23 @@ function buildComparisonHtml(result: PyodideOlsResult, comparison: ProComparison
   );
 }
 
-function buildRlsTestHtml(rlsTest: PyodideRlsTest, comparison?: ProRlsComparison | null): string {
+function buildInferenceHtml(seType: ProStandardErrorType): string {
+  const info = getProCovarianceInfo(seType);
+  return `
+    <p class="qb-label" style="margin-top:10px">Inferencia: ${escapeHtml(info.label)}</p>
+    <div class="qb-interp">${escapeHtml(info.description)}</div>`;
+}
+
+// Rβ = q se evalúa con la MISMA covarianza que el resto de la inferencia
+// (classic/HC1/HC3): statsmodels' f_test usa results.cov_params() por debajo,
+// que ya respeta cov_type. Por eso el caveat contra Lite (que siempre usa el
+// F clásico de rls.ts) depende de qué covarianza esté activa en Pro.
+function buildRlsTestHtml(rlsTest: PyodideRlsTest, seType: ProStandardErrorType, comparison?: ProRlsComparison | null): string {
   const verdict = rlsTest.reject ? 'Se rechaza H0 al 5%' : 'No se rechaza H0 al 5%';
   const df = `${rlsTest.dfNum ?? '—'}, ${rlsTest.dfDenom ?? '—'}`;
+  const covarianceCaveat = seType === 'classic'
+    ? 'El test de restricción usa errores estándar clásicos y debería coincidir con el F clásico de Lite salvo diferencias numéricas mínimas.'
+    : `El test de restricción en Pro usa la matriz de covarianza robusta seleccionada (${escapeHtml(PRO_STANDARD_ERROR_LABELS[seType])}). Por eso puede diferir del F clásico de Lite.`;
 
   let table = '';
   if (comparison) {
@@ -253,7 +286,31 @@ function buildRlsTestHtml(rlsTest: PyodideRlsTest, comparison?: ProRlsComparison
       <strong>${verdict}</strong><br>
       <span class="muted" style="font-size:11px">
         Este test no re-estima los coeficientes bajo la restricción — sólo evalúa si Rβ = q es compatible con los datos.
-        Los coeficientes de la tabla de arriba son siempre el OLS no restringido.
+        Los coeficientes de la tabla de arriba son siempre el OLS no restringido.<br>
+        ${covarianceCaveat}
       </span>
     </div>${table}`;
+}
+
+// "Probá HC3" sólo tiene sentido si todavía no estás en HC3 (evitar una
+// recomendación redundante) — HC1 también podría "subir" a HC3, pero el
+// pedido explícito acá es no repetir la sugerencia únicamente cuando ya se
+// está en HC3.
+function buildBpTestHtml(bp: PyodideBreuschPagan, seType: ProStandardErrorType): string {
+  const recommendation =
+    seType === 'classic' && bp.rejectAt5
+      ? `<p class="muted qb-help" style="margin-top:8px">
+          El test Breusch-Pagan sugiere heterocedasticidad. Los errores estándar clásicos pueden ser poco confiables.
+          Probá HC3 para inferencia más robusta.
+        </p>`
+      : '';
+
+  return `
+    <p class="qb-label" style="margin-top:10px">Test Breusch-Pagan</p>
+    <div class="qb-interp">
+      H0: varianza constante de los errores (homocedasticidad)<br>
+      LM-statistic: ${fmt(bp.lmStatistic)} · p-value: ${fmt(bp.lmPValue)}<br>
+      F-statistic: ${fmt(bp.fStatistic)} · p-value: ${fmt(bp.fPValue)}<br>
+      <strong>Conclusión: ${escapeHtml(bp.interpretation)}</strong>
+    </div>${recommendation}`;
 }

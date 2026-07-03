@@ -18,6 +18,35 @@ export function isProStandardErrorType(value: unknown): value is ProStandardErro
   return value === 'classic' || value === 'HC1' || value === 'HC3';
 }
 
+const PRO_STANDARD_ERROR_DESCRIPTIONS: Record<ProStandardErrorType, string> = {
+  classic:
+    'Los t-stats, p-values, intervalos de confianza y el test de restricción (RLS) asumen homocedasticidad ' +
+    '(varianza constante de los errores).',
+  HC1:
+    'Los t-stats, p-values, intervalos de confianza y el test de restricción (RLS) usan la matriz de ' +
+    'covarianza robusta HC1 (corrige por heterocedasticidad).',
+  HC3:
+    'Los t-stats, p-values, intervalos de confianza y el test de restricción (RLS) usan la matriz de ' +
+    'covarianza robusta HC3 (corrige por heterocedasticidad; más conservadora en muestras chicas).',
+};
+
+// Consolidates "qué matriz de covarianza se usó, y qué implica" en un solo
+// lugar, derivado de las constantes de arriba — no hay una segunda fuente de
+// verdad para label/descripción en ningún otro archivo.
+export type ProCovarianceInfo = {
+  type: ProStandardErrorType;
+  label: string;
+  description: string;
+};
+
+export function getProCovarianceInfo(seType: ProStandardErrorType): ProCovarianceInfo {
+  return {
+    type: seType,
+    label: PRO_STANDARD_ERROR_LABELS[seType],
+    description: PRO_STANDARD_ERROR_DESCRIPTIONS[seType],
+  };
+}
+
 export type PyodideOlsCoefficient = {
   name: string;
   estimate: number;
@@ -38,6 +67,21 @@ export type PyodideRlsTest = {
   dfNum: number | null;
   dfDenom: number | null;
   reject: boolean;
+};
+
+// Breusch-Pagan heteroskedasticity test on the effectively estimated model
+// (statsmodels het_breuschpagan on results.resid / results.model.exog — the
+// already functional-form-transformed design matrix, so it works the same
+// way for lin-lin/log-lin/lin-log/log-log without any special-casing here).
+// rejectAt5/interpretation are driven by the F p-value (the more commonly
+// cited statistic in practice), though both LM and F are always returned.
+export type PyodideBreuschPagan = {
+  lmStatistic: number;
+  lmPValue: number;
+  fStatistic: number;
+  fPValue: number;
+  rejectAt5: boolean;
+  interpretation: string;
 };
 
 export type PyodideOlsResult = {
@@ -64,6 +108,8 @@ export type PyodideOlsResult = {
   error?: string;
   // Only present when a valid RLS constraint was passed in for this run.
   rlsTest?: PyodideRlsTest;
+  // Absent only if statsmodels couldn't compute it (see warnings in that case).
+  breuschPagan?: PyodideBreuschPagan;
 };
 
 const VALID_FUNCTIONAL_FORMS: ReadonlySet<string> = new Set(['lin-lin', 'log-lin', 'lin-log', 'log-log']);
@@ -122,6 +168,40 @@ function parseRlsTest(raw: unknown): { ok: true; value: PyodideRlsTest | undefin
   return {
     ok: true,
     value: { label: record.label, fStat, fPValue, dfNum, dfDenom, reject: record.reject },
+  };
+}
+
+// null/undefined means "Breusch-Pagan wasn't computed for this run" (statsmodels
+// failed on it — see the warnings array) — valid, yields breuschPagan: undefined.
+// Anything else must be a fully well-formed, finite object, or the whole
+// payload is rejected: a malformed BP result is as untrustworthy as malformed
+// coefficients, and BP's statistics/p-values should never legitimately be null.
+function parseBreuschPagan(raw: unknown): { ok: true; value: PyodideBreuschPagan | undefined } | { ok: false } {
+  if (raw === null || raw === undefined) return { ok: true, value: undefined };
+  if (typeof raw !== 'object' || Array.isArray(raw)) return { ok: false };
+
+  const record = raw as Record<string, unknown>;
+  const lmStatistic = record.lmStatistic;
+  const lmPValue = record.lmPValue;
+  const fStatistic = record.fStatistic;
+  const fPValue = record.fPValue;
+  if (typeof lmStatistic !== 'number' || !Number.isFinite(lmStatistic)) return { ok: false };
+  if (typeof lmPValue !== 'number' || !Number.isFinite(lmPValue)) return { ok: false };
+  if (typeof fStatistic !== 'number' || !Number.isFinite(fStatistic)) return { ok: false };
+  if (typeof fPValue !== 'number' || !Number.isFinite(fPValue)) return { ok: false };
+  if (typeof record.rejectAt5 !== 'boolean') return { ok: false };
+  if (typeof record.interpretation !== 'string' || record.interpretation.trim() === '') return { ok: false };
+
+  return {
+    ok: true,
+    value: {
+      lmStatistic,
+      lmPValue,
+      fStatistic,
+      fPValue,
+      rejectAt5: record.rejectAt5,
+      interpretation: record.interpretation,
+    },
   };
 }
 
@@ -215,6 +295,11 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
     return proError('El motor Python devolvió un test de restricción RLS inválido.');
   }
 
+  const breuschPaganParsed = parseBreuschPagan(obj.breuschPagan);
+  if (!breuschPaganParsed.ok) {
+    return proError('El motor Python devolvió un test de Breusch-Pagan inválido.');
+  }
+
   // R², R² ajustado, F y su p-value pueden ser legítimamente null
   // (Y constante o ajuste perfecto); null → undefined, cualquier otra cosa se rechaza.
   const rSquared = finiteOrNull(obj.rSquared);
@@ -260,5 +345,6 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
     fitted,
     warnings,
     rlsTest: rlsTestParsed.value,
+    breuschPagan: breuschPaganParsed.value,
   };
 }

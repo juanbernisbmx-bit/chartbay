@@ -14,8 +14,9 @@ export type PyodideOlsPhase = 'loading-pyodide' | 'loading-packages' | 'running'
 
 // OLS con statsmodels.api.OLS — con las 4 formas funcionales (lin-lin,
 // log-lin, lin-log, log-log), errores estándar clásicos o robustos HC1/HC3
-// (cov_type de statsmodels) y test de restricciones lineales (Rβ = q) vía
-// statsmodels' f_test. IMPORTANTE: el modelo estimado y devuelto (coeficientes,
+// (cov_type de statsmodels), diagnóstico de heterocedasticidad Breusch-Pagan
+// y test de restricciones lineales (Rβ = q) vía statsmodels' f_test.
+// IMPORTANTE: el modelo estimado y devuelto (coeficientes,
 // residuos, R², etc.) es SIEMPRE el OLS no restringido — la restricción no
 // re-estima los coeficientes, sólo evalúa (Wald/F) si es compatible con los
 // datos. Esto es intencional: es lo que statsmodels ofrece de forma nativa y
@@ -37,6 +38,7 @@ import math
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
+from statsmodels.stats.diagnostic import het_breuschpagan
 
 
 def _chartbay_pro_ols():
@@ -158,6 +160,40 @@ def _chartbay_pro_ols():
     except Exception as exc:
         return fail("statsmodels no pudo estimar el modelo OLS: " + str(exc) + ".")
 
+    # Breusch-Pagan sobre el modelo efectivamente estimado: usa los residuos y
+    # la matriz de diseño (results.model.exog) YA transformados por la forma
+    # funcional, así que funciona igual para lin-lin/log-lin/lin-log/log-log
+    # sin ningún caso especial acá. Es un diagnóstico adicional, no crítico: si
+    # falla, no aborta el resultado completo, sólo queda ausente con una advertencia.
+    try:
+        bp_lm, bp_lm_pvalue, bp_fvalue, bp_f_pvalue = het_breuschpagan(results.resid, results.model.exog)
+        bp_lm = finite_or_none(bp_lm)
+        bp_lm_pvalue = finite_or_none(bp_lm_pvalue)
+        bp_fvalue = finite_or_none(bp_fvalue)
+        bp_f_pvalue = finite_or_none(bp_f_pvalue)
+        if None in (bp_lm, bp_lm_pvalue, bp_fvalue, bp_f_pvalue):
+            breusch_pagan = None
+            warnings.append("No se pudo calcular Breusch-Pagan: statsmodels devolvió un estadístico no finito.")
+        else:
+            # La conclusión pedagógica usa el p-value del F (más citado en la
+            # práctica); el LM también se devuelve completo para quien lo prefiera.
+            bp_reject = bp_f_pvalue < 0.05
+            breusch_pagan = {
+                "lmStatistic": bp_lm,
+                "lmPValue": bp_lm_pvalue,
+                "fStatistic": bp_fvalue,
+                "fPValue": bp_f_pvalue,
+                "rejectAt5": bp_reject,
+                "interpretation": (
+                    "Se rechaza homocedasticidad al 5% (evidencia de heterocedasticidad)."
+                    if bp_reject else
+                    "No se rechaza homocedasticidad al 5% (sin evidencia suficiente de heterocedasticidad)."
+                ),
+            }
+    except Exception as exc:
+        breusch_pagan = None
+        warnings.append("No se pudo calcular Breusch-Pagan: " + str(exc) + ".")
+
     # Test de restricción lineal Rβ = q sobre el OLS no restringido (Wald/F test
     # de statsmodels, que ya usa la covarianza robusta cuando se_type != classic).
     # No re-estima β: sólo evalúa si la restricción es compatible con los datos.
@@ -266,6 +302,7 @@ def _chartbay_pro_ols():
         "fitted": fitted,
         "warnings": warnings,
         "rlsTest": rls_test,
+        "breuschPagan": breusch_pagan,
     }
 
 
