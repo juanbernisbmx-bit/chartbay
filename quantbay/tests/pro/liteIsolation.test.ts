@@ -10,6 +10,7 @@ const ALLOWED = [
   join(SRC_DIR, 'pro'),
   join(SRC_DIR, 'main.ts'),
   join(SRC_DIR, 'ui', 'proView.ts'),
+  join(SRC_DIR, 'ui', 'proTimeSeriesView.ts'),
 ];
 
 function collectSourceFiles(dir: string): string[] {

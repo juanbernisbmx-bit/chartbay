@@ -41,6 +41,18 @@ import {
 import { checkProCapability } from './pro/proCapability';
 import { checkProFunctionalDomain } from './pro/proDomainCheck';
 import { buildLiteComparison } from './pro/liteComparison';
+import { runPyodideTimeSeries } from './pro/pyodide/pythonTimeSeriesRunner';
+import {
+  clearProTimeSeriesResult,
+  getProTimeSeriesAdfRegression,
+  getProTimeSeriesMaxLag,
+  getSelectedProTimeSeriesValueColumn,
+  renderProTimeSeriesNoData,
+  renderProTimeSeriesResult,
+  renderProTimeSeriesSelectors,
+  resetProTimeSeriesView,
+  showProTimeSeriesStatus,
+} from './ui/proTimeSeriesView';
 import type { FunctionalForm } from './functionalForms';
 
 interface QuantDemoCase {
@@ -282,6 +294,13 @@ function isTimeSeriesMode(): boolean {
   return appState.activeMode === 'timeseries';
 }
 
+// Time series + Pro (Pyodide) → diagnósticos de series con statsmodels. Con
+// cualquier otra versión (Lite / Mega Pro) sigue el flujo Lite existente, para
+// no mezclar corte transversal y series de tiempo de forma silenciosa.
+function isProTimeSeries(): boolean {
+  return isTimeSeriesMode() && resolveEngineAction(appState.activeVersion) === 'pro_pyodide';
+}
+
 // Guards the flows the Pro POC does NOT cover yet (auto-run, time series).
 // The standard regression run has its own routing in onRun via resolveEngineAction.
 function checkActiveEngineReady(): boolean {
@@ -317,20 +336,32 @@ function updateModePanels(): void {
   const results = $('qb-results');
   const repair = $('qb-repair-log');
   const tsPanel = $('qb-ts-panel');
+  const proTsPanel = $('qb-pro-ts-panel');
   const ts = isTimeSeriesMode();
+  // Pro usa su propio panel de series (statsmodels); Lite y Mega Pro usan el
+  // panel Lite existente (Mega Pro sigue bloqueando en el run como antes).
+  const proTs = ts && isProTimeSeries();
+  const liteTs = ts && !proTs;
 
   if (demo) demo.style.display = ts ? 'none' : '';
   if (vars) vars.style.display = !ts && appState.csvData && appState.csvData.numericColumns.length >= 2 ? '' : 'none';
   if (results && ts) results.style.display = 'none';
   if (repair && ts) repair.style.display = 'none';
-  if (tsPanel) tsPanel.style.display = ts ? '' : 'none';
+  if (tsPanel) tsPanel.style.display = liteTs ? '' : 'none';
+  if (proTsPanel) proTsPanel.style.display = proTs ? '' : 'none';
   if (ts) hideProPanel();
 
-  if (ts) {
+  if (proTs) {
+    resetTimeSeriesView();
+    if (appState.csvData) renderProTimeSeriesSelectors(appState.csvData);
+    else renderProTimeSeriesNoData();
+  } else if (liteTs) {
+    resetProTimeSeriesView();
     if (appState.csvData) renderTimeSeriesSelectors(appState.csvData);
     else renderTimeSeriesNoData();
   } else {
     resetTimeSeriesView();
+    resetProTimeSeriesView();
     if (appState.csvData && appState.csvData.numericColumns.length < 2) {
       showError('El CSV necesita al menos 2 columnas numéricas.');
     }
@@ -350,6 +381,9 @@ function setActiveVersion(version: ChartBayVersion): void {
   if (version !== 'pro') hideProPanel();
   renderVersionInfo(getVersionConfig(version));
   setProSeSelectorVisible(resolveEngineAction(version) === 'pro_pyodide');
+  // En modo series de tiempo, cambiar de versión intercambia el panel Lite por
+  // el panel Pro (statsmodels) y viceversa.
+  if (isTimeSeriesMode()) updateModePanels();
 }
 async function loadDemoCase(id: string): Promise<void> {
   const demo = DEMO_CASES[id];
@@ -796,6 +830,93 @@ function onTimeSeriesRun(): void {
   updateExportButtonState();
 }
 
+// ── ChartBay Pro · Time Series (Pyodide POC) ────────────────────────────────
+// Como el OLS Pro, Pyodide corre en un único intérprete Python compartido: dos
+// corridas simultáneas escribirían las mismas globales (chartbay_ts_*) y podrían
+// pisarse. Guarda contra doble click en "Correr diagnósticos" mientras hay una
+// corrida en vuelo.
+let proTsRunInFlight = false;
+
+async function onRunProTimeSeries(): Promise<void> {
+  if (proTsRunInFlight) return;
+  if (!appState.csvData) {
+    renderProTimeSeriesNoData();
+    return;
+  }
+  const valueColumn = getSelectedProTimeSeriesValueColumn();
+  if (!valueColumn) {
+    renderProTimeSeriesNoData('Seleccioná una columna de serie para diagnosticar.');
+    return;
+  }
+
+  proTsRunInFlight = true;
+  const runButton = $('qb-pro-ts-run') as HTMLButtonElement | null;
+  if (runButton) runButton.disabled = true;
+  appState.lastTimeSeriesResult = null;
+  updateExportButtonState();
+
+  try {
+    showError('');
+    clearProTimeSeriesResult();
+    setEngineStatus('CALCULANDO');
+
+    // Extrae la columna como serie numérica: los valores faltantes/no numéricos
+    // se marcan NaN y la validación TS (proTimeSeriesValidation.ts) los descarta
+    // con una advertencia clara antes de cargar Python.
+    const values = appState.csvData.rows.map(row => {
+      const raw = row[valueColumn];
+      if (raw === null || raw === undefined || raw === '') return NaN;
+      const num = Number(raw);
+      return Number.isFinite(num) ? num : NaN;
+    });
+
+    showProTimeSeriesStatus('Cargando Python en navegador…');
+    writeRunLog(['ChartBay Pro (experimental): preparando diagnósticos de series de tiempo…']);
+
+    const result = await runPyodideTimeSeries(
+      {
+        values,
+        variableName: valueColumn,
+        maxLag: getProTimeSeriesMaxLag(),
+        adfRegression: getProTimeSeriesAdfRegression(),
+      },
+      phase => {
+        if (phase === 'loading-pyodide') showProTimeSeriesStatus('Cargando Python en navegador…');
+        else if (phase === 'loading-packages') showProTimeSeriesStatus('Cargando numpy, pandas y statsmodels…');
+        else showProTimeSeriesStatus('Ejecutando diagnósticos con statsmodels…');
+      }
+    );
+
+    renderProTimeSeriesResult(result);
+    setEngineStatus(result.ok ? 'COMPLETADO' : 'ERROR');
+    if (result.ok) setText('qb-status-obs', result.observations ?? 0);
+    writeRunLog(
+      result.ok
+        ? [
+            'ChartBay Pro (experimental): diagnósticos de series ejecutados con statsmodels (Pyodide)... OK',
+            `Serie: ${valueColumn}`,
+            `Observaciones: ${result.observations}`,
+            ...result.warnings,
+          ]
+        : [`ChartBay Pro (experimental): error — ${result.error ?? 'desconocido'}`]
+    );
+    const panel = $('qb-pro-ts-panel');
+    if (panel) panel.scrollIntoView({ behavior: 'smooth' });
+    updateSidebarStep(3);
+  } finally {
+    proTsRunInFlight = false;
+    if (runButton) runButton.disabled = false;
+  }
+}
+
+function onProTimeSeriesValueChange(): void {
+  // Al cambiar la columna de serie se descartan los diagnósticos previos para
+  // no dejar tablas viejas de otra variable visibles.
+  appState.lastTimeSeriesResult = null;
+  updateExportButtonState();
+  clearProTimeSeriesResult();
+}
+
 function onTimeSeriesTransformationChange(): void {
   syncTimeSeriesTransformationControls();
   if (isTimeSeriesMode() && appState.csvData) {
@@ -844,6 +965,8 @@ function init(): void {
   $('qb-ts-run')?.addEventListener('click', onTimeSeriesRun);
   $('qb-ts-transform')?.addEventListener('change', onTimeSeriesTransformationChange);
   $('qb-ts-ma-window')?.addEventListener('change', onTimeSeriesTransformationChange);
+  $('qb-pro-ts-run')?.addEventListener('click', onRunProTimeSeries);
+  $('qb-pro-ts-value')?.addEventListener('change', onProTimeSeriesValueChange);
   $('qb-export-pdf')?.addEventListener('click', exportPDF);
   $('qb-export-csv')?.addEventListener('click', exportAnalysisCSV);
   $('qb-export-txt')?.addEventListener('click', exportAnalysisTXT);
