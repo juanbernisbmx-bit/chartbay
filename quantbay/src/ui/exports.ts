@@ -10,7 +10,7 @@ export function residualSumSquares(result: RegressionResult): number {
   return result.residuals.reduce((sum, residual) => sum + residual ** 2, 0);
 }
 
-function downloadTextFile(filename: string, content: string, mime: string): void {
+export function downloadTextFile(filename: string, content: string, mime: string): void {
   const blob = new Blob([content], { type: `${mime};charset=utf-8` });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
