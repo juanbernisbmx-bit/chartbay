@@ -3,6 +3,7 @@ import {
   clearProTimeSeriesResult,
   getProArimaEnabled,
   getProArimaOrder,
+  getProForecastSteps,
   getProTimeSeriesAdfRegression,
   getProTimeSeriesMaxLag,
   getSelectedProTimeSeriesValueColumn,
@@ -29,6 +30,7 @@ function mountPanel(): void {
         <input id="qb-pro-ts-arima-p" type="number" value="1">
         <input id="qb-pro-ts-arima-d" type="number" value="0">
         <input id="qb-pro-ts-arima-q" type="number" value="1">
+        <input id="qb-pro-ts-forecast-steps" type="number" value="12">
         <button id="qb-pro-ts-run"></button>
       </div>
       <div id="qb-pro-ts-status" style="display:none"></div>
@@ -134,12 +136,12 @@ describe('renderProTimeSeriesResult', () => {
     expect(text).toContain('Ljung-Box');
   });
 
-  it('communicates honestly that ARIMA is manual and auto-ARIMA/forecast are not implemented yet', () => {
+  it('communicates honestly that ARIMA manual + basic forecast exist but auto-ARIMA does not', () => {
     renderProTimeSeriesResult(okResult);
     const text = document.getElementById('qb-pro-ts-arima-note')?.textContent ?? '';
-    expect(text).toContain('ARIMA es manual');
+    expect(text).toContain('forecast básico');
     expect(text).toContain('auto-ARIMA');
-    expect(text).toContain('forecast');
+    expect(text).toContain('todavía no está implementada');
   });
 
   it('renders warnings when present', () => {
@@ -283,6 +285,100 @@ describe('renderProTimeSeriesResult · ARIMA', () => {
     const text = document.getElementById('qb-pro-ts-arima-section')?.textContent ?? '';
     expect(text).toContain('No informada');
   });
+
+  describe('forecast', () => {
+    const forecastArima: PyodideTimeSeriesResult = {
+      ...arimaResult,
+      arima: {
+        ...arima,
+        forecast: {
+          steps: 3,
+          confidenceLevel: 0.95,
+          items: [
+            { step: 1, mean: 10.512345, meanStandardError: 0.8, lower: 8.912345, upper: 12.112345 },
+            { step: 2, mean: 10.7, meanStandardError: 1.1, lower: 8.5, upper: 12.9 },
+            { step: 3, mean: 10.8, meanStandardError: null, lower: null, upper: null },
+          ],
+          warnings: [],
+        },
+      },
+    };
+
+    it('shows the forecast table with Paso / Pronóstico / Límite inferior / Límite superior', () => {
+      renderProTimeSeriesResult(forecastArima);
+      const section = document.getElementById('qb-pro-ts-arima-section');
+      const text = section?.textContent ?? '';
+      expect(text).toContain('Forecast ARIMA');
+      expect(text).toContain('Paso');
+      expect(text).toContain('Pronóstico');
+      expect(text).toContain('Límite inferior');
+      expect(text).toContain('Límite superior');
+      expect(text).toContain('t+1');
+      expect(text).toContain('10.512345');
+      expect(text).toContain('8.912345');
+      expect(text).toContain('12.112345');
+      expect(text).toContain('95%');
+    });
+
+    it('renders null bounds as em dashes (intervals are never invented)', () => {
+      renderProTimeSeriesResult(forecastArima);
+      const rows = Array.from(document.querySelectorAll('#qb-pro-ts-arima-section table tr'))
+        .map(tr => tr.textContent ?? '');
+      const lastRow = rows.find(r => r.includes('t+3')) ?? '';
+      expect(lastRow).toContain('—');
+    });
+
+    it('shows the pedagogical forecast note', () => {
+      renderProTimeSeriesResult(forecastArima);
+      const text = document.getElementById('qb-pro-ts-arima-section')?.textContent ?? '';
+      expect(text).toContain('proyecta valores futuros');
+      expect(text).toContain('suelen ampliarse a medida que crece el horizonte');
+    });
+
+    it('shows forecast warnings when present', () => {
+      const withWarning: PyodideTimeSeriesResult = {
+        ...forecastArima,
+        arima: {
+          ...forecastArima.arima!,
+          forecast: {
+            ...forecastArima.arima!.forecast!,
+            warnings: ['statsmodels no devolvió intervalos de confianza para este forecast.'],
+          },
+        },
+      };
+      renderProTimeSeriesResult(withWarning);
+      const text = document.getElementById('qb-pro-ts-arima-section')?.textContent ?? '';
+      expect(text).toContain('no devolvió intervalos de confianza');
+    });
+
+    it('shows a controlled forecast error while keeping the ARIMA result and diagnostics', () => {
+      renderProTimeSeriesResult({
+        ...arimaResult,
+        arima: {
+          ...arima,
+          forecastError:
+            'No se pudo calcular el forecast para este modelo. El ARIMA fue estimado, pero statsmodels no pudo generar predicciones futuras.',
+        },
+      });
+      const text = document.getElementById('qb-pro-ts-arima-section')?.textContent ?? '';
+      // Forecast error visible…
+      expect(text).toContain('No se pudo calcular el forecast');
+      // …but the ARIMA summary and coefficients are still there…
+      expect(text).toContain('ARIMA(1,1,1)');
+      expect(text).toContain('AIC');
+      expect(text).toContain('ar.L1');
+      // …and the diagnostics are untouched.
+      expect(document.getElementById('qb-pro-ts-adf')?.innerHTML).not.toBe('');
+      expect(document.getElementById('qb-pro-ts-ljungbox')?.innerHTML).not.toBe('');
+      expect(document.getElementById('qb-pro-ts-content')?.style.display).toBe('');
+    });
+
+    it('renders no forecast section when the ARIMA has neither forecast nor forecastError', () => {
+      renderProTimeSeriesResult(arimaResult);
+      const text = document.getElementById('qb-pro-ts-arima-section')?.textContent ?? '';
+      expect(text).not.toContain('Forecast ARIMA');
+    });
+  });
 });
 
 describe('Pro TS selectors and getters', () => {
@@ -340,6 +436,15 @@ describe('Pro TS selectors and getters', () => {
     (document.getElementById('qb-pro-ts-arima-q') as HTMLInputElement).value = '';
     // p=2, d=1 read from inputs; empty q falls back to the default (1).
     expect(getProArimaOrder()).toEqual({ p: 2, d: 1, q: 1 });
+  });
+
+  it('getProForecastSteps reads the horizon input, defaulting to 12 when empty', () => {
+    renderProTimeSeriesSelectors(csv);
+    const input = document.getElementById('qb-pro-ts-forecast-steps') as HTMLInputElement;
+    input.value = '24';
+    expect(getProForecastSteps()).toBe(24);
+    input.value = '';
+    expect(getProForecastSteps()).toBe(12);
   });
 
   it('falls back to "no data" when there is no numeric column', () => {

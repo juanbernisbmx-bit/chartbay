@@ -6,7 +6,7 @@ import {
   type PyodideTimeSeriesInput,
   type PyodideTimeSeriesResult,
 } from './proTimeSeriesResultTypes';
-import { validateProArimaOrder, validateProTimeSeriesInput } from './proTimeSeriesValidation';
+import { validateProArimaOrder, validateProForecastSteps, validateProTimeSeriesInput } from './proTimeSeriesValidation';
 
 export type PyodideTimeSeriesPhase = 'loading-pyodide' | 'loading-packages' | 'running';
 
@@ -24,6 +24,9 @@ export type PyodideTimeSeriesPhase = 'loading-pyodide' | 'loading-packages' | 'r
 // auto-ARIMA (selección automática del orden) en esta fase. ARIMA es totalmente
 // independiente de los diagnósticos: si falla, los diagnósticos ADF/ACF/PACF/
 // Ljung-Box siguen presentes y la sección ARIMA muestra un error controlado.
+// Con ARIMA estimado, opcionalmente genera forecast out-of-sample
+// (fit.get_forecast) con media e intervalos al 95%; si el forecast falla, el
+// resultado ARIMA se conserva y sólo se agrega forecastError.
 //
 // Convención de errores idéntica a la del OLS Pro (pythonOlsRunner.ts): los
 // errores de validación se devuelven como dicts {ok: false, error} (nunca se
@@ -59,6 +62,8 @@ def _chartbay_pro_time_series():
     adf_regression = chartbay_ts_adf_regression
     ljung_box_lags = [int(l) for l in json.loads(chartbay_ts_ljung_box_lags_json)]
     run_arima = bool(chartbay_ts_run_arima)
+    # 0 = sin forecast. Sólo se usa si el ARIMA se estimó correctamente.
+    forecast_steps = int(chartbay_ts_forecast_steps)
 
     if adf_regression not in ("c", "ct", "ctt", "n"):
         return fail('Tipo de regresión ADF no soportado: "' + str(adf_regression) + '". Usá c, ct, ctt o n.')
@@ -249,6 +254,78 @@ def _chartbay_pro_time_series():
                 result["arima"]["warnings"].append(
                     "No se pudo calcular Ljung-Box sobre los residuos: " + str(exc) + "."
                 )
+
+            # ── Forecast out-of-sample ────────────────────────────────
+            # Sólo corre si el ARIMA se estimó bien (estamos dentro del try
+            # exitoso) y el usuario pidió un horizonte. Falla de forma
+            # controlada: forecastError SIN borrar el resultado ARIMA.
+            # summary_frame() puede cambiar los nombres de columnas según la
+            # versión de statsmodels — se buscan candidatos y, si faltan, se
+            # cae a predicted_mean / conf_int(). Los intervalos NUNCA se
+            # inventan: si no están disponibles, quedan en null con warning.
+            if forecast_steps > 0:
+                try:
+                    fc_warnings = []
+                    forecast_res = fit.get_forecast(steps=forecast_steps)
+                    frame = None
+                    try:
+                        frame = forecast_res.summary_frame(alpha=0.05)
+                    except Exception:
+                        frame = None
+
+                    def pick_col(candidates):
+                        if frame is None:
+                            return None
+                        for c in candidates:
+                            if c in list(frame.columns):
+                                return [v for v in frame[c]]
+                        return None
+
+                    mean_vals = pick_col(["mean", "predicted_mean"])
+                    se_vals = pick_col(["mean_se", "se_mean"])
+                    lo_vals = pick_col(["mean_ci_lower", "lower"])
+                    hi_vals = pick_col(["mean_ci_upper", "upper"])
+
+                    if mean_vals is None:
+                        mean_vals = [v for v in np.asarray(forecast_res.predicted_mean, dtype=float)]
+                    if lo_vals is None or hi_vals is None:
+                        try:
+                            ci = np.asarray(forecast_res.conf_int(alpha=0.05), dtype=float)
+                            if ci.ndim == 2 and ci.shape[1] >= 2:
+                                lo_vals = [v for v in ci[:, 0]]
+                                hi_vals = [v for v in ci[:, 1]]
+                        except Exception:
+                            pass
+                    if lo_vals is None or hi_vals is None:
+                        lo_vals = [None] * forecast_steps
+                        hi_vals = [None] * forecast_steps
+                        fc_warnings.append(
+                            "statsmodels no devolvió intervalos de confianza para este forecast; "
+                            "se muestran sólo los pronósticos puntuales."
+                        )
+
+                    items = []
+                    for i in range(forecast_steps):
+                        items.append({
+                            "step": i + 1,
+                            "mean": finite_or_none(mean_vals[i]) if i < len(mean_vals) else None,
+                            "meanStandardError": (
+                                finite_or_none(se_vals[i]) if (se_vals is not None and i < len(se_vals)) else None
+                            ),
+                            "lower": finite_or_none(lo_vals[i]) if i < len(lo_vals) else None,
+                            "upper": finite_or_none(hi_vals[i]) if i < len(hi_vals) else None,
+                        })
+                    result["arima"]["forecast"] = {
+                        "steps": forecast_steps,
+                        "items": items,
+                        "confidenceLevel": 0.95,
+                        "warnings": fc_warnings,
+                    }
+                except Exception as exc:
+                    result["arima"]["forecastError"] = (
+                        "No se pudo calcular el forecast para este modelo. El ARIMA fue estimado, "
+                        "pero statsmodels no pudo generar predicciones futuras. (" + str(exc) + ")"
+                    )
         except Exception as exc:
             result["arima"] = None
             result["arimaError"] = (
@@ -297,6 +374,21 @@ export async function runPyodideTimeSeries(
     }
   }
 
+  // Forecast: sólo tiene sentido con ARIMA activo y estimable. Sin runArima,
+  // forecastSteps se ignora (la UI sólo lo envía con ARIMA activado). Un
+  // horizonte inválido no bloquea el ARIMA: se estima igual y el error se
+  // muestra sólo en la sección de forecast.
+  let forecastStepsForPython = 0;
+  let tsForecastError: string | null = null;
+  if (runArimaInPython && input.forecastSteps !== undefined) {
+    const forecastValidation = validateProForecastSteps(input.forecastSteps);
+    if (forecastValidation.ok) {
+      forecastStepsForPython = forecastValidation.value;
+    } else {
+      tsForecastError = forecastValidation.error;
+    }
+  }
+
   let pyodide;
   try {
     onPhase?.('loading-pyodide');
@@ -324,6 +416,7 @@ export async function runPyodideTimeSeries(
       'chartbay_ts_arima_order_json',
       JSON.stringify(arimaOrderForPython ?? { p: 0, d: 0, q: 0 })
     );
+    pyodide.globals.set('chartbay_ts_forecast_steps', forecastStepsForPython);
     const raw = await pyodide.runPythonAsync(PYTHON_TIME_SERIES_SCRIPT);
     const result = normalizePyodideTimeSeriesResult(raw);
     if (!result.ok) return result;
@@ -336,6 +429,11 @@ export async function runPyodideTimeSeries(
     // Un orden ARIMA inválido (validación TS) no llegó a Python: se reporta acá
     // como error controlado de la sección ARIMA, sin tocar los diagnósticos.
     if (tsArimaError) merged.arimaError = tsArimaError;
+    // Un horizonte inválido (validación TS) tampoco llegó a Python: el ARIMA
+    // se estimó igual y el error se cuelga sólo de la sección de forecast.
+    if (tsForecastError && merged.arima) {
+      merged.arima = { ...merged.arima, forecastError: tsForecastError };
+    }
     return merged;
   } catch (err) {
     return tsError(`Error ejecutando diagnósticos de series de tiempo con statsmodels en Python: ${errorMessage(err)}`);

@@ -383,4 +383,145 @@ describe('runPyodideTimeSeries (statsmodels)', () => {
       expect(script).toContain('mle_retvals');
     });
   });
+
+  describe('ARIMA forecast', () => {
+    const FORECAST_BLOCK = {
+      steps: 3,
+      confidenceLevel: 0.95,
+      items: [
+        { step: 1, mean: 10.5, meanStandardError: 0.8, lower: 8.9, upper: 12.1 },
+        { step: 2, mean: 10.7, meanStandardError: 1.1, lower: 8.5, upper: 12.9 },
+        { step: 3, mean: 10.8, meanStandardError: 1.3, lower: 8.2, upper: 13.4 },
+      ],
+      warnings: [],
+    };
+    const ARIMA_WITH_FORECAST = {
+      ...VALID_TS_PAYLOAD,
+      arima: {
+        order: { p: 1, d: 0, q: 1 },
+        converged: true,
+        nobs: 40,
+        logLikelihood: -55.2,
+        aic: 118.4,
+        bic: 126.1,
+        hqic: 121.2,
+        coefficients: [{ name: 'ar.L1', estimate: 0.6, standardError: 0.12, zStatistic: 5.0, pValue: 0.002 }],
+        warnings: [],
+        forecast: FORECAST_BLOCK,
+      },
+    };
+
+    it('returns the forecast and passes the horizon to Python when ARIMA + steps are valid', async () => {
+      const fake = makeFakePyodide({
+        runPythonAsync: vi.fn().mockResolvedValue(JSON.stringify(ARIMA_WITH_FORECAST)),
+      });
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      const result = await runPyodideTimeSeries({
+        values: SERIES,
+        variableName: 'serie',
+        runArima: true,
+        arimaOrder: { p: 1, d: 0, q: 1 },
+        forecastSteps: 3,
+      });
+
+      expect(fake.globals.set).toHaveBeenCalledWith('chartbay_ts_forecast_steps', 3);
+      expect(result.ok).toBe(true);
+      expect(result.arima?.forecast?.steps).toBe(3);
+      expect(result.arima?.forecast?.items).toHaveLength(3);
+      expect(result.arima?.forecast?.items[0]).toMatchObject({ step: 1, mean: 10.5, lower: 8.9, upper: 12.1 });
+      expect(result.arima?.forecast?.confidenceLevel).toBe(0.95);
+    });
+
+    it('does NOT request a forecast when ARIMA is not active (steps forced to 0)', async () => {
+      const fake = makeFakePyodide();
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      const result = await runPyodideTimeSeries({ values: SERIES, variableName: 'serie', forecastSteps: 12 });
+
+      expect(fake.globals.set).toHaveBeenCalledWith('chartbay_ts_forecast_steps', 0);
+      expect(result.arima).toBeUndefined();
+    });
+
+    it('an invalid horizon does not block the ARIMA: it runs and only the forecast section errors', async () => {
+      const fake = makeFakePyodide({
+        runPythonAsync: vi.fn().mockResolvedValue(
+          JSON.stringify({ ...ARIMA_WITH_FORECAST, arima: { ...ARIMA_WITH_FORECAST.arima, forecast: undefined } })
+        ),
+      });
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      const result = await runPyodideTimeSeries({
+        values: SERIES,
+        variableName: 'serie',
+        runArima: true,
+        arimaOrder: { p: 1, d: 0, q: 1 },
+        forecastSteps: 100,
+      });
+
+      // ARIMA still runs; forecast never reaches Python.
+      expect(fake.globals.set).toHaveBeenCalledWith('chartbay_ts_run_arima', true);
+      expect(fake.globals.set).toHaveBeenCalledWith('chartbay_ts_forecast_steps', 0);
+      expect(result.ok).toBe(true);
+      expect(result.arima).toBeDefined();
+      expect(result.arima?.forecast).toBeUndefined();
+      expect(result.arima?.forecastError).toContain('hasta 60 períodos');
+      // Diagnostics untouched.
+      expect(result.adf).toBeDefined();
+    });
+
+    it('threads a Python-side forecast failure through as forecastError, keeping the ARIMA result', async () => {
+      const fake = makeFakePyodide({
+        runPythonAsync: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            ...ARIMA_WITH_FORECAST,
+            arima: {
+              ...ARIMA_WITH_FORECAST.arima,
+              forecast: undefined,
+              forecastError:
+                'No se pudo calcular el forecast para este modelo. El ARIMA fue estimado, pero statsmodels no pudo generar predicciones futuras.',
+            },
+          })
+        ),
+      });
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      const result = await runPyodideTimeSeries({
+        values: SERIES,
+        variableName: 'serie',
+        runArima: true,
+        arimaOrder: { p: 1, d: 0, q: 1 },
+        forecastSteps: 12,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.arima?.aic).toBe(118.4);
+      expect(result.arima?.forecast).toBeUndefined();
+      expect(result.arima?.forecastError).toContain('No se pudo calcular el forecast');
+      expect(result.adf).toBeDefined();
+    });
+
+    it('the Python script uses get_forecast/summary_frame defensively with conf_int fallback', async () => {
+      const fake = makeFakePyodide();
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      await runPyodideTimeSeries({
+        values: SERIES,
+        variableName: 'serie',
+        runArima: true,
+        arimaOrder: { p: 1, d: 0, q: 1 },
+        forecastSteps: 12,
+      });
+
+      const script = scriptOf(fake);
+      expect(script).toContain('fit.get_forecast(steps=forecast_steps)');
+      expect(script).toContain('summary_frame(alpha=0.05)');
+      // Defensive column candidates + fallbacks (statsmodels versions differ).
+      expect(script).toContain('"mean_ci_lower"');
+      expect(script).toContain('forecast_res.predicted_mean');
+      expect(script).toContain('conf_int(alpha=0.05)');
+      // Intervals are never invented: missing CI → nulls + warning.
+      expect(script).toContain('no devolvió intervalos de confianza');
+    });
+  });
 });

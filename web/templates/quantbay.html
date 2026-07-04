@@ -303,7 +303,7 @@
             <p class="qb-subtitle">Pro · Diagnósticos de series de tiempo</p>
             <span>PYODIDE · PYTHON EN NAVEGADOR</span>
           </div>
-          <p class="muted qb-help">ChartBay Pro corre diagnósticos de series de tiempo con statsmodels (Python/Pyodide) en el navegador: ADF (raíz unitaria / estacionariedad), ACF y PACF (rezagos candidatos) y Ljung-Box (autocorrelación conjunta). Opcionalmente estima un ARIMA(p,d,q) manual: elegí p, d y q. La selección automática de orden (auto-ARIMA) y el forecast todavía no están implementados.</p>
+          <p class="muted qb-help">ChartBay Pro corre diagnósticos de series de tiempo con statsmodels (Python/Pyodide) en el navegador: ADF (raíz unitaria / estacionariedad), ACF y PACF (rezagos candidatos) y Ljung-Box (autocorrelación conjunta). Opcionalmente estima un ARIMA(p,d,q) manual con forecast básico e intervalos de confianza. La selección automática de modelo (auto-ARIMA) todavía no está implementada.</p>
           <div class="qb-interp" id="qb-pro-ts-empty">Subí un CSV para diagnosticar una serie de tiempo con statsmodels.</div>
           <div id="qb-pro-ts-controls" style="display:none">
             <div class="qb-vars-grid">
@@ -341,6 +341,10 @@
                 <div>
                   <label for="qb-pro-ts-arima-q">q (MA)</label>
                   <input id="qb-pro-ts-arima-q" type="number" min="0" max="5" value="1" step="1" style="width:100%">
+                </div>
+                <div>
+                  <label for="qb-pro-ts-forecast-steps">Horizonte forecast</label>
+                  <input id="qb-pro-ts-forecast-steps" type="number" min="1" max="60" value="12" step="1" style="width:100%">
                 </div>
               </div>
             </div>

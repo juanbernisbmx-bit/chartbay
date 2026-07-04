@@ -3,12 +3,14 @@ import { $ } from '../app/dom';
 import { escapeHtml } from '../utils/format';
 import {
   DEFAULT_ARIMA_ORDER,
+  DEFAULT_FORECAST_STEPS,
   DEFAULT_PRO_ADF_REGRESSION,
   PRO_ADF_REGRESSION_LABELS,
   isProAdfRegression,
   type ProAcfPoint,
   type ProAdfRegression,
   type ProAdfResult,
+  type ProArimaForecast,
   type ProArimaOrder,
   type ProArimaResidualDiagnostics,
   type ProArimaResult,
@@ -21,15 +23,21 @@ const PEDAGOGICAL_NOTE =
   'ADF evalúa estacionariedad. ACF/PACF ayudan a identificar rezagos candidatos para modelos AR, MA o ARIMA. ' +
   'Ljung-Box evalúa autocorrelación conjunta.';
 
-// UX honesta: hay ARIMA MANUAL (elegís p,d,q), pero NO auto-ARIMA ni forecast.
+// UX honesta: ARIMA manual + forecast básico están; auto-ARIMA no.
 const ARIMA_STATUS_NOTE =
-  'ARIMA es manual: elegí p, d y q y activá "Estimar ARIMA". La selección automática de orden (auto-ARIMA) y el ' +
-  'forecast todavía no están implementados en Pro.';
+  'ARIMA Pro permite estimar modelos manuales y generar forecast básico. La selección automática de modelo ' +
+  '(auto-ARIMA) todavía no está implementada.';
 
 // Nota pedagógica sobre criterios de información para comparar modelos.
 const ARIMA_IC_NOTE =
   'AIC y BIC sirven para comparar modelos estimados sobre la misma serie. Valores menores suelen indicar mejor ' +
   'balance entre ajuste y complejidad.';
+
+// Nota pedagógica del forecast.
+const FORECAST_NOTE =
+  'El forecast proyecta valores futuros a partir del modelo ARIMA estimado. Los intervalos reflejan incertidumbre ' +
+  'del pronóstico y suelen ampliarse a medida que crece el horizonte. El forecast no es una promesa: es una ' +
+  'proyección condicionada al patrón histórico y al modelo elegido.';
 
 const DEFAULT_MAX_LAG = 12;
 
@@ -92,6 +100,15 @@ export function getProArimaOrder(): ProArimaOrder {
     d: read('qb-pro-ts-arima-d', DEFAULT_ARIMA_ORDER.d),
     q: read('qb-pro-ts-arima-q', DEFAULT_ARIMA_ORDER.q),
   };
+}
+
+// Horizonte de forecast. Campo vacío/no entero → default (12); los límites
+// (1..60) se validan en proTimeSeriesValidation.ts antes de correr Pyodide.
+export function getProForecastSteps(defaultValue = DEFAULT_FORECAST_STEPS): number {
+  const raw = ($('qb-pro-ts-forecast-steps') as HTMLInputElement | null)?.value?.trim() ?? '';
+  if (raw === '') return defaultValue;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) ? parsed : defaultValue;
 }
 
 export function showProTimeSeriesStatus(text: string): void {
@@ -266,6 +283,42 @@ function buildArimaResidualHtml(diag: ProArimaResidualDiagnostics | undefined): 
     <div class="qb-interp" style="margin-top:8px">${escapeHtml(diag.interpretation)}</div>`;
 }
 
+// Forecast del ARIMA: error controlado (el ARIMA sigue mostrándose), o tabla de
+// pronósticos con intervalos + nota pedagógica. '' cuando no se pidió forecast.
+function buildForecastHtml(arima: ProArimaResult): string {
+  if (arima.forecastError) {
+    return (
+      `<p class="qb-label" style="margin-top:10px">Forecast ARIMA</p>` +
+      `<div class="qb-interp" style="color:#e55">${escapeHtml(arima.forecastError)}</div>`
+    );
+  }
+
+  const forecast: ProArimaForecast | undefined = arima.forecast;
+  if (!forecast || forecast.items.length === 0) return '';
+
+  const rows = forecast.items
+    .map(
+      item =>
+        `<tr><td>t+${item.step}</td><td>${fmt(item.mean)}</td><td>${fmt(item.lower)}</td><td>${fmt(item.upper)}</td></tr>`
+    )
+    .join('');
+  const confidencePct = Math.round(forecast.confidenceLevel * 100);
+  const forecastWarnings = forecast.warnings.length > 0
+    ? `<div class="qb-warn-yellow" style="margin-top:6px"><ul>${forecast.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
+    : '';
+
+  return `
+    <p class="qb-label" style="margin-top:10px">Forecast ARIMA (${forecast.steps} períodos, intervalos al ${confidencePct}%)</p>
+    <div class="qb-table-scroll">
+      <table class="ledger">
+        <thead><tr><th>Paso</th><th>Pronóstico</th><th>Límite inferior</th><th>Límite superior</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${forecastWarnings}
+    <div class="qb-interp" style="margin-top:8px">${escapeHtml(FORECAST_NOTE)}</div>`;
+}
+
 // Sección ARIMA completa: error controlado, o resumen + coeficientes + warnings
 // + diagnóstico de residuos. Devuelve '' cuando no se pidió ARIMA.
 function buildArimaHtml(result: PyodideTimeSeriesResult): string {
@@ -326,6 +379,7 @@ function buildArimaHtml(result: PyodideTimeSeriesResult): string {
     coefTable +
     modelWarnings +
     buildArimaResidualHtml(result.arimaResidualDiagnostics) +
+    buildForecastHtml(arima) +
     `<div class="qb-interp" style="margin-top:8px">${escapeHtml(ARIMA_IC_NOTE)}</div>`
   );
 }

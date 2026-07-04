@@ -46,6 +46,7 @@ import {
   clearProTimeSeriesResult,
   getProArimaEnabled,
   getProArimaOrder,
+  getProForecastSteps,
   getProTimeSeriesAdfRegression,
   getProTimeSeriesMaxLag,
   getSelectedProTimeSeriesValueColumn,
@@ -884,6 +885,9 @@ async function onRunProTimeSeries(): Promise<void> {
         adfRegression: getProTimeSeriesAdfRegression(),
         runArima,
         arimaOrder: runArima ? getProArimaOrder() : undefined,
+        // El horizonte sólo se envía con ARIMA activo: sin modelo estimado no
+        // hay forecast posible (el runner también lo ignora sin runArima).
+        forecastSteps: runArima ? getProForecastSteps() : undefined,
       },
       phase => {
         if (phase === 'loading-pyodide') showProTimeSeriesStatus('Cargando Python en navegador…');
@@ -905,6 +909,8 @@ async function onRunProTimeSeries(): Promise<void> {
               ? [`ARIMA(${result.arima.order.p},${result.arima.order.d},${result.arima.order.q}) estimado (AIC: ${result.arima.aic ?? '—'})`]
               : []),
             ...(result.arimaError ? [`ARIMA: ${result.arimaError}`] : []),
+            ...(result.arima?.forecast ? [`Forecast: ${result.arima.forecast.steps} períodos generados`] : []),
+            ...(result.arima?.forecastError ? [`Forecast: ${result.arima.forecastError}`] : []),
             ...result.warnings,
           ]
         : [`ChartBay Pro (experimental): error — ${result.error ?? 'desconocido'}`]

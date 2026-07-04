@@ -46,6 +46,11 @@ export const MAX_ARIMA_Q = 5;
 
 export const DEFAULT_ARIMA_ORDER: ProArimaOrder = { p: 1, d: 0, q: 1 };
 
+// Horizonte de forecast: límites de la primera versión.
+export const MIN_FORECAST_STEPS = 1;
+export const MAX_FORECAST_STEPS = 60;
+export const DEFAULT_FORECAST_STEPS = 12;
+
 // Entrada del runner: una serie numérica ya extraída de una columna del CSV
 // (los valores no finitos se limpian en la validación TS, ver
 // proTimeSeriesValidation.ts) más las opciones de diagnóstico.
@@ -59,6 +64,9 @@ export interface PyodideTimeSeriesInput {
   // ARIMA manual opcional: sólo se estima cuando runArima === true.
   runArima?: boolean;
   arimaOrder?: ProArimaOrder;
+  // Horizonte de forecast (períodos futuros). Sólo tiene efecto cuando
+  // runArima === true — sin ARIMA estimado no hay forecast posible.
+  forecastSteps?: number;
 }
 
 // H0 del ADF: la serie tiene raíz unitaria (no es estacionaria).
@@ -107,6 +115,25 @@ export interface ProArimaResidualDiagnostics {
   interpretation: string;
 }
 
+// Un paso del forecast: t+step. mean/lower/upper son null cuando statsmodels
+// devuelve valores no finitos — nunca se inventan intervalos.
+export interface ProArimaForecastItem {
+  step: number;
+  mean: number | null;
+  // undefined cuando la versión de statsmodels no expone el SE del pronóstico.
+  meanStandardError?: number | null;
+  lower: number | null;
+  upper: number | null;
+}
+
+export interface ProArimaForecast {
+  steps: number;
+  items: ProArimaForecastItem[];
+  // Nivel de confianza de los intervalos (summary_frame usa alpha=0.05 → 0.95).
+  confidenceLevel: number;
+  warnings: string[];
+}
+
 export interface ProArimaResult {
   order: ProArimaOrder;
   // undefined cuando statsmodels no expone info de convergencia (no se inventa).
@@ -120,6 +147,10 @@ export interface ProArimaResult {
   // Warnings de statsmodels capturados durante fit() (convergencia, etc.).
   warnings: string[];
   interpretation: string;
+  // Forecast out-of-sample: presente sólo si se pidió y statsmodels pudo
+  // generarlo. Si falla, forecastError explica por qué SIN borrar el ARIMA.
+  forecast?: ProArimaForecast;
+  forecastError?: string;
 }
 
 export interface PyodideTimeSeriesResult {
@@ -345,6 +376,48 @@ function parseArimaCoefficients(raw: unknown): ProArimaCoefficient[] | null {
   return coefficients;
 }
 
+// Forecast es OPCIONAL dentro del ARIMA: null/undefined = no se pidió o falló
+// (en ese caso forecastError explica por qué). Un objeto presente debe estar
+// bien formado o se rechaza el ARIMA completo.
+function parseArimaForecast(raw: unknown): { ok: true; value: ProArimaForecast | undefined } | { ok: false } {
+  if (raw === null || raw === undefined) return { ok: true, value: undefined };
+  if (typeof raw !== 'object' || Array.isArray(raw)) return { ok: false };
+
+  const record = raw as Record<string, unknown>;
+  if (typeof record.steps !== 'number' || !Number.isInteger(record.steps) || record.steps < 1) return { ok: false };
+  if (typeof record.confidenceLevel !== 'number' || !(record.confidenceLevel > 0 && record.confidenceLevel < 1)) {
+    return { ok: false };
+  }
+  if (!Array.isArray(record.items)) return { ok: false };
+
+  const items: ProArimaForecastItem[] = [];
+  for (const item of record.items) {
+    if (item === null || typeof item !== 'object') return { ok: false };
+    const row = item as Record<string, unknown>;
+    if (typeof row.step !== 'number' || !Number.isInteger(row.step) || row.step < 1) return { ok: false };
+    const mean = finiteOrNull(row.mean);
+    const lower = finiteOrNull(row.lower);
+    const upper = finiteOrNull(row.upper);
+    if (mean === undefined || lower === undefined || upper === undefined) return { ok: false };
+    // meanStandardError puede faltar (versión de statsmodels sin SE) → undefined.
+    let meanStandardError: number | null | undefined;
+    if ('meanStandardError' in row && row.meanStandardError !== undefined) {
+      meanStandardError = finiteOrNull(row.meanStandardError);
+      if (meanStandardError === undefined) return { ok: false };
+    }
+    items.push({ step: row.step, mean, meanStandardError, lower, upper });
+  }
+
+  const forecastWarnings = Array.isArray(record.warnings)
+    ? record.warnings.filter((w): w is string => typeof w === 'string')
+    : [];
+
+  return {
+    ok: true,
+    value: { steps: record.steps, items, confidenceLevel: record.confidenceLevel, warnings: forecastWarnings },
+  };
+}
+
 // ARIMA es OPCIONAL: null/undefined = no se pidió o no se estimó (válido).
 // Un objeto presente debe estar bien formado o se rechaza todo el payload.
 function parseArima(raw: unknown): { ok: true; value: ProArimaResult | undefined } | { ok: false } {
@@ -379,9 +452,19 @@ function parseArima(raw: unknown): { ok: true; value: ProArimaResult | undefined
     ? record.warnings.filter((w): w is string => typeof w === 'string')
     : [];
 
+  const forecastParsed = parseArimaForecast(record.forecast);
+  if (!forecastParsed.ok) return { ok: false };
+
+  // forecastError: texto opcional de falla controlada del forecast.
+  const forecastError = typeof record.forecastError === 'string' && record.forecastError.trim() !== ''
+    ? record.forecastError
+    : undefined;
+
   return {
     ok: true,
     value: {
+      forecast: forecastParsed.value,
+      forecastError,
       order,
       converged,
       nobs,
