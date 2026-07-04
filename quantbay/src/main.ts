@@ -896,7 +896,9 @@ async function onRunProTimeSeries(): Promise<void> {
       }
     );
 
-    renderProTimeSeriesResult(result);
+    // El gráfico de forecast dibuja los últimos observados: se pasan las
+    // observaciones finitas de la serie (mismas que valida el runner).
+    renderProTimeSeriesResult(result, values.filter(Number.isFinite));
     setEngineStatus(result.ok ? 'COMPLETADO' : 'ERROR');
     if (result.ok) setText('qb-status-obs', result.observations ?? 0);
     writeRunLog(

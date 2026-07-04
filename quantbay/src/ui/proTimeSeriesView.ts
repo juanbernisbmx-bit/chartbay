@@ -18,6 +18,14 @@ import {
   type PyodideTimeSeriesResult,
 } from '../pro/pyodide/proTimeSeriesResultTypes';
 
+// Chart.js se carga globalmente por CDN en quantbay.html (igual que en el motor
+// Lite, ver ui/timeseriesView.ts). No es un import npm — se accede por el global
+// y todo acceso se protege con `typeof Chart === 'undefined'`.
+declare const Chart: any;
+
+// Ventana de observados a mostrar en el gráfico de forecast (los últimos N).
+const OBSERVED_WINDOW = 30;
+
 // Nota pedagógica fija que acompaña siempre a los diagnósticos.
 const PEDAGOGICAL_NOTE =
   'ADF evalúa estacionariedad. ACF/PACF ayudan a identificar rezagos candidatos para modelos AR, MA o ARIMA. ' +
@@ -38,6 +46,15 @@ const FORECAST_NOTE =
   'El forecast proyecta valores futuros a partir del modelo ARIMA estimado. Los intervalos reflejan incertidumbre ' +
   'del pronóstico y suelen ampliarse a medida que crece el horizonte. El forecast no es una promesa: es una ' +
   'proyección condicionada al patrón histórico y al modelo elegido.';
+
+// Notas del gráfico de forecast.
+const FORECAST_CHART_NOTE =
+  'El gráfico muestra los últimos valores observados y el pronóstico ARIMA. Las bandas representan incertidumbre ' +
+  'del forecast cuando statsmodels las devuelve.';
+const FORECAST_CHART_NO_INTERVALS =
+  'Statsmodels no devolvió intervalos completos para este forecast. Se muestra solo el pronóstico medio.';
+const FORECAST_CHART_NO_LIB =
+  'No se pudo renderizar el gráfico porque la librería de gráficos no está disponible.';
 
 const DEFAULT_MAX_LAG = 12;
 
@@ -175,6 +192,15 @@ export function clearProTimeSeriesResult(): void {
   if (note) note.textContent = '';
   const arima = $('qb-pro-ts-arima-note');
   if (arima) arima.textContent = '';
+  // El gráfico de forecast se destruye y su sección se oculta al limpiar, para
+  // no dejar un chart viejo colgado entre corridas.
+  destroyProForecastChart();
+  const chartSection = $('qb-pro-ts-forecast-chart-section');
+  if (chartSection) chartSection.style.display = 'none';
+  const chartNote = $('qb-pro-ts-forecast-chart-note');
+  if (chartNote) chartNote.textContent = '';
+  const chartStatus = $('qb-pro-ts-forecast-chart-status');
+  if (chartStatus) chartStatus.textContent = '';
 }
 
 export function resetProTimeSeriesView(): void {
@@ -384,13 +410,165 @@ function buildArimaHtml(result: PyodideTimeSeriesResult): string {
   );
 }
 
-export function renderProTimeSeriesResult(result: PyodideTimeSeriesResult): void {
+// ── Gráfico de forecast (Chart.js) ───────────────────────────────────────────
+// Instancia única a nivel de módulo (igual que el chart Lite): se destruye
+// SIEMPRE antes de crear otra, para no duplicar charts al recalcular.
+let proForecastChart: unknown = null;
+
+export function destroyProForecastChart(): void {
+  if (proForecastChart) {
+    try {
+      (proForecastChart as { destroy(): void }).destroy();
+    } catch {
+      // Un destroy fallido no debe romper el resto del render.
+    }
+    proForecastChart = null;
+  }
+}
+
+function forecastChartLabel(offsetFromLastObserved: number): string {
+  // 0 = último observado ("t"), negativos hacia atrás ("t-1"...), positivos futuros ("t+1"...).
+  if (offsetFromLastObserved === 0) return 't';
+  return offsetFromLastObserved < 0 ? `t${offsetFromLastObserved}` : `t+${offsetFromLastObserved}`;
+}
+
+/**
+ * Renderiza el gráfico de forecast: últimos observados + pronóstico medio +
+ * banda inferior/superior (si statsmodels devolvió intervalos completos).
+ * - Sólo se dibuja si hay un forecast válido; si no, se oculta la sección.
+ * - NUNCA inventa bandas: con algún lower/upper null, muestra sólo la media.
+ * - Si Chart.js no está disponible, no rompe: muestra un mensaje controlado.
+ */
+function renderProForecastChart(observedValues: number[] | undefined, forecast: ProArimaForecast | undefined): void {
+  // Destruir el chart previo antes que nada: recalcular nunca deja dos.
+  destroyProForecastChart();
+
+  const section = $('qb-pro-ts-forecast-chart-section');
+  const noteEl = $('qb-pro-ts-forecast-chart-note');
+  const statusEl = $('qb-pro-ts-forecast-chart-status');
+
+  const hasForecast = !!forecast && forecast.items.length > 0;
+  if (!hasForecast) {
+    if (section) section.style.display = 'none';
+    if (noteEl) noteEl.textContent = '';
+    if (statusEl) statusEl.textContent = '';
+    return;
+  }
+
+  if (section) section.style.display = '';
+  // La nota pedagógica se muestra tenga o no Chart.js disponible.
+  if (noteEl) noteEl.textContent = FORECAST_CHART_NOTE;
+
+  // Chart.js ausente: mensaje controlado, sin romper la tabla ni el resto.
+  if (typeof Chart === 'undefined') {
+    if (statusEl) statusEl.textContent = FORECAST_CHART_NO_LIB;
+    return;
+  }
+
+  const canvas = $('qb-pro-arima-forecast-chart') as HTMLCanvasElement | null;
+  if (!canvas) return;
+
+  const observed = (observedValues ?? []).filter(v => typeof v === 'number' && Number.isFinite(v));
+  const k = Math.min(OBSERVED_WINDOW, observed.length);
+  const observedTail = observed.slice(observed.length - k);
+  const items = forecast!.items;
+  const h = items.length;
+  const total = k + h;
+  // No se inventan bandas: sólo se dibujan si TODO lower/upper es finito.
+  const hasIntervals = items.every(it => it.lower !== null && it.upper !== null);
+
+  const labels: string[] = [];
+  for (let i = 0; i < k; i += 1) labels.push(forecastChartLabel(-(k - 1 - i)));
+  for (const item of items) labels.push(`t+${item.step}`);
+
+  const observedData: Array<number | null> = new Array(total).fill(null);
+  for (let i = 0; i < k; i += 1) observedData[i] = observedTail[i];
+
+  // El forecast (media y bandas) se ancla al último observado para que la línea
+  // conecte historia con futuro en vez de "flotar".
+  const anchor = k > 0 ? observedTail[k - 1] : null;
+  const meanData: Array<number | null> = new Array(total).fill(null);
+  if (k > 0) meanData[k - 1] = anchor;
+  for (let i = 0; i < h; i += 1) meanData[k + i] = items[i].mean;
+
+  const datasets: unknown[] = [
+    {
+      label: 'Observado',
+      data: observedData,
+      borderColor: '#1b3a6b',
+      backgroundColor: 'rgba(27,58,107,.10)',
+      pointRadius: 2,
+      tension: 0.15,
+      spanGaps: false,
+    },
+  ];
+
+  if (hasIntervals) {
+    const lowerData: Array<number | null> = new Array(total).fill(null);
+    const upperData: Array<number | null> = new Array(total).fill(null);
+    if (k > 0) { lowerData[k - 1] = anchor; upperData[k - 1] = anchor; }
+    for (let i = 0; i < h; i += 1) {
+      lowerData[k + i] = items[i].lower;
+      upperData[k + i] = items[i].upper;
+    }
+    // La banda se pinta rellenando el 'superior' hasta el dataset anterior
+    // ('inferior', índice -1 en el arreglo de datasets).
+    datasets.push({
+      label: 'Límite inferior',
+      data: lowerData,
+      borderColor: 'rgba(200,120,0,.45)',
+      borderDash: [4, 4],
+      pointRadius: 0,
+      fill: false,
+      tension: 0.1,
+    });
+    datasets.push({
+      label: 'Límite superior',
+      data: upperData,
+      borderColor: 'rgba(200,120,0,.45)',
+      borderDash: [4, 4],
+      pointRadius: 0,
+      fill: '-1',
+      backgroundColor: 'rgba(230,160,50,.15)',
+      tension: 0.1,
+    });
+  }
+
+  // La media va última para dibujarse por encima de la banda.
+  datasets.push({
+    label: 'Forecast',
+    data: meanData,
+    borderColor: '#c8780a',
+    borderDash: [6, 3],
+    pointRadius: 2,
+    tension: 0.1,
+  });
+
+  proForecastChart = new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: true } },
+      scales: {
+        x: { ticks: { maxRotation: 0, autoSkip: true } },
+        y: { beginAtZero: false },
+      },
+    },
+  });
+
+  if (statusEl) statusEl.textContent = hasIntervals ? '' : FORECAST_CHART_NO_INTERVALS;
+}
+
+export function renderProTimeSeriesResult(result: PyodideTimeSeriesResult, observedValues?: number[]): void {
   const panel = $('qb-pro-ts-panel');
   if (panel) panel.style.display = '';
   showProTimeSeriesStatus('');
 
   if (!result.ok) {
     showProTimeSeriesError(result.error ?? 'Error desconocido en el motor Pro de series de tiempo.');
+    destroyProForecastChart();
     return;
   }
 
@@ -410,6 +588,10 @@ export function renderProTimeSeriesResult(result: PyodideTimeSeriesResult): void
   // se pidió, los diagnósticos de arriba siguen renderizados igual.
   const arimaSection = $('qb-pro-ts-arima-section');
   if (arimaSection) arimaSection.innerHTML = buildArimaHtml(result);
+
+  // El gráfico de forecast se dibuja sólo si hay forecast válido; nunca rompe
+  // la tabla de forecast ni el resto del panel.
+  renderProForecastChart(observedValues, result.arima?.forecast);
 
   const note = $('qb-pro-ts-note');
   if (note) note.textContent = PEDAGOGICAL_NOTE;

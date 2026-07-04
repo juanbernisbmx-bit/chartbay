@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   clearProTimeSeriesResult,
+  destroyProForecastChart,
   getProArimaEnabled,
   getProArimaOrder,
   getProForecastSteps,
@@ -40,6 +41,11 @@ function mountPanel(): void {
         <div id="qb-pro-ts-acfpacf"></div>
         <div id="qb-pro-ts-ljungbox"></div>
         <div id="qb-pro-ts-arima-section"></div>
+        <div id="qb-pro-ts-forecast-chart-section" style="display:none">
+          <canvas id="qb-pro-arima-forecast-chart"></canvas>
+          <p id="qb-pro-ts-forecast-chart-note"></p>
+          <div id="qb-pro-ts-forecast-chart-status"></div>
+        </div>
         <div id="qb-pro-ts-note"></div>
         <div id="qb-pro-ts-arima-note"></div>
         <div id="qb-pro-ts-warnings"></div>
@@ -378,6 +384,161 @@ describe('renderProTimeSeriesResult · ARIMA', () => {
       const text = document.getElementById('qb-pro-ts-arima-section')?.textContent ?? '';
       expect(text).not.toContain('Forecast ARIMA');
     });
+  });
+});
+
+describe('renderProTimeSeriesResult · forecast chart', () => {
+  // Fake Chart.js: records instances and destroy() calls without touching canvas.
+  class MockChart {
+    static instances: MockChart[] = [];
+    canvas: unknown;
+    config: { data: { labels: string[]; datasets: Array<{ label: string; data: Array<number | null> }> } };
+    destroyed = false;
+    constructor(canvas: unknown, config: MockChart['config']) {
+      this.canvas = canvas;
+      this.config = config;
+      MockChart.instances.push(this);
+    }
+    destroy(): void { this.destroyed = true; }
+  }
+
+  const baseArima: ProArimaResult = {
+    order: { p: 1, d: 1, q: 1 },
+    converged: true,
+    nobs: 39,
+    logLikelihood: -55,
+    aic: 118,
+    bic: 126,
+    hqic: 121,
+    coefficients: [{ name: 'ar.L1', estimate: 0.6, standardError: 0.12, zStatistic: 5, pValue: 0.001 }],
+    warnings: [],
+    interpretation: 'ARIMA(1,1,1) combina AR(1), diferenciación d=1 y MA(1).',
+  };
+  const forecastFull = {
+    steps: 3,
+    confidenceLevel: 0.95,
+    items: [
+      { step: 1, mean: 10.5, meanStandardError: 0.8, lower: 8.9, upper: 12.1 },
+      { step: 2, mean: 10.7, meanStandardError: 1.1, lower: 8.5, upper: 12.9 },
+      { step: 3, mean: 10.8, meanStandardError: 1.3, lower: 8.2, upper: 13.4 },
+    ],
+    warnings: [],
+  };
+  const withForecast: PyodideTimeSeriesResult = { ...okResult, arima: { ...baseArima, forecast: forecastFull } };
+  const noForecast: PyodideTimeSeriesResult = { ...okResult, arima: baseArima };
+  const observed = Array.from({ length: 40 }, (_, i) => i * 0.5 + Math.sin(i));
+
+  function installChart(): void {
+    MockChart.instances = [];
+    (globalThis as unknown as { Chart: unknown }).Chart = MockChart;
+  }
+
+  afterEach(() => {
+    destroyProForecastChart();
+    delete (globalThis as unknown as { Chart?: unknown }).Chart;
+    MockChart.instances = [];
+  });
+
+  it('shows the chart section and the pedagogical note when a valid forecast exists', () => {
+    renderProTimeSeriesResult(withForecast, observed);
+    expect(document.getElementById('qb-pro-ts-forecast-chart-section')?.style.display).toBe('');
+    const note = document.getElementById('qb-pro-ts-forecast-chart-note')?.textContent ?? '';
+    expect(note).toContain('últimos valores observados');
+    expect(note).toContain('bandas');
+  });
+
+  it('hides the chart section when there is no forecast', () => {
+    renderProTimeSeriesResult(noForecast, observed);
+    expect(document.getElementById('qb-pro-ts-forecast-chart-section')?.style.display).toBe('none');
+  });
+
+  it('does not crash and shows a controlled message when Chart.js is unavailable', () => {
+    // No Chart global installed (jsdom default).
+    expect(() => renderProTimeSeriesResult(withForecast, observed)).not.toThrow();
+    const status = document.getElementById('qb-pro-ts-forecast-chart-status')?.textContent ?? '';
+    expect(status).toContain('librería de gráficos no está disponible');
+    // The forecast table and diagnostics still render.
+    expect(document.getElementById('qb-pro-ts-arima-section')?.textContent).toContain('Forecast ARIMA');
+    expect(document.getElementById('qb-pro-ts-adf')?.innerHTML).not.toBe('');
+  });
+
+  it('builds observed + mean + band datasets when Chart.js is present and intervals are complete', () => {
+    installChart();
+    renderProTimeSeriesResult(withForecast, observed);
+    expect(MockChart.instances).toHaveLength(1);
+    const labels = MockChart.instances[0].config.data.labels;
+    const datasetLabels = MockChart.instances[0].config.data.datasets.map(d => d.label);
+    // Observed window is min(30, 40) = 30 points, plus 3 forecast steps.
+    expect(labels).toContain('t');
+    expect(labels).toContain('t+3');
+    expect(datasetLabels).toContain('Observado');
+    expect(datasetLabels).toContain('Forecast');
+    expect(datasetLabels).toContain('Límite inferior');
+    expect(datasetLabels).toContain('Límite superior');
+    // No incomplete-interval status when the band is drawn.
+    expect(document.getElementById('qb-pro-ts-forecast-chart-status')?.textContent).toBe('');
+  });
+
+  it('draws only the mean (no band) and warns when intervals are incomplete — never invents them', () => {
+    installChart();
+    const partial: PyodideTimeSeriesResult = {
+      ...okResult,
+      arima: {
+        ...baseArima,
+        forecast: {
+          steps: 2,
+          confidenceLevel: 0.95,
+          items: [
+            { step: 1, mean: 10.5, lower: 8.9, upper: 12.1 },
+            { step: 2, mean: 10.7, lower: null, upper: null },
+          ],
+          warnings: [],
+        },
+      },
+    };
+    renderProTimeSeriesResult(partial, observed);
+    const datasetLabels = MockChart.instances[0].config.data.datasets.map(d => d.label);
+    expect(datasetLabels).toContain('Observado');
+    expect(datasetLabels).toContain('Forecast');
+    expect(datasetLabels).not.toContain('Límite inferior');
+    expect(datasetLabels).not.toContain('Límite superior');
+    const status = document.getElementById('qb-pro-ts-forecast-chart-status')?.textContent ?? '';
+    expect(status).toContain('no devolvió intervalos completos');
+  });
+
+  it('destroys the previous chart on recalculation instead of duplicating it', () => {
+    installChart();
+    renderProTimeSeriesResult(withForecast, observed);
+    renderProTimeSeriesResult(withForecast, observed);
+    // Two constructions, and the first instance was destroyed.
+    expect(MockChart.instances).toHaveLength(2);
+    expect(MockChart.instances[0].destroyed).toBe(true);
+    expect(MockChart.instances[1].destroyed).toBe(false);
+  });
+
+  it('plots the forecast even with no observed values passed (mean-only history)', () => {
+    installChart();
+    renderProTimeSeriesResult(withForecast);
+    expect(MockChart.instances).toHaveLength(1);
+    const datasetLabels = MockChart.instances[0].config.data.datasets.map(d => d.label);
+    expect(datasetLabels).toContain('Forecast');
+  });
+
+  it('clearProTimeSeriesResult destroys the chart and hides its section', () => {
+    installChart();
+    renderProTimeSeriesResult(withForecast, observed);
+    const chart = MockChart.instances[0];
+    clearProTimeSeriesResult();
+    expect(chart.destroyed).toBe(true);
+    expect(document.getElementById('qb-pro-ts-forecast-chart-section')?.style.display).toBe('none');
+  });
+
+  it('keeps the forecast table intact alongside the chart', () => {
+    installChart();
+    renderProTimeSeriesResult(withForecast, observed);
+    expect(document.getElementById('qb-pro-ts-arima-section')?.textContent).toContain('Forecast ARIMA');
+    expect(document.getElementById('qb-pro-ts-adf')?.innerHTML).not.toBe('');
+    expect(document.getElementById('qb-pro-ts-ljungbox')?.innerHTML).not.toBe('');
   });
 });
 
