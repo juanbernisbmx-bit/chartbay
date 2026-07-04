@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MIN_PRO_TS_OBSERVATIONS,
+  validateProArimaOrder,
   validateProTimeSeriesInput,
 } from '../../src/pro/pyodide/proTimeSeriesValidation';
 
@@ -90,5 +91,58 @@ describe('validateProTimeSeriesInput', () => {
     const result = validateProTimeSeriesInput({ values: makeSeries(40), variableName: '   ' });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain('columna de serie');
+  });
+});
+
+describe('validateProArimaOrder', () => {
+  const N = 40;
+
+  it('accepts a valid non-negative integer order', () => {
+    const result = validateProArimaOrder({ p: 1, d: 1, q: 1 }, N);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual({ p: 1, d: 1, q: 1 });
+  });
+
+  it('rejects negative parameters', () => {
+    const result = validateProArimaOrder({ p: -1, d: 0, q: 1 }, N);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('enteros no negativos');
+  });
+
+  it('rejects non-integer parameters', () => {
+    const result = validateProArimaOrder({ p: 1.5, d: 0, q: 1 }, N);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('enteros no negativos');
+  });
+
+  it('rejects ARIMA(0,0,0) (no temporal dynamics)', () => {
+    const result = validateProArimaOrder({ p: 0, d: 0, q: 0 }, N);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('ARIMA(0,0,0)');
+  });
+
+  it('rejects p or q above the first-version limit (5)', () => {
+    expect(validateProArimaOrder({ p: 6, d: 0, q: 1 }, N).ok).toBe(false);
+    const result = validateProArimaOrder({ p: 1, d: 0, q: 6 }, N);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('p y q entre 0 y 5');
+  });
+
+  it('rejects d above the first-version limit (2)', () => {
+    const result = validateProArimaOrder({ p: 1, d: 3, q: 1 }, N);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('d entre 0 y 2');
+  });
+
+  it('rejects an order that needs more observations than the (differenced) series has', () => {
+    // n=12, d=2 → 10 usable; p+q+2 = 5+5+2 = 12 > 10.
+    const result = validateProArimaOrder({ p: 5, d: 2, q: 5 }, 12);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('suficientes observaciones');
+  });
+
+  it('rejects a missing order', () => {
+    const result = validateProArimaOrder(undefined, N);
+    expect(result.ok).toBe(false);
   });
 });

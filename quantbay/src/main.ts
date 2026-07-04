@@ -44,6 +44,8 @@ import { buildLiteComparison } from './pro/liteComparison';
 import { runPyodideTimeSeries } from './pro/pyodide/pythonTimeSeriesRunner';
 import {
   clearProTimeSeriesResult,
+  getProArimaEnabled,
+  getProArimaOrder,
   getProTimeSeriesAdfRegression,
   getProTimeSeriesMaxLag,
   getSelectedProTimeSeriesValueColumn,
@@ -873,12 +875,15 @@ async function onRunProTimeSeries(): Promise<void> {
     showProTimeSeriesStatus('Cargando Python en navegador…');
     writeRunLog(['ChartBay Pro (experimental): preparando diagnósticos de series de tiempo…']);
 
+    const runArima = getProArimaEnabled();
     const result = await runPyodideTimeSeries(
       {
         values,
         variableName: valueColumn,
         maxLag: getProTimeSeriesMaxLag(),
         adfRegression: getProTimeSeriesAdfRegression(),
+        runArima,
+        arimaOrder: runArima ? getProArimaOrder() : undefined,
       },
       phase => {
         if (phase === 'loading-pyodide') showProTimeSeriesStatus('Cargando Python en navegador…');
@@ -896,6 +901,10 @@ async function onRunProTimeSeries(): Promise<void> {
             'ChartBay Pro (experimental): diagnósticos de series ejecutados con statsmodels (Pyodide)... OK',
             `Serie: ${valueColumn}`,
             `Observaciones: ${result.observations}`,
+            ...(result.arima
+              ? [`ARIMA(${result.arima.order.p},${result.arima.order.d},${result.arima.order.q}) estimado (AIC: ${result.arima.aic ?? '—'})`]
+              : []),
+            ...(result.arimaError ? [`ARIMA: ${result.arimaError}`] : []),
             ...result.warnings,
           ]
         : [`ChartBay Pro (experimental): error — ${result.error ?? 'desconocido'}`]

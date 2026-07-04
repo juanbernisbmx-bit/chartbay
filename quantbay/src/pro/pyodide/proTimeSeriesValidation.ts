@@ -10,8 +10,12 @@
 
 import {
   DEFAULT_PRO_ADF_REGRESSION,
+  MAX_ARIMA_D,
+  MAX_ARIMA_P,
+  MAX_ARIMA_Q,
   isProAdfRegression,
   type ProAdfRegression,
+  type ProArimaOrder,
   type PyodideTimeSeriesInput,
 } from './proTimeSeriesResultTypes';
 
@@ -133,6 +137,51 @@ export function validateProTimeSeriesInput(input: PyodideTimeSeriesInput): ProTi
     ok: true,
     value: { values, variableName, maxLag, adfRegression, ljungBoxLags, warnings },
   };
+}
+
+export type ProArimaValidation =
+  | { ok: true; value: ProArimaOrder }
+  | { ok: false; error: string };
+
+/**
+ * Valida un orden ARIMA(p,d,q) manual antes de correr Pyodide. NO bloquea los
+ * diagnósticos ADF/ACF/PACF/Ljung-Box: el runner corre los diagnósticos igual y
+ * usa este error sólo para la sección ARIMA (ver pythonTimeSeriesRunner.ts).
+ *
+ * @param n cantidad de observaciones válidas ya limpias de la serie.
+ */
+export function validateProArimaOrder(order: ProArimaOrder | undefined, n: number): ProArimaValidation {
+  if (!order) {
+    return { ok: false, error: 'Falta el orden ARIMA (p, d, q) para estimar el modelo.' };
+  }
+  const { p, d, q } = order;
+
+  if (![p, d, q].every(v => typeof v === 'number' && Number.isInteger(v))) {
+    return { ok: false, error: 'Los parámetros p, d y q deben ser enteros no negativos.' };
+  }
+  if (p < 0 || d < 0 || q < 0) {
+    return { ok: false, error: 'Los parámetros p, d y q deben ser enteros no negativos.' };
+  }
+  if (p === 0 && d === 0 && q === 0) {
+    return { ok: false, error: 'ARIMA(0,0,0) no aporta dinámica temporal. Elegí al menos p, d o q mayor que cero.' };
+  }
+  if (p > MAX_ARIMA_P || q > MAX_ARIMA_Q || d > MAX_ARIMA_D) {
+    return {
+      ok: false,
+      error: `Para esta primera versión, usá p y q entre 0 y ${MAX_ARIMA_P}, y d entre 0 y ${MAX_ARIMA_D}.`,
+    };
+  }
+
+  // Tras diferenciar d veces quedan n - d observaciones útiles; el modelo debe
+  // tener margen para estimar p + q coeficientes (más constante y varianza).
+  if (n - d < p + q + 2) {
+    return {
+      ok: false,
+      error: 'La serie no tiene suficientes observaciones para estimar este ARIMA. Probá un orden más simple.',
+    };
+  }
+
+  return { ok: true, value: { p, d, q } };
 }
 
 function rangeInclusive(start: number, end: number): number[] {

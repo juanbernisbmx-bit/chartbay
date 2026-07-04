@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   adfRejectsAt5,
   interpretAdf,
+  interpretArima,
   interpretLjungBox,
   ljungBoxRejectsAt5,
   normalizePyodideTimeSeriesResult,
@@ -159,5 +160,109 @@ describe('interpretation helpers', () => {
     expect(interpretLjungBox(0.01)).toContain('Se rechaza H0');
     expect(interpretLjungBox(0.6)).toContain('No se rechaza H0');
     expect(interpretLjungBox(null)).toContain('no disponible');
+  });
+
+  it('interpretArima describes p/d/q and notes non-convergence and differencing', () => {
+    const converged = interpretArima({ p: 1, d: 0, q: 1 }, true);
+    expect(converged).toContain('ARIMA(1,0,1)');
+    expect(converged).toContain('AR(1)');
+    expect(converged).not.toContain('no convergió');
+
+    const notConverged = interpretArima({ p: 2, d: 1, q: 0 }, false);
+    expect(notConverged).toContain('serie diferenciada');
+    expect(notConverged).toContain('no convergió');
+  });
+});
+
+describe('normalizePyodideTimeSeriesResult · ARIMA', () => {
+  const ARIMA_BLOCK = {
+    order: { p: 1, d: 0, q: 1 },
+    converged: true,
+    nobs: 40,
+    logLikelihood: -55.2,
+    aic: 118.4,
+    bic: 126.1,
+    hqic: 121.2,
+    coefficients: [
+      { name: 'ar.L1', estimate: 0.6, standardError: 0.12, zStatistic: 5.0, pValue: 0.002 },
+      { name: 'sigma2', estimate: 1.2, standardError: 0.2, zStatistic: 6.0, pValue: 0.0 },
+    ],
+    warnings: ['Optimization failed to converge.'],
+  };
+
+  function normalizeWithArima(extra: Record<string, unknown>) {
+    return normalizePyodideTimeSeriesResult(JSON.stringify({ ...VALID_PAYLOAD, ...extra }));
+  }
+
+  it('parses a full ARIMA block and derives its interpretation', () => {
+    const result = normalizeWithArima({ arima: ARIMA_BLOCK });
+    expect(result.ok).toBe(true);
+    expect(result.arima?.order).toEqual({ p: 1, d: 0, q: 1 });
+    expect(result.arima?.aic).toBe(118.4);
+    expect(result.arima?.coefficients).toHaveLength(2);
+    expect(result.arima?.converged).toBe(true);
+    expect(result.arima?.interpretation).toContain('ARIMA(1,0,1)');
+    expect(result.arima?.warnings).toEqual(['Optimization failed to converge.']);
+  });
+
+  it('converts non-finite ARIMA statistics to null (serialized as null by Python)', () => {
+    const result = normalizeWithArima({
+      arima: {
+        ...ARIMA_BLOCK,
+        aic: null,
+        coefficients: [{ name: 'ar.L1', estimate: 0.6, standardError: null, zStatistic: null, pValue: null }],
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.arima?.aic).toBeNull();
+    expect(result.arima?.coefficients[0].standardError).toBeNull();
+    expect(result.arima?.coefficients[0].pValue).toBeNull();
+  });
+
+  it('does not throw when convergence/nobs are absent (optional fields)', () => {
+    const result = normalizeWithArima({
+      arima: { order: { p: 1, d: 0, q: 1 }, logLikelihood: -10, aic: 25, bic: 28, hqic: 26, coefficients: [], warnings: [] },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.arima?.converged).toBeUndefined();
+    expect(result.arima?.nobs).toBeUndefined();
+  });
+
+  it('leaves arima undefined when the payload has no ARIMA block', () => {
+    const result = normalizeWithArima({});
+    expect(result.ok).toBe(true);
+    expect(result.arima).toBeUndefined();
+    expect(result.arimaError).toBeUndefined();
+  });
+
+  it('threads an arimaError through and keeps diagnostics intact', () => {
+    const result = normalizeWithArima({ arima: null, arimaError: 'No se pudo estimar ARIMA con este orden.' });
+    expect(result.ok).toBe(true);
+    expect(result.arima).toBeUndefined();
+    expect(result.arimaError).toContain('No se pudo estimar ARIMA');
+    // Diagnostics from VALID_PAYLOAD are still present.
+    expect(result.adf).toBeDefined();
+    expect(result.ljungBox).toBeDefined();
+  });
+
+  it('parses ARIMA residual Ljung-Box and derives rejectAt5 + interpretation', () => {
+    const result = normalizeWithArima({
+      arima: ARIMA_BLOCK,
+      arimaResidualDiagnostics: {
+        ljungBox: [
+          { lag: 1, statistic: 0.5, pValue: 0.48 },
+          { lag: 2, statistic: 6.0, pValue: 0.01 },
+        ],
+      },
+    });
+    expect(result.arimaResidualDiagnostics?.ljungBox[0].rejectAt5).toBe(false);
+    expect(result.arimaResidualDiagnostics?.ljungBox[1].rejectAt5).toBe(true);
+    expect(result.arimaResidualDiagnostics?.interpretation).toContain('autocorrelación');
+  });
+
+  it('rejects a malformed ARIMA block (bad order)', () => {
+    const result = normalizeWithArima({ arima: { ...ARIMA_BLOCK, order: { p: -1, d: 0, q: 1 } } });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('ARIMA inválido');
   });
 });
