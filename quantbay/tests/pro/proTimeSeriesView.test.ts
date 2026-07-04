@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   clearProTimeSeriesResult,
+  getProArimaEnabled,
+  getProArimaOrder,
   getProTimeSeriesAdfRegression,
   getProTimeSeriesMaxLag,
   getSelectedProTimeSeriesValueColumn,
   renderProTimeSeriesResult,
   renderProTimeSeriesSelectors,
 } from '../../src/ui/proTimeSeriesView';
-import type { PyodideTimeSeriesResult } from '../../src/pro/pyodide/proTimeSeriesResultTypes';
+import type { ProArimaResult, PyodideTimeSeriesResult } from '../../src/pro/pyodide/proTimeSeriesResultTypes';
 import type { ParsedCSV } from '../../src/csvParser';
 
 function mountPanel(): void {
@@ -23,6 +25,10 @@ function mountPanel(): void {
           <option value="ctt">ctt</option>
           <option value="n">n</option>
         </select>
+        <input type="checkbox" id="qb-pro-ts-arima-enable">
+        <input id="qb-pro-ts-arima-p" type="number" value="1">
+        <input id="qb-pro-ts-arima-d" type="number" value="0">
+        <input id="qb-pro-ts-arima-q" type="number" value="1">
         <button id="qb-pro-ts-run"></button>
       </div>
       <div id="qb-pro-ts-status" style="display:none"></div>
@@ -31,6 +37,7 @@ function mountPanel(): void {
         <div id="qb-pro-ts-adf"></div>
         <div id="qb-pro-ts-acfpacf"></div>
         <div id="qb-pro-ts-ljungbox"></div>
+        <div id="qb-pro-ts-arima-section"></div>
         <div id="qb-pro-ts-note"></div>
         <div id="qb-pro-ts-arima-note"></div>
         <div id="qb-pro-ts-warnings"></div>
@@ -127,10 +134,12 @@ describe('renderProTimeSeriesResult', () => {
     expect(text).toContain('Ljung-Box');
   });
 
-  it('communicates honestly that ARIMA is not implemented yet', () => {
+  it('communicates honestly that ARIMA is manual and auto-ARIMA/forecast are not implemented yet', () => {
     renderProTimeSeriesResult(okResult);
     const text = document.getElementById('qb-pro-ts-arima-note')?.textContent ?? '';
-    expect(text).toContain('ARIMA todavía no está implementado');
+    expect(text).toContain('ARIMA es manual');
+    expect(text).toContain('auto-ARIMA');
+    expect(text).toContain('forecast');
   });
 
   it('renders warnings when present', () => {
@@ -159,6 +168,120 @@ describe('renderProTimeSeriesResult', () => {
   it('escapes HTML in warnings and variable-derived content', () => {
     renderProTimeSeriesResult({ ...okResult, warnings: ['<script>alert(1)</script>'] });
     expect(document.querySelector('#qb-pro-ts-warnings script')).toBeNull();
+  });
+});
+
+describe('renderProTimeSeriesResult · ARIMA', () => {
+  const arima: ProArimaResult = {
+    order: { p: 1, d: 1, q: 1 },
+    converged: true,
+    nobs: 39,
+    logLikelihood: -55.234567,
+    aic: 118.469134,
+    bic: 126.112233,
+    hqic: 121.223344,
+    coefficients: [
+      { name: 'ar.L1', estimate: 0.612345, standardError: 0.12, zStatistic: 5.1, pValue: 0.0001 },
+      { name: 'ma.L1', estimate: -0.312345, standardError: 0.15, zStatistic: -2.08, pValue: 0.037 },
+      { name: 'sigma2', estimate: 1.2, standardError: 0.2, zStatistic: 6.0, pValue: 0.0 },
+    ],
+    warnings: ['Maximum Likelihood optimization failed to converge.'],
+    interpretation: 'ARIMA(1,1,1) combina términos autorregresivos AR(1), diferenciación d=1 y media móvil MA(1).',
+  };
+  const arimaResult: PyodideTimeSeriesResult = {
+    ...okResult,
+    arima,
+    arimaResidualDiagnostics: {
+      ljungBox: [{ lag: 1, statistic: 0.5, pValue: 0.48, rejectAt5: false, interpretation: '' }],
+      interpretation: 'Si Ljung-Box no rechaza autocorrelación en los residuos, el modelo capturó razonablemente la dependencia temporal.',
+    },
+  };
+
+  it('shows the estimated ARIMA(p,d,q) model label', () => {
+    renderProTimeSeriesResult(arimaResult);
+    const text = document.getElementById('qb-pro-ts-arima-section')?.textContent ?? '';
+    expect(text).toContain('ARIMA(1,1,1)');
+    expect(text).toContain('Modelo estimado');
+    expect(text).toContain('Convergencia');
+  });
+
+  it('shows AIC, BIC, HQIC and log-likelihood', () => {
+    renderProTimeSeriesResult(arimaResult);
+    const text = document.getElementById('qb-pro-ts-arima-section')?.textContent ?? '';
+    expect(text).toContain('AIC');
+    expect(text).toContain('118.469134');
+    expect(text).toContain('BIC');
+    expect(text).toContain('126.112233');
+    expect(text).toContain('HQIC');
+    expect(text).toContain('Log-likelihood');
+  });
+
+  it('renders the coefficients table with parameter names, z-stat and p-value', () => {
+    renderProTimeSeriesResult(arimaResult);
+    const section = document.getElementById('qb-pro-ts-arima-section');
+    const text = section?.textContent ?? '';
+    expect(text).toContain('Parámetro');
+    expect(text).toContain('ar.L1');
+    expect(text).toContain('ma.L1');
+    expect(text).toContain('sigma2');
+    expect(text).toContain('z-stat');
+    // 3 coefficient rows.
+    const tables = section?.querySelectorAll('table');
+    expect((tables?.length ?? 0)).toBeGreaterThanOrEqual(2);
+  });
+
+  it('shows the model warnings captured from statsmodels', () => {
+    renderProTimeSeriesResult(arimaResult);
+    const text = document.getElementById('qb-pro-ts-arima-section')?.textContent ?? '';
+    expect(text).toContain('Advertencias del modelo');
+    expect(text).toContain('failed to converge');
+  });
+
+  it('shows the AIC/BIC comparison note', () => {
+    renderProTimeSeriesResult(arimaResult);
+    const text = document.getElementById('qb-pro-ts-arima-section')?.textContent ?? '';
+    expect(text).toContain('AIC y BIC sirven para comparar');
+  });
+
+  it('shows the residual Ljung-Box diagnostics', () => {
+    renderProTimeSeriesResult(arimaResult);
+    const text = document.getElementById('qb-pro-ts-arima-section')?.textContent ?? '';
+    expect(text).toContain('Diagnóstico de residuos');
+    expect(text).toContain('capturó razonablemente');
+  });
+
+  it('shows a controlled error in the ARIMA section while keeping the diagnostics', () => {
+    renderProTimeSeriesResult({ ...okResult, arimaError: 'No se pudo estimar ARIMA con este orden.' });
+    const section = document.getElementById('qb-pro-ts-arima-section')?.textContent ?? '';
+    expect(section).toContain('No se pudo estimar ARIMA');
+    // Diagnostics are untouched: ADF/ACF/Ljung-Box still rendered.
+    expect(document.getElementById('qb-pro-ts-adf')?.innerHTML).not.toBe('');
+    expect(document.getElementById('qb-pro-ts-ljungbox')?.innerHTML).not.toBe('');
+    expect(document.getElementById('qb-pro-ts-content')?.style.display).toBe('');
+  });
+
+  it('leaves the ARIMA section empty when ARIMA was not requested', () => {
+    renderProTimeSeriesResult(okResult);
+    expect(document.getElementById('qb-pro-ts-arima-section')?.innerHTML).toBe('');
+  });
+
+  it('escapes HTML in ARIMA coefficient names and warnings', () => {
+    renderProTimeSeriesResult({
+      ...arimaResult,
+      arima: {
+        ...arima,
+        coefficients: [{ name: '<img src=x>', estimate: 1, standardError: null, zStatistic: null, pValue: null }],
+        warnings: ['<script>alert(1)</script>'],
+      },
+    });
+    expect(document.querySelector('#qb-pro-ts-arima-section img')).toBeNull();
+    expect(document.querySelector('#qb-pro-ts-arima-section script')).toBeNull();
+  });
+
+  it('shows "No informada" when convergence is unknown (undefined)', () => {
+    renderProTimeSeriesResult({ ...arimaResult, arima: { ...arima, converged: undefined } });
+    const text = document.getElementById('qb-pro-ts-arima-section')?.textContent ?? '';
+    expect(text).toContain('No informada');
   });
 });
 
@@ -200,6 +323,23 @@ describe('Pro TS selectors and getters', () => {
     const select = document.getElementById('qb-pro-ts-adf-reg') as HTMLSelectElement;
     select.value = 'ct';
     expect(getProTimeSeriesAdfRegression()).toBe('ct');
+  });
+
+  it('getProArimaEnabled reflects the "Estimar ARIMA" checkbox', () => {
+    renderProTimeSeriesSelectors(csv);
+    const checkbox = document.getElementById('qb-pro-ts-arima-enable') as HTMLInputElement;
+    expect(getProArimaEnabled()).toBe(false);
+    checkbox.checked = true;
+    expect(getProArimaEnabled()).toBe(true);
+  });
+
+  it('getProArimaOrder reads p, d, q from the inputs, defaulting empty fields', () => {
+    renderProTimeSeriesSelectors(csv);
+    (document.getElementById('qb-pro-ts-arima-p') as HTMLInputElement).value = '2';
+    (document.getElementById('qb-pro-ts-arima-d') as HTMLInputElement).value = '1';
+    (document.getElementById('qb-pro-ts-arima-q') as HTMLInputElement).value = '';
+    // p=2, d=1 read from inputs; empty q falls back to the default (1).
+    expect(getProArimaOrder()).toEqual({ p: 2, d: 1, q: 1 });
   });
 
   it('falls back to "no data" when there is no numeric column', () => {

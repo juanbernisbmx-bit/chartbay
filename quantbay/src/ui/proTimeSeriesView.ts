@@ -2,12 +2,16 @@ import type { ParsedCSV } from '../csvParser';
 import { $ } from '../app/dom';
 import { escapeHtml } from '../utils/format';
 import {
+  DEFAULT_ARIMA_ORDER,
   DEFAULT_PRO_ADF_REGRESSION,
   PRO_ADF_REGRESSION_LABELS,
   isProAdfRegression,
   type ProAcfPoint,
   type ProAdfRegression,
   type ProAdfResult,
+  type ProArimaOrder,
+  type ProArimaResidualDiagnostics,
+  type ProArimaResult,
   type ProLjungBoxRow,
   type PyodideTimeSeriesResult,
 } from '../pro/pyodide/proTimeSeriesResultTypes';
@@ -17,9 +21,15 @@ const PEDAGOGICAL_NOTE =
   'ADF evalúa estacionariedad. ACF/PACF ayudan a identificar rezagos candidatos para modelos AR, MA o ARIMA. ' +
   'Ljung-Box evalúa autocorrelación conjunta.';
 
-// UX honesta: ARIMA todavía no está implementado. Nunca se finge un resultado.
-const ARIMA_NOT_IMPLEMENTED_NOTE =
-  'ARIMA todavía no está implementado en Pro. Primero usá ADF, ACF/PACF y Ljung-Box para diagnosticar la serie.';
+// UX honesta: hay ARIMA MANUAL (elegís p,d,q), pero NO auto-ARIMA ni forecast.
+const ARIMA_STATUS_NOTE =
+  'ARIMA es manual: elegí p, d y q y activá "Estimar ARIMA". La selección automática de orden (auto-ARIMA) y el ' +
+  'forecast todavía no están implementados en Pro.';
+
+// Nota pedagógica sobre criterios de información para comparar modelos.
+const ARIMA_IC_NOTE =
+  'AIC y BIC sirven para comparar modelos estimados sobre la misma serie. Valores menores suelen indicar mejor ' +
+  'balance entre ajuste y complejidad.';
 
 const DEFAULT_MAX_LAG = 12;
 
@@ -60,6 +70,28 @@ export function getProTimeSeriesAdfRegression(): ProAdfRegression {
   const select = $('qb-pro-ts-adf-reg') as HTMLSelectElement | null;
   const value = select?.value;
   return isProAdfRegression(value) ? value : DEFAULT_PRO_ADF_REGRESSION;
+}
+
+export function getProArimaEnabled(): boolean {
+  const checkbox = $('qb-pro-ts-arima-enable') as HTMLInputElement | null;
+  return checkbox?.checked ?? false;
+}
+
+// Lee p, d, q de los inputs. Un campo vacío/no entero cae al default sugerido;
+// los límites y la coherencia (no negativos, no todos cero) se validan en
+// proTimeSeriesValidation.ts antes de correr Pyodide.
+export function getProArimaOrder(): ProArimaOrder {
+  const read = (id: string, fallback: number): number => {
+    const raw = ($(id) as HTMLInputElement | null)?.value?.trim() ?? '';
+    if (raw === '') return fallback;
+    const parsed = Number(raw);
+    return Number.isInteger(parsed) ? parsed : fallback;
+  };
+  return {
+    p: read('qb-pro-ts-arima-p', DEFAULT_ARIMA_ORDER.p),
+    d: read('qb-pro-ts-arima-d', DEFAULT_ARIMA_ORDER.d),
+    q: read('qb-pro-ts-arima-q', DEFAULT_ARIMA_ORDER.q),
+  };
 }
 
 export function showProTimeSeriesStatus(text: string): void {
@@ -118,7 +150,7 @@ export function clearProTimeSeriesResult(): void {
   if (content) content.style.display = 'none';
   const error = $('qb-pro-ts-error');
   if (error) { error.textContent = ''; error.style.display = 'none'; }
-  for (const id of ['qb-pro-ts-adf', 'qb-pro-ts-acfpacf', 'qb-pro-ts-ljungbox', 'qb-pro-ts-warnings']) {
+  for (const id of ['qb-pro-ts-adf', 'qb-pro-ts-acfpacf', 'qb-pro-ts-ljungbox', 'qb-pro-ts-arima-section', 'qb-pro-ts-warnings']) {
     const el = $(id);
     if (el) el.innerHTML = '';
   }
@@ -211,6 +243,93 @@ function buildLjungBoxHtml(rows: ProLjungBoxRow[] | undefined): string {
     <div class="qb-interp" style="margin-top:8px">H0: no hay autocorrelación conjunta hasta ese rezago.</div>`;
 }
 
+function orderLabel(order: ProArimaOrder): string {
+  return `ARIMA(${order.p},${order.d},${order.q})`;
+}
+
+function buildArimaResidualHtml(diag: ProArimaResidualDiagnostics | undefined): string {
+  if (!diag || diag.ljungBox.length === 0) return '';
+  const body = diag.ljungBox
+    .map(row => {
+      const verdict = row.rejectAt5 ? 'Se rechaza H0 al 5%' : 'No se rechaza H0 al 5%';
+      return `<tr><td>${row.lag}</td><td>${fmt(row.statistic)}</td><td>${fmt(row.pValue)}</td><td>${escapeHtml(verdict)}</td></tr>`;
+    })
+    .join('');
+  return `
+    <p class="qb-label" style="margin-top:10px">Diagnóstico de residuos (Ljung-Box)</p>
+    <div class="qb-table-scroll">
+      <table class="ledger">
+        <thead><tr><th>Lag</th><th>Q-stat</th><th>p-value</th><th>Conclusión</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+    <div class="qb-interp" style="margin-top:8px">${escapeHtml(diag.interpretation)}</div>`;
+}
+
+// Sección ARIMA completa: error controlado, o resumen + coeficientes + warnings
+// + diagnóstico de residuos. Devuelve '' cuando no se pidió ARIMA.
+function buildArimaHtml(result: PyodideTimeSeriesResult): string {
+  if (result.arimaError) {
+    return (
+      `<p class="qb-label" style="margin-top:10px">ARIMA</p>` +
+      `<div class="qb-interp" style="color:#e55">${escapeHtml(result.arimaError)}</div>` +
+      `<div class="qb-interp" style="margin-top:6px">Revisá los valores de p, d y q, o probá un orden más simple.</div>`
+    );
+  }
+
+  const arima = result.arima;
+  if (!arima) return '';
+
+  const converged =
+    arima.converged === true ? 'Sí' : arima.converged === false ? 'No' : 'No informada';
+
+  const summary = `
+    <table class="ledger">
+      <thead><tr><th>ARIMA</th><th>Valor</th></tr></thead>
+      <tbody>
+        <tr><td>Modelo estimado</td><td>${escapeHtml(orderLabel(arima.order))}</td></tr>
+        <tr><td>Observaciones usadas</td><td>${arima.nobs ?? '—'}</td></tr>
+        <tr><td>Convergencia</td><td>${escapeHtml(converged)}</td></tr>
+        <tr><td>Log-likelihood</td><td>${fmt(arima.logLikelihood)}</td></tr>
+        <tr><td>AIC</td><td>${fmt(arima.aic)}</td></tr>
+        <tr><td>BIC</td><td>${fmt(arima.bic)}</td></tr>
+        <tr><td>HQIC</td><td>${fmt(arima.hqic)}</td></tr>
+      </tbody>
+    </table>`;
+
+  const coefRows = arima.coefficients
+    .map(
+      c =>
+        `<tr><td>${escapeHtml(c.name)}</td><td>${fmt(c.estimate)}</td><td>${fmt(c.standardError)}</td><td>${fmt(c.zStatistic)}</td><td>${fmt(c.pValue)}</td></tr>`
+    )
+    .join('');
+  const coefTable = arima.coefficients.length > 0
+    ? `
+      <p class="qb-label" style="margin-top:10px">Coeficientes</p>
+      <div class="qb-table-scroll">
+        <table class="ledger">
+          <thead><tr><th>Parámetro</th><th>Estimación</th><th>Error estándar</th><th>z-stat</th><th>p-value</th></tr></thead>
+          <tbody>${coefRows}</tbody>
+        </table>
+      </div>`
+    : '';
+
+  const modelWarnings = arima.warnings.length > 0
+    ? `<p class="qb-label" style="margin-top:10px">Advertencias del modelo</p>` +
+      `<div class="qb-warn-yellow"><ul>${arima.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
+    : '';
+
+  return (
+    `<p class="qb-label" style="margin-top:10px">${escapeHtml(orderLabel(arima.order))}</p>` +
+    `<div class="qb-interp" style="margin-bottom:6px">${escapeHtml(arima.interpretation)}</div>` +
+    summary +
+    coefTable +
+    modelWarnings +
+    buildArimaResidualHtml(result.arimaResidualDiagnostics) +
+    `<div class="qb-interp" style="margin-top:8px">${escapeHtml(ARIMA_IC_NOTE)}</div>`
+  );
+}
+
 export function renderProTimeSeriesResult(result: PyodideTimeSeriesResult): void {
   const panel = $('qb-pro-ts-panel');
   if (panel) panel.style.display = '';
@@ -233,11 +352,16 @@ export function renderProTimeSeriesResult(result: PyodideTimeSeriesResult): void
   const ljungBoxEl = $('qb-pro-ts-ljungbox');
   if (ljungBoxEl) ljungBoxEl.innerHTML = buildLjungBoxHtml(result.ljungBox);
 
+  // La sección ARIMA es independiente de los diagnósticos: si ARIMA falla o no
+  // se pidió, los diagnósticos de arriba siguen renderizados igual.
+  const arimaSection = $('qb-pro-ts-arima-section');
+  if (arimaSection) arimaSection.innerHTML = buildArimaHtml(result);
+
   const note = $('qb-pro-ts-note');
   if (note) note.textContent = PEDAGOGICAL_NOTE;
 
   const arima = $('qb-pro-ts-arima-note');
-  if (arima) arima.textContent = ARIMA_NOT_IMPLEMENTED_NOTE;
+  if (arima) arima.textContent = ARIMA_STATUS_NOTE;
 
   const warningsEl = $('qb-pro-ts-warnings');
   if (warningsEl) {

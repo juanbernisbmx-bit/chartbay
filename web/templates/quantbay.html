@@ -303,7 +303,7 @@
             <p class="qb-subtitle">Pro · Diagnósticos de series de tiempo</p>
             <span>PYODIDE · PYTHON EN NAVEGADOR</span>
           </div>
-          <p class="muted qb-help">ChartBay Pro corre diagnósticos de series de tiempo con statsmodels (Python/Pyodide) en el navegador: ADF (raíz unitaria / estacionariedad), ACF y PACF (rezagos candidatos) y Ljung-Box (autocorrelación conjunta). Es diagnóstico previo a ARIMA — ARIMA todavía no está implementado.</p>
+          <p class="muted qb-help">ChartBay Pro corre diagnósticos de series de tiempo con statsmodels (Python/Pyodide) en el navegador: ADF (raíz unitaria / estacionariedad), ACF y PACF (rezagos candidatos) y Ljung-Box (autocorrelación conjunta). Opcionalmente estima un ARIMA(p,d,q) manual: elegí p, d y q. La selección automática de orden (auto-ARIMA) y el forecast todavía no están implementados.</p>
           <div class="qb-interp" id="qb-pro-ts-empty">Subí un CSV para diagnosticar una serie de tiempo con statsmodels.</div>
           <div id="qb-pro-ts-controls" style="display:none">
             <div class="qb-vars-grid">
@@ -325,6 +325,25 @@
                 </select>
               </div>
             </div>
+            <div class="qb-subpanel" style="margin-top:12px">
+              <label class="qb-label" style="display:flex;align-items:center;gap:8px">
+                <input type="checkbox" id="qb-pro-ts-arima-enable"> Estimar ARIMA(p,d,q) manual
+              </label>
+              <div class="qb-vars-grid" style="margin-top:8px">
+                <div>
+                  <label for="qb-pro-ts-arima-p">p (AR)</label>
+                  <input id="qb-pro-ts-arima-p" type="number" min="0" max="5" value="1" step="1" style="width:100%">
+                </div>
+                <div>
+                  <label for="qb-pro-ts-arima-d">d (diferenciación)</label>
+                  <input id="qb-pro-ts-arima-d" type="number" min="0" max="2" value="0" step="1" style="width:100%">
+                </div>
+                <div>
+                  <label for="qb-pro-ts-arima-q">q (MA)</label>
+                  <input id="qb-pro-ts-arima-q" type="number" min="0" max="5" value="1" step="1" style="width:100%">
+                </div>
+              </div>
+            </div>
             <div style="margin-top:10px">
               <button class="btn-ink" id="qb-pro-ts-run" style="font-weight:700">Correr diagnósticos Pro</button>
             </div>
@@ -338,6 +357,7 @@
             <div id="qb-pro-ts-acfpacf" class="qb-table-scroll" style="margin-top:6px"></div>
             <p class="qb-label" style="margin-top:10px">Ljung-Box</p>
             <div id="qb-pro-ts-ljungbox" class="qb-table-scroll" style="margin-top:6px"></div>
+            <div id="qb-pro-ts-arima-section" style="margin-top:12px"></div>
             <div class="qb-interp" id="qb-pro-ts-note" style="margin-top:12px"></div>
             <div class="qb-interp" id="qb-pro-ts-arima-note" style="margin-top:8px;font-weight:600"></div>
             <div id="qb-pro-ts-warnings" style="margin-top:8px"></div>

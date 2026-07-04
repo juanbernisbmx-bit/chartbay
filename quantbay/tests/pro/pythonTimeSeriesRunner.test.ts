@@ -97,15 +97,31 @@ describe('runPyodideTimeSeries (statsmodels)', () => {
     expect(script).toContain('acorr_ljungbox(arr, lags=ljung_box_lags, return_df=True)');
   });
 
-  it('never runs ARIMA — the script has no ARIMA/SARIMAX estimation', async () => {
+  it('imports statsmodels ARIMA but never does auto-ARIMA (no pmdarima/auto_arima)', async () => {
     const fake = makeFakePyodide();
     mocks.getPyodide.mockResolvedValue(fake);
 
     await runPyodideTimeSeries({ values: SERIES, variableName: 'serie' });
 
     const script = scriptOf(fake);
-    expect(script).not.toContain('ARIMA');
-    expect(script).not.toContain('SARIMAX');
+    expect(script).toContain('from statsmodels.tsa.arima.model import ARIMA');
+    // Manual ARIMA only — no automatic order selection.
+    expect(script).not.toContain('auto_arima');
+    expect(script).not.toContain('pmdarima');
+  });
+
+  it('estimates ARIMA in Python only when run_arima is set (gated, not automatic)', async () => {
+    const fake = makeFakePyodide();
+    mocks.getPyodide.mockResolvedValue(fake);
+
+    await runPyodideTimeSeries({ values: SERIES, variableName: 'serie' });
+
+    const script = scriptOf(fake);
+    expect(script).toContain('run_arima = bool(chartbay_ts_run_arima)');
+    expect(script).toContain('if run_arima:');
+    expect(script).toContain('ARIMA(arr, order=(p, d, q)).fit()');
+    // Warnings from statsmodels are captured, not swallowed.
+    expect(script).toContain('py_warnings.catch_warnings(record=True)');
   });
 
   it('threads the ADF statistic, p-value and critical values from Python', async () => {
@@ -245,5 +261,126 @@ describe('runPyodideTimeSeries (statsmodels)', () => {
     const script = scriptOf(fake);
     expect(script).toContain('if n < 12:');
     expect(script).toContain('np.ptp(arr)');
+  });
+
+  describe('ARIMA manual', () => {
+    const ARIMA_PAYLOAD = {
+      ...VALID_TS_PAYLOAD,
+      arima: {
+        order: { p: 1, d: 0, q: 1 },
+        converged: true,
+        nobs: 40,
+        logLikelihood: -55.2,
+        aic: 118.4,
+        bic: 126.1,
+        hqic: 121.2,
+        coefficients: [
+          { name: 'const', estimate: 0.5, standardError: 0.1, zStatistic: 5.0, pValue: 0.001 },
+          { name: 'ar.L1', estimate: 0.6, standardError: 0.12, zStatistic: 5.0, pValue: 0.002 },
+          { name: 'ma.L1', estimate: -0.3, standardError: 0.15, zStatistic: -2.0, pValue: 0.045 },
+          { name: 'sigma2', estimate: 1.2, standardError: 0.2, zStatistic: 6.0, pValue: 0.0 },
+        ],
+        warnings: [],
+      },
+      arimaResidualDiagnostics: {
+        ljungBox: [
+          { lag: 1, statistic: 0.5, pValue: 0.48 },
+          { lag: 2, statistic: 1.1, pValue: 0.57 },
+        ],
+      },
+    };
+
+    it('does NOT estimate ARIMA and sets run_arima=false when runArima is absent', async () => {
+      const fake = makeFakePyodide();
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      const result = await runPyodideTimeSeries({ values: SERIES, variableName: 'serie' });
+
+      expect(fake.globals.set).toHaveBeenCalledWith('chartbay_ts_run_arima', false);
+      expect(result.arima).toBeUndefined();
+    });
+
+    it('estimates ARIMA and passes the order to Python when runArima is true', async () => {
+      const fake = makeFakePyodide({
+        runPythonAsync: vi.fn().mockResolvedValue(JSON.stringify(ARIMA_PAYLOAD)),
+      });
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      const result = await runPyodideTimeSeries({
+        values: SERIES,
+        variableName: 'serie',
+        runArima: true,
+        arimaOrder: { p: 1, d: 0, q: 1 },
+      });
+
+      expect(fake.globals.set).toHaveBeenCalledWith('chartbay_ts_run_arima', true);
+      expect(fake.globals.set).toHaveBeenCalledWith('chartbay_ts_arima_order_json', JSON.stringify({ p: 1, d: 0, q: 1 }));
+      expect(result.ok).toBe(true);
+      expect(result.arima?.order).toEqual({ p: 1, d: 0, q: 1 });
+      expect(result.arima?.aic).toBe(118.4);
+      expect(result.arima?.coefficients).toHaveLength(4);
+      // Residual Ljung-Box rejectAt5 derived in TS from p-value.
+      expect(result.arimaResidualDiagnostics?.ljungBox[0].rejectAt5).toBe(false);
+      // Diagnostics remain present alongside ARIMA.
+      expect(result.adf).toBeDefined();
+    });
+
+    it('reports a controlled arimaError (without touching Python) when the order is invalid, keeping diagnostics', async () => {
+      const fake = makeFakePyodide();
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      const result = await runPyodideTimeSeries({
+        values: SERIES,
+        variableName: 'serie',
+        runArima: true,
+        arimaOrder: { p: 0, d: 0, q: 0 },
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.arima).toBeUndefined();
+      expect(result.arimaError).toContain('ARIMA(0,0,0)');
+      // Invalid order never reaches Python: run_arima is forced false.
+      expect(fake.globals.set).toHaveBeenCalledWith('chartbay_ts_run_arima', false);
+      // Diagnostics still computed.
+      expect(result.adf).toBeDefined();
+    });
+
+    it('threads a Python-side ARIMA estimation failure through as arimaError, keeping diagnostics', async () => {
+      const fake = makeFakePyodide({
+        runPythonAsync: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            ...VALID_TS_PAYLOAD,
+            arima: null,
+            arimaError: 'No se pudo estimar ARIMA con este orden. Probá un modelo más simple.',
+          })
+        ),
+      });
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      const result = await runPyodideTimeSeries({
+        values: SERIES,
+        variableName: 'serie',
+        runArima: true,
+        arimaOrder: { p: 3, d: 1, q: 2 },
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.arima).toBeUndefined();
+      expect(result.arimaError).toContain('No se pudo estimar ARIMA');
+      expect(result.adf).toBeDefined();
+    });
+
+    it('the Python script computes Ljung-Box on the ARIMA residuals', async () => {
+      const fake = makeFakePyodide();
+      mocks.getPyodide.mockResolvedValue(fake);
+
+      await runPyodideTimeSeries({ values: SERIES, variableName: 'serie', runArima: true, arimaOrder: { p: 1, d: 0, q: 1 } });
+
+      const script = scriptOf(fake);
+      expect(script).toContain('fit.resid');
+      expect(script).toContain('arimaResidualDiagnostics');
+      // Convergence is only reported when statsmodels exposes it (never invented).
+      expect(script).toContain('mle_retvals');
+    });
   });
 });

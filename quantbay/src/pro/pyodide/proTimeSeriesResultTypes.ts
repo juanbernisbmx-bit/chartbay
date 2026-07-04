@@ -31,6 +31,21 @@ export function isProAdfRegression(value: unknown): value is ProAdfRegression {
   return value === 'c' || value === 'ct' || value === 'ctt' || value === 'n';
 }
 
+// Orden de un ARIMA manual: p (AR), d (diferenciación), q (MA). Auto-ARIMA
+// (selección automática del orden) NO está implementado en esta fase.
+export interface ProArimaOrder {
+  p: number;
+  d: number;
+  q: number;
+}
+
+// Límites de la primera versión de ARIMA manual (ver proTimeSeriesValidation.ts).
+export const MAX_ARIMA_P = 5;
+export const MAX_ARIMA_D = 2;
+export const MAX_ARIMA_Q = 5;
+
+export const DEFAULT_ARIMA_ORDER: ProArimaOrder = { p: 1, d: 0, q: 1 };
+
 // Entrada del runner: una serie numérica ya extraída de una columna del CSV
 // (los valores no finitos se limpian en la validación TS, ver
 // proTimeSeriesValidation.ts) más las opciones de diagnóstico.
@@ -41,6 +56,9 @@ export interface PyodideTimeSeriesInput {
   adfRegression?: ProAdfRegression;
   // Rezagos para Ljung-Box. Por defecto la validación usa 1..maxLag.
   ljungBoxLags?: number[];
+  // ARIMA manual opcional: sólo se estima cuando runArima === true.
+  runArima?: boolean;
+  arimaOrder?: ProArimaOrder;
 }
 
 // H0 del ADF: la serie tiene raíz unitaria (no es estacionaria).
@@ -73,6 +91,37 @@ export interface ProLjungBoxRow {
   interpretation: string;
 }
 
+// Un coeficiente estimado del ARIMA (ej: ar.L1, ma.L1, const, sigma2).
+export interface ProArimaCoefficient {
+  name: string;
+  estimate: number | null;
+  standardError: number | null;
+  zStatistic: number | null;
+  pValue: number | null;
+}
+
+// Ljung-Box sobre los residuos del ARIMA: si no rechaza, el modelo capturó
+// razonablemente la dependencia temporal.
+export interface ProArimaResidualDiagnostics {
+  ljungBox: ProLjungBoxRow[];
+  interpretation: string;
+}
+
+export interface ProArimaResult {
+  order: ProArimaOrder;
+  // undefined cuando statsmodels no expone info de convergencia (no se inventa).
+  converged?: boolean;
+  nobs?: number;
+  logLikelihood: number | null;
+  aic: number | null;
+  bic: number | null;
+  hqic: number | null;
+  coefficients: ProArimaCoefficient[];
+  // Warnings de statsmodels capturados durante fit() (convergencia, etc.).
+  warnings: string[];
+  interpretation: string;
+}
+
 export interface PyodideTimeSeriesResult {
   ok: boolean;
   engine: 'pyodide';
@@ -86,6 +135,13 @@ export interface PyodideTimeSeriesResult {
   acf?: ProAcfPoint[];
   pacf?: ProAcfPoint[];
   ljungBox?: ProLjungBoxRow[];
+  // ARIMA manual: presente sólo cuando se estimó con éxito. Los diagnósticos de
+  // arriba NUNCA dependen de ARIMA — si ARIMA falla, siguen presentes.
+  arima?: ProArimaResult;
+  // Presente cuando se pidió ARIMA pero falló (orden inválido o no estimable):
+  // error controlado para la sección ARIMA, sin borrar los diagnósticos.
+  arimaError?: string;
+  arimaResidualDiagnostics?: ProArimaResidualDiagnostics;
   warnings: string[];
   error?: string;
 }
@@ -128,6 +184,30 @@ export function interpretLjungBox(pValue: number | null): string {
     return 'Se rechaza H0 al 5%: hay evidencia de autocorrelación hasta este rezago.';
   }
   return 'No se rechaza H0 al 5%: sin evidencia de autocorrelación conjunta hasta este rezago.';
+}
+
+export function interpretArima(order: ProArimaOrder, converged: boolean | undefined): string {
+  const base =
+    `ARIMA(${order.p},${order.d},${order.q}) combina términos autorregresivos AR(${order.p}), ` +
+    `diferenciación d=${order.d} y media móvil MA(${order.q}). ` +
+    `p: rezagos autorregresivos; d: cantidad de diferenciaciones; q: rezagos de errores de pronóstico.`;
+  const diff = order.d > 0
+    ? ' El modelo se estima sobre la serie diferenciada para reducir la no estacionariedad.'
+    : '';
+  const conv = converged === false
+    ? ' El modelo no convergió. Probá un orden más simple o revisá la estacionariedad de la serie.'
+    : '';
+  return base + diff + conv;
+}
+
+export function interpretArimaResiduals(rows: ProLjungBoxRow[]): string {
+  if (rows.length === 0) {
+    return 'No se pudo evaluar la autocorrelación de los residuos del ARIMA.';
+  }
+  const anyReject = rows.some(row => row.rejectAt5);
+  return anyReject
+    ? 'Ljung-Box rechaza en algún rezago: queda autocorrelación en los residuos; considerá otro orden (p, d, q).'
+    : 'Si Ljung-Box no rechaza autocorrelación en los residuos, el modelo capturó razonablemente la dependencia temporal.';
 }
 
 // statsmodels devuelve NaN/inf en casos degenerados; el script Python los
@@ -201,22 +281,20 @@ function parseAdf(raw: unknown): { ok: true; value: ProAdfResult | undefined } |
   };
 }
 
-// Misma convención que parseAdf: null/undefined = no se calculó (warning),
-// cualquier otra cosa debe ser un array bien formado.
-function parseLjungBox(raw: unknown): { ok: true; value: ProLjungBoxRow[] | undefined } | { ok: false } {
-  if (raw === null || raw === undefined) return { ok: true, value: undefined };
-  if (!Array.isArray(raw)) return { ok: false };
-
+// Parsea un array de filas Ljung-Box (compartido por el LB de la serie y el LB
+// de los residuos del ARIMA). Devuelve null si el array está malformado.
+function parseLjungBoxRows(raw: unknown): ProLjungBoxRow[] | null {
+  if (!Array.isArray(raw)) return null;
   const rows: ProLjungBoxRow[] = [];
   for (const item of raw) {
-    if (item === null || typeof item !== 'object') return { ok: false };
+    if (item === null || typeof item !== 'object') return null;
     const record = item as Record<string, unknown>;
     const lag = record.lag;
     const statistic = finiteOrNull(record.statistic);
     const pValue = finiteOrNull(record.pValue);
-    if (typeof lag !== 'number' || !Number.isInteger(lag)) return { ok: false };
-    if (statistic === undefined || statistic === null) return { ok: false };
-    if (pValue === undefined) return { ok: false };
+    if (typeof lag !== 'number' || !Number.isInteger(lag)) return null;
+    if (statistic === undefined || statistic === null) return null;
+    if (pValue === undefined) return null;
     rows.push({
       lag,
       statistic,
@@ -225,7 +303,108 @@ function parseLjungBox(raw: unknown): { ok: true; value: ProLjungBoxRow[] | unde
       interpretation: interpretLjungBox(pValue),
     });
   }
-  return { ok: true, value: rows };
+  return rows;
+}
+
+// Misma convención que parseAdf: null/undefined = no se calculó (warning),
+// cualquier otra cosa debe ser un array bien formado.
+function parseLjungBox(raw: unknown): { ok: true; value: ProLjungBoxRow[] | undefined } | { ok: false } {
+  if (raw === null || raw === undefined) return { ok: true, value: undefined };
+  const rows = parseLjungBoxRows(raw);
+  return rows === null ? { ok: false } : { ok: true, value: rows };
+}
+
+function parseArimaOrder(raw: unknown): ProArimaOrder | null {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  const { p, d, q } = record;
+  if (typeof p !== 'number' || !Number.isInteger(p) || p < 0) return null;
+  if (typeof d !== 'number' || !Number.isInteger(d) || d < 0) return null;
+  if (typeof q !== 'number' || !Number.isInteger(q) || q < 0) return null;
+  return { p, d, q };
+}
+
+function parseArimaCoefficients(raw: unknown): ProArimaCoefficient[] | null {
+  if (!Array.isArray(raw)) return null;
+  const coefficients: ProArimaCoefficient[] = [];
+  for (const item of raw) {
+    if (item === null || typeof item !== 'object') return null;
+    const record = item as Record<string, unknown>;
+    if (typeof record.name !== 'string') return null;
+    const estimate = finiteOrNull(record.estimate);
+    const standardError = finiteOrNull(record.standardError);
+    const zStatistic = finiteOrNull(record.zStatistic);
+    const pValue = finiteOrNull(record.pValue);
+    // finiteOrNull devuelve undefined SÓLO para tipos no numéricos inesperados;
+    // NaN/inf/null (casos degenerados) ya vienen como null y son válidos.
+    if (estimate === undefined || standardError === undefined || zStatistic === undefined || pValue === undefined) {
+      return null;
+    }
+    coefficients.push({ name: record.name, estimate, standardError, zStatistic, pValue });
+  }
+  return coefficients;
+}
+
+// ARIMA es OPCIONAL: null/undefined = no se pidió o no se estimó (válido).
+// Un objeto presente debe estar bien formado o se rechaza todo el payload.
+function parseArima(raw: unknown): { ok: true; value: ProArimaResult | undefined } | { ok: false } {
+  if (raw === null || raw === undefined) return { ok: true, value: undefined };
+  if (typeof raw !== 'object' || Array.isArray(raw)) return { ok: false };
+
+  const record = raw as Record<string, unknown>;
+  const order = parseArimaOrder(record.order);
+  if (order === null) return { ok: false };
+
+  const coefficients = parseArimaCoefficients(record.coefficients);
+  if (coefficients === null) return { ok: false };
+
+  const logLikelihood = finiteOrNull(record.logLikelihood);
+  const aic = finiteOrNull(record.aic);
+  const bic = finiteOrNull(record.bic);
+  const hqic = finiteOrNull(record.hqic);
+  if (logLikelihood === undefined || aic === undefined || bic === undefined || hqic === undefined) return { ok: false };
+
+  // converged: sólo boolean o ausente (no se inventa cuando statsmodels no lo expone).
+  let converged: boolean | undefined;
+  if (record.converged === true || record.converged === false) converged = record.converged;
+  else if (record.converged !== null && record.converged !== undefined) return { ok: false };
+
+  let nobs: number | undefined;
+  if (record.nobs !== null && record.nobs !== undefined) {
+    if (typeof record.nobs !== 'number' || !Number.isInteger(record.nobs) || record.nobs <= 0) return { ok: false };
+    nobs = record.nobs;
+  }
+
+  const arimaWarnings = Array.isArray(record.warnings)
+    ? record.warnings.filter((w): w is string => typeof w === 'string')
+    : [];
+
+  return {
+    ok: true,
+    value: {
+      order,
+      converged,
+      nobs,
+      logLikelihood,
+      aic,
+      bic,
+      hqic,
+      coefficients,
+      warnings: arimaWarnings,
+      interpretation: interpretArima(order, converged),
+    },
+  };
+}
+
+function parseArimaResidualDiagnostics(
+  raw: unknown
+): { ok: true; value: ProArimaResidualDiagnostics | undefined } | { ok: false } {
+  if (raw === null || raw === undefined) return { ok: true, value: undefined };
+  if (typeof raw !== 'object' || Array.isArray(raw)) return { ok: false };
+  const record = raw as Record<string, unknown>;
+  const rows = parseLjungBoxRows(record.ljungBox);
+  if (rows === null) return { ok: false };
+  return { ok: true, value: { ljungBox: rows, interpretation: interpretArimaResiduals(rows) } };
 }
 
 /**
@@ -305,6 +484,19 @@ export function normalizePyodideTimeSeriesResult(raw: unknown): PyodideTimeSerie
   const ljungBoxParsed = parseLjungBox(obj.ljungBox);
   if (!ljungBoxParsed.ok) return tsError('El motor Python devolvió un test Ljung-Box inválido.');
 
+  const arimaParsed = parseArima(obj.arima);
+  if (!arimaParsed.ok) return tsError('El motor Python devolvió un resultado ARIMA inválido.');
+
+  const arimaResidualParsed = parseArimaResidualDiagnostics(obj.arimaResidualDiagnostics);
+  if (!arimaResidualParsed.ok) {
+    return tsError('El motor Python devolvió diagnósticos de residuos ARIMA inválidos.');
+  }
+
+  // arimaError es un texto opcional (falla controlada de ARIMA); ausente/no-string → undefined.
+  const arimaError = typeof obj.arimaError === 'string' && obj.arimaError.trim() !== ''
+    ? obj.arimaError
+    : undefined;
+
   return {
     ok: true,
     engine: 'pyodide',
@@ -316,6 +508,9 @@ export function normalizePyodideTimeSeriesResult(raw: unknown): PyodideTimeSerie
     acf,
     pacf,
     ljungBox: ljungBoxParsed.value,
+    arima: arimaParsed.value,
+    arimaError,
+    arimaResidualDiagnostics: arimaResidualParsed.value,
     warnings,
   };
 }
