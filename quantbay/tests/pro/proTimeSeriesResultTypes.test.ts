@@ -265,4 +265,68 @@ describe('normalizePyodideTimeSeriesResult · ARIMA', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain('ARIMA inválido');
   });
+
+  describe('forecast', () => {
+    const FORECAST_BLOCK = {
+      steps: 2,
+      confidenceLevel: 0.95,
+      items: [
+        { step: 1, mean: 10.5, meanStandardError: 0.8, lower: 8.9, upper: 12.1 },
+        { step: 2, mean: 10.7, meanStandardError: null, lower: null, upper: null },
+      ],
+      warnings: ['statsmodels no devolvió intervalos de confianza para este forecast.'],
+    };
+
+    it('parses a full forecast block inside the ARIMA result', () => {
+      const result = normalizeWithArima({ arima: { ...ARIMA_BLOCK, forecast: FORECAST_BLOCK } });
+      expect(result.ok).toBe(true);
+      expect(result.arima?.forecast?.steps).toBe(2);
+      expect(result.arima?.forecast?.confidenceLevel).toBe(0.95);
+      expect(result.arima?.forecast?.items[0]).toEqual({
+        step: 1, mean: 10.5, meanStandardError: 0.8, lower: 8.9, upper: 12.1,
+      });
+      expect(result.arima?.forecast?.warnings).toHaveLength(1);
+    });
+
+    it('keeps non-finite forecast values as null (serialized by Python) without inventing intervals', () => {
+      const result = normalizeWithArima({ arima: { ...ARIMA_BLOCK, forecast: FORECAST_BLOCK } });
+      const second = result.arima?.forecast?.items[1];
+      expect(second?.mean).toBe(10.7);
+      expect(second?.lower).toBeNull();
+      expect(second?.upper).toBeNull();
+      expect(second?.meanStandardError).toBeNull();
+    });
+
+    it('does not throw when the optional forecast/meanStandardError fields are absent', () => {
+      const noSe = {
+        steps: 1,
+        confidenceLevel: 0.95,
+        items: [{ step: 1, mean: 5.0, lower: 4.0, upper: 6.0 }],
+        warnings: [],
+      };
+      const result = normalizeWithArima({ arima: { ...ARIMA_BLOCK, forecast: noSe } });
+      expect(result.ok).toBe(true);
+      expect(result.arima?.forecast?.items[0].meanStandardError).toBeUndefined();
+
+      const noForecast = normalizeWithArima({ arima: ARIMA_BLOCK });
+      expect(noForecast.ok).toBe(true);
+      expect(noForecast.arima?.forecast).toBeUndefined();
+      expect(noForecast.arima?.forecastError).toBeUndefined();
+    });
+
+    it('threads forecastError through inside the ARIMA result', () => {
+      const result = normalizeWithArima({
+        arima: { ...ARIMA_BLOCK, forecastError: 'No se pudo calcular el forecast para este modelo.' },
+      });
+      expect(result.ok).toBe(true);
+      expect(result.arima?.forecastError).toContain('No se pudo calcular el forecast');
+    });
+
+    it('rejects a malformed forecast block (bad step)', () => {
+      const bad = { ...FORECAST_BLOCK, items: [{ step: 0, mean: 1, lower: 0, upper: 2 }] };
+      const result = normalizeWithArima({ arima: { ...ARIMA_BLOCK, forecast: bad } });
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('ARIMA inválido');
+    });
+  });
 });

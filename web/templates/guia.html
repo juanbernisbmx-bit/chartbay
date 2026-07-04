@@ -241,6 +241,14 @@
               <p><strong>Como se interpreta.</strong> Numeros con incertidumbre, no verdades exactas.</p>
             </div></details>
 
+            <details class="guia-sub"><summary>Que es un modelo econometrico</summary><div class="guia-sub-body">
+              <p><strong>Que es.</strong> Una representacion matematica de una relacion economica usando datos. No demuestra verdades absolutas: plantea una hipotesis cuantitativa y permite estimar, contrastar y medir evidencia.</p>
+              <p><strong>Piezas.</strong> Variable dependiente (Y, lo que queres explicar), variables explicativas (X), y un termino de error (u) que junta todo lo que el modelo no captura.</p>
+              <p><strong>Ejemplo.</strong> consumo = &beta;0 + &beta;1&middot;ingreso + u</p>
+              <p><strong>Flujo.</strong> Hipotesis &rarr; estimacion &rarr; interpretacion. El modelo estima y aporta evidencia; no "demuestra" causalidad por si solo.</p>
+              <p class="guia-note">Un coeficiente mide una asociacion estimada, no una verdad universal.</p>
+            </div></details>
+
             <details class="guia-sub"><summary>Variables Y y X</summary><div class="guia-sub-body">
               <p><strong>Que es.</strong> Y es lo que queres explicar; X lo que usas para explicarlo.</p>
               <p><strong>Para que.</strong> Definir el modelo.</p>
@@ -280,7 +288,8 @@
             <details class="guia-sub"><summary>Inferencia: error estandar, t, p-valor</summary><div class="guia-sub-body">
               <p><strong>Que es.</strong> Mide cuanta confianza dan los coeficientes.</p>
               <p><strong>Como se interpreta.</strong> Error estandar bajo = mas preciso. |t| grande y p &lt; 0.05 = significativo.</p>
-              <p><strong>En ChartBay.</strong> Columnas de la tabla, con marcas de significancia.</p>
+              <p><strong>En ChartBay.</strong> Columnas de la tabla, con marcas de significancia. OLS ademas reporta F-stat global y R2 / R2 ajustado.</p>
+              <p class="guia-note">Un p-value bajo no convierte automaticamente una relacion en causal.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
@@ -295,10 +304,27 @@
           <details class="guia-acc"><summary>Econometria avanzada</summary><div class="guia-acc-body">
 
             <details class="guia-sub"><summary>Restricciones lineales (RLS)</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> OLS imponiendo condiciones a los coeficientes.</p>
-              <p><strong>Para que.</strong> Probar hipotesis (ej: dos efectos iguales).</p>
+              <p><strong>Que es.</strong> Permite evaluar restricciones sobre coeficientes, como &beta;1 = 0 o &beta;1 + &beta;2 = 1. Sirve para contrastar hipotesis economicas concretas dentro del modelo.</p>
+              <p><strong>Como.</strong> La restriccion es la hipotesis nula (H0) y se contrasta con un test F/Wald. p bajo = la restriccion no se sostiene en los datos.</p>
+              <p><strong>Matiz importante.</strong> Una cosa es re-estimar los coeficientes bajo la restriccion (estimador restringido) y otra es testear la restriccion sobre el modelo libre. Lite re-estima; ChartBay Pro usa el test F/Wald de statsmodels sobre el OLS sin restringir (f_test). Los tests coinciden; los coeficientes no se comparan.</p>
               <p><strong>En ChartBay.</strong> Escribi beta_x1 = beta_x2, beta_x1 + beta_x2 = 1, etc.</p>
-              <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
+              <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Lite y Pro)</p>
+            </div></details>
+
+            <details class="guia-sub"><summary>Formas funcionales</summary><div class="guia-sub-body">
+              <p><strong>Que es.</strong> Como entra cada variable al modelo: en niveles o en logaritmos.</p>
+              <p><strong>Las cuatro.</strong> Lin-Lin: Y = &beta;0 + &beta;1&middot;X + u &middot; Log-Lin: ln(Y) = &beta;0 + &beta;1&middot;X + u &middot; Lin-Log: Y = &beta;0 + &beta;1&middot;ln(X) + u &middot; Log-Log: ln(Y) = &beta;0 + &beta;1&middot;ln(X) + u</p>
+              <p><strong>Como se interpreta.</strong> Lin-lin: cambio en unidades. Log-lin: cambio porcentual aproximado en Y por unidad de X. Lin-log: cambio en Y ante cambios porcentuales en X. Log-log: elasticidad (% de Y por % de X).</p>
+              <p><strong>Dominio.</strong> Los modelos con logaritmos requieren valores positivos en las variables transformadas. ChartBay valida esto antes de estimar.</p>
+              <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Lite y Pro, con recomendacion automatica)</p>
+            </div></details>
+
+            <details class="guia-sub"><summary>Variables dummy</summary><div class="guia-sub-body">
+              <p><strong>Que es.</strong> Una variable dummy convierte una categoria en una columna 0/1. Permite incluir informacion cualitativa, como region, sector o tipo de empresa, dentro de una regresion.</p>
+              <p><strong>Categoria base.</strong> Una categoria se omite para evitar la trampa de dummies (colinealidad perfecta con el intercepto). Cada coeficiente dummy se interpreta como diferencia respecto de esa base, con lo demas constante.</p>
+              <p><strong>Ejemplo.</strong> region_Centro queda como base. region_Norte = 1 si la observacion pertenece al Norte, 0 si no. El coeficiente de region_Norte mide la diferencia Norte vs Centro.</p>
+              <p class="guia-note">La categoria base no desaparece: funciona como punto de comparacion.</p>
+              <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Lite y Pro, mismo encoding)</p>
             </div></details>
 
             <details class="guia-sub"><summary>RSS y F de restricciones</summary><div class="guia-sub-body">
@@ -329,12 +355,6 @@
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (chequeos parciales)</p>
             </div></details>
 
-            <details class="guia-sub"><summary>Heterocedasticidad</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Varianza de los errores que cambia.</p>
-              <p><strong>Como se interpreta.</strong> Residuos en abanico = aviso; p-valores menos confiables.</p>
-              <p><strong>Estado.</strong> Concepto. Test dedicado: <span class="guia-st road">Roadmap</span></p>
-            </div></details>
-
             <details class="guia-sub"><summary>Variables binarias y logistica</summary><div class="guia-sub-body">
               <p><strong>Que es.</strong> Y de 0/1. OLS se vuelve modelo de probabilidad lineal; la logistica es mas apropiada.</p>
               <p><strong>Como se interpreta.</strong> La logistica da probabilidades 0-1; odds ratio mayor a 1 sube las chances.</p>
@@ -348,12 +368,38 @@
             </div></details>
           </div></details>
 
+          <!-- Modulo: Inferencia y diagnostico -->
+          <details class="guia-acc"><summary>Inferencia y diagnostico</summary><div class="guia-acc-body">
+
+            <details class="guia-sub"><summary>Errores estandar y errores robustos</summary><div class="guia-sub-body">
+              <p><strong>Que es.</strong> Los errores robustos ajustan la inferencia cuando la varianza de los errores no parece constante. No cambian los coeficientes OLS, pero pueden cambiar errores estandar, t-stats, p-values e intervalos.</p>
+              <p><strong>Variantes.</strong> Classic: asume varianza constante (homocedasticidad). HC1: correccion robusta estandar. HC3: mas conservadora, recomendada en muestras chicas o cuando Breusch-Pagan rechaza.</p>
+              <p><strong>Por que no cambia el beta.</strong> El estimador OLS es el mismo; lo que cambia es la matriz de covarianza con la que se mide su incertidumbre.</p>
+              <p class="guia-note">Los errores robustos no arreglan el modelo; ajustan la inferencia.</p>
+              <p><strong>En ChartBay.</strong> Selector de errores estandar en Pro (classic / HC1 / HC3).</p>
+              <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Pro)</p>
+            </div></details>
+
+            <details class="guia-sub"><summary>Heterocedasticidad</summary><div class="guia-sub-body">
+              <p><strong>Que es.</strong> Hay heterocedasticidad cuando la variabilidad de los errores cambia sistematicamente con las variables explicativas.</p>
+              <p><strong>Como se interpreta.</strong> Residuos en abanico = aviso. Los p-valores clasicos valen menos; conviene mirar errores robustos.</p>
+              <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (test Breusch-Pagan en Lite y Pro)</p>
+            </div></details>
+
+            <details class="guia-sub"><summary>Breusch-Pagan</summary><div class="guia-sub-body">
+              <p><strong>Que es.</strong> Breusch-Pagan contrasta si la varianza de los residuos parece depender de las X. Si rechaza homocedasticidad, los errores estandar clasicos pueden ser poco confiables.</p>
+              <p><strong>Como se lee.</strong> H0: homocedasticidad (varianza constante). p &lt; 0.05 = se rechaza H0 al 5%: hay evidencia de heterocedasticidad y conviene pasar a errores robustos (HC3).</p>
+              <p><strong>En ChartBay.</strong> Se reporta con el OLS; Pro ademas sugiere HC3 cuando rechaza.</p>
+              <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Lite y Pro)</p>
+            </div></details>
+          </div></details>
+
           <!-- Modulo: Series de tiempo -->
           <details class="guia-acc"><summary>Series de tiempo</summary><div class="guia-acc-body">
 
             <details class="guia-sub"><summary>Que es una serie de tiempo</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Datos ordenados en el tiempo (precio diario, etc.).</p>
-              <p><strong>Para que.</strong> Estudiar evolucion y dependencia temporal.</p>
+              <p><strong>Que es.</strong> Una variable observada en distintos momentos, como inflacion mensual, tipo de cambio diario o ventas trimestrales.</p>
+              <p><strong>Claves.</strong> El orden temporal importa: la serie tiene rezagos (valores pasados), puede mostrar autocorrelacion (correlacion con su pasado) y tiene una frecuencia (diaria, mensual, etc.).</p>
               <p><strong>En ChartBay.</strong> Elegis columna de fecha y de valor.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
@@ -365,9 +411,10 @@
             </div></details>
 
             <details class="guia-sub"><summary>ADF (raiz unitaria)</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Test de estacionariedad.</p>
-              <p><strong>Como se interpreta.</strong> p bajo = estacionaria. Incluye p-valor de MacKinnon.</p>
-              <p><strong>En ChartBay.</strong> En el panel de series.</p>
+              <p><strong>Que es.</strong> ADF ayuda a evaluar si una serie tiene raiz unitaria. En terminos simples, sirve para analizar si la serie parece estacionaria o si necesita diferenciacion antes de modelarse.</p>
+              <p><strong>Como se interpreta.</strong> H0: la serie tiene raiz unitaria (no es estacionaria). p &lt; 0.05 = se rechaza H0: evidencia de estacionariedad. p alto = la serie podria necesitar diferenciarse.</p>
+              <p><strong>Relacion con ARIMA.</strong> Si ADF sugiere no estacionariedad, un d &gt; 0 en ARIMA(p,d,q) diferencia la serie antes de modelarla.</p>
+              <p><strong>En ChartBay.</strong> Panel de series (Lite) y Pro con statsmodels (p-valor de MacKinnon).</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
@@ -379,22 +426,35 @@
             </div></details>
 
             <details class="guia-sub"><summary>ACF y PACF</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> ACF: correlacion con los rezagos. PACF: lo mismo, descontando los rezagos mas cortos.</p>
-              <p><strong>Como se interpreta.</strong> Caida lenta de la ACF = no estacionaria. La PACF ayuda a elegir el orden AR.</p>
-              <p><strong>En ChartBay.</strong> Tablas en el panel de series.</p>
+              <p><strong>Que es.</strong> ACF mide la correlacion de la serie con sus propios rezagos. PACF mide la relacion con un rezago especifico descontando los rezagos intermedios.</p>
+              <p><strong>Como se interpreta.</strong> Caida lenta de la ACF = probable no estacionariedad. Cortes claros en ACF/PACF sugieren candidatos para q y p en ARIMA — son una guia, no una regla mecanica perfecta.</p>
+              <p><strong>En ChartBay.</strong> Tablas en el panel de series (Lite) y en Pro con statsmodels.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
             <details class="guia-sub"><summary>Ljung-Box</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Test conjunto de autocorrelacion.</p>
-              <p><strong>Como se interpreta.</strong> p bajo = queda autocorrelacion (no es ruido blanco).</p>
-              <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
+              <p><strong>Que es.</strong> Ljung-Box evalua si existe autocorrelacion conjunta hasta ciertos rezagos.</p>
+              <p><strong>Como se interpreta.</strong> H0: no hay autocorrelacion conjunta. p &lt; 0.05 = se rechaza H0: queda estructura (no es ruido blanco).</p>
+              <p><strong>Dos usos.</strong> Sobre la serie original, detecta dependencia temporal. Sobre los residuos de un ARIMA, chequea si el modelo capturo esa dependencia: si no rechaza, buena señal.</p>
+              <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (serie y residuos ARIMA en Pro)</p>
             </div></details>
 
-            <details class="guia-sub"><summary>Modelos AR / MA / ARIMA</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Modelos clasicos para series.</p>
-              <p><strong>Para que.</strong> Pronosticar valores futuros.</p>
-              <p><strong>Estado.</strong> <span class="guia-st road">Roadmap</span></p>
+            <details class="guia-sub"><summary>ARIMA</summary><div class="guia-sub-body">
+              <p><strong>Que es.</strong> ARIMA combina terminos autorregresivos, diferenciacion y errores de pronostico para modelar series de tiempo.</p>
+              <p><strong>Las piezas.</strong> p: componente AR (rezagos de la propia serie). d: cuantas veces se diferencia la serie. q: componente MA (rezagos de errores de pronostico).</p>
+              <p><strong>Ejemplo.</strong> ARIMA(1,1,1): p = 1 usa un rezago autorregresivo; d = 1 diferencia la serie una vez; q = 1 usa un rezago de media movil.</p>
+              <p><strong>Honestidad.</strong> ARIMA no adivina el futuro. Construye un pronostico condicionado al patron historico y al modelo elegido.</p>
+              <p class="guia-note">Antes de usar ARIMA, conviene mirar estacionariedad (ADF), ACF, PACF y residuos.</p>
+              <p><strong>En ChartBay.</strong> Pro estima ARIMA manual: elegis p, d, q y ves coeficientes, AIC/BIC y diagnostico de residuos. Auto-ARIMA: <span class="guia-st road">Roadmap</span></p>
+              <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Pro, manual)</p>
+            </div></details>
+
+            <details class="guia-sub"><summary>Forecast</summary><div class="guia-sub-body">
+              <p><strong>Que es.</strong> El forecast proyecta valores futuros usando el modelo estimado. El pronostico puntual es una estimacion central; los intervalos muestran incertidumbre.</p>
+              <p><strong>Como se lee.</strong> Elegis un horizonte (cuantos periodos hacia adelante). Cada paso tiene un pronostico puntual y un limite inferior/superior. Los intervalos suelen abrirse a medida que crece el horizonte, porque la incertidumbre se acumula.</p>
+              <p><strong>Honestidad.</strong> El forecast no es una promesa: es una proyeccion condicionada al modelo y a que el patron historico se mantenga.</p>
+              <p><strong>En ChartBay.</strong> Pro genera forecast del ARIMA estimado con intervalos al 95%.</p>
+              <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Pro)</p>
             </div></details>
           </div></details>
 
@@ -454,11 +514,20 @@
             <p><strong>RLS.</strong> OLS con restricciones lineales.</p>
             <p><strong>VIF.</strong> Indicador de multicolinealidad.</p>
             <p><strong>Matriz singular.</strong> No se puede resolver el modelo.</p>
+            <p><strong>Forma funcional.</strong> Como entran las variables: niveles o logaritmos (lin-lin, log-lin, lin-log, log-log).</p>
+            <p><strong>Elasticidad.</strong> % de cambio en Y por % de cambio en X (coeficiente log-log).</p>
+            <p><strong>Dummy.</strong> Columna 0/1 que representa una categoria.</p>
+            <p><strong>Categoria base.</strong> Categoria omitida contra la que se comparan las dummies.</p>
+            <p><strong>Heterocedasticidad.</strong> Varianza de los errores que cambia con las X.</p>
+            <p><strong>Breusch-Pagan.</strong> Test de heterocedasticidad (H0: varianza constante).</p>
+            <p><strong>Errores robustos (HC1/HC3).</strong> Inferencia ajustada ante heterocedasticidad.</p>
             <p><strong>Estacionariedad.</strong> Propiedades estables en el tiempo.</p>
             <p><strong>ADF.</strong> Test de raiz unitaria.</p>
             <p><strong>ACF / PACF.</strong> Autocorrelacion y autocorrelacion parcial.</p>
             <p><strong>Ljung-Box.</strong> Test conjunto de autocorrelacion.</p>
             <p><strong>Ruido blanco.</strong> Serie sin estructura.</p>
+            <p><strong>ARIMA(p,d,q).</strong> Modelo de series: AR(p) + diferenciacion d + MA(q).</p>
+            <p><strong>Forecast.</strong> Proyeccion futura con pronostico puntual e intervalos.</p>
             <p><strong>Retorno.</strong> Variacion del precio.</p>
             <p><strong>Volatilidad.</strong> Dispersion del retorno.</p>
             <p><strong>Sobreajuste.</strong> Modelo que memoriza la muestra.</p>
@@ -498,6 +567,7 @@
             <details class="guia-sub"><summary>Ejemplo 4: serie de tiempo</summary><div class="guia-sub-body">
               <p><strong>Pasos.</strong> Elegi columna de fecha y de valor &rarr; Run Time Series.</p>
               <p><strong>Como se lee.</strong> ADF (estacionariedad), ACF/PACF, Ljung-Box y el siguiente paso sugerido.</p>
+              <p><strong>Con Pro.</strong> En version Pro, el mismo modo corre los diagnosticos con statsmodels y permite estimar un ARIMA manual (p,d,q) con forecast e intervalos.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
           </div></details>

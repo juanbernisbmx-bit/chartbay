@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MIN_PRO_TS_OBSERVATIONS,
   validateProArimaOrder,
+  validateProForecastSteps,
   validateProTimeSeriesInput,
 } from '../../src/pro/pyodide/proTimeSeriesValidation';
 
@@ -143,6 +144,40 @@ describe('validateProArimaOrder', () => {
 
   it('rejects a missing order', () => {
     const result = validateProArimaOrder(undefined, N);
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('validateProForecastSteps', () => {
+  it('accepts a valid integer horizon within 1..60', () => {
+    const result = validateProForecastSteps(12);
+    expect(result).toEqual({ ok: true, value: 12 });
+    expect(validateProForecastSteps(1).ok).toBe(true);
+    expect(validateProForecastSteps(60).ok).toBe(true);
+  });
+
+  it('rejects zero and negative horizons', () => {
+    for (const steps of [0, -1, -12]) {
+      const result = validateProForecastSteps(steps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error).toContain('entero positivo');
+    }
+  });
+
+  it('rejects a non-integer horizon', () => {
+    const result = validateProForecastSteps(2.5);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('entero positivo');
+  });
+
+  it('rejects horizons above the first-version limit (60)', () => {
+    const result = validateProForecastSteps(61);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('hasta 60 períodos');
+  });
+
+  it('rejects a missing horizon', () => {
+    const result = validateProForecastSteps(undefined);
     expect(result.ok).toBe(false);
   });
 });

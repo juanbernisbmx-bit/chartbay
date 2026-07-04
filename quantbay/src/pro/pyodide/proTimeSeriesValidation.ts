@@ -13,6 +13,8 @@ import {
   MAX_ARIMA_D,
   MAX_ARIMA_P,
   MAX_ARIMA_Q,
+  MAX_FORECAST_STEPS,
+  MIN_FORECAST_STEPS,
   isProAdfRegression,
   type ProAdfRegression,
   type ProArimaOrder,
@@ -182,6 +184,32 @@ export function validateProArimaOrder(order: ProArimaOrder | undefined, n: numbe
   }
 
   return { ok: true, value: { p, d, q } };
+}
+
+export type ProForecastStepsValidation =
+  | { ok: true; value: number }
+  | { ok: false; error: string };
+
+/**
+ * Valida el horizonte de forecast ANTES de correr Pyodide. Igual que el orden
+ * ARIMA, un horizonte inválido NO bloquea los diagnósticos ni el ARIMA en sí:
+ * el runner estima el ARIMA igual y usa este error sólo para la sección de
+ * forecast (ver pythonTimeSeriesRunner.ts).
+ */
+export function validateProForecastSteps(steps: number | undefined): ProForecastStepsValidation {
+  if (steps === undefined || steps === null) {
+    return { ok: false, error: 'Falta el horizonte de forecast (cantidad de períodos futuros).' };
+  }
+  if (typeof steps !== 'number' || !Number.isInteger(steps) || steps < MIN_FORECAST_STEPS) {
+    return { ok: false, error: 'El horizonte de forecast debe ser un entero positivo.' };
+  }
+  if (steps > MAX_FORECAST_STEPS) {
+    return {
+      ok: false,
+      error: `Para esta primera versión, usá un horizonte de hasta ${MAX_FORECAST_STEPS} períodos.`,
+    };
+  }
+  return { ok: true, value: steps };
 }
 
 function rangeInclusive(start: number, end: number): number[] {
