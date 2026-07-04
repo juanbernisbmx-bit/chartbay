@@ -6,6 +6,15 @@ import { escapeHtml } from './utils/format';
 import { $, setEngineStatus, setMethodStatus, setText, showError, updateSidebarStep, writeRunLog } from './app/dom';
 import { appState } from './app/state';
 import { exportAnalysisCSV, exportAnalysisTXT, exportPDF } from './ui/exports';
+import {
+  exportProRegressionCSV,
+  exportProRegressionMarkdown,
+  exportProRegressionTXT,
+  exportProTimeSeriesCSV,
+  exportProTimeSeriesMarkdown,
+  exportProTimeSeriesTXT,
+  proExportState,
+} from './pro/proExportView';
 import { checkCSVLimits, formatRegressionError } from './ui/errors';
 import { renderPreview, renderVarSelectors } from './ui/tables';
 import { renderRepairLog } from './ui/diagnosticsView';
@@ -320,6 +329,8 @@ function checkActiveEngineReady(): boolean {
 function updateExportButtonState(): void {
   const regressionReady = !!appState.lastResult;
   const timeSeriesReady = !!appState.lastTimeSeriesResult;
+  const proRegressionReady = !!(proExportState.lastProResult && proExportState.lastProResult.ok);
+  const proTimeSeriesReady = !!(proExportState.lastProTimeSeriesResult && proExportState.lastProTimeSeriesResult.ok);
   for (const id of ['qb-export-pdf', 'qb-export-csv', 'qb-export-txt']) {
     const button = $(id) as HTMLButtonElement | null;
     if (button) button.disabled = !regressionReady;
@@ -327,6 +338,14 @@ function updateExportButtonState(): void {
   for (const id of ['qb-ts-export-pdf', 'qb-ts-export-csv', 'qb-ts-export-txt']) {
     const button = $(id) as HTMLButtonElement | null;
     if (button) button.disabled = !timeSeriesReady;
+  }
+  for (const id of ['qb-pro-export-md', 'qb-pro-export-txt', 'qb-pro-export-csv']) {
+    const button = $(id) as HTMLButtonElement | null;
+    if (button) button.disabled = !proRegressionReady;
+  }
+  for (const id of ['qb-pro-ts-export-md', 'qb-pro-ts-export-txt', 'qb-pro-ts-export-csv']) {
+    const button = $(id) as HTMLButtonElement | null;
+    if (button) button.disabled = !proTimeSeriesReady;
   }
 }
 
@@ -456,6 +475,8 @@ async function onFileChange(e: Event): Promise<void> {
   hideProPanel();
   appState.activeDemoId = null;
   appState.lastTimeSeriesResult = null;
+  proExportState.lastProResult = null;
+  proExportState.lastProTimeSeriesResult = null;
   updateExportButtonState();
   clearDemoInfo();
   const fn = $('qb-filename');
@@ -628,6 +649,8 @@ async function onRunPro(
   proRunInFlight = true;
   const runButton = $('qb-run') as HTMLButtonElement | null;
   if (runButton) runButton.disabled = true;
+  proExportState.lastProResult = null;
+  updateExportButtonState();
 
   try {
     showProPanel();
@@ -696,6 +719,10 @@ async function onRunPro(
       ? buildLiteComparison(appState.csvData, yName, xNames, form, result, rlsConstraint)
       : null;
     renderProResult(result, comparison);
+    // Sólo se guarda para exportar cuando la corrida fue exitosa; un error deja
+    // el estado en null y los botones de exportación deshabilitados.
+    proExportState.lastProResult = result.ok ? result : null;
+    updateExportButtonState();
     setEngineStatus(result.ok ? 'COMPLETADO' : 'ERROR');
     writeRunLog(
       result.ok
@@ -856,6 +883,7 @@ async function onRunProTimeSeries(): Promise<void> {
   const runButton = $('qb-pro-ts-run') as HTMLButtonElement | null;
   if (runButton) runButton.disabled = true;
   appState.lastTimeSeriesResult = null;
+  proExportState.lastProTimeSeriesResult = null;
   updateExportButtonState();
 
   try {
@@ -899,6 +927,8 @@ async function onRunProTimeSeries(): Promise<void> {
     // El gráfico de forecast dibuja los últimos observados: se pasan las
     // observaciones finitas de la serie (mismas que valida el runner).
     renderProTimeSeriesResult(result, values.filter(Number.isFinite));
+    proExportState.lastProTimeSeriesResult = result.ok ? result : null;
+    updateExportButtonState();
     setEngineStatus(result.ok ? 'COMPLETADO' : 'ERROR');
     if (result.ok) setText('qb-status-obs', result.observations ?? 0);
     writeRunLog(
@@ -930,6 +960,7 @@ function onProTimeSeriesValueChange(): void {
   // Al cambiar la columna de serie se descartan los diagnósticos previos para
   // no dejar tablas viejas de otra variable visibles.
   appState.lastTimeSeriesResult = null;
+  proExportState.lastProTimeSeriesResult = null;
   updateExportButtonState();
   clearProTimeSeriesResult();
 }
@@ -990,6 +1021,12 @@ function init(): void {
   $('qb-ts-export-pdf')?.addEventListener('click', exportPDF);
   $('qb-ts-export-csv')?.addEventListener('click', exportAnalysisCSV);
   $('qb-ts-export-txt')?.addEventListener('click', exportAnalysisTXT);
+  $('qb-pro-export-md')?.addEventListener('click', exportProRegressionMarkdown);
+  $('qb-pro-export-txt')?.addEventListener('click', exportProRegressionTXT);
+  $('qb-pro-export-csv')?.addEventListener('click', exportProRegressionCSV);
+  $('qb-pro-ts-export-md')?.addEventListener('click', exportProTimeSeriesMarkdown);
+  $('qb-pro-ts-export-txt')?.addEventListener('click', exportProTimeSeriesTXT);
+  $('qb-pro-ts-export-csv')?.addEventListener('click', exportProTimeSeriesCSV);
 
   $('qb-y')?.addEventListener('change', () => {
     applyYIndicators(($('qb-y') as HTMLSelectElement)?.value ?? '');
