@@ -52,6 +52,7 @@ export {
   getAgroCsvTemplate,
   listAgroCsvTemplates,
 } from './agroCsvTemplates';
+export { assessAgroModelCapacity } from './agroModelCapacity';
 export { CHARTBAY_VERTICALS, isVerticalEnabled, type ChartBayVerticalId } from './agroFeatureFlags';
 export {
   clearAgroContext,
