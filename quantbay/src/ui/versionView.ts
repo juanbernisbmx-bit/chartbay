@@ -25,5 +25,5 @@ export function renderVersionInfo(config: ChartBayVersionConfig): void {
   if (engine) engine.textContent = ENGINE_LABELS[config.engine];
   if (limit) limit.textContent = `${config.maxCsvSizeMb} MB`;
   if (status) status.textContent = STATUS_LABELS[config.status];
-  if (desc) desc.innerHTML = config.status === 'available' ? '' : escapeHtml(config.description);
+  if (desc) desc.innerHTML = escapeHtml(config.description);
 }

@@ -327,7 +327,7 @@ function checkActiveEngineReady(): boolean {
   if (config.engine === 'typescript') return true;
   showError(
     config.engine === 'pyodide'
-      ? 'ChartBay Pro (experimental) solo soporta el cálculo OLS estándar por ahora. Para esta función, usá ChartBay Lite.'
+      ? 'La acción automática de reparación todavía no está disponible en Pro. Usá "Calcular regresión" en Pro o cambiá a Lite para usar "Arreglar y calcular".'
       : `El motor ${config.label} todavía está en preparación. Para ejecutar este análisis ahora, usá ChartBay Lite.`
   );
   return false;
@@ -634,7 +634,7 @@ async function onRun(): Promise<void> {
   }
 }
 
-// ── ChartBay Pro (Pyodide POC) ───────────────────────────────────────────────
+// ── ChartBay Pro (Pyodide) ───────────────────────────────────────────────────
 
 // Pyodide runs Python in a single shared interpreter: two concurrent runs would
 // both write to the same global variable names (chartbay_csv_text, etc.) and
@@ -694,12 +694,12 @@ async function onRunPro(
     if (domainError) {
       renderProResult(proError(domainError));
       setEngineStatus('ERROR');
-      writeRunLog([`ChartBay Pro (experimental): error de dominio — ${domainError}`]);
+      writeRunLog([`ChartBay Pro: error de dominio — ${domainError}`]);
       return;
     }
 
     showProStatus('Cargando Python en navegador…');
-    writeRunLog(['ChartBay Pro (experimental): preparando Python en el navegador…']);
+    writeRunLog(['ChartBay Pro: preparando Python en el navegador…']);
 
     const rawResult = await runPyodideOls(
       {
@@ -734,12 +734,12 @@ async function onRunPro(
     writeRunLog(
       result.ok
         ? [
-            'ChartBay Pro (experimental): OLS ejecutado con statsmodels (Pyodide)... OK',
+            'ChartBay Pro: OLS ejecutado con statsmodels (Pyodide)... OK',
             `Observaciones: ${result.nobs}`,
             `Inferencia: ${PRO_STANDARD_ERROR_LABELS[result.standardErrorType ?? DEFAULT_PRO_STANDARD_ERROR_TYPE]}`,
             ...result.warnings,
           ]
-        : [`ChartBay Pro (experimental): error — ${result.error ?? 'desconocido'}`]
+        : [`ChartBay Pro: error — ${result.error ?? 'desconocido'}`]
     );
     const panel = $('qb-pro-results');
     if (panel) panel.scrollIntoView({ behavior: 'smooth' });
@@ -867,7 +867,7 @@ function onTimeSeriesRun(): void {
   updateExportButtonState();
 }
 
-// ── ChartBay Pro · Time Series (Pyodide POC) ────────────────────────────────
+// ── ChartBay Pro · Time Series (Pyodide) ─────────────────────────────────────
 // Como el OLS Pro, Pyodide corre en un único intérprete Python compartido: dos
 // corridas simultáneas escribirían las mismas globales (chartbay_ts_*) y podrían
 // pisarse. Guarda contra doble click en "Correr diagnósticos" mientras hay una
@@ -879,8 +879,11 @@ function withPreparedProTimeIndex(
   prepared: PreparedProTimeSeries
 ): PyodideTimeSeriesResult {
   if (!result.ok) return result;
-  const warnings = prepared.warnings.length > 0
-    ? [...prepared.warnings, ...result.warnings]
+  const preparedWarnings = prepared.timeIndex
+    ? prepared.warnings.filter(warning => !prepared.timeIndex?.warnings.includes(warning))
+    : prepared.warnings;
+  const warnings = preparedWarnings.length > 0
+    ? [...preparedWarnings, ...result.warnings]
     : result.warnings;
   if (!prepared.timeIndex) return { ...result, warnings };
   const arima = result.arima?.forecast
@@ -935,13 +938,13 @@ async function onRunProTimeSeries(): Promise<void> {
       };
       renderProTimeSeriesResult(errorResult);
       setEngineStatus('ERROR');
-      writeRunLog([`ChartBay Pro (experimental): error — ${prepared.error}`]);
+      writeRunLog([`ChartBay Pro: error — ${prepared.error}`]);
       return;
     }
     const { values } = prepared.value;
 
     showProTimeSeriesStatus('Cargando Python en navegador…');
-    writeRunLog(['ChartBay Pro (experimental): preparando diagnósticos de series de tiempo…']);
+    writeRunLog(['ChartBay Pro: preparando diagnósticos de series de tiempo…']);
 
     const runArima = getProArimaEnabled();
     const rawResult = await runPyodideTimeSeries(
@@ -974,7 +977,7 @@ async function onRunProTimeSeries(): Promise<void> {
     writeRunLog(
       result.ok
         ? [
-            'ChartBay Pro (experimental): diagnósticos de series ejecutados con statsmodels (Pyodide)... OK',
+            'ChartBay Pro: diagnósticos de series ejecutados con statsmodels (Pyodide)... OK',
             `Serie: ${valueColumn}`,
             ...(result.timeIndex ? [`Índice temporal: ${result.timeIndex.columnName} (${result.timeIndex.frequency})`] : []),
             `Observaciones: ${result.observations}`,
@@ -986,7 +989,7 @@ async function onRunProTimeSeries(): Promise<void> {
             ...(result.arima?.forecastError ? [`Forecast: ${result.arima.forecastError}`] : []),
             ...result.warnings,
           ]
-        : [`ChartBay Pro (experimental): error — ${result.error ?? 'desconocido'}`]
+        : [`ChartBay Pro: error — ${result.error ?? 'desconocido'}`]
     );
     const panel = $('qb-pro-ts-panel');
     if (panel) panel.scrollIntoView({ behavior: 'smooth' });

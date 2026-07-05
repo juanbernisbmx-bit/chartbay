@@ -15,7 +15,10 @@ describe('chartbayVersions', () => {
     expect(pro.id).toBe('pro');
     expect(pro.maxCsvSizeMb).toBe(10);
     expect(pro.engine).toBe('pyodide');
-    expect(pro.status).toBe('experimental');
+    expect(pro.status).toBe('available');
+    expect(pro.description).toContain('ChartBay Pro v1');
+    expect(pro.description).toContain('ARIMA');
+    expect(pro.description).toContain('índice temporal opcional');
   });
 
   it('Mega Pro config matches spec', () => {

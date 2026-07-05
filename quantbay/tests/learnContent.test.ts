@@ -35,11 +35,13 @@ describe('Área Aprender (guia.html)', () => {
     ['heterocedasticidad', 'Heterocedasticidad'],
     ['Breusch-Pagan', 'Breusch-Pagan'],
     ['series de tiempo', 'Que es una serie de tiempo'],
+    ['orden temporal', 'Orden temporal y frecuencia'],
     ['ADF', 'ADF (raiz unitaria)'],
     ['ACF/PACF', 'ACF y PACF'],
     ['Ljung-Box', 'Ljung-Box'],
     ['ARIMA', '<summary>ARIMA</summary>'],
     ['forecast', '<summary>Forecast</summary>'],
+    ['fechas reales', 'Fechas reales'],
   ])('covers %s', (_topic, marker) => {
     expect(APRENDER).toContain(marker);
   });
@@ -88,6 +90,13 @@ describe('Área Aprender (guia.html)', () => {
     expect(APRENDER).toContain('no es una promesa');
   });
 
+  it('explains real dates, frequency inference and generic forecast fallback', () => {
+    expect(APRENDER).toContain('ChartBay puede ordenar la serie por fecha');
+    expect(APRENDER).toContain('frecuencia temporal estable');
+    expect(APRENDER).toContain('no inventa fechas');
+    expect(APRENDER).toContain('t+1, t+2');
+  });
+
   it('includes the pedagogical microcopy phrases', () => {
     expect(APRENDER).toContain('asociacion estimada, no una verdad universal');
     expect(APRENDER).toContain('no convierte automaticamente una relacion en causal');
@@ -109,5 +118,7 @@ describe('Área Aprender (guia.html)', () => {
     expect(APRENDER).toContain('<strong>Breusch-Pagan.</strong>');
     expect(APRENDER).toContain('<strong>ARIMA(p,d,q).</strong>');
     expect(APRENDER).toContain('<strong>Forecast.</strong>');
+    expect(APRENDER).toContain('<strong>Indice temporal.</strong>');
+    expect(APRENDER).toContain('<strong>Frecuencia temporal.</strong>');
   });
 });
