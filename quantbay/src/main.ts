@@ -73,6 +73,7 @@ import {
   type PreparedProTimeSeries,
 } from './pro/pyodide/proTimeIndex';
 import type { PyodideTimeSeriesResult } from './pro/pyodide/proTimeSeriesResultTypes';
+import { initAgroVertical } from './verticals/agro';
 
 interface QuantDemoCase {
   id: string;
@@ -1126,6 +1127,8 @@ function init(): void {
   setProSeSelectorVisible(resolveEngineAction(appState.activeVersion) === 'pro_pyodide');
   updateModePanels();
   updateExportButtonState();
+  // Vertical Agro: no-op si el flag está apagado o el panel no existe.
+  initAgroVertical();
 }
 
 if (document.readyState === 'loading') {

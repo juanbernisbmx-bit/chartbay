@@ -537,6 +537,45 @@
             </div>
           </div>
         </section>
+        <section class="qb-section" id="qb-agro-panel" style="display:none">
+          <div class="qb-panel-head">
+            <p class="qb-subtitle">ChartBay Agro</p>
+            <span>VERTICAL · MOTOR COMÚN</span>
+          </div>
+          <p class="muted qb-help">ChartBay Agro es la capa agropecuaria de ChartBay: datasets de ejemplo sintéticos, detección de columnas agro, presets de modelos y un simulador de margen bruto. Las regresiones las ejecuta el mismo motor econométrico de Econometría (Lite/Pro): Agro no duplica cálculos, solo agrega contexto del sector.</p>
+          <div class="qb-vars-grid">
+            <div>
+              <label for="qb-agro-dataset">Dataset de ejemplo (sintético)</label>
+              <select id="qb-agro-dataset" style="width:100%"></select>
+            </div>
+          </div>
+          <div class="qb-demo-note" id="qb-agro-dataset-note"></div>
+          <div id="qb-agro-detection"></div>
+          <div id="qb-agro-presets"></div>
+          <div class="qb-panel-head qb-subpanel" style="margin-top:14px">
+            <p class="qb-subtitle">Simulador de margen bruto</p>
+            <span>USD · POR CAMPAÑA</span>
+          </div>
+          <div class="qb-vars-grid">
+            <div><label for="qb-agro-m-crop">Cultivo</label><select id="qb-agro-m-crop" style="width:100%"></select></div>
+            <div><label for="qb-agro-m-hectares">Hectáreas</label><input id="qb-agro-m-hectares" type="number" min="0" value="100" step="1" style="width:100%"></div>
+            <div><label for="qb-agro-m-yield">Rinde esperado</label><input id="qb-agro-m-yield" type="number" min="0" value="3000" step="any" style="width:100%"></div>
+            <div><label for="qb-agro-m-unit">Unidad de rinde</label><select id="qb-agro-m-unit" style="width:100%"></select></div>
+            <div><label for="qb-agro-m-price">Precio esperado (USD/tn)</label><input id="qb-agro-m-price" type="number" min="0" value="300" step="any" style="width:100%"></div>
+            <div><label for="qb-agro-m-seed">Semilla (USD/ha)</label><input id="qb-agro-m-seed" type="number" min="0" value="80" step="any" style="width:100%"></div>
+            <div><label for="qb-agro-m-fert">Fertilizante (USD/ha)</label><input id="qb-agro-m-fert" type="number" min="0" value="120" step="any" style="width:100%"></div>
+            <div><label for="qb-agro-m-agq">Agroquímicos (USD/ha)</label><input id="qb-agro-m-agq" type="number" min="0" value="60" step="any" style="width:100%"></div>
+            <div><label for="qb-agro-m-labor">Labores (USD/ha)</label><input id="qb-agro-m-labor" type="number" min="0" value="90" step="any" style="width:100%"></div>
+            <div><label for="qb-agro-m-freight">Flete (USD/tn)</label><input id="qb-agro-m-freight" type="number" min="0" value="25" step="any" style="width:100%"></div>
+            <div><label for="qb-agro-m-rent">Alquiler (USD/ha)</label><input id="qb-agro-m-rent" type="number" min="0" value="0" step="any" style="width:100%"></div>
+            <div><label for="qb-agro-m-other">Otros (USD/ha)</label><input id="qb-agro-m-other" type="number" min="0" value="0" step="any" style="width:100%"></div>
+          </div>
+          <div style="margin-top:10px">
+            <button class="btn-ink" id="qb-agro-m-run" style="font-weight:700">Calcular margen</button>
+          </div>
+          <div id="qb-agro-margin-error" style="display:none;color:#e55;margin-top:8px"></div>
+          <div id="qb-agro-margin-result"></div>
+        </section>
       </main>
     </div>
 
