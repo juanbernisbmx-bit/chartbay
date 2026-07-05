@@ -52,6 +52,11 @@ describe('detectAgroColumns', () => {
     expect(roleOf(['area_harvested'], 'area_harvested')).toBe('area_harvested');
   });
 
+  it('detecta fecha/date como season (series de precios reales)', () => {
+    expect(roleOf(['fecha'], 'fecha')).toBe('season');
+    expect(roleOf(['date'], 'date')).toBe('season');
+  });
+
   it('tolera acentos', () => {
     expect(roleOf(['Precipitación'], 'Precipitación')).toBe('rainfall');
     expect(roleOf(['Producción'], 'Producción')).toBe('production');

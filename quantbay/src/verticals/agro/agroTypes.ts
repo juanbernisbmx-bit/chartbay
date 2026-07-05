@@ -166,3 +166,57 @@ export interface AgroExampleDataset {
   rows: Array<Record<string, string | number>>;
   suggestedPresetId?: string;
 }
+
+// Opciones del generador de datasets sintéticos grandes (muchas más filas que
+// los datasets de ejemplo fijos de arriba). Sirve para probar el flujo con un
+// volumen de datos parecido al de fuentes reales (ver agroDataCatalog.ts),
+// sin descargar ni fabricar datos reales.
+export interface AgroLargeSyntheticDatasetOptions {
+  crop?: AgroCrop;
+  seasonsCount?: number;            // cantidad de campañas simuladas
+  provinces?: string[];             // nombres de provincia a simular
+  departmentsPerProvince?: number;  // departamentos sintéticos por provincia
+  includeWeather?: boolean;         // agrega lluvia_total_mm y temperatura_media
+  includePrices?: boolean;          // agrega precio_usd_tn
+  includeCosts?: boolean;           // agrega costo_usd_ha
+  seed?: number;                    // semilla del PRNG determinista (reproducible)
+}
+
+// ── Catálogo de fuentes de datos agro (sólo referencia informativa) ────────
+//
+// loadMethod siempre es 'manual_csv': ChartBay Agro todavía NO descarga ni
+// integra ninguna API externa. El catálogo sólo documenta de dónde vendrían
+// datos reales y qué preset conviene usar con cada uno.
+
+export interface AgroDataSource {
+  id: string;
+  name: string;
+  provider: string;                 // organismo/institución de origen
+  granularity: string[];             // dimensiones de desagregación del dataset
+  variables: string[];               // variables típicamente disponibles
+  recommendedFor: AgroModelType[];   // qué tipo(s) de modelo agro conviene aplicar
+  loadMethod: 'manual_csv';
+  notes: string;
+}
+
+// ── Templates de CSV recomendados ───────────────────────────────────────────
+
+export interface AgroCsvTemplate {
+  id: string;
+  name: string;
+  description: string;
+  requiredColumns: string[];
+  optionalColumns: string[];
+  exampleRows: Array<Record<string, string | number>>;
+  recommendedModelType: AgroModelType;
+}
+
+// ── Capacidad del modelo según n (observaciones) y k (regresores) ─────────
+
+export type AgroModelCapacityLevel = 'safe' | 'warning' | 'unsafe';
+
+export interface AgroModelCapacityAssessment {
+  level: AgroModelCapacityLevel;
+  maxRecommendedX: number;   // cantidad de X recomendada dado rowCount
+  messages: string[];
+}

@@ -50,7 +50,7 @@ const RAW_ALIASES: Partial<Record<AgroColumnRole, string[]>> = {
   ],
   season: [
     'campaña', 'campania', 'campaign', 'season', 'ciclo', 'campana',
-    'year', 'anio', 'año', 'mes', 'month',
+    'year', 'anio', 'año', 'mes', 'month', 'fecha', 'date',
   ],
   province: [
     'provincia', 'province', 'departamento', 'localidad', 'location',

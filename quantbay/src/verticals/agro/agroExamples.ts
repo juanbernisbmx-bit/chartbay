@@ -119,17 +119,21 @@ export function getAgroExampleById(id: string): AgroExampleDataset | undefined {
   return AGRO_EXAMPLE_DATASETS.find(dataset => dataset.id === id);
 }
 
-function csvEscape(value: string | number): string {
+export function csvEscape(value: string | number): string {
   const text = String(value);
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+// Serializa columnas + filas a texto CSV (header + una línea por fila).
+// Utilidad genérica compartida por datasets de ejemplo y templates CSV.
+export function rowsToCsv(columns: string[], rows: Array<Record<string, string | number>>): string {
+  const header = columns.map(csvEscape).join(',');
+  const lines = rows.map(row => columns.map(column => csvEscape(row[column] ?? '')).join(','));
+  return [header, ...lines].join('\n');
 }
 
 // Serializa un dataset de ejemplo a texto CSV (headers + filas), compatible
 // con el mismo flujo de carga que usa Econometría para sus demos.
 export function agroDatasetToCsv(dataset: AgroExampleDataset): string {
-  const header = dataset.columns.map(csvEscape).join(',');
-  const rows = dataset.rows.map(row =>
-    dataset.columns.map(column => csvEscape(row[column] ?? '')).join(',')
-  );
-  return [header, ...rows].join('\n');
+  return rowsToCsv(dataset.columns, dataset.rows);
 }
