@@ -199,3 +199,45 @@ export function calculateAgroMargin(input: AgroMarginInput): AgroMarginResult {
     warnings,
   };
 }
+
+const YIELD_UNIT_LABELS: Record<AgroYieldUnit, string> = {
+  kg_ha: 'kg/ha',
+  qq_ha: 'qq/ha',
+  tn_ha: 'tn/ha',
+};
+
+// Resumen en texto plano del simulador de margen, para copiar al portapapeles
+// o exportar como TXT. Toma el input tal como lo ingresó el usuario (para
+// mostrar el rinde/precio en sus unidades originales) y el resultado ya
+// calculado — no vuelve a calcular nada.
+export function formatAgroMarginSummary(input: AgroMarginInput, result: AgroMarginResult): string {
+  const inputUnitLabel = YIELD_UNIT_LABELS[input.yieldUnit];
+  const breakEvenUnitLabel = YIELD_UNIT_LABELS[result.breakEvenYieldUnit];
+
+  const lines = [
+    'ChartBay Agro — Resumen del simulador de margen bruto',
+    '(Cálculo del vertical Agro; no proviene del motor econométrico.)',
+    '',
+    `Cultivo: ${input.crop}`,
+    `Hectáreas: ${input.hectares}`,
+    `Rinde esperado: ${input.expectedYield} ${inputUnitLabel} (${result.yieldTnHa.toFixed(3)} tn/ha)`,
+    `Precio esperado: ${input.expectedPriceUsdPerTon.toFixed(2)} USD/tn`,
+    `Ingreso bruto: ${result.revenueUsd.toFixed(2)} USD`,
+    `Costo total: ${result.totalCostUsd.toFixed(2)} USD`,
+    `Margen bruto: ${result.grossMarginUsd.toFixed(2)} USD`,
+    `Margen por hectárea: ${result.marginPerHectareUsd.toFixed(2)} USD/ha`,
+    `Rinde de indiferencia: ${result.breakEvenYield === null ? 'N/D' : `${result.breakEvenYield.toFixed(2)} ${breakEvenUnitLabel}`}`,
+    `Precio de indiferencia: ${result.breakEvenPriceUsdPerTon === null ? 'N/D' : `${result.breakEvenPriceUsdPerTon.toFixed(2)} USD/tn`}`,
+    '',
+    'Escenarios (±10% rinde y precio)',
+    ...result.scenarios.map(scenario =>
+      `  ${scenario.label}: rinde ${scenario.yieldTnHa.toFixed(3)} tn/ha, precio ${scenario.priceUsdPerTon.toFixed(2)} USD/tn, ` +
+      `margen bruto ${scenario.grossMarginUsd.toFixed(2)} USD, margen/ha ${scenario.marginPerHectareUsd.toFixed(2)} USD/ha`
+    ),
+    ...(result.warnings.length > 0 ? ['', 'Advertencias', ...result.warnings.map(w => `  - ${w}`)] : []),
+    '',
+    'Datos con fines educativos; no constituye asesoramiento financiero ni recomendación agronómica.',
+  ];
+
+  return lines.join('\n');
+}

@@ -7,6 +7,7 @@ import {
   calculateAgroTotalCost,
   calculateBreakEvenPrice,
   calculateBreakEvenYield,
+  formatAgroMarginSummary,
   runAgroMarginScenarios,
   yieldToTonsPerHa,
 } from '../../src/verticals/agro/agroMargin';
@@ -184,5 +185,57 @@ describe('validación de input', () => {
       ...result.scenarios.flatMap(s => [s.revenueUsd, s.totalCostUsd, s.grossMarginUsd, s.marginPerHectareUsd]),
     ];
     for (const n of numeros) expect(Number.isFinite(n)).toBe(true);
+  });
+});
+
+describe('formatAgroMarginSummary', () => {
+  it('incluye todos los campos requeridos del resumen', () => {
+    const result = calculateAgroMargin(BASE);
+    const summary = formatAgroMarginSummary(BASE, result);
+
+    expect(summary).toContain('Cultivo: soja');
+    expect(summary).toContain('Hectáreas: 100');
+    expect(summary).toContain('Rinde esperado: 3000 kg/ha (3.000 tn/ha)');
+    expect(summary).toContain('Precio esperado: 300.00 USD/tn');
+    expect(summary).toContain('Ingreso bruto: 90000.00 USD');
+    expect(summary).toContain('Costo total: 87500.00 USD');
+    expect(summary).toContain('Margen bruto: 2500.00 USD');
+    expect(summary).toContain('Margen por hectárea: 25.00 USD/ha');
+    expect(summary).toContain('Rinde de indiferencia: 2916.67 kg/ha');
+    expect(summary).toContain('Precio de indiferencia: 291.67 USD/tn');
+    expect(summary).toContain('Escenarios (±10% rinde y precio)');
+    expect(summary).toContain('Pesimista');
+    expect(summary).toContain('Optimista');
+  });
+
+  it('usa la unidad de rinde original, aunque difiera de la del punto de indiferencia', () => {
+    const input: AgroMarginInput = { ...BASE, expectedYield: 90, yieldUnit: 'qq_ha' };
+    const result = calculateAgroMargin(input);
+    const summary = formatAgroMarginSummary(input, result);
+    expect(summary).toContain('Rinde esperado: 90 qq/ha');
+    expect(summary).toContain('qq/ha');
+  });
+
+  it('muestra N/D cuando no hay rinde o precio de indiferencia calculable', () => {
+    const input: AgroMarginInput = { ...BASE, expectedPriceUsdPerTon: 0 };
+    const result = calculateAgroMargin(input);
+    const summary = formatAgroMarginSummary(input, result);
+    expect(summary).toContain('Rinde de indiferencia: N/D');
+  });
+
+  it('incluye las advertencias del resultado cuando existen', () => {
+    const input: AgroMarginInput = {
+      crop: 'soja', hectares: 10, expectedYield: 3000, yieldUnit: 'kg_ha', expectedPriceUsdPerTon: 300,
+    };
+    const result = calculateAgroMargin(input);
+    const summary = formatAgroMarginSummary(input, result);
+    expect(summary).toContain('Advertencias');
+    expect(summary).toContain('ningún costo');
+  });
+
+  it('no incluye la sección de advertencias cuando no hay ninguna', () => {
+    const result = calculateAgroMargin(BASE);
+    const summary = formatAgroMarginSummary(BASE, result);
+    expect(summary).not.toContain('Advertencias');
   });
 });
