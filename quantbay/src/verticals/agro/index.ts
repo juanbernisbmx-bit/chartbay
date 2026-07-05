@@ -37,8 +37,21 @@ export {
   SOJA_RINDE_DEMO,
   TRIGO_PRECIO_DEMO,
   agroDatasetToCsv,
+  generateLargeAgroSyntheticDataset,
   getAgroExampleById,
+  rowsToCsv,
 } from './agroExamples';
+export {
+  AGRO_DATA_CATALOG,
+  getAgroDataSourceById,
+  getAgroDataSourcesByModelType,
+} from './agroDataCatalog';
+export {
+  AGRO_CSV_TEMPLATES,
+  agroCsvTemplateToCsv,
+  getAgroCsvTemplate,
+  listAgroCsvTemplates,
+} from './agroCsvTemplates';
 export { CHARTBAY_VERTICALS, isVerticalEnabled, type ChartBayVerticalId } from './agroFeatureFlags';
 export {
   clearAgroContext,

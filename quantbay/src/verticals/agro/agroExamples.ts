@@ -9,7 +9,7 @@
 //   - soja:  produccion_tn = rinde_kg_ha × superficie_sembrada_ha / 1000
 //   - maíz:  margen_bruto_usd_ha = rinde_tn×precio − costos/ha − flete×rinde_tn
 
-import type { AgroExampleDataset } from './agroTypes';
+import type { AgroCrop, AgroExampleDataset, AgroLargeSyntheticDatasetOptions } from './agroTypes';
 
 export const SOJA_RINDE_DEMO: AgroExampleDataset = {
   id: 'soja_rinde_demo',
@@ -136,4 +136,148 @@ export function rowsToCsv(columns: string[], rows: Array<Record<string, string |
 // con el mismo flujo de carga que usa Econometría para sus demos.
 export function agroDatasetToCsv(dataset: AgroExampleDataset): string {
   return rowsToCsv(dataset.columns, dataset.rows);
+}
+
+// ── Generador de datasets sintéticos grandes ────────────────────────────────
+//
+// A diferencia de los 3 datasets fijos de arriba (12-30 filas, para demos
+// rápidas), este generador produce datasets con volumen realista (cientos o
+// miles de filas) para probar ChartBay Agro en condiciones parecidas a las de
+// una fuente real (ver agroDataCatalog.ts) — SIGUEN siendo 100% sintéticos.
+//
+// PRNG determinista (mulberry32, dominio público): dado el mismo seed, el
+// generador siempre produce exactamente el mismo dataset. No hay un patrón de
+// aleatoriedad determinista preexistente en el proyecto, así que se define acá,
+// mínimo y sin dependencias nuevas.
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return function next(): number {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const LARGE_DATASET_CROP_BASE_YIELD_KG_HA: Record<AgroCrop, number> = {
+  soja: 2800, maiz: 8500, trigo: 3000, girasol: 2000, sorgo: 4500, cebada: 3200, otro: 3000,
+};
+
+const LARGE_DATASET_CROP_BASE_PRICE_USD_TN: Record<AgroCrop, number> = {
+  soja: 350, maiz: 170, trigo: 200, girasol: 380, sorgo: 160, cebada: 190, otro: 250,
+};
+
+const DEFAULT_LARGE_DATASET_PROVINCES = ['Buenos Aires', 'Córdoba', 'Santa Fe', 'Entre Ríos', 'La Pampa'];
+
+// Ancla fija (no usa la fecha real): mantiene el generador 100% reproducible,
+// sin que su salida cambie con el paso del tiempo.
+const LAST_SYNTHETIC_SEASON_END_YEAR = 2025;
+
+function buildSyntheticSeasonLabels(count: number): string[] {
+  const labels: string[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const endYear = LAST_SYNTHETIC_SEASON_END_YEAR - i;
+    labels.push(`${endYear - 1}/${String(endYear).slice(2)}`);
+  }
+  return labels;
+}
+
+// Genera un dataset sintético grande: cultivo × campaña × provincia ×
+// departamento. Por defecto 20 campañas × 5 provincias × 10 departamentos =
+// 1000 filas. Mantiene producción = rinde × superficie cosechada / 1000 en
+// cada fila (coherencia interna), con variación realista por campaña
+// (clima/precio compartido a nivel país) y por provincia/departamento.
+export function generateLargeAgroSyntheticDataset(
+  options: AgroLargeSyntheticDatasetOptions = {}
+): AgroExampleDataset {
+  const crop = options.crop ?? 'soja';
+  const seasonsCount = options.seasonsCount ?? 20;
+  const provinces = options.provinces ?? DEFAULT_LARGE_DATASET_PROVINCES;
+  const departmentsPerProvince = options.departmentsPerProvince ?? 10;
+  const includeWeather = options.includeWeather ?? true;
+  const includePrices = options.includePrices ?? true;
+  const includeCosts = options.includeCosts ?? true;
+  const seed = options.seed ?? 20260705;
+
+  const random = mulberry32(seed);
+  const seasons = buildSyntheticSeasonLabels(seasonsCount);
+  const baseYield = LARGE_DATASET_CROP_BASE_YIELD_KG_HA[crop];
+  const basePrice = LARGE_DATASET_CROP_BASE_PRICE_USD_TN[crop];
+
+  const columns = [
+    'cultivo', 'campaña', 'provincia', 'departamento',
+    'superficie_sembrada_ha', 'superficie_cosechada_ha', 'produccion_tn', 'rinde_kg_ha',
+    ...(includeWeather ? ['lluvia_total_mm', 'temperatura_media'] : []),
+    ...(includePrices ? ['precio_usd_tn'] : []),
+    ...(includeCosts ? ['costo_usd_ha'] : []),
+  ];
+
+  const rows: Array<Record<string, string | number>> = [];
+
+  for (const season of seasons) {
+    // Efecto climático de la campaña (0 = seca/mala, 1 = lluviosa/buena),
+    // compartido por todas las provincias de esa campaña — como en la
+    // realidad, una seca afecta a todo el país, no departamento por
+    // departamento.
+    const seasonQuality = random();
+    const seasonRainfall = 350 + seasonQuality * 700;
+    const seasonTemperature = 19.5 - seasonQuality * 3;
+    const seasonPrice = basePrice * (0.8 + random() * 0.4);
+    const seasonCostBase = basePrice * 1.1 * (0.85 + random() * 0.3);
+
+    for (const province of provinces) {
+      // Efecto provincia: algunas zonas rinden sistemáticamente más que otras.
+      const provinceFactor = 0.85 + random() * 0.3;
+
+      for (let deptIndex = 0; deptIndex < departmentsPerProvince; deptIndex++) {
+        const department = `Departamento ${deptIndex + 1}`;
+        const idiosyncraticNoise = 0.9 + random() * 0.2;
+        const rindeKgHa = Math.round(
+          baseYield * provinceFactor * (0.6 + seasonQuality * 0.5) * idiosyncraticNoise
+        );
+
+        const superficieSembradaHa = Math.round(5000 + random() * 45000);
+        const harvestFactor = 0.9 + random() * 0.09; // 90%-99% de lo sembrado se cosecha
+        const superficieCosechadaHa = Math.round(superficieSembradaHa * harvestFactor);
+        const produccionTn = Math.round((rindeKgHa * superficieCosechadaHa) / 1000);
+
+        const row: Record<string, string | number> = {
+          cultivo: crop,
+          'campaña': season,
+          provincia: province,
+          departamento: department,
+          superficie_sembrada_ha: superficieSembradaHa,
+          superficie_cosechada_ha: superficieCosechadaHa,
+          produccion_tn: produccionTn,
+          rinde_kg_ha: rindeKgHa,
+        };
+        if (includeWeather) {
+          row.lluvia_total_mm = Math.round(seasonRainfall * (0.9 + random() * 0.2));
+          row.temperatura_media = Number((seasonTemperature + (random() - 0.5)).toFixed(1));
+        }
+        if (includePrices) {
+          row.precio_usd_tn = Number(seasonPrice.toFixed(1));
+        }
+        if (includeCosts) {
+          row.costo_usd_ha = Math.round(seasonCostBase * (0.95 + random() * 0.1));
+        }
+        rows.push(row);
+      }
+    }
+  }
+
+  return {
+    id: `${crop}_large_synthetic_demo`,
+    name: `${crop} — dataset sintético grande (${seasons.length} campañas × ${provinces.length} provincias × ${departmentsPerProvince} deptos/provincia)`,
+    description:
+      `Dataset 100% SINTÉTICO (${rows.length} filas) generado para probar ChartBay Agro con volumen ` +
+      `realista de observaciones. No proviene de ninguna fuente real — ver el catálogo de fuentes ` +
+      `(agroDataCatalog.ts) para datos reales recomendados. No usar para decisiones productivas ni comerciales.`,
+    crop,
+    synthetic: true,
+    columns,
+    rows,
+    suggestedPresetId: 'agro-yield',
+  };
 }
