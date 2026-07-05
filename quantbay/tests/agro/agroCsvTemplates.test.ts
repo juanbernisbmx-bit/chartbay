@@ -5,6 +5,8 @@ import {
   getAgroCsvTemplate,
   listAgroCsvTemplates,
 } from '../../src/verticals/agro/agroCsvTemplates';
+import { detectAgroColumns } from '../../src/verticals/agro/agroColumnDetection';
+import { suggestAgroModelPresets } from '../../src/verticals/agro/agroModelPresets';
 
 describe('AGRO_CSV_TEMPLATES', () => {
   it('incluye los 5 templates mínimos requeridos', () => {
@@ -37,6 +39,14 @@ describe('AGRO_CSV_TEMPLATES', () => {
     for (const template of AGRO_CSV_TEMPLATES) {
       const overlap = template.requiredColumns.filter(c => template.optionalColumns.includes(c));
       expect(overlap).toEqual([]);
+    }
+  });
+
+  it('cada template completo puede sugerir su modelo recomendado', () => {
+    for (const template of AGRO_CSV_TEMPLATES) {
+      const columns = [...template.requiredColumns, ...template.optionalColumns];
+      const suggestions = suggestAgroModelPresets(detectAgroColumns(columns));
+      expect(suggestions.some(s => s.preset.type === template.recommendedModelType)).toBe(true);
     }
   });
 });

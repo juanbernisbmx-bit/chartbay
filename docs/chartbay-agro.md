@@ -103,7 +103,7 @@ el panel ("Descargar template CSV"):
 | Template | Columnas requeridas | Modelo |
 |---|---|---|
 | `rinde` | campaña, provincia, rinde_kg_ha | Rinde |
-| `clima-agregado` | zona, campaña, lluvia_total_mm, temperatura_media | Insumo del modelo de rinde |
+| `clima-agregado` | zona, campaña, lluvia_total_mm, temperatura_media | Insumo del modelo de rinde; incluye `rinde_kg_ha` como opcional para disparar el preset de rinde |
 | `precios` | fecha, precio_local_usd_tn | Precio |
 | `margen` | lote, campaña, rinde_kg_ha, precio_usd_tn, costo_usd_ha | Margen |
 | `producción` | cultivo, campaña, provincia, superficie_sembrada_ha, produccion_tn | Producción |

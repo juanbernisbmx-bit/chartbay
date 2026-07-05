@@ -28,12 +28,13 @@ export const AGRO_CSV_TEMPLATES: AgroCsvTemplate[] = [
     name: 'Clima agregado por zona y campaña',
     description:
       'Una fila por zona/provincia + campaña con variables climáticas agregadas (lluvia acumulada, ' +
-      'temperatura media). Se usa como insumo del modelo de rinde, cruzado con producción o precio.',
+      'temperatura media). Se usa como insumo del modelo de rinde; si se completa la columna opcional ' +
+      'rinde_kg_ha también puede disparar el preset de rinde directamente.',
     requiredColumns: ['zona', 'campaña', 'lluvia_total_mm', 'temperatura_media'],
-    optionalColumns: ['humedad_media', 'heladas_dias'],
+    optionalColumns: ['rinde_kg_ha', 'humedad_media', 'heladas_dias'],
     exampleRows: [
-      { zona: 'Zona núcleo', 'campaña': '2023/24', lluvia_total_mm: 920, temperatura_media: 17.1 },
-      { zona: 'Zona núcleo', 'campaña': '2022/23', lluvia_total_mm: 430, temperatura_media: 18.4 },
+      { zona: 'Zona núcleo', 'campaña': '2023/24', lluvia_total_mm: 920, temperatura_media: 17.1, rinde_kg_ha: 3450 },
+      { zona: 'Zona núcleo', 'campaña': '2022/23', lluvia_total_mm: 430, temperatura_media: 18.4, rinde_kg_ha: 1950 },
     ],
     recommendedModelType: 'yield',
   },
