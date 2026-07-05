@@ -232,7 +232,7 @@ function renderPresets(datasetId: string): void {
   wrap.innerHTML =
     `<p class="qb-label" style="margin-top:12px">Presets sugeridos</p>${cards}` +
     `<p class="muted" style="font-size:11px;margin-top:6px">` +
-    `"Usar este preset" carga el dataset en Econometría (arriba) y preselecciona Y/X: revisá la ` +
+    `"Usar este preset" carga el dataset en el motor de ChartBay y preselecciona Y/X: revisá la ` +
     `selección antes de correr. El motor común de ChartBay hace la regresión; Agro sólo sugiere el modelo.</p>`;
 }
 
@@ -262,7 +262,7 @@ function loadDatasetWithSuggestion(
   });
 
   if (!result.ok) {
-    if (statusEl) statusEl.textContent = result.message ?? 'No se pudo cargar el dataset en Econometría.';
+    if (statusEl) statusEl.textContent = result.message ?? 'No se pudo cargar el dataset en el motor de ChartBay.';
     return;
   }
 
@@ -275,13 +275,13 @@ function loadDatasetWithSuggestion(
 
   if (statusEl) {
     if (!suggestion) {
-      statusEl.textContent = `"${dataset.name}" cargado en Econometría. Elegí las variables manualmente.`;
+      statusEl.textContent = `"${dataset.name}" cargado en el motor de ChartBay. Elegí las variables manualmente.`;
       return;
     }
     const categoricalCount = countCategoricalColumns(dataset, suggestion.xColumns);
     const capacity = assessAgroModelCapacity(dataset.rows.length, suggestion.xColumns.length, categoricalCount);
     statusEl.textContent =
-      `"${dataset.name}" cargado en Econometría con el preset "${suggestion.preset.label}" preseleccionado ` +
+      `"${dataset.name}" cargado en el motor de ChartBay con el preset "${suggestion.preset.label}" preseleccionado ` +
       `(Y = ${suggestion.yColumn}; X = ${suggestion.xColumns.join(', ')}). Revisá la selección antes de correr el modelo. ` +
       capacity.messages.join(' ');
   }
@@ -292,7 +292,7 @@ function onUseDatasetInEconometria(): void {
   const statusEl = $('qb-agro-use-status');
   const dataset = resolveAgroDataset(select?.value ?? '');
   if (!dataset) {
-    if (statusEl) statusEl.textContent = 'Elegí un dataset antes de usarlo en Econometría.';
+    if (statusEl) statusEl.textContent = 'Elegí un dataset antes de usarlo en el motor de ChartBay.';
     return;
   }
 
@@ -538,7 +538,7 @@ function onGenerateLargeDemo(): void {
   if (statusEl) {
     statusEl.textContent =
       `Se generó "${dataset.name}" con ${dataset.rows.length} filas — 100% sintético. Ya está seleccionado ` +
-      `arriba: revisá las columnas detectadas y los presets sugeridos, o usalo directamente en Econometría.`;
+      `arriba: revisá las columnas detectadas y los presets sugeridos, o usalo directamente en el motor de ChartBay.`;
   }
 }
 

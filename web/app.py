@@ -121,7 +121,7 @@ _CSP_QUANTBAY = (
     "frame-ancestors 'none'"
 )
 
-_QUANTBAY_PATHS = {"/econometria"}
+_QUANTBAY_PATHS = {"/econometria", "/agro"}
 
 
 @app.after_request
@@ -641,7 +641,12 @@ def guia():
 
 @app.route("/econometria")
 def econometria():
-    return render_template("quantbay.html")
+    return render_template("quantbay.html", quantbay_module="econometria")
+
+
+@app.route("/agro")
+def agro():
+    return render_template("quantbay.html", quantbay_module="agro")
 
 
 @app.route("/quantbay")

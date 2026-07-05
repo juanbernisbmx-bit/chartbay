@@ -1035,6 +1035,29 @@ function onTimeSeriesTransformationChange(): void {
 // orquestación que onFileChange usa para un archivo subido a mano. Nunca
 // corre el modelo: sólo deja el CSV cargado y, si es seguro, las variables
 // preseleccionadas para que el usuario revise antes de calcular.
+function initialQuantbayModule(): 'econometria' | 'agro' {
+  const module = document.querySelector<HTMLElement>('[data-qb-module]')?.dataset.qbModule;
+  return module === 'agro' ? 'agro' : 'econometria';
+}
+
+function setElementsDisplay(selector: string, display: string): void {
+  document.querySelectorAll<HTMLElement>(selector).forEach(el => {
+    el.style.display = display;
+  });
+}
+
+function applyInitialModuleLayout(): void {
+  if (initialQuantbayModule() !== 'agro') return;
+  setElementsDisplay('.qb-econometria-chrome', 'none');
+  setElementsDisplay('.qb-econometria-section', 'none');
+}
+
+function revealEconometriaWorkspaceForAgro(): void {
+  if (initialQuantbayModule() !== 'agro') return;
+  document.querySelector<HTMLElement>('[data-qb-module]')?.classList.remove('qb-agro-initial');
+  setElementsDisplay('.qb-econometria-chrome', '');
+}
+
 function agroLoadDataset(params: {
   csvText: string;
   label: string;
@@ -1075,6 +1098,7 @@ function agroLoadDataset(params: {
     renderPreview(appState.csvData);
     const categoricalCols = categoricalColumnsFor(appState.csvData);
     renderVarSelectors([...appState.csvData.numericColumns, ...categoricalCols], categoricalCols);
+    revealEconometriaWorkspaceForAgro();
     updateModePanels();
 
     const preview = $('qb-preview'), vars = $('qb-vars'), results = $('qb-results'), repair = $('qb-repair-log');
@@ -1211,6 +1235,7 @@ function init(): void {
   setProSeSelectorVisible(resolveEngineAction(appState.activeVersion) === 'pro_pyodide');
   updateModePanels();
   updateExportButtonState();
+  applyInitialModuleLayout();
   // Vertical Agro: no-op si el flag está apagado o el panel no existe.
   initAgroVertical({ loadDataset: agroLoadDataset });
 }
