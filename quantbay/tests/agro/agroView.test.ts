@@ -39,6 +39,10 @@ function agroPanelSkeleton(): string {
       <button id="qb-agro-m-copy" disabled></button>
       <button id="qb-agro-m-export-txt" disabled></button>
       <span id="qb-agro-m-copy-status"></span>
+      <button id="qb-agro-generate-large"></button>
+      <p id="qb-agro-generate-status"></p>
+      <div id="qb-agro-sources"></div>
+      <div id="qb-agro-templates"></div>
     </section>
     <section id="qb-results">
       <div id="qb-agro-interpretation-panel" style="display:none">
@@ -347,5 +351,96 @@ describe('simulador de margen (UI)', () => {
     const copiedText = writeText.mock.calls[0][0] as string;
     expect(copiedText).toContain('Margen bruto: 2500.00 USD');
     expect(copiedText).toContain('Escenarios');
+  });
+});
+
+describe('aviso de capacidad n/k en el status', () => {
+  it('incluye el aviso de capacidad al usar un dataset chico con variables categóricas', () => {
+    const { bridge } = makeFakeBridge();
+    initAgroVertical(bridge);
+    selectDataset('soja_rinde_demo');
+    document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
+
+    const status = document.getElementById('qb-agro-use-status')!.textContent ?? '';
+    expect(status).toContain('categórica');
+  });
+});
+
+describe('"Generar demo grande"', () => {
+  it('genera el dataset, lo agrega al select, lo selecciona y refresca detección/presets', () => {
+    initAgroVertical(makeFakeBridge().bridge);
+    document.getElementById('qb-agro-generate-large')!.dispatchEvent(new Event('click'));
+
+    const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
+    // opción vacía + 3 datasets fijos + 1 generado
+    expect(select.options.length).toBe(5);
+    expect(select.value).toContain('_large_synthetic_demo');
+
+    const status = document.getElementById('qb-agro-generate-status')!.textContent ?? '';
+    expect(status).toContain('1000 filas');
+
+    const detection = document.getElementById('qb-agro-detection')!.innerHTML;
+    expect(detection).toContain('rinde_kg_ha');
+
+    const presets = document.getElementById('qb-agro-presets')!.innerHTML;
+    expect(presets).toContain('Modelo de rinde');
+  });
+
+  it('no duplica la opción del select si se genera más de una vez', () => {
+    initAgroVertical(makeFakeBridge().bridge);
+    document.getElementById('qb-agro-generate-large')!.dispatchEvent(new Event('click'));
+    document.getElementById('qb-agro-generate-large')!.dispatchEvent(new Event('click'));
+    const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
+    expect(select.options.length).toBe(5);
+  });
+
+  it('el dataset generado se puede cargar en Econometría con el preset por defecto', () => {
+    const { bridge, calls } = makeFakeBridge();
+    initAgroVertical(bridge);
+    document.getElementById('qb-agro-generate-large')!.dispatchEvent(new Event('click'));
+    document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].suggestedY).toBe('rinde_kg_ha');
+    expect(calls[0].csvText.split('\n')).toHaveLength(1001); // header + 1000 filas
+  });
+});
+
+describe('fuentes de datos y templates CSV', () => {
+  it('renderiza el catálogo de fuentes al iniciar', () => {
+    initAgroVertical(makeFakeBridge().bridge);
+    const sources = document.getElementById('qb-agro-sources')!.innerHTML;
+    expect(sources).toContain('Estimaciones Agrícolas Argentina');
+    expect(sources).toContain('FAOSTAT');
+  });
+
+  it('renderiza los templates CSV con botón de descarga', () => {
+    initAgroVertical(makeFakeBridge().bridge);
+    const templates = document.getElementById('qb-agro-templates')!.innerHTML;
+    expect(templates).toContain('data-agro-template-id="rinde"');
+    expect(templates).toContain('Descargar template CSV');
+  });
+
+  it('descarga el template elegido al hacer click', () => {
+    const originalCreate = URL.createObjectURL;
+    const originalRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn(() => 'blob:mock');
+    URL.revokeObjectURL = vi.fn();
+    try {
+      initAgroVertical(makeFakeBridge().bridge);
+      const button = document.querySelector<HTMLElement>('[data-agro-template-id="margen"]')!;
+      expect(() => button.dispatchEvent(new Event('click', { bubbles: true }))).not.toThrow();
+      expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+    } finally {
+      URL.createObjectURL = originalCreate;
+      URL.revokeObjectURL = originalRevoke;
+    }
+  });
+
+  it('ignora el click si no viene de un botón de template', () => {
+    initAgroVertical(makeFakeBridge().bridge);
+    expect(() =>
+      document.getElementById('qb-agro-templates')!.dispatchEvent(new Event('click', { bubbles: true }))
+    ).not.toThrow();
   });
 });

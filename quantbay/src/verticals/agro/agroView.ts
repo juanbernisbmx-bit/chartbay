@@ -16,7 +16,14 @@ import { escapeHtml } from '../../utils/format';
 import type { FunctionalForm } from '../../functionalForms';
 import type { RegressionResult } from '../../regression';
 import { detectAgroColumns } from './agroColumnDetection';
-import { AGRO_EXAMPLE_DATASETS, agroDatasetToCsv, getAgroExampleById } from './agroExamples';
+import { AGRO_CSV_TEMPLATES, agroCsvTemplateToCsv } from './agroCsvTemplates';
+import { AGRO_DATA_CATALOG } from './agroDataCatalog';
+import {
+  AGRO_EXAMPLE_DATASETS,
+  agroDatasetToCsv,
+  generateLargeAgroSyntheticDataset,
+  getAgroExampleById,
+} from './agroExamples';
 import { isVerticalEnabled } from './agroFeatureFlags';
 import {
   fromPyodideOlsResult,
@@ -25,6 +32,7 @@ import {
   type AgroPyodideResultLike,
 } from './agroInterpretation';
 import { calculateAgroMargin, formatAgroMarginSummary } from './agroMargin';
+import { assessAgroModelCapacity } from './agroModelCapacity';
 import { agroRoleLabel, suggestAgroModelPresets } from './agroModelPresets';
 import type {
   AgroColumnDetectionResult,
@@ -81,6 +89,23 @@ let activeAgroContext: AgroInterpretationContext | null = null;
 let lastMarginInput: AgroMarginInput | null = null;
 let lastMarginResult: AgroMarginResult | null = null;
 
+// Dataset generado por "Generar demo grande" (si el usuario lo usó). Vive
+// aparte de AGRO_EXAMPLE_DATASETS (que es una lista fija) para no mutar esa
+// constante exportada; resolveAgroDataset lo consulta primero.
+let generatedDataset: AgroExampleDataset | null = null;
+
+function resolveAgroDataset(id: string): AgroExampleDataset | undefined {
+  if (generatedDataset && generatedDataset.id === id) return generatedDataset;
+  return getAgroExampleById(id);
+}
+
+// Cuenta cuántas de las columnas dadas tienen al menos un valor no numérico
+// en el dataset (heurística simple: esas son las que Econometría codifica
+// como dummies si se seleccionan como X).
+function countCategoricalColumns(dataset: AgroExampleDataset, columns: string[]): number {
+  return columns.filter(column => dataset.rows.some(row => typeof row[column] === 'string')).length;
+}
+
 function fmtUsd(value: number): string {
   const rounded = Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(2);
   return `${rounded} USD`;
@@ -129,7 +154,7 @@ export function clearAgroContext(): void {
 function renderDatasetNote(datasetId: string): void {
   const note = $('qb-agro-dataset-note');
   if (!note) return;
-  const dataset = getAgroExampleById(datasetId);
+  const dataset = resolveAgroDataset(datasetId);
   if (!dataset) {
     note.textContent = 'Elegí un dataset sintético para ver columnas detectadas y presets sugeridos.';
     return;
@@ -143,7 +168,7 @@ function renderDatasetNote(datasetId: string): void {
 function renderDetection(datasetId: string): void {
   const wrap = $('qb-agro-detection');
   if (!wrap) return;
-  const dataset = getAgroExampleById(datasetId);
+  const dataset = resolveAgroDataset(datasetId);
   if (!dataset) {
     wrap.innerHTML = '';
     return;
@@ -172,7 +197,7 @@ function renderDetection(datasetId: string): void {
 function renderPresets(datasetId: string): void {
   const wrap = $('qb-agro-presets');
   if (!wrap) return;
-  const dataset = getAgroExampleById(datasetId);
+  const dataset = resolveAgroDataset(datasetId);
   if (!dataset) {
     wrap.innerHTML = '';
     return;
@@ -249,17 +274,23 @@ function loadDatasetWithSuggestion(
   hideAgroInterpretationPanels();
 
   if (statusEl) {
-    statusEl.textContent = suggestion
-      ? `"${dataset.name}" cargado en Econometría con el preset "${suggestion.preset.label}" preseleccionado ` +
-        `(Y = ${suggestion.yColumn}; X = ${suggestion.xColumns.join(', ')}). Revisá la selección antes de correr el modelo.`
-      : `"${dataset.name}" cargado en Econometría. Elegí las variables manualmente.`;
+    if (!suggestion) {
+      statusEl.textContent = `"${dataset.name}" cargado en Econometría. Elegí las variables manualmente.`;
+      return;
+    }
+    const categoricalCount = countCategoricalColumns(dataset, suggestion.xColumns);
+    const capacity = assessAgroModelCapacity(dataset.rows.length, suggestion.xColumns.length, categoricalCount);
+    statusEl.textContent =
+      `"${dataset.name}" cargado en Econometría con el preset "${suggestion.preset.label}" preseleccionado ` +
+      `(Y = ${suggestion.yColumn}; X = ${suggestion.xColumns.join(', ')}). Revisá la selección antes de correr el modelo. ` +
+      capacity.messages.join(' ');
   }
 }
 
 function onUseDatasetInEconometria(): void {
   const select = $('qb-agro-dataset') as HTMLSelectElement | null;
   const statusEl = $('qb-agro-use-status');
-  const dataset = getAgroExampleById(select?.value ?? '');
+  const dataset = resolveAgroDataset(select?.value ?? '');
   if (!dataset) {
     if (statusEl) statusEl.textContent = 'Elegí un dataset antes de usarlo en Econometría.';
     return;
@@ -280,7 +311,7 @@ function onPresetsClick(event: Event): void {
   const presetId = button.dataset.agroPresetId ?? '';
 
   const select = $('qb-agro-dataset') as HTMLSelectElement | null;
-  const dataset = getAgroExampleById(select?.value ?? '');
+  const dataset = resolveAgroDataset(select?.value ?? '');
   if (!dataset) return;
 
   const detection = detectAgroColumns(dataset.columns);
@@ -479,6 +510,80 @@ function onMarginExportTxt(): void {
   );
 }
 
+// ── Demo grande (dataset sintético con volumen realista) ───────────────────
+
+// Genera un dataset sintético grande (por defecto 1000 filas: ver
+// generateLargeAgroSyntheticDataset) y lo agrega/selecciona en el desplegable
+// de datasets, como si fuera uno más — reutiliza todo el flujo de detección,
+// presets y carga en Econometría ya existente, sin duplicarlo.
+function onGenerateLargeDemo(): void {
+  const statusEl = $('qb-agro-generate-status');
+  const dataset = generateLargeAgroSyntheticDataset();
+  generatedDataset = dataset;
+
+  const select = $('qb-agro-dataset') as HTMLSelectElement | null;
+  if (select) {
+    let option = select.querySelector<HTMLOptionElement>('option[data-agro-generated="1"]');
+    if (!option) {
+      option = document.createElement('option');
+      option.dataset.agroGenerated = '1';
+      select.appendChild(option);
+    }
+    option.value = dataset.id;
+    option.textContent = `${dataset.name} (generado ahora)`;
+    select.value = dataset.id;
+  }
+  onDatasetChange();
+
+  if (statusEl) {
+    statusEl.textContent =
+      `Se generó "${dataset.name}" con ${dataset.rows.length} filas — 100% sintético. Ya está seleccionado ` +
+      `arriba: revisá las columnas detectadas y los presets sugeridos, o usalo directamente en Econometría.`;
+  }
+}
+
+// ── Datos reales: catálogo de fuentes + templates CSV ──────────────────────
+//
+// Sección puramente informativa/estática (no depende del dataset elegido).
+// No descarga nada: sólo documenta de dónde podría venir un dataset real y
+// deja templates CSV listos para copiar/descargar como punto de partida.
+
+function renderAgroDataSources(): void {
+  const wrap = $('qb-agro-sources');
+  if (!wrap) return;
+  wrap.innerHTML = AGRO_DATA_CATALOG.map(source =>
+    `<div class="qb-demo-note" style="margin-top:8px">` +
+    `<strong>${escapeHtml(source.name)}</strong> — <span class="muted">${escapeHtml(source.provider)}</span><br>` +
+    `Granularidad: ${source.granularity.map(escapeHtml).join(' · ')}<br>` +
+    `Variables: ${source.variables.map(escapeHtml).join(', ')}<br>` +
+    `<span class="muted">${escapeHtml(source.notes)}</span>` +
+    `</div>`
+  ).join('');
+}
+
+function renderAgroCsvTemplates(): void {
+  const wrap = $('qb-agro-templates');
+  if (!wrap) return;
+  wrap.innerHTML = AGRO_CSV_TEMPLATES.map(template =>
+    `<div class="qb-demo-note" style="margin-top:8px">` +
+    `<strong>${escapeHtml(template.name)}</strong><br>` +
+    `${escapeHtml(template.description)}<br>` +
+    `Columnas requeridas: ${template.requiredColumns.map(c => `<code>${escapeHtml(c)}</code>`).join(', ')}<br>` +
+    `Columnas opcionales: ${template.optionalColumns.map(c => `<code>${escapeHtml(c)}</code>`).join(', ')}<br>` +
+    `<button type="button" class="btn-ink qb-agro-template-btn" style="margin-top:6px" ` +
+    `data-agro-template-id="${escapeHtml(template.id)}">Descargar template CSV</button>` +
+    `</div>`
+  ).join('');
+}
+
+function onTemplatesClick(event: Event): void {
+  const button = (event.target as HTMLElement).closest<HTMLElement>('[data-agro-template-id]');
+  if (!button) return;
+  const template = AGRO_CSV_TEMPLATES.find(t => t.id === button.dataset.agroTemplateId);
+  if (!template) return;
+  downloadTextFile(`chartbay_agro_template_${template.id}.csv`, agroCsvTemplateToCsv(template), 'text/csv');
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 // Inicializa el panel de ChartBay Agro. No-op si el panel no existe en la
@@ -540,8 +645,12 @@ export function initAgroVertical(
     $('qb-agro-m-run')?.addEventListener('click', onMarginRun);
     $('qb-agro-m-copy')?.addEventListener('click', onMarginCopy);
     $('qb-agro-m-export-txt')?.addEventListener('click', onMarginExportTxt);
+    $('qb-agro-generate-large')?.addEventListener('click', onGenerateLargeDemo);
+    $('qb-agro-templates')?.addEventListener('click', onTemplatesClick);
   }
 
   panel.style.display = '';
   renderDatasetNote('');
+  renderAgroDataSources();
+  renderAgroCsvTemplates();
 }
