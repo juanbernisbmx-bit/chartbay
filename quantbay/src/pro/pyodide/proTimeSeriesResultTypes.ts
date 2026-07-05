@@ -51,6 +51,16 @@ export const MIN_FORECAST_STEPS = 1;
 export const MAX_FORECAST_STEPS = 60;
 export const DEFAULT_FORECAST_STEPS = 12;
 
+export type ProTimeFrequency = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'unknown';
+
+export interface ProTimeIndex {
+  columnName: string;
+  labels: string[];
+  futureLabels: string[];
+  frequency: ProTimeFrequency;
+  warnings: string[];
+}
+
 // Entrada del runner: una serie numérica ya extraída de una columna del CSV
 // (los valores no finitos se limpian en la validación TS, ver
 // proTimeSeriesValidation.ts) más las opciones de diagnóstico.
@@ -119,6 +129,7 @@ export interface ProArimaResidualDiagnostics {
 // devuelve valores no finitos — nunca se inventan intervalos.
 export interface ProArimaForecastItem {
   step: number;
+  period?: string;
   mean: number | null;
   // undefined cuando la versión de statsmodels no expone el SE del pronóstico.
   meanStandardError?: number | null;
@@ -173,6 +184,7 @@ export interface PyodideTimeSeriesResult {
   // error controlado para la sección ARIMA, sin borrar los diagnósticos.
   arimaError?: string;
   arimaResidualDiagnostics?: ProArimaResidualDiagnostics;
+  timeIndex?: ProTimeIndex;
   warnings: string[];
   error?: string;
 }
@@ -405,7 +417,8 @@ function parseArimaForecast(raw: unknown): { ok: true; value: ProArimaForecast |
       meanStandardError = finiteOrNull(row.meanStandardError);
       if (meanStandardError === undefined) return { ok: false };
     }
-    items.push({ step: row.step, mean, meanStandardError, lower, upper });
+    const period = typeof row.period === 'string' && row.period.trim() !== '' ? row.period : undefined;
+    items.push({ step: row.step, period, mean, meanStandardError, lower, upper });
   }
 
   const forecastWarnings = Array.isArray(record.warnings)

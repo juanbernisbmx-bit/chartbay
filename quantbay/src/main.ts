@@ -58,6 +58,7 @@ import {
   getProForecastSteps,
   getProTimeSeriesAdfRegression,
   getProTimeSeriesMaxLag,
+  getSelectedProTimeSeriesDateColumn,
   getSelectedProTimeSeriesValueColumn,
   renderProTimeSeriesNoData,
   renderProTimeSeriesResult,
@@ -66,6 +67,12 @@ import {
   showProTimeSeriesStatus,
 } from './ui/proTimeSeriesView';
 import type { FunctionalForm } from './functionalForms';
+import {
+  applyFuturePeriodsToForecast,
+  prepareProTimeSeriesValues,
+  type PreparedProTimeSeries,
+} from './pro/pyodide/proTimeIndex';
+import type { PyodideTimeSeriesResult } from './pro/pyodide/proTimeSeriesResultTypes';
 
 interface QuantDemoCase {
   id: string;
@@ -867,6 +874,29 @@ function onTimeSeriesRun(): void {
 // corrida en vuelo.
 let proTsRunInFlight = false;
 
+function withPreparedProTimeIndex(
+  result: PyodideTimeSeriesResult,
+  prepared: PreparedProTimeSeries
+): PyodideTimeSeriesResult {
+  if (!result.ok) return result;
+  const warnings = prepared.warnings.length > 0
+    ? [...prepared.warnings, ...result.warnings]
+    : result.warnings;
+  if (!prepared.timeIndex) return { ...result, warnings };
+  const arima = result.arima?.forecast
+    ? {
+        ...result.arima,
+        forecast: applyFuturePeriodsToForecast(result.arima.forecast, prepared.timeIndex),
+      }
+    : result.arima;
+  return {
+    ...result,
+    arima,
+    timeIndex: prepared.timeIndex,
+    warnings,
+  };
+}
+
 async function onRunProTimeSeries(): Promise<void> {
   if (proTsRunInFlight) return;
   if (!appState.csvData) {
@@ -891,21 +921,30 @@ async function onRunProTimeSeries(): Promise<void> {
     clearProTimeSeriesResult();
     setEngineStatus('CALCULANDO');
 
-    // Extrae la columna como serie numérica: los valores faltantes/no numéricos
-    // se marcan NaN y la validación TS (proTimeSeriesValidation.ts) los descarta
-    // con una advertencia clara antes de cargar Python.
-    const values = appState.csvData.rows.map(row => {
-      const raw = row[valueColumn];
-      if (raw === null || raw === undefined || raw === '') return NaN;
-      const num = Number(raw);
-      return Number.isFinite(num) ? num : NaN;
-    });
+    const prepared = prepareProTimeSeriesValues(
+      appState.csvData,
+      valueColumn,
+      getSelectedProTimeSeriesDateColumn()
+    );
+    if (!prepared.ok) {
+      const errorResult: PyodideTimeSeriesResult = {
+        ok: false,
+        engine: 'pyodide',
+        warnings: [],
+        error: prepared.error,
+      };
+      renderProTimeSeriesResult(errorResult);
+      setEngineStatus('ERROR');
+      writeRunLog([`ChartBay Pro (experimental): error — ${prepared.error}`]);
+      return;
+    }
+    const { values } = prepared.value;
 
     showProTimeSeriesStatus('Cargando Python en navegador…');
     writeRunLog(['ChartBay Pro (experimental): preparando diagnósticos de series de tiempo…']);
 
     const runArima = getProArimaEnabled();
-    const result = await runPyodideTimeSeries(
+    const rawResult = await runPyodideTimeSeries(
       {
         values,
         variableName: valueColumn,
@@ -923,10 +962,11 @@ async function onRunProTimeSeries(): Promise<void> {
         else showProTimeSeriesStatus('Ejecutando diagnósticos con statsmodels…');
       }
     );
+    const result = withPreparedProTimeIndex(rawResult, prepared.value);
 
     // El gráfico de forecast dibuja los últimos observados: se pasan las
     // observaciones finitas de la serie (mismas que valida el runner).
-    renderProTimeSeriesResult(result, values.filter(Number.isFinite));
+    renderProTimeSeriesResult(result, prepared.value.observedValues);
     proExportState.lastProTimeSeriesResult = result.ok ? result : null;
     updateExportButtonState();
     setEngineStatus(result.ok ? 'COMPLETADO' : 'ERROR');
@@ -936,6 +976,7 @@ async function onRunProTimeSeries(): Promise<void> {
         ? [
             'ChartBay Pro (experimental): diagnósticos de series ejecutados con statsmodels (Pyodide)... OK',
             `Serie: ${valueColumn}`,
+            ...(result.timeIndex ? [`Índice temporal: ${result.timeIndex.columnName} (${result.timeIndex.frequency})`] : []),
             `Observaciones: ${result.observations}`,
             ...(result.arima
               ? [`ARIMA(${result.arima.order.p},${result.arima.order.d},${result.arima.order.q}) estimado (AIC: ${result.arima.aic ?? '—'})`]
@@ -1015,6 +1056,7 @@ function init(): void {
   $('qb-ts-ma-window')?.addEventListener('change', onTimeSeriesTransformationChange);
   $('qb-pro-ts-run')?.addEventListener('click', onRunProTimeSeries);
   $('qb-pro-ts-value')?.addEventListener('change', onProTimeSeriesValueChange);
+  $('qb-pro-ts-date')?.addEventListener('change', onProTimeSeriesValueChange);
   $('qb-export-pdf')?.addEventListener('click', exportPDF);
   $('qb-export-csv')?.addEventListener('click', exportAnalysisCSV);
   $('qb-export-txt')?.addEventListener('click', exportAnalysisTXT);

@@ -312,6 +312,10 @@
                 <select id="qb-pro-ts-value" style="width:100%"></select>
               </div>
               <div>
+                <label for="qb-pro-ts-date">Columna temporal</label>
+                <select id="qb-pro-ts-date" style="width:100%"></select>
+              </div>
+              <div>
                 <label for="qb-pro-ts-maxlag">Rezago máximo</label>
                 <input id="qb-pro-ts-maxlag" type="number" min="1" max="40" value="12" step="1" style="width:100%">
               </div>
@@ -355,6 +359,7 @@
           <div id="qb-pro-ts-status" class="qb-interp" style="display:none;margin-top:10px"></div>
           <div id="qb-pro-ts-error" style="display:none;color:#e55;margin-top:10px"></div>
           <div id="qb-pro-ts-content" style="display:none">
+            <div id="qb-pro-ts-time-index"></div>
             <p class="qb-label" style="margin-top:10px">ADF (Augmented Dickey-Fuller)</p>
             <div id="qb-pro-ts-adf" class="qb-table-scroll" style="margin-top:6px"></div>
             <p class="qb-label" style="margin-top:10px">ACF / PACF</p>
