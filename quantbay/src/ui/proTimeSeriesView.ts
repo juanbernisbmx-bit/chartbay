@@ -15,8 +15,11 @@ import {
   type ProArimaResidualDiagnostics,
   type ProArimaResult,
   type ProLjungBoxRow,
+  type ProTimeFrequency,
+  type ProTimeIndex,
   type PyodideTimeSeriesResult,
 } from '../pro/pyodide/proTimeSeriesResultTypes';
+import { NO_TIME_COLUMN_VALUE, detectProTimeColumn } from '../pro/pyodide/proTimeIndex';
 
 // Chart.js se carga globalmente por CDN en quantbay.html (igual que en el motor
 // Lite, ver ui/timeseriesView.ts). No es un import npm — se accede por el global
@@ -55,6 +58,8 @@ const FORECAST_CHART_NO_INTERVALS =
   'Statsmodels no devolvió intervalos completos para este forecast. Se muestra solo el pronóstico medio.';
 const FORECAST_CHART_NO_LIB =
   'No se pudo renderizar el gráfico porque la librería de gráficos no está disponible.';
+const TIME_INDEX_PEDAGOGICAL_NOTE =
+  'En series de tiempo, el orden importa. ChartBay ordena la serie por fecha antes de estimar diagnósticos y modelos.';
 
 const DEFAULT_MAX_LAG = 12;
 
@@ -72,6 +77,10 @@ function optionHtml(value: string): string {
   return `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`;
 }
 
+function timeColumnOptionHtml(value: string, label = value): string {
+  return `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;
+}
+
 // Columnas candidatas a serie: las que tienen al menos un valor numérico finito.
 export function getProTimeSeriesValueColumns(rows: Record<string, unknown>[], headers: string[]): string[] {
   return headers.filter(header => rows.some(row => isFiniteNumeric(row[header])));
@@ -80,6 +89,12 @@ export function getProTimeSeriesValueColumns(rows: Record<string, unknown>[], he
 export function getSelectedProTimeSeriesValueColumn(): string {
   const select = $('qb-pro-ts-value') as HTMLSelectElement | null;
   return select?.value ?? '';
+}
+
+export function getSelectedProTimeSeriesDateColumn(): string | null {
+  const select = $('qb-pro-ts-date') as HTMLSelectElement | null;
+  const value = select?.value ?? NO_TIME_COLUMN_VALUE;
+  return value.trim() === '' ? null : value;
 }
 
 export function getProTimeSeriesMaxLag(defaultValue = DEFAULT_MAX_LAG): number {
@@ -150,10 +165,15 @@ export function renderProTimeSeriesNoData(
   clearProTimeSeriesResult();
 }
 
-export function renderProTimeSeriesSelectors(data: ParsedCSV, selectedValueColumn?: string): void {
+export function renderProTimeSeriesSelectors(
+  data: ParsedCSV,
+  selectedValueColumn?: string,
+  selectedTimeColumn?: string | null
+): void {
   const empty = $('qb-pro-ts-empty');
   const controls = $('qb-pro-ts-controls');
   const valueSelect = $('qb-pro-ts-value') as HTMLSelectElement | null;
+  const dateSelect = $('qb-pro-ts-date') as HTMLSelectElement | null;
   const runButton = $('qb-pro-ts-run') as HTMLButtonElement | null;
 
   const valueColumns = getProTimeSeriesValueColumns(data.rows, data.headers);
@@ -171,6 +191,15 @@ export function renderProTimeSeriesSelectors(data: ParsedCSV, selectedValueColum
     valueSelect.innerHTML = valueColumns.map(optionHtml).join('');
     valueSelect.value = valueColumn;
   }
+  if (dateSelect) {
+    const detected = detectProTimeColumn(data);
+    const validSelection = selectedTimeColumn && data.headers.includes(selectedTimeColumn) ? selectedTimeColumn : null;
+    dateSelect.innerHTML = [
+      timeColumnOptionHtml(NO_TIME_COLUMN_VALUE, detected ? `Sin fecha (detectada: ${detected})` : 'Sin fecha'),
+      ...data.headers.map(header => timeColumnOptionHtml(header)),
+    ].join('');
+    dateSelect.value = validSelection ?? NO_TIME_COLUMN_VALUE;
+  }
   if (runButton) runButton.disabled = !valueColumn;
   clearProTimeSeriesResult();
 }
@@ -184,7 +213,7 @@ export function clearProTimeSeriesResult(): void {
   if (content) content.style.display = 'none';
   const error = $('qb-pro-ts-error');
   if (error) { error.textContent = ''; error.style.display = 'none'; }
-  for (const id of ['qb-pro-ts-adf', 'qb-pro-ts-acfpacf', 'qb-pro-ts-ljungbox', 'qb-pro-ts-arima-section', 'qb-pro-ts-warnings']) {
+  for (const id of ['qb-pro-ts-time-index', 'qb-pro-ts-adf', 'qb-pro-ts-acfpacf', 'qb-pro-ts-ljungbox', 'qb-pro-ts-arima-section', 'qb-pro-ts-warnings']) {
     const el = $(id);
     if (el) el.innerHTML = '';
   }
@@ -290,6 +319,40 @@ function orderLabel(order: ProArimaOrder): string {
   return `ARIMA(${order.p},${order.d},${order.q})`;
 }
 
+function frequencyLabel(frequency: ProTimeFrequency): string {
+  switch (frequency) {
+    case 'daily': return 'diaria';
+    case 'weekly': return 'semanal';
+    case 'monthly': return 'mensual';
+    case 'quarterly': return 'trimestral';
+    case 'yearly': return 'anual';
+    default: return 'no detectada';
+  }
+}
+
+function buildTimeIndexHtml(timeIndex: ProTimeIndex | undefined): string {
+  if (!timeIndex) return '';
+  const unknown = timeIndex.frequency === 'unknown'
+    ? '<div class="qb-interp" style="margin-top:6px">El forecast se mostrará como pasos futuros porque la serie no tiene una frecuencia regular clara.</div>'
+    : '';
+  const warnings = timeIndex.warnings.length > 0
+    ? `<div class="qb-warn-yellow" style="margin-top:6px"><ul>${timeIndex.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
+    : '';
+  return `
+    <div class="qb-subpanel" style="margin-top:10px">
+      <p class="qb-label">Índice temporal</p>
+      <table class="ledger">
+        <tbody>
+          <tr><td>Columna</td><td>${escapeHtml(timeIndex.columnName)}</td></tr>
+          <tr><td>Frecuencia inferida</td><td>${escapeHtml(frequencyLabel(timeIndex.frequency))}</td></tr>
+        </tbody>
+      </table>
+      ${unknown}
+      <div class="qb-interp" style="margin-top:6px">${escapeHtml(TIME_INDEX_PEDAGOGICAL_NOTE)}</div>
+      ${warnings}
+    </div>`;
+}
+
 function buildArimaResidualHtml(diag: ProArimaResidualDiagnostics | undefined): string {
   if (!diag || diag.ljungBox.length === 0) return '';
   const body = diag.ljungBox
@@ -322,12 +385,16 @@ function buildForecastHtml(arima: ProArimaResult): string {
   const forecast: ProArimaForecast | undefined = arima.forecast;
   if (!forecast || forecast.items.length === 0) return '';
 
+  const hasPeriod = forecast.items.some(item => typeof item.period === 'string' && item.period.trim() !== '');
   const rows = forecast.items
-    .map(
-      item =>
-        `<tr><td>t+${item.step}</td><td>${fmt(item.mean)}</td><td>${fmt(item.lower)}</td><td>${fmt(item.upper)}</td></tr>`
-    )
+    .map(item => {
+      const periodCell = hasPeriod ? `<td>${escapeHtml(item.period ?? `t+${item.step}`)}</td>` : '';
+      return `<tr>${periodCell}<td>t+${item.step}</td><td>${fmt(item.mean)}</td><td>${fmt(item.lower)}</td><td>${fmt(item.upper)}</td></tr>`;
+    })
     .join('');
+  const header = hasPeriod
+    ? '<tr><th>Período</th><th>Paso</th><th>Pronóstico</th><th>Límite inferior</th><th>Límite superior</th></tr>'
+    : '<tr><th>Paso</th><th>Pronóstico</th><th>Límite inferior</th><th>Límite superior</th></tr>';
   const confidencePct = Math.round(forecast.confidenceLevel * 100);
   const forecastWarnings = forecast.warnings.length > 0
     ? `<div class="qb-warn-yellow" style="margin-top:6px"><ul>${forecast.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
@@ -337,7 +404,7 @@ function buildForecastHtml(arima: ProArimaResult): string {
     <p class="qb-label" style="margin-top:10px">Forecast ARIMA (${forecast.steps} períodos, intervalos al ${confidencePct}%)</p>
     <div class="qb-table-scroll">
       <table class="ledger">
-        <thead><tr><th>Paso</th><th>Pronóstico</th><th>Límite inferior</th><th>Límite superior</th></tr></thead>
+        <thead>${header}</thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -439,7 +506,11 @@ function forecastChartLabel(offsetFromLastObserved: number): string {
  * - NUNCA inventa bandas: con algún lower/upper null, muestra sólo la media.
  * - Si Chart.js no está disponible, no rompe: muestra un mensaje controlado.
  */
-function renderProForecastChart(observedValues: number[] | undefined, forecast: ProArimaForecast | undefined): void {
+function renderProForecastChart(
+  observedValues: number[] | undefined,
+  forecast: ProArimaForecast | undefined,
+  timeIndex?: ProTimeIndex
+): void {
   // Destruir el chart previo antes que nada: recalcular nunca deja dos.
   destroyProForecastChart();
 
@@ -457,7 +528,11 @@ function renderProForecastChart(observedValues: number[] | undefined, forecast: 
 
   if (section) section.style.display = '';
   // La nota pedagógica se muestra tenga o no Chart.js disponible.
-  if (noteEl) noteEl.textContent = FORECAST_CHART_NOTE;
+  if (noteEl) {
+    noteEl.textContent = timeIndex?.frequency === 'unknown'
+      ? `${FORECAST_CHART_NOTE} No se pudo inferir una frecuencia temporal regular. El forecast se muestra como pasos futuros t+1, t+2, ...`
+      : FORECAST_CHART_NOTE;
+  }
 
   // Chart.js ausente: mensaje controlado, sin romper la tabla ni el resto.
   if (typeof Chart === 'undefined') {
@@ -477,9 +552,12 @@ function renderProForecastChart(observedValues: number[] | undefined, forecast: 
   // No se inventan bandas: sólo se dibujan si TODO lower/upper es finito.
   const hasIntervals = items.every(it => it.lower !== null && it.upper !== null);
 
+  const observedLabels = timeIndex?.labels.slice(Math.max(0, timeIndex.labels.length - k));
   const labels: string[] = [];
-  for (let i = 0; i < k; i += 1) labels.push(forecastChartLabel(-(k - 1 - i)));
-  for (const item of items) labels.push(`t+${item.step}`);
+  for (let i = 0; i < k; i += 1) {
+    labels.push(observedLabels?.[i] ?? forecastChartLabel(-(k - 1 - i)));
+  }
+  for (const item of items) labels.push(item.period ?? `t+${item.step}`);
 
   const observedData: Array<number | null> = new Array(total).fill(null);
   for (let i = 0; i < k; i += 1) observedData[i] = observedTail[i];
@@ -591,10 +669,13 @@ export function renderProTimeSeriesResult(result: PyodideTimeSeriesResult, obser
 
   // El gráfico de forecast se dibuja sólo si hay forecast válido; nunca rompe
   // la tabla de forecast ni el resto del panel.
-  renderProForecastChart(observedValues, result.arima?.forecast);
+  renderProForecastChart(observedValues, result.arima?.forecast, result.timeIndex);
 
   const note = $('qb-pro-ts-note');
   if (note) note.textContent = PEDAGOGICAL_NOTE;
+
+  const timeIndexEl = $('qb-pro-ts-time-index');
+  if (timeIndexEl) timeIndexEl.innerHTML = buildTimeIndexHtml(result.timeIndex);
 
   const arima = $('qb-pro-ts-arima-note');
   if (arima) arima.textContent = ARIMA_STATUS_NOTE;

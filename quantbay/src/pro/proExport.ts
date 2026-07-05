@@ -21,6 +21,7 @@ import type {
   ProAcfPoint,
   ProArimaResult,
   ProLjungBoxRow,
+  ProTimeFrequency,
   PyodideTimeSeriesResult,
 } from './pyodide/proTimeSeriesResultTypes';
 
@@ -279,6 +280,17 @@ function ljungBoxVerdict(row: ProLjungBoxRow): string {
   return row.rejectAt5 ? 'Se rechaza H0 al 5%' : 'No se rechaza H0 al 5%';
 }
 
+function timeFrequencyLabel(frequency: ProTimeFrequency): string {
+  switch (frequency) {
+    case 'daily': return 'diaria';
+    case 'weekly': return 'semanal';
+    case 'monthly': return 'mensual';
+    case 'quarterly': return 'trimestral';
+    case 'yearly': return 'anual';
+    default: return 'no detectada';
+  }
+}
+
 // ── Series de tiempo Pro — Markdown ───────────────────────────────────────────
 
 export function buildProTimeSeriesMarkdown(result: PyodideTimeSeriesResult): string {
@@ -291,6 +303,13 @@ export function buildProTimeSeriesMarkdown(result: PyodideTimeSeriesResult): str
   lines.push(`- Variable analizada: ${result.variableName ?? 'N/D'}`);
   lines.push(`- Observaciones: ${reportInt(result.observations)}`);
   lines.push(`- Motor: ${PRO_ENGINE_LABEL}`);
+  if (result.timeIndex) {
+    lines.push(`- Columna temporal: ${result.timeIndex.columnName}`);
+    lines.push(`- Frecuencia inferida: ${timeFrequencyLabel(result.timeIndex.frequency)}`);
+    if (result.timeIndex.warnings.length > 0) {
+      for (const warning of result.timeIndex.warnings) lines.push(`- Advertencia temporal: ${warning}`);
+    }
+  }
   lines.push('');
 
   lines.push('## ADF');
@@ -402,12 +421,19 @@ function appendArimaMarkdown(lines: string[], result: PyodideTimeSeriesResult): 
     lines.push('');
   } else if (arima.forecast && arima.forecast.items.length > 0) {
     const forecast = arima.forecast;
+    const hasPeriod = forecast.items.some(item => item.period);
     lines.push('## Forecast');
     lines.push('');
-    lines.push('| Paso | Pronóstico | Error estándar | Límite inferior | Límite superior |');
-    lines.push('|---:|---:|---:|---:|---:|');
+    lines.push(hasPeriod
+      ? '| Período | Paso | Pronóstico | Error estándar | Límite inferior | Límite superior |'
+      : '| Paso | Pronóstico | Error estándar | Límite inferior | Límite superior |');
+    lines.push(hasPeriod ? '|---|---:|---:|---:|---:|---:|' : '|---:|---:|---:|---:|---:|');
     for (const item of forecast.items) {
-      lines.push(`| t+${item.step} | ${reportNum(item.mean)} | ${reportNum(item.meanStandardError)} | ${reportNum(item.lower)} | ${reportNum(item.upper)} |`);
+      if (hasPeriod) {
+        lines.push(`| ${item.period ?? `t+${item.step}`} | t+${item.step} | ${reportNum(item.mean)} | ${reportNum(item.meanStandardError)} | ${reportNum(item.lower)} | ${reportNum(item.upper)} |`);
+      } else {
+        lines.push(`| t+${item.step} | ${reportNum(item.mean)} | ${reportNum(item.meanStandardError)} | ${reportNum(item.lower)} | ${reportNum(item.upper)} |`);
+      }
     }
     lines.push('');
   }
@@ -424,6 +450,11 @@ export function buildProTimeSeriesText(result: PyodideTimeSeriesResult): string 
   lines.push(`- Variable analizada: ${result.variableName ?? 'N/D'}`);
   lines.push(`- Observaciones: ${reportInt(result.observations)}`);
   lines.push(`- Motor: ${PRO_ENGINE_LABEL}`);
+  if (result.timeIndex) {
+    lines.push(`- Columna temporal: ${result.timeIndex.columnName}`);
+    lines.push(`- Frecuencia inferida: ${timeFrequencyLabel(result.timeIndex.frequency)}`);
+    for (const warning of result.timeIndex.warnings) lines.push(`- Advertencia temporal: ${warning}`);
+  }
   lines.push('');
 
   lines.push('ADF');
@@ -484,11 +515,18 @@ export function buildProTimeSeriesText(result: PyodideTimeSeriesResult): string 
       lines.push('Forecast');
       lines.push(`Forecast no disponible: ${arima.forecastError}`);
     } else if (arima.forecast && arima.forecast.items.length > 0) {
+      const hasPeriod = arima.forecast.items.some(item => item.period);
       lines.push('');
       lines.push('Forecast');
-      lines.push('Paso\tPronostico\tError estandar\tLimite inferior\tLimite superior');
+      lines.push(hasPeriod
+        ? 'Periodo\tPaso\tPronostico\tError estandar\tLimite inferior\tLimite superior'
+        : 'Paso\tPronostico\tError estandar\tLimite inferior\tLimite superior');
       for (const item of arima.forecast.items) {
-        lines.push(`t+${item.step}\t${reportNum(item.mean)}\t${reportNum(item.meanStandardError)}\t${reportNum(item.lower)}\t${reportNum(item.upper)}`);
+        if (hasPeriod) {
+          lines.push(`${item.period ?? `t+${item.step}`}\tt+${item.step}\t${reportNum(item.mean)}\t${reportNum(item.meanStandardError)}\t${reportNum(item.lower)}\t${reportNum(item.upper)}`);
+        } else {
+          lines.push(`t+${item.step}\t${reportNum(item.mean)}\t${reportNum(item.meanStandardError)}\t${reportNum(item.lower)}\t${reportNum(item.upper)}`);
+        }
       }
     }
   }
@@ -504,11 +542,20 @@ export function buildProTimeSeriesText(result: PyodideTimeSeriesResult): string 
 // ── Series de tiempo Pro — CSV ────────────────────────────────────────────────
 
 export function buildProTimeSeriesForecastCsv(result: PyodideTimeSeriesResult): string {
-  const rows: string[] = [csvLine(['step', 'mean', 'mean_standard_error', 'lower', 'upper'])];
   const forecast = result.arima?.forecast;
+  const hasPeriod = !!forecast?.items.some(item => item.period);
+  const rows: string[] = [
+    hasPeriod
+      ? csvLine(['period', 'step', 'mean', 'mean_standard_error', 'lower', 'upper'])
+      : csvLine(['step', 'mean', 'mean_standard_error', 'lower', 'upper']),
+  ];
   if (forecast) {
     for (const item of forecast.items) {
-      rows.push(csvLine([item.step, csvNum(item.mean), csvNum(item.meanStandardError), csvNum(item.lower), csvNum(item.upper)]));
+      rows.push(
+        hasPeriod
+          ? csvLine([item.period ?? `t+${item.step}`, item.step, csvNum(item.mean), csvNum(item.meanStandardError), csvNum(item.lower), csvNum(item.upper)])
+          : csvLine([item.step, csvNum(item.mean), csvNum(item.meanStandardError), csvNum(item.lower), csvNum(item.upper)])
+      );
     }
   }
   return rows.join('\n');

@@ -7,6 +7,7 @@ import {
   getProForecastSteps,
   getProTimeSeriesAdfRegression,
   getProTimeSeriesMaxLag,
+  getSelectedProTimeSeriesDateColumn,
   getSelectedProTimeSeriesValueColumn,
   renderProTimeSeriesResult,
   renderProTimeSeriesSelectors,
@@ -20,6 +21,7 @@ function mountPanel(): void {
       <div id="qb-pro-ts-empty"></div>
       <div id="qb-pro-ts-controls" style="display:none">
         <select id="qb-pro-ts-value"></select>
+        <select id="qb-pro-ts-date"></select>
         <input id="qb-pro-ts-maxlag" type="number" value="12">
         <select id="qb-pro-ts-adf-reg">
           <option value="c" selected>c</option>
@@ -37,6 +39,7 @@ function mountPanel(): void {
       <div id="qb-pro-ts-status" style="display:none"></div>
       <div id="qb-pro-ts-error" style="display:none"></div>
       <div id="qb-pro-ts-content" style="display:none">
+        <div id="qb-pro-ts-time-index"></div>
         <div id="qb-pro-ts-adf"></div>
         <div id="qb-pro-ts-acfpacf"></div>
         <div id="qb-pro-ts-ljungbox"></div>
@@ -295,30 +298,39 @@ describe('renderProTimeSeriesResult · ARIMA', () => {
   describe('forecast', () => {
     const forecastArima: PyodideTimeSeriesResult = {
       ...arimaResult,
+      timeIndex: {
+        columnName: 'fecha',
+        labels: ['2024-01', '2024-02', '2024-03'],
+        futureLabels: ['2024-04', '2024-05', '2024-06'],
+        frequency: 'monthly',
+        warnings: [],
+      },
       arima: {
         ...arima,
         forecast: {
           steps: 3,
           confidenceLevel: 0.95,
           items: [
-            { step: 1, mean: 10.512345, meanStandardError: 0.8, lower: 8.912345, upper: 12.112345 },
-            { step: 2, mean: 10.7, meanStandardError: 1.1, lower: 8.5, upper: 12.9 },
-            { step: 3, mean: 10.8, meanStandardError: null, lower: null, upper: null },
+            { step: 1, period: '2024-04', mean: 10.512345, meanStandardError: 0.8, lower: 8.912345, upper: 12.112345 },
+            { step: 2, period: '2024-05', mean: 10.7, meanStandardError: 1.1, lower: 8.5, upper: 12.9 },
+            { step: 3, period: '2024-06', mean: 10.8, meanStandardError: null, lower: null, upper: null },
           ],
           warnings: [],
         },
       },
     };
 
-    it('shows the forecast table with Paso / Pronóstico / Límite inferior / Límite superior', () => {
+    it('shows the forecast table with Período / Paso / Pronóstico / Límite inferior / Límite superior when dates exist', () => {
       renderProTimeSeriesResult(forecastArima);
       const section = document.getElementById('qb-pro-ts-arima-section');
       const text = section?.textContent ?? '';
       expect(text).toContain('Forecast ARIMA');
+      expect(text).toContain('Período');
       expect(text).toContain('Paso');
       expect(text).toContain('Pronóstico');
       expect(text).toContain('Límite inferior');
       expect(text).toContain('Límite superior');
+      expect(text).toContain('2024-04');
       expect(text).toContain('t+1');
       expect(text).toContain('10.512345');
       expect(text).toContain('8.912345');
@@ -330,7 +342,7 @@ describe('renderProTimeSeriesResult · ARIMA', () => {
       renderProTimeSeriesResult(forecastArima);
       const rows = Array.from(document.querySelectorAll('#qb-pro-ts-arima-section table tr'))
         .map(tr => tr.textContent ?? '');
-      const lastRow = rows.find(r => r.includes('t+3')) ?? '';
+      const lastRow = rows.find(r => r.includes('2024-06')) ?? '';
       expect(lastRow).toContain('—');
     });
 
@@ -425,6 +437,23 @@ describe('renderProTimeSeriesResult · forecast chart', () => {
     warnings: [],
   };
   const withForecast: PyodideTimeSeriesResult = { ...okResult, arima: { ...baseArima, forecast: forecastFull } };
+  const withMonthlyForecast: PyodideTimeSeriesResult = {
+    ...withForecast,
+    timeIndex: {
+      columnName: 'fecha',
+      labels: Array.from({ length: 40 }, (_, index) => `2024-${String(index + 1).padStart(2, '0')}`),
+      futureLabels: ['2027-05', '2027-06', '2027-07'],
+      frequency: 'monthly',
+      warnings: [],
+    },
+    arima: {
+      ...baseArima,
+      forecast: {
+        ...forecastFull,
+        items: forecastFull.items.map((item, index) => ({ ...item, period: ['2027-05', '2027-06', '2027-07'][index] })),
+      },
+    },
+  };
   const noForecast: PyodideTimeSeriesResult = { ...okResult, arima: baseArima };
   const observed = Array.from({ length: 40 }, (_, i) => i * 0.5 + Math.sin(i));
 
@@ -464,13 +493,13 @@ describe('renderProTimeSeriesResult · forecast chart', () => {
 
   it('builds observed + mean + band datasets when Chart.js is present and intervals are complete', () => {
     installChart();
-    renderProTimeSeriesResult(withForecast, observed);
+    renderProTimeSeriesResult(withMonthlyForecast, observed);
     expect(MockChart.instances).toHaveLength(1);
     const labels = MockChart.instances[0].config.data.labels;
     const datasetLabels = MockChart.instances[0].config.data.datasets.map(d => d.label);
     // Observed window is min(30, 40) = 30 points, plus 3 forecast steps.
-    expect(labels).toContain('t');
-    expect(labels).toContain('t+3');
+    expect(labels).toContain('2024-40');
+    expect(labels).toContain('2027-07');
     expect(datasetLabels).toContain('Observado');
     expect(datasetLabels).toContain('Forecast');
     expect(datasetLabels).toContain('Límite inferior');
@@ -559,6 +588,51 @@ describe('Pro TS selectors and getters', () => {
     expect(options).toContain('pib');
     expect(options).not.toContain('texto');
     expect(document.getElementById('qb-pro-ts-controls')?.style.display).toBe('');
+  });
+
+  it('populates the optional time-column selector with a no-date fallback', () => {
+    renderProTimeSeriesSelectors(csv);
+    const select = document.getElementById('qb-pro-ts-date') as HTMLSelectElement;
+    const options = Array.from(select.options).map(o => o.value);
+    expect(options[0]).toBe('');
+    expect(options).toContain('fecha');
+    expect(getSelectedProTimeSeriesDateColumn()).toBeNull();
+    select.value = 'fecha';
+    expect(getSelectedProTimeSeriesDateColumn()).toBe('fecha');
+  });
+
+  it('renders the time index block with frequency and pedagogical note', () => {
+    renderProTimeSeriesResult({
+      ...okResult,
+      timeIndex: {
+        columnName: 'fecha',
+        labels: ['2024-01', '2024-02'],
+        futureLabels: ['2024-03'],
+        frequency: 'monthly',
+        warnings: [],
+      },
+    });
+    const text = document.getElementById('qb-pro-ts-time-index')?.textContent ?? '';
+    expect(text).toContain('Índice temporal');
+    expect(text).toContain('fecha');
+    expect(text).toContain('mensual');
+    expect(text).toContain('ordena la serie por fecha');
+  });
+
+  it('renders an unknown-frequency warning in the time index block', () => {
+    renderProTimeSeriesResult({
+      ...okResult,
+      timeIndex: {
+        columnName: 'fecha',
+        labels: ['2024-01', '2024-03'],
+        futureLabels: ['t+1'],
+        frequency: 'unknown',
+        warnings: ['No se pudo inferir una frecuencia temporal regular.'],
+      },
+    });
+    const text = document.getElementById('qb-pro-ts-time-index')?.textContent ?? '';
+    expect(text).toContain('no detectada');
+    expect(text).toContain('pasos futuros');
   });
 
   it('getSelectedProTimeSeriesValueColumn reads the selected series column', () => {

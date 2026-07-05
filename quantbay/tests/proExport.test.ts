@@ -131,6 +131,30 @@ function timeSeriesWithArima(): PyodideTimeSeriesResult {
   };
 }
 
+function timeSeriesWithDatedForecast(): PyodideTimeSeriesResult {
+  const result = timeSeriesWithArima();
+  return {
+    ...result,
+    timeIndex: {
+      columnName: 'fecha',
+      labels: ['2024-01', '2024-02', '2024-03'],
+      futureLabels: ['2024-04', '2024-05'],
+      frequency: 'monthly',
+      warnings: [],
+    },
+    arima: {
+      ...result.arima!,
+      forecast: {
+        ...result.arima!.forecast!,
+        items: [
+          { ...result.arima!.forecast!.items[0], period: '2024-04' },
+          { ...result.arima!.forecast!.items[1], period: '2024-05' },
+        ],
+      },
+    },
+  };
+}
+
 // ── Markdown: regresión ───────────────────────────────────────────────────────
 
 describe('buildProRegressionMarkdown', () => {
@@ -203,6 +227,13 @@ describe('buildProTimeSeriesMarkdown', () => {
     expect(md).toContain('| t+2 | 101.000000 | N/D | N/D | N/D |');
   });
 
+  it('mentions the temporal column and inferred frequency when present', () => {
+    const md = buildProTimeSeriesMarkdown(timeSeriesWithDatedForecast());
+    expect(md).toContain('Columna temporal: fecha');
+    expect(md).toContain('Frecuencia inferida: mensual');
+    expect(md).toContain('| 2024-04 | t+1 | 100.500000 |');
+  });
+
   it('does not break when ARIMA is absent', () => {
     const md = buildProTimeSeriesMarkdown(baseTimeSeries());
     expect(md).toContain('## ARIMA');
@@ -229,6 +260,14 @@ describe('TXT reports', () => {
     expect(txt).toContain('Modelo estimado: ARIMA(1,0,1)');
     expect(txt).toContain('Forecast');
     expect(txt).toContain('Paso\tPronostico\tError estandar\tLimite inferior\tLimite superior');
+  });
+
+  it('mentions temporal metadata in TXT reports', () => {
+    const txt = buildProTimeSeriesText(timeSeriesWithDatedForecast());
+    expect(txt).toContain('Columna temporal: fecha');
+    expect(txt).toContain('Frecuencia inferida: mensual');
+    expect(txt).toContain('Periodo\tPaso\tPronostico');
+    expect(txt).toContain('2024-04\tt+1\t100.500000');
   });
 });
 
@@ -259,6 +298,14 @@ describe('CSV reports', () => {
     expect(lines[0]).toBe('step,mean,mean_standard_error,lower,upper');
     expect(lines).toContain('1,100.5,1.2,98.1,102.9');
     expect(lines).toContain('2,101,,,');
+  });
+
+  it('exports forecast with period when dated labels exist', () => {
+    const csv = buildProTimeSeriesForecastCsv(timeSeriesWithDatedForecast());
+    const lines = csv.split('\n');
+    expect(lines[0]).toBe('period,step,mean,mean_standard_error,lower,upper');
+    expect(lines).toContain('2024-04,1,100.5,1.2,98.1,102.9');
+    expect(lines).toContain('2024-05,2,101,,,');
   });
 
   it('exports ACF/PACF as the fallback table', () => {
