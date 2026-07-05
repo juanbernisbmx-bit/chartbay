@@ -303,7 +303,7 @@
             <p class="qb-subtitle">Pro · Diagnósticos de series de tiempo</p>
             <span>PYODIDE · PYTHON EN NAVEGADOR</span>
           </div>
-          <p class="muted qb-help">ChartBay Pro corre diagnósticos de series de tiempo con statsmodels (Python/Pyodide) en el navegador: ADF (raíz unitaria / estacionariedad), ACF y PACF (rezagos candidatos) y Ljung-Box (autocorrelación conjunta). Opcionalmente estima un ARIMA(p,d,q) manual con forecast básico e intervalos de confianza. La selección automática de modelo (auto-ARIMA) todavía no está implementada.</p>
+          <p class="muted qb-help">ChartBay Pro corre diagnósticos de series de tiempo con statsmodels (Python/Pyodide) en el navegador: ADF (raíz unitaria / estacionariedad), ACF y PACF (rezagos candidatos) y Ljung-Box (autocorrelación conjunta). La columna temporal es opcional: si la elegís, Pro ordena la serie por fecha y usa períodos reales en el forecast cuando puede inferir una frecuencia estable. Si no, muestra pasos genéricos t+1, t+2. Opcionalmente estima un ARIMA(p,d,q) manual con forecast básico e intervalos de confianza. La selección automática de modelo (auto-ARIMA) todavía no está implementada.</p>
           <div class="qb-interp" id="qb-pro-ts-empty">Subí un CSV para diagnosticar una serie de tiempo con statsmodels.</div>
           <div id="qb-pro-ts-controls" style="display:none">
             <div class="qb-vars-grid">
@@ -498,10 +498,10 @@
 
         <section class="qb-section" id="qb-pro-results" style="display:none">
           <div class="qb-panel-head">
-            <p class="qb-subtitle">Resultado ChartBay Pro experimental</p>
+            <p class="qb-subtitle">Resultado ChartBay Pro v1</p>
             <span>PYODIDE · PYTHON EN NAVEGADOR</span>
           </div>
-          <p class="muted qb-help">ChartBay Pro está en etapa experimental. Ejecuta OLS con statsmodels (Python/Pyodide) en el navegador, con las 4 formas funcionales (lin-lin, log-lin, lin-log, log-log), intercepto automático, errores estándar clásicos o robustos (HC1/HC3) y test de restricciones lineales (Rβ = q) vía statsmodels.</p>
+          <p class="muted qb-help">ChartBay Pro v1 ejecuta OLS con statsmodels (Python/Pyodide) en el navegador, con las 4 formas funcionales (lin-lin, log-lin, lin-log, log-log), intercepto automático, errores estándar clásicos o robustos (HC1/HC3) y test de restricciones lineales (Rβ = q) vía statsmodels.</p>
           <p class="muted qb-help">El test de restricción evalúa si Rβ = q es compatible con los datos (Wald/F), pero los coeficientes que se muestran son siempre del OLS no restringido: Pro no re-estima β bajo la restricción como sí lo hace Lite. Las variables X categóricas se codifican como dummies (categoría base omitida) con la misma lógica que Lite. Cualquier selección ambigua o no soportada se bloquea con un aviso — no se ignora en silencio.</p>
           <div id="qb-pro-status" class="qb-interp" style="display:none"></div>
           <div id="qb-pro-error" style="display:none;color:#e55"></div>

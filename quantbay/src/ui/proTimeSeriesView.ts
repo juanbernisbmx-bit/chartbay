@@ -647,6 +647,12 @@ export function renderProTimeSeriesResult(result: PyodideTimeSeriesResult, obser
   if (!result.ok) {
     showProTimeSeriesError(result.error ?? 'Error desconocido en el motor Pro de series de tiempo.');
     destroyProForecastChart();
+    const chartSection = $('qb-pro-ts-forecast-chart-section');
+    if (chartSection) chartSection.style.display = 'none';
+    const chartNote = $('qb-pro-ts-forecast-chart-note');
+    if (chartNote) chartNote.textContent = '';
+    const chartStatus = $('qb-pro-ts-forecast-chart-status');
+    if (chartStatus) chartStatus.textContent = '';
     return;
   }
 
@@ -682,8 +688,11 @@ export function renderProTimeSeriesResult(result: PyodideTimeSeriesResult, obser
 
   const warningsEl = $('qb-pro-ts-warnings');
   if (warningsEl) {
-    warningsEl.innerHTML = result.warnings.length > 0
-      ? `<div class="qb-warn-yellow"><ul>${result.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
+    const generalWarnings = result.timeIndex
+      ? result.warnings.filter(w => !result.timeIndex?.warnings.includes(w))
+      : result.warnings;
+    warningsEl.innerHTML = generalWarnings.length > 0
+      ? `<div class="qb-warn-yellow"><ul>${generalWarnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
       : '';
   }
 

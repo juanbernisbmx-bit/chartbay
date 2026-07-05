@@ -562,6 +562,19 @@ describe('renderProTimeSeriesResult · forecast chart', () => {
     expect(document.getElementById('qb-pro-ts-forecast-chart-section')?.style.display).toBe('none');
   });
 
+  it('an ok:false result destroys and hides any previous forecast chart', () => {
+    installChart();
+    renderProTimeSeriesResult(withForecast, observed);
+    const chart = MockChart.instances[0];
+
+    renderProTimeSeriesResult({ ok: false, engine: 'pyodide', warnings: [], error: 'Fechas duplicadas.' });
+
+    expect(chart.destroyed).toBe(true);
+    expect(document.getElementById('qb-pro-ts-forecast-chart-section')?.style.display).toBe('none');
+    expect(document.getElementById('qb-pro-ts-forecast-chart-note')?.textContent).toBe('');
+    expect(document.getElementById('qb-pro-ts-forecast-chart-status')?.textContent).toBe('');
+  });
+
   it('keeps the forecast table intact alongside the chart', () => {
     installChart();
     renderProTimeSeriesResult(withForecast, observed);
@@ -629,10 +642,12 @@ describe('Pro TS selectors and getters', () => {
         frequency: 'unknown',
         warnings: ['No se pudo inferir una frecuencia temporal regular.'],
       },
+      warnings: ['No se pudo inferir una frecuencia temporal regular.'],
     });
     const text = document.getElementById('qb-pro-ts-time-index')?.textContent ?? '';
     expect(text).toContain('no detectada');
     expect(text).toContain('pasos futuros');
+    expect(document.getElementById('qb-pro-ts-warnings')?.textContent ?? '').toBe('');
   });
 
   it('getSelectedProTimeSeriesValueColumn reads the selected series column', () => {

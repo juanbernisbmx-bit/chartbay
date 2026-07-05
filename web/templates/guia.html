@@ -400,8 +400,16 @@
             <details class="guia-sub"><summary>Que es una serie de tiempo</summary><div class="guia-sub-body">
               <p><strong>Que es.</strong> Una variable observada en distintos momentos, como inflacion mensual, tipo de cambio diario o ventas trimestrales.</p>
               <p><strong>Claves.</strong> El orden temporal importa: la serie tiene rezagos (valores pasados), puede mostrar autocorrelacion (correlacion con su pasado) y tiene una frecuencia (diaria, mensual, etc.).</p>
-              <p><strong>En ChartBay.</strong> Elegis columna de fecha y de valor.</p>
+              <p><strong>Fechas reales.</strong> Si el CSV trae una columna temporal valida, ChartBay puede ordenar la serie por fecha antes de estimar. En Pro, esa columna es opcional: sin fecha, el analisis usa el orden del CSV.</p>
+              <p><strong>En ChartBay.</strong> Elegis columna de fecha y de valor en Lite. En Pro elegis una columna de serie y, si existe, una columna temporal opcional.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
+            </div></details>
+
+            <details class="guia-sub"><summary>Orden temporal y frecuencia</summary><div class="guia-sub-body">
+              <p><strong>Que es.</strong> El indice temporal define el orden de las observaciones. La frecuencia dice si los datos avanzan de forma regular: diaria, semanal, mensual, trimestral o anual.</p>
+              <p><strong>Como se interpreta.</strong> Una frecuencia estable permite etiquetar pasos futuros con periodos reales. Una frecuencia irregular no debe forzarse.</p>
+              <p><strong>En ChartBay Pro.</strong> Si elegis columna temporal, Pro valida fechas, bloquea duplicados, ordena la serie y solo genera fechas futuras cuando la frecuencia es clara. Si no, el forecast usa pasos genericos t+1, t+2.</p>
+              <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Pro)</p>
             </div></details>
 
             <details class="guia-sub"><summary>Estacionariedad</summary><div class="guia-sub-body">
@@ -452,6 +460,7 @@
             <details class="guia-sub"><summary>Forecast</summary><div class="guia-sub-body">
               <p><strong>Que es.</strong> El forecast proyecta valores futuros usando el modelo estimado. El pronostico puntual es una estimacion central; los intervalos muestran incertidumbre.</p>
               <p><strong>Como se lee.</strong> Elegis un horizonte (cuantos periodos hacia adelante). Cada paso tiene un pronostico puntual y un limite inferior/superior. Los intervalos suelen abrirse a medida que crece el horizonte, porque la incertidumbre se acumula.</p>
+              <p><strong>Fechas o pasos.</strong> Si Pro pudo inferir una frecuencia temporal estable, muestra periodos futuros reales. Si la frecuencia no es clara, no inventa fechas: muestra t+1, t+2 y avisa.</p>
               <p><strong>Honestidad.</strong> El forecast no es una promesa: es una proyeccion condicionada al modelo y a que el patron historico se mantenga.</p>
               <p><strong>En ChartBay.</strong> Pro genera forecast del ARIMA estimado con intervalos al 95%.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Pro)</p>
@@ -522,6 +531,8 @@
             <p><strong>Breusch-Pagan.</strong> Test de heterocedasticidad (H0: varianza constante).</p>
             <p><strong>Errores robustos (HC1/HC3).</strong> Inferencia ajustada ante heterocedasticidad.</p>
             <p><strong>Estacionariedad.</strong> Propiedades estables en el tiempo.</p>
+            <p><strong>Indice temporal.</strong> Columna de fecha o periodo que ordena una serie.</p>
+            <p><strong>Frecuencia temporal.</strong> Ritmo regular de la serie: diaria, semanal, mensual, trimestral o anual.</p>
             <p><strong>ADF.</strong> Test de raiz unitaria.</p>
             <p><strong>ACF / PACF.</strong> Autocorrelacion y autocorrelacion parcial.</p>
             <p><strong>Ljung-Box.</strong> Test conjunto de autocorrelacion.</p>

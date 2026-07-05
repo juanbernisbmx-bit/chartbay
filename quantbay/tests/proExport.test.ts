@@ -188,6 +188,16 @@ describe('buildProRegressionMarkdown', () => {
     expect(md).toContain('probá HC3');
   });
 
+  it('includes Pro regression warnings when present', () => {
+    const result = { ...baseRegression(), warnings: ['Se descartaron 2 filas con valores no numéricos.'] };
+    const md = buildProRegressionMarkdown(result);
+    const txt = buildProRegressionText(result);
+    expect(md).toContain('## Advertencias');
+    expect(md).toContain('Se descartaron 2 filas');
+    expect(txt).toContain('Advertencias');
+    expect(txt).toContain('Se descartaron 2 filas');
+  });
+
   it('omits optional blocks when they are absent', () => {
     const md = buildProRegressionMarkdown(baseRegression());
     expect(md).not.toContain('## Variables categóricas');
@@ -232,6 +242,19 @@ describe('buildProTimeSeriesMarkdown', () => {
     expect(md).toContain('Columna temporal: fecha');
     expect(md).toContain('Frecuencia inferida: mensual');
     expect(md).toContain('| 2024-04 | t+1 | 100.500000 |');
+  });
+
+  it('includes Pro time-series warnings when present', () => {
+    const result = {
+      ...baseTimeSeries(),
+      warnings: ['No se pudo inferir una frecuencia temporal regular.'],
+    };
+    const md = buildProTimeSeriesMarkdown(result);
+    const txt = buildProTimeSeriesText(result);
+    expect(md).toContain('## Advertencias');
+    expect(md).toContain('frecuencia temporal regular');
+    expect(txt).toContain('Advertencias');
+    expect(txt).toContain('frecuencia temporal regular');
   });
 
   it('does not break when ARIMA is absent', () => {

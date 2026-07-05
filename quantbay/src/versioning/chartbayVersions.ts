@@ -51,13 +51,14 @@ export const CHARTBAY_VERSIONS: Record<ChartBayVersion, ChartBayVersionConfig> =
   pro: {
     id: 'pro',
     label: 'Pro',
-    status: 'experimental',
+    status: 'available',
     description:
-      'ChartBay Pro (experimental) hoy ejecuta OLS con statsmodels vía Pyodide (Python en el navegador), con las ' +
+      'ChartBay Pro v1 ejecuta OLS con statsmodels vía Pyodide (Python en el navegador), con las ' +
       '4 formas funcionales (lin-lin, log-lin, lin-log, log-log), variables categóricas vía dummies (misma ' +
       'lógica que Lite), intercepto automático, errores estándar clásicos o robustos (HC1/HC3), diagnóstico ' +
       'Breusch-Pagan y test de restricciones lineales Rβ = q (Wald/F vía statsmodels, sin re-estimar los ' +
-      'coeficientes bajo la restricción).',
+      'coeficientes bajo la restricción). En series de tiempo Pro incluye ADF, ACF, PACF, Ljung-Box, ARIMA ' +
+      'manual, forecast con intervalos, gráfico e índice temporal opcional con fechas reales cuando el CSV lo permite.',
     maxCsvSizeMb: 10,
     engine: 'pyodide',
     features: {

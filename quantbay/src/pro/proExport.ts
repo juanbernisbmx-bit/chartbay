@@ -158,6 +158,13 @@ export function buildProRegressionMarkdown(result: PyodideOlsResult): string {
     lines.push('');
   }
 
+  if (result.warnings.length > 0) {
+    lines.push('## Advertencias');
+    lines.push('');
+    for (const warning of result.warnings) lines.push(`- ${warning}`);
+    lines.push('');
+  }
+
   lines.push('## Notas de interpretación');
   lines.push('');
   for (const note of REGRESSION_NOTES) lines.push(`- ${note}`);
@@ -227,6 +234,12 @@ export function buildProRegressionText(result: PyodideOlsResult): string {
     lines.push('');
   }
 
+  if (result.warnings.length > 0) {
+    lines.push('Advertencias');
+    for (const warning of result.warnings) lines.push(`- ${warning}`);
+    lines.push('');
+  }
+
   lines.push('Notas de interpretacion');
   for (const note of REGRESSION_NOTES) lines.push(`- ${note}`);
   lines.push('');
@@ -289,6 +302,11 @@ function timeFrequencyLabel(frequency: ProTimeFrequency): string {
     case 'yearly': return 'anual';
     default: return 'no detectada';
   }
+}
+
+function generalTimeSeriesWarnings(result: PyodideTimeSeriesResult): string[] {
+  if (!result.timeIndex) return result.warnings;
+  return result.warnings.filter(warning => !result.timeIndex?.warnings.includes(warning));
 }
 
 // ── Series de tiempo Pro — Markdown ───────────────────────────────────────────
@@ -356,6 +374,14 @@ export function buildProTimeSeriesMarkdown(result: PyodideTimeSeriesResult): str
   lines.push('');
 
   appendArimaMarkdown(lines, result);
+
+  const tsWarnings = generalTimeSeriesWarnings(result);
+  if (tsWarnings.length > 0) {
+    lines.push('## Advertencias');
+    lines.push('');
+    for (const warning of tsWarnings) lines.push(`- ${warning}`);
+    lines.push('');
+  }
 
   lines.push('## Notas');
   lines.push('');
@@ -531,6 +557,13 @@ export function buildProTimeSeriesText(result: PyodideTimeSeriesResult): string 
     }
   }
   lines.push('');
+
+  const tsWarnings = generalTimeSeriesWarnings(result);
+  if (tsWarnings.length > 0) {
+    lines.push('Advertencias');
+    for (const warning of tsWarnings) lines.push(`- ${warning}`);
+    lines.push('');
+  }
 
   lines.push('Notas');
   for (const note of TIME_SERIES_NOTES) lines.push(`- ${note}`);
