@@ -20,12 +20,15 @@ export {
   calculateAgroTotalCost,
   calculateBreakEvenPrice,
   calculateBreakEvenYield,
+  formatAgroMarginSummary,
   runAgroMarginScenarios,
   yieldToTonsPerHa,
 } from './agroMargin';
 export {
+  fromPyodideOlsResult,
   fromRegressionResult,
   interpretAgroRegressionResult,
+  type AgroPyodideResultLike,
   type ModelRunResultLike,
 } from './agroInterpretation';
 export {
@@ -37,4 +40,14 @@ export {
   getAgroExampleById,
 } from './agroExamples';
 export { CHARTBAY_VERTICALS, isVerticalEnabled, type ChartBayVerticalId } from './agroFeatureFlags';
-export { initAgroVertical } from './agroView';
+export {
+  clearAgroContext,
+  hasActiveAgroContext,
+  hideAgroInterpretationPanels,
+  initAgroVertical,
+  presentAgroInterpretationForPro,
+  presentAgroInterpretationForRegression,
+  type AgroDatasetLoadParams,
+  type AgroDatasetLoadResult,
+  type AgroEconometriaBridge,
+} from './agroView';

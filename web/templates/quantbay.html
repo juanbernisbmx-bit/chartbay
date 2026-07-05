@@ -484,6 +484,14 @@
           <p class="qb-label">Interpretación automática</p>
           <div class="qb-interp" id="qb-interpretation"></div>
 
+          <div id="qb-agro-interpretation-panel" style="display:none;margin-top:14px">
+            <div class="qb-panel-head qb-subpanel">
+              <p class="qb-subtitle">Lectura agropecuaria del modelo</p>
+              <span>CHARTBAY AGRO</span>
+            </div>
+            <div id="qb-agro-interpretation-content"></div>
+          </div>
+
           <div style="margin:14px 0 4px">
             <button class="btn-ink" id="qb-export-pdf" disabled>Exportar PDF</button>
             <button class="btn-ink" id="qb-export-csv" disabled>Exportar CSV</button>
@@ -530,6 +538,15 @@
             <div id="qb-pro-bp-test"></div>
             <div id="qb-pro-warnings"></div>
             <div id="qb-pro-comparison"></div>
+
+            <div id="qb-agro-pro-interpretation-panel" style="display:none;margin-top:14px">
+              <div class="qb-panel-head qb-subpanel">
+                <p class="qb-subtitle">Lectura agropecuaria del modelo</p>
+                <span>CHARTBAY AGRO</span>
+              </div>
+              <div id="qb-agro-pro-interpretation-content"></div>
+            </div>
+
             <div style="margin:14px 0 4px">
               <button class="btn-ink" id="qb-pro-export-md" disabled>Exportar Pro Markdown</button>
               <button class="btn-ink" id="qb-pro-export-txt" disabled>Exportar Pro TXT</button>
@@ -550,6 +567,10 @@
             </div>
           </div>
           <div class="qb-demo-note" id="qb-agro-dataset-note"></div>
+          <div style="margin-top:10px">
+            <button class="btn-ink" id="qb-agro-use-dataset">Usar en Econometría</button>
+            <p class="muted qb-help" id="qb-agro-use-status"></p>
+          </div>
           <div id="qb-agro-detection"></div>
           <div id="qb-agro-presets"></div>
           <div class="qb-panel-head qb-subpanel" style="margin-top:14px">
@@ -575,6 +596,11 @@
           </div>
           <div id="qb-agro-margin-error" style="display:none;color:#e55;margin-top:8px"></div>
           <div id="qb-agro-margin-result"></div>
+          <div style="margin:10px 0 4px">
+            <button class="btn-ink" id="qb-agro-m-copy" disabled>Copiar resumen</button>
+            <button class="btn-ink" id="qb-agro-m-export-txt" disabled>Exportar TXT</button>
+            <span class="muted" id="qb-agro-m-copy-status" style="margin-left:6px"></span>
+          </div>
         </section>
       </main>
     </div>

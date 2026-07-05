@@ -1,4 +1,4 @@
-import { parseCSVFile, type ParsedCSV } from './csvParser';
+import { parseCSVFile, parseCSVText, type ParsedCSV } from './csvParser';
 import type { RLSConstraint } from './rls';
 import { parseRLSRestriction } from './rlsParser';
 import { runRegressionMode, runAutoRegressionMode } from './modes/regressionMode';
@@ -73,7 +73,13 @@ import {
   type PreparedProTimeSeries,
 } from './pro/pyodide/proTimeIndex';
 import type { PyodideTimeSeriesResult } from './pro/pyodide/proTimeSeriesResultTypes';
-import { initAgroVertical } from './verticals/agro';
+import {
+  clearAgroContext,
+  hideAgroInterpretationPanels,
+  initAgroVertical,
+  presentAgroInterpretationForPro,
+  presentAgroInterpretationForRegression,
+} from './verticals/agro';
 
 interface QuantDemoCase {
   id: string;
@@ -420,6 +426,7 @@ async function loadDemoCase(id: string): Promise<void> {
   if (!demo) return;
   showError('');
   hideProPanel();
+  clearAgroContext();
   appState.activeDemoId = id;
   setEngineStatus('LEYENDO');
   writeRunLog([`Cargando demo: ${demo.label}`]);
@@ -481,6 +488,7 @@ async function onFileChange(e: Event): Promise<void> {
 
   showError('');
   hideProPanel();
+  clearAgroContext();
   appState.activeDemoId = null;
   appState.lastTimeSeriesResult = null;
   proExportState.lastProResult = null;
@@ -625,12 +633,14 @@ async function onRun(): Promise<void> {
     setText('qb-status-obs', output.result.nObs);
     setEngineStatus('COMPLETADO');
     writeRunLog(output.logEntries);
+    presentAgroInterpretationForRegression(yName, output.result, output.functionalForm);
     const res = $('qb-results');
     if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
     updateSidebarStep(3);
     updateExportButtonState();
   } catch (err) {
     setEngineStatus('ERROR');
+    hideAgroInterpretationPanels();
     showError(formatRegressionError(err));
   }
 }
@@ -694,6 +704,7 @@ async function onRunPro(
     );
     if (domainError) {
       renderProResult(proError(domainError));
+      hideAgroInterpretationPanels();
       setEngineStatus('ERROR');
       writeRunLog([`ChartBay Pro: error de dominio — ${domainError}`]);
       return;
@@ -727,6 +738,7 @@ async function onRunPro(
       ? buildLiteComparison(appState.csvData, yName, xNames, form, result, rlsConstraint)
       : null;
     renderProResult(result, comparison);
+    presentAgroInterpretationForPro(yName, result);
     // Sólo se guarda para exportar cuando la corrida fue exitosa; un error deja
     // el estado en null y los botones de exportación deshabilitados.
     proExportState.lastProResult = result.ok ? result : null;
@@ -1016,6 +1028,78 @@ function onTimeSeriesTransformationChange(): void {
     onTimeSeriesRun();
   }
 }
+
+// ── ChartBay Agro bridge ──────────────────────────────────────────────────
+// Única puerta de entrada para que el vertical Agro cargue un dataset (CSV en
+// memoria) en el flujo existente de Econometría, reutilizando la misma
+// orquestación que onFileChange usa para un archivo subido a mano. Nunca
+// corre el modelo: sólo deja el CSV cargado y, si es seguro, las variables
+// preseleccionadas para que el usuario revise antes de calcular.
+function agroLoadDataset(params: {
+  csvText: string;
+  label: string;
+  suggestedY?: string;
+  suggestedX?: string[];
+}): { ok: boolean; numericColumns: string[]; message?: string } {
+  showError('');
+  hideProPanel();
+  appState.activeDemoId = null;
+  appState.lastTimeSeriesResult = null;
+  proExportState.lastProResult = null;
+  proExportState.lastProTimeSeriesResult = null;
+  updateExportButtonState();
+  clearDemoInfo();
+  if (isTimeSeriesMode()) setActiveMode('regression');
+
+  const fn = $('qb-filename');
+  if (fn) fn.textContent = params.label;
+  setText('qb-status-dataset', params.label);
+  setEngineStatus('LEYENDO');
+  writeRunLog([`ChartBay Agro: cargando "${params.label}"...`]);
+
+  try {
+    appState.csvText = params.csvText;
+    appState.csvData = parseCSVText(params.csvText);
+    if (appState.csvData.numericColumns.length < 2) {
+      throw new Error('El dataset necesita al menos 2 columnas numéricas.');
+    }
+    setText('qb-status-obs', appState.csvData.rows.length);
+    setText('qb-status-vars', appState.csvData.numericColumns.length);
+    setEngineStatus('LISTO');
+    writeRunLog([
+      `Dataset cargado: ${appState.csvData.rows.length} observaciones`,
+      `Variables numéricas detectadas: ${appState.csvData.numericColumns.length}`,
+      'Motor de regresión listo.',
+    ]);
+
+    renderPreview(appState.csvData);
+    const categoricalCols = categoricalColumnsFor(appState.csvData);
+    renderVarSelectors([...appState.csvData.numericColumns, ...categoricalCols], categoricalCols);
+    updateModePanels();
+
+    const preview = $('qb-preview'), vars = $('qb-vars'), results = $('qb-results'), repair = $('qb-repair-log');
+    if (preview) preview.style.display = '';
+    if (vars) vars.style.display = '';
+    if (results) results.style.display = 'none';
+    if (repair) repair.style.display = 'none';
+
+    if (params.suggestedY && appState.csvData.numericColumns.includes(params.suggestedY)) {
+      const selectable = new Set([...appState.csvData.numericColumns, ...categoricalCols]);
+      const safeX = (params.suggestedX ?? []).filter(x => selectable.has(x) && x !== params.suggestedY);
+      setVariableSelection(params.suggestedY, safeX);
+    }
+    runFormRecommendation();
+    updateSidebarStep(2);
+
+    return { ok: true, numericColumns: appState.csvData.numericColumns };
+  } catch (err) {
+    setEngineStatus('ERROR');
+    const message = (err as Error).message;
+    showError(`Error al cargar dataset de Agro: ${message}`);
+    return { ok: false, numericColumns: [], message };
+  }
+}
+
 function runFormRecommendation(): void {
   if (!appState.csvData || isTimeSeriesMode()) {
     renderFormRecommendation(null);
@@ -1128,7 +1212,7 @@ function init(): void {
   updateModePanels();
   updateExportButtonState();
   // Vertical Agro: no-op si el flag está apagado o el panel no existe.
-  initAgroVertical();
+  initAgroVertical({ loadDataset: agroLoadDataset });
 }
 
 if (document.readyState === 'loading') {

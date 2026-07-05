@@ -1,11 +1,24 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { initAgroVertical } from '../../src/verticals/agro/agroView';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  clearAgroContext,
+  hasActiveAgroContext,
+  initAgroVertical,
+  presentAgroInterpretationForPro,
+  presentAgroInterpretationForRegression,
+  type AgroDatasetLoadParams,
+  type AgroDatasetLoadResult,
+  type AgroEconometriaBridge,
+} from '../../src/verticals/agro/agroView';
+import { runOLS } from '../../src/regression';
+import type { AgroPyodideResultLike } from '../../src/verticals/agro/agroInterpretation';
 
 function agroPanelSkeleton(): string {
   return `
     <section id="qb-agro-panel" style="display:none">
       <select id="qb-agro-dataset"></select>
       <div id="qb-agro-dataset-note"></div>
+      <button id="qb-agro-use-dataset"></button>
+      <p id="qb-agro-use-status"></p>
       <div id="qb-agro-detection"></div>
       <div id="qb-agro-presets"></div>
       <select id="qb-agro-m-crop"></select>
@@ -23,6 +36,19 @@ function agroPanelSkeleton(): string {
       <button id="qb-agro-m-run"></button>
       <div id="qb-agro-margin-error" style="display:none"></div>
       <div id="qb-agro-margin-result"></div>
+      <button id="qb-agro-m-copy" disabled></button>
+      <button id="qb-agro-m-export-txt" disabled></button>
+      <span id="qb-agro-m-copy-status"></span>
+    </section>
+    <section id="qb-results">
+      <div id="qb-agro-interpretation-panel" style="display:none">
+        <div id="qb-agro-interpretation-content"></div>
+      </div>
+    </section>
+    <section id="qb-pro-results">
+      <div id="qb-agro-pro-interpretation-panel" style="display:none">
+        <div id="qb-agro-pro-interpretation-content"></div>
+      </div>
     </section>`;
 }
 
@@ -32,13 +58,30 @@ function selectDataset(id: string): void {
   select.dispatchEvent(new Event('change'));
 }
 
+function makeFakeBridge(result: AgroDatasetLoadResult = { ok: true, numericColumns: [] }): {
+  bridge: AgroEconometriaBridge;
+  calls: AgroDatasetLoadParams[];
+} {
+  const calls: AgroDatasetLoadParams[] = [];
+  return {
+    calls,
+    bridge: {
+      loadDataset(params) {
+        calls.push(params);
+        return result;
+      },
+    },
+  };
+}
+
 beforeEach(() => {
   document.body.innerHTML = agroPanelSkeleton();
+  clearAgroContext();
 });
 
 describe('initAgroVertical', () => {
   it('muestra el panel y carga los datasets cuando el vertical está habilitado', () => {
-    initAgroVertical();
+    initAgroVertical(makeFakeBridge().bridge);
     const panel = document.getElementById('qb-agro-panel')!;
     expect(panel.style.display).toBe('');
     const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
@@ -47,7 +90,7 @@ describe('initAgroVertical', () => {
   });
 
   it('mantiene el panel oculto cuando el vertical está deshabilitado', () => {
-    initAgroVertical(false);
+    initAgroVertical(makeFakeBridge().bridge, false);
     expect(document.getElementById('qb-agro-panel')!.style.display).toBe('none');
     const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
     expect(select.options.length).toBe(0);
@@ -55,20 +98,25 @@ describe('initAgroVertical', () => {
 
   it('es un no-op si el panel no existe (Econometría no depende de Agro)', () => {
     document.body.innerHTML = '<div id="qb-results"></div>';
-    expect(() => initAgroVertical()).not.toThrow();
+    expect(() => initAgroVertical(makeFakeBridge().bridge)).not.toThrow();
   });
 
-  it('no duplica opciones si se inicializa dos veces', () => {
-    initAgroVertical();
-    initAgroVertical();
+  it('no duplica opciones ni listeners si se inicializa dos veces', () => {
+    const { bridge, calls } = makeFakeBridge();
+    initAgroVertical(bridge);
+    initAgroVertical(bridge);
     const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
     expect(select.options.length).toBe(4);
+
+    selectDataset('soja_rinde_demo');
+    document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
+    expect(calls).toHaveLength(1);
   });
 });
 
 describe('selección de dataset', () => {
-  it('renderiza columnas detectadas y presets sugeridos para soja', () => {
-    initAgroVertical();
+  it('renderiza columnas detectadas y presets sugeridos para soja, con botón "Usar este preset"', () => {
+    initAgroVertical(makeFakeBridge().bridge);
     selectDataset('soja_rinde_demo');
 
     const detection = document.getElementById('qb-agro-detection')!.innerHTML;
@@ -78,13 +126,15 @@ describe('selección de dataset', () => {
     const presets = document.getElementById('qb-agro-presets')!.innerHTML;
     expect(presets).toContain('Modelo de rinde');
     expect(presets).toContain('motor común de ChartBay');
+    expect(presets).toContain('data-agro-preset-id="agro-yield"');
+    expect(presets).toContain('Usar este preset');
 
     const note = document.getElementById('qb-agro-dataset-note')!.innerHTML;
     expect(note).toContain('sintéticos');
   });
 
   it('limpia los paneles al volver a la opción vacía', () => {
-    initAgroVertical();
+    initAgroVertical(makeFakeBridge().bridge);
     selectDataset('soja_rinde_demo');
     selectDataset('');
     expect(document.getElementById('qb-agro-detection')!.innerHTML).toBe('');
@@ -92,9 +142,158 @@ describe('selección de dataset', () => {
   });
 });
 
+describe('"Usar en Econometría" (botón por dataset)', () => {
+  it('avisa si no hay dataset seleccionado y no llama al bridge', () => {
+    const { bridge, calls } = makeFakeBridge();
+    initAgroVertical(bridge);
+    document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
+    expect(calls).toHaveLength(0);
+    expect(document.getElementById('qb-agro-use-status')!.textContent).toContain('Elegí un dataset');
+  });
+
+  it('carga el CSV del dataset con las columnas del preset por defecto preseleccionadas', () => {
+    const { bridge, calls } = makeFakeBridge();
+    initAgroVertical(bridge);
+    selectDataset('soja_rinde_demo');
+    document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].label).toContain('Soja');
+    expect(calls[0].csvText).toContain('rinde_kg_ha');
+    expect(calls[0].suggestedY).toBe('rinde_kg_ha');
+    expect(calls[0].suggestedX).toEqual(expect.arrayContaining(['lluvia_mm', 'temperatura_media']));
+    expect(hasActiveAgroContext()).toBe(true);
+
+    const status = document.getElementById('qb-agro-use-status')!.textContent ?? '';
+    expect(status).toContain('Soja');
+    expect(status).toContain('Modelo de rinde');
+  });
+
+  it('muestra el mensaje del bridge y no fija contexto agro si la carga falla', () => {
+    const { bridge } = makeFakeBridge({ ok: false, numericColumns: [], message: 'CSV inválido' });
+    initAgroVertical(bridge);
+    selectDataset('soja_rinde_demo');
+    document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
+
+    expect(document.getElementById('qb-agro-use-status')!.textContent).toBe('CSV inválido');
+    expect(hasActiveAgroContext()).toBe(false);
+  });
+});
+
+describe('"Usar este preset" (por preset sugerido)', () => {
+  it('aplica el preset elegido y actualiza el status con Y/X y la razón', () => {
+    const { bridge, calls } = makeFakeBridge();
+    initAgroVertical(bridge);
+    selectDataset('maiz_margen_demo');
+
+    const presetButton = document.querySelector<HTMLElement>('[data-agro-preset-id="agro-margin"]')!;
+    presetButton.dispatchEvent(new Event('click', { bubbles: true }));
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].suggestedY).toBe('margen_bruto_usd_ha');
+    expect(hasActiveAgroContext()).toBe(true);
+    expect(document.getElementById('qb-agro-use-status')!.textContent).toContain('Modelo de margen');
+  });
+
+  it('ignora el click si no hay un dataset seleccionado en el desplegable', () => {
+    const { bridge, calls } = makeFakeBridge();
+    initAgroVertical(bridge);
+    // Simula un botón de preset "huérfano" sin dataset activo en el select.
+    document.getElementById('qb-agro-presets')!.innerHTML =
+      '<button data-agro-preset-id="agro-yield">Usar este preset</button>';
+    document.querySelector('[data-agro-preset-id]')!.dispatchEvent(new Event('click', { bubbles: true }));
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe('presentAgroInterpretationForRegression', () => {
+  const olsResult = runOLS({
+    X: [[1], [2], [3], [4], [5], [6]],
+    y: [3.1, 4.9, 7.2, 9.1, 10.8, 13.2],
+    featureNames: ['lluvia_mm'],
+    yName: 'rinde_kg_ha',
+  });
+
+  it('no muestra nada si no hay contexto agro activo', () => {
+    presentAgroInterpretationForRegression('rinde_kg_ha', olsResult, 'lin-lin');
+    expect(document.getElementById('qb-agro-interpretation-panel')!.style.display).toBe('none');
+  });
+
+  it('no muestra nada si la Y corrida no coincide con la del preset agro activo', () => {
+    const { bridge } = makeFakeBridge();
+    initAgroVertical(bridge);
+    selectDataset('soja_rinde_demo');
+    document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
+
+    presentAgroInterpretationForRegression('otra_variable', olsResult, 'lin-lin');
+    expect(document.getElementById('qb-agro-interpretation-panel')!.style.display).toBe('none');
+  });
+
+  it('muestra la lectura agropecuaria cuando la Y coincide con el contexto activo', () => {
+    const { bridge } = makeFakeBridge();
+    initAgroVertical(bridge);
+    selectDataset('soja_rinde_demo');
+    document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
+
+    presentAgroInterpretationForRegression('rinde_kg_ha', olsResult, 'lin-lin');
+    const panel = document.getElementById('qb-agro-interpretation-panel')!;
+    expect(panel.style.display).toBe('');
+    expect(document.getElementById('qb-agro-interpretation-content')!.innerHTML).toContain('Lluvia y rinde');
+  });
+});
+
+describe('presentAgroInterpretationForPro', () => {
+  function makeProResult(overrides: Partial<AgroPyodideResultLike> = {}): AgroPyodideResultLike {
+    return {
+      ok: true,
+      functionalForm: 'lin-lin',
+      nobs: 40,
+      coefficients: [
+        { name: 'Intercept', estimate: 100, stdError: 5, pValue: 0.0001 },
+        { name: 'lluvia_mm', estimate: 2.1, stdError: 0.3, pValue: 0.0001 },
+      ],
+      rSquared: 0.6,
+      rSquaredAdj: 0.58,
+      warnings: [],
+      ...overrides,
+    };
+  }
+
+  it('no muestra nada si el resultado Pro no fue exitoso', () => {
+    const { bridge } = makeFakeBridge();
+    initAgroVertical(bridge);
+    selectDataset('soja_rinde_demo');
+    document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
+
+    presentAgroInterpretationForPro('rinde_kg_ha', { ok: false, warnings: [] });
+    expect(document.getElementById('qb-agro-pro-interpretation-panel')!.style.display).toBe('none');
+  });
+
+  it('muestra la lectura agropecuaria para un resultado Pro exitoso con Y coincidente', () => {
+    const { bridge } = makeFakeBridge();
+    initAgroVertical(bridge);
+    selectDataset('soja_rinde_demo');
+    document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
+
+    presentAgroInterpretationForPro('rinde_kg_ha', makeProResult());
+    const panel = document.getElementById('qb-agro-pro-interpretation-panel')!;
+    expect(panel.style.display).toBe('');
+    const content = document.getElementById('qb-agro-pro-interpretation-content')!.innerHTML;
+    expect(content).toContain('Lluvia y rinde');
+    expect(content).not.toContain('Intercept');
+  });
+});
+
 describe('simulador de margen (UI)', () => {
+  it('no hace nada al copiar/exportar si todavía no se calculó ningún margen', () => {
+    initAgroVertical(makeFakeBridge().bridge);
+    document.getElementById('qb-agro-m-copy')!.dispatchEvent(new Event('click'));
+    document.getElementById('qb-agro-m-export-txt')!.dispatchEvent(new Event('click'));
+    expect(document.getElementById('qb-agro-m-copy-status')!.textContent).toBe('');
+  });
+
   it('calcula y muestra el margen con los valores del formulario', () => {
-    initAgroVertical();
+    initAgroVertical(makeFakeBridge().bridge);
     document.getElementById('qb-agro-m-run')!.dispatchEvent(new Event('click'));
 
     const result = document.getElementById('qb-agro-margin-result')!.innerHTML;
@@ -108,12 +307,45 @@ describe('simulador de margen (UI)', () => {
   });
 
   it('muestra el error de validación sin romper la vista', () => {
-    initAgroVertical();
+    initAgroVertical(makeFakeBridge().bridge);
     (document.getElementById('qb-agro-m-hectares') as HTMLInputElement).value = '0';
     document.getElementById('qb-agro-m-run')!.dispatchEvent(new Event('click'));
 
     const error = document.getElementById('qb-agro-margin-error')!;
     expect(error.textContent).toContain('hectáreas');
     expect(document.getElementById('qb-agro-margin-result')!.innerHTML).toBe('');
+  });
+
+  it('habilita copiar/exportar tras un cálculo exitoso y los deshabilita si falla', () => {
+    initAgroVertical(makeFakeBridge().bridge);
+    document.getElementById('qb-agro-m-run')!.dispatchEvent(new Event('click'));
+    expect((document.getElementById('qb-agro-m-copy') as HTMLButtonElement).disabled).toBe(false);
+    expect((document.getElementById('qb-agro-m-export-txt') as HTMLButtonElement).disabled).toBe(false);
+
+    (document.getElementById('qb-agro-m-hectares') as HTMLInputElement).value = '-1';
+    document.getElementById('qb-agro-m-run')!.dispatchEvent(new Event('click'));
+    expect((document.getElementById('qb-agro-m-copy') as HTMLButtonElement).disabled).toBe(true);
+    expect((document.getElementById('qb-agro-m-export-txt') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('copiar resumen escribe al portapapeles y muestra confirmación', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    initAgroVertical(makeFakeBridge().bridge);
+    document.getElementById('qb-agro-m-run')!.dispatchEvent(new Event('click'));
+    document.getElementById('qb-agro-m-copy')!.dispatchEvent(new Event('click'));
+
+    await vi.waitFor(() => {
+      expect(document.getElementById('qb-agro-m-copy-status')!.textContent).toBe('Copiado ✓');
+    });
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const copiedText = writeText.mock.calls[0][0] as string;
+    expect(copiedText).toContain('Margen bruto: 2500.00 USD');
+    expect(copiedText).toContain('Escenarios');
   });
 });

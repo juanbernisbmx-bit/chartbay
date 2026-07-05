@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  fromPyodideOlsResult,
   fromRegressionResult,
   interpretAgroRegressionResult,
   type ModelRunResultLike,
 } from '../../src/verticals/agro/agroInterpretation';
 import type { AgroInterpretationContext } from '../../src/verticals/agro/agroTypes';
 import { runOLS } from '../../src/regression';
+import type { AgroPyodideResultLike } from '../../src/verticals/agro/agroInterpretation';
 
 function baseResult(overrides: Partial<ModelRunResultLike> = {}): ModelRunResultLike {
   return {
@@ -165,5 +167,57 @@ describe('fromRegressionResult (adapter del motor común)', () => {
     const interpretation = interpretAgroRegressionResult(adapted, yieldContext());
     expect(interpretation.agroReading).toContain('Lluvia y rinde');
     expect(interpretation.warnings.some(w => w.includes('Muestra chica'))).toBe(true);
+  });
+});
+
+function baseProResult(overrides: Partial<AgroPyodideResultLike> = {}): AgroPyodideResultLike {
+  return {
+    ok: true,
+    functionalForm: 'lin-lin',
+    nobs: 40,
+    coefficients: [
+      { name: 'Intercept', estimate: 100, stdError: 5, pValue: 0.0001 },
+      { name: 'lluvia_mm', estimate: 2.1, stdError: 0.3, pValue: 0.0001 },
+    ],
+    rSquared: 0.6,
+    rSquaredAdj: 0.58,
+    warnings: [],
+    ...overrides,
+  };
+}
+
+describe('fromPyodideOlsResult (adapter del motor Pro)', () => {
+  it('adapta un resultado exitoso y descarta el intercepto', () => {
+    const adapted = fromPyodideOlsResult(baseProResult());
+    expect(adapted).not.toBeNull();
+    expect(adapted!.coefficients).toHaveLength(1);
+    expect(adapted!.coefficients[0]).toEqual({
+      name: 'lluvia_mm', estimate: 2.1, pValue: 0.0001, standardError: 0.3,
+    });
+    expect(adapted!.observations).toBe(40);
+    expect(adapted!.functionalForm).toBe('lin-lin');
+  });
+
+  it('devuelve null si el resultado no fue exitoso', () => {
+    expect(fromPyodideOlsResult({ ok: false, warnings: [] })).toBeNull();
+  });
+
+  it('devuelve null si faltan coeficientes o forma funcional', () => {
+    expect(fromPyodideOlsResult(baseProResult({ coefficients: undefined }))).toBeNull();
+    expect(fromPyodideOlsResult(baseProResult({ functionalForm: undefined }))).toBeNull();
+  });
+
+  it('devuelve null si sólo viene el intercepto (sin pendientes)', () => {
+    const onlyIntercept = baseProResult({
+      coefficients: [{ name: 'Intercept', estimate: 100, stdError: 5, pValue: 0.0001 }],
+    });
+    expect(fromPyodideOlsResult(onlyIntercept)).toBeNull();
+  });
+
+  it('el adapter alimenta correctamente la interpretación agro (lluvia-rinde, sin mencionar el intercepto)', () => {
+    const adapted = fromPyodideOlsResult(baseProResult())!;
+    const interpretation = interpretAgroRegressionResult(adapted, yieldContext());
+    expect(interpretation.agroReading).toContain('Lluvia y rinde');
+    expect(interpretation.coefficientReadings.join(' ')).not.toContain('Intercept');
   });
 });

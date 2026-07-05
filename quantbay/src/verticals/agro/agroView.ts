@@ -3,15 +3,41 @@
 // UI mínima y 100% aditiva: si el panel #qb-agro-panel no existe en el HTML o
 // el vertical está apagado por flag, initAgroVertical() es un no-op. La UI de
 // Econometría no depende de nada de este archivo.
+//
+// Puente con Econometría: agroView.ts NO importa main.ts (crearía un import
+// circular, ya que main.ts importa este módulo). En cambio, main.ts inyecta
+// un AgroEconometriaBridge con la única pieza que necesita reutilizar del
+// flujo existente (cargar CSV + preseleccionar variables, revisable antes de
+// correr); todo lo demás (detección, presets, margen, interpretación) vive acá.
 
 import { $ } from '../../app/dom';
+import { downloadTextFile } from '../../ui/exports';
 import { escapeHtml } from '../../utils/format';
+import type { FunctionalForm } from '../../functionalForms';
+import type { RegressionResult } from '../../regression';
 import { detectAgroColumns } from './agroColumnDetection';
-import { AGRO_EXAMPLE_DATASETS, getAgroExampleById } from './agroExamples';
+import { AGRO_EXAMPLE_DATASETS, agroDatasetToCsv, getAgroExampleById } from './agroExamples';
 import { isVerticalEnabled } from './agroFeatureFlags';
+import {
+  fromPyodideOlsResult,
+  fromRegressionResult,
+  interpretAgroRegressionResult,
+  type AgroPyodideResultLike,
+} from './agroInterpretation';
+import { calculateAgroMargin, formatAgroMarginSummary } from './agroMargin';
 import { agroRoleLabel, suggestAgroModelPresets } from './agroModelPresets';
-import { calculateAgroMargin } from './agroMargin';
-import type { AgroCrop, AgroMarginInput, AgroYieldUnit } from './agroTypes';
+import type {
+  AgroColumnDetectionResult,
+  AgroColumnRole,
+  AgroCrop,
+  AgroExampleDataset,
+  AgroInterpretation,
+  AgroInterpretationContext,
+  AgroMarginInput,
+  AgroMarginResult,
+  AgroModelPresetSuggestion,
+  AgroYieldUnit,
+} from './agroTypes';
 
 const CROPS: AgroCrop[] = ['soja', 'maiz', 'trigo', 'girasol', 'sorgo', 'cebada', 'otro'];
 const YIELD_UNITS: Array<{ id: AgroYieldUnit; label: string }> = [
@@ -19,6 +45,41 @@ const YIELD_UNITS: Array<{ id: AgroYieldUnit; label: string }> = [
   { id: 'qq_ha', label: 'qq/ha' },
   { id: 'tn_ha', label: 'tn/ha' },
 ];
+
+// ── Puente con el flujo de Econometría (inyectado por main.ts) ─────────────
+//
+// El adapter vive en main.ts porque necesita reutilizar orquestación privada
+// del flujo existente (parseo, render de preview/selectores, estado de la
+// app). Acá sólo se define el contrato mínimo que Agro necesita consumir.
+
+export interface AgroDatasetLoadParams {
+  csvText: string;
+  label: string;
+  suggestedY?: string;
+  suggestedX?: string[];
+}
+
+export interface AgroDatasetLoadResult {
+  ok: boolean;
+  numericColumns: string[];
+  message?: string;
+}
+
+export interface AgroEconometriaBridge {
+  loadDataset(params: AgroDatasetLoadParams): AgroDatasetLoadResult;
+}
+
+let bridge: AgroEconometriaBridge | null = null;
+
+// Contexto del preset agro activo: se fija cuando el usuario carga un
+// dataset/preset de Agro en Econometría, y se consulta después de una
+// corrida real para decidir si corresponde mostrar la lectura agropecuaria.
+// Vive en memoria de este módulo (no en appState) para no acoplar el estado
+// global de Econometría a Agro.
+let activeAgroContext: AgroInterpretationContext | null = null;
+
+let lastMarginInput: AgroMarginInput | null = null;
+let lastMarginResult: AgroMarginResult | null = null;
 
 function fmtUsd(value: number): string {
   const rounded = Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(2);
@@ -29,6 +90,40 @@ function numberInput(id: string): number {
   const el = $(id) as HTMLInputElement | null;
   if (!el || el.value.trim() === '') return 0;
   return Number(el.value);
+}
+
+function buildColumnRoles(detection: AgroColumnDetectionResult, columns: string[]): Record<string, AgroColumnRole> {
+  const roles: Record<string, AgroColumnRole> = {};
+  for (const column of columns) {
+    roles[column] = detection.columns.find(c => c.original === column)?.role ?? 'unknown';
+  }
+  return roles;
+}
+
+function setAgroContextFromSuggestion(
+  dataset: AgroExampleDataset,
+  detection: AgroColumnDetectionResult,
+  suggestion: AgroModelPresetSuggestion
+): void {
+  const targetRole = detection.columns.find(c => c.original === suggestion.yColumn)?.role ?? suggestion.preset.yRoles[0];
+  activeAgroContext = {
+    form: suggestion.preset.suggestedForm,
+    targetColumn: suggestion.yColumn,
+    targetRole,
+    columnRoles: buildColumnRoles(detection, suggestion.xColumns),
+    crop: dataset.crop,
+  };
+}
+
+// Sólo para tests: expone si hay un contexto agro activo, sin exponer su
+// contenido (evita acoplar los tests a la forma interna del contexto).
+export function hasActiveAgroContext(): boolean {
+  return activeAgroContext !== null;
+}
+
+export function clearAgroContext(): void {
+  activeAgroContext = null;
+  hideAgroInterpretationPanels();
 }
 
 function renderDatasetNote(datasetId: string): void {
@@ -101,7 +196,10 @@ function renderPresets(datasetId: string): void {
         `${escapeHtml(suggestion.reason)}<br>` +
         `Y: <code>${escapeHtml(suggestion.yColumn)}</code> · ` +
         `X: ${suggestion.xColumns.map(x => `<code>${escapeHtml(x)}</code>`).join(', ')}` +
-        `${missing}</div>`
+        `${missing}<br>` +
+        `<button type="button" class="btn-ink qb-agro-use-preset-btn" style="margin-top:6px" ` +
+        `data-agro-preset-id="${escapeHtml(suggestion.preset.id)}">Usar este preset</button>` +
+        `</div>`
       );
     })
     .join('');
@@ -109,8 +207,8 @@ function renderPresets(datasetId: string): void {
   wrap.innerHTML =
     `<p class="qb-label" style="margin-top:12px">Presets sugeridos</p>${cards}` +
     `<p class="muted" style="font-size:11px;margin-top:6px">` +
-    `Para estimar cualquiera de estos modelos, cargá el CSV en Econometría (arriba): ` +
-    `Agro sugiere el modelo, el motor común de ChartBay hace la regresión.</p>`;
+    `"Usar este preset" carga el dataset en Econometría (arriba) y preselecciona Y/X: revisá la ` +
+    `selección antes de correr. El motor común de ChartBay hace la regresión; Agro sólo sugiere el modelo.</p>`;
 }
 
 function onDatasetChange(): void {
@@ -120,6 +218,150 @@ function onDatasetChange(): void {
   renderDetection(datasetId);
   renderPresets(datasetId);
 }
+
+// ── Cargar dataset/preset en Econometría ────────────────────────────────────
+
+function loadDatasetWithSuggestion(
+  dataset: AgroExampleDataset,
+  detection: AgroColumnDetectionResult,
+  suggestion: AgroModelPresetSuggestion | undefined
+): void {
+  const statusEl = $('qb-agro-use-status');
+  if (!bridge) return;
+
+  const result = bridge.loadDataset({
+    csvText: agroDatasetToCsv(dataset),
+    label: dataset.name,
+    suggestedY: suggestion?.yColumn,
+    suggestedX: suggestion?.xColumns,
+  });
+
+  if (!result.ok) {
+    if (statusEl) statusEl.textContent = result.message ?? 'No se pudo cargar el dataset en Econometría.';
+    return;
+  }
+
+  if (suggestion) {
+    setAgroContextFromSuggestion(dataset, detection, suggestion);
+  } else {
+    activeAgroContext = null;
+  }
+  hideAgroInterpretationPanels();
+
+  if (statusEl) {
+    statusEl.textContent = suggestion
+      ? `"${dataset.name}" cargado en Econometría con el preset "${suggestion.preset.label}" preseleccionado ` +
+        `(Y = ${suggestion.yColumn}; X = ${suggestion.xColumns.join(', ')}). Revisá la selección antes de correr el modelo.`
+      : `"${dataset.name}" cargado en Econometría. Elegí las variables manualmente.`;
+  }
+}
+
+function onUseDatasetInEconometria(): void {
+  const select = $('qb-agro-dataset') as HTMLSelectElement | null;
+  const statusEl = $('qb-agro-use-status');
+  const dataset = getAgroExampleById(select?.value ?? '');
+  if (!dataset) {
+    if (statusEl) statusEl.textContent = 'Elegí un dataset antes de usarlo en Econometría.';
+    return;
+  }
+
+  const detection = detectAgroColumns(dataset.columns);
+  const suggestions = suggestAgroModelPresets(detection);
+  const best = dataset.suggestedPresetId
+    ? suggestions.find(s => s.preset.id === dataset.suggestedPresetId) ?? suggestions[0]
+    : suggestions[0];
+
+  loadDatasetWithSuggestion(dataset, detection, best);
+}
+
+function onPresetsClick(event: Event): void {
+  const button = (event.target as HTMLElement).closest<HTMLElement>('[data-agro-preset-id]');
+  if (!button) return;
+  const presetId = button.dataset.agroPresetId ?? '';
+
+  const select = $('qb-agro-dataset') as HTMLSelectElement | null;
+  const dataset = getAgroExampleById(select?.value ?? '');
+  if (!dataset) return;
+
+  const detection = detectAgroColumns(dataset.columns);
+  const suggestion = suggestAgroModelPresets(detection).find(s => s.preset.id === presetId);
+  if (!suggestion) return;
+
+  loadDatasetWithSuggestion(dataset, detection, suggestion);
+}
+
+// ── Interpretación agropecuaria tras una corrida real ──────────────────────
+
+function renderAgroInterpretationHtml(interpretation: AgroInterpretation): string {
+  const list = (items: string[]): string => items.map(item => `<li>${escapeHtml(item)}</li>`).join('');
+  const warningsBlock = interpretation.warnings.length
+    ? `<p class="qb-label" style="margin-top:8px">Advertencias</p>` +
+      `<ul class="qb-interp" style="margin:4px 0 0;padding-left:18px">${list(interpretation.warnings)}</ul>`
+    : '';
+  return (
+    `<p class="qb-interp">${escapeHtml(interpretation.executiveSummary)}</p>` +
+    `<p class="qb-label" style="margin-top:8px">Lectura de coeficientes</p>` +
+    `<ul class="qb-interp" style="margin:4px 0 0;padding-left:18px">${list(interpretation.coefficientReadings)}</ul>` +
+    `<p class="qb-label" style="margin-top:8px">Lectura agropecuaria</p>` +
+    `<p class="qb-interp" style="white-space:pre-line">${escapeHtml(interpretation.agroReading)}</p>` +
+    warningsBlock +
+    `<p class="qb-label" style="margin-top:8px">Limitaciones</p>` +
+    `<ul class="qb-interp" style="margin:4px 0 0;padding-left:18px">${list(interpretation.limitations)}</ul>`
+  );
+}
+
+function renderInterpretationPanel(panelId: string, contentId: string, interpretation: AgroInterpretation | null): void {
+  const panel = $(panelId);
+  const content = $(contentId);
+  if (!panel || !content) return;
+  if (!interpretation) {
+    panel.style.display = 'none';
+    content.innerHTML = '';
+    return;
+  }
+  content.innerHTML = renderAgroInterpretationHtml(interpretation);
+  panel.style.display = '';
+}
+
+// Oculta ambos paneles de lectura agropecuaria (Lite y Pro) sin tocar el
+// contexto agro activo — se usa al recargar datos o cuando una corrida falla.
+export function hideAgroInterpretationPanels(): void {
+  renderInterpretationPanel('qb-agro-interpretation-panel', 'qb-agro-interpretation-content', null);
+  renderInterpretationPanel('qb-agro-pro-interpretation-panel', 'qb-agro-pro-interpretation-content', null);
+}
+
+// Llamado por main.ts tras una corrida exitosa del motor TypeScript (Lite).
+// No hace nada (oculta el panel) si no hay contexto agro activo o si la Y de
+// la corrida no coincide con la del preset agro elegido — nunca reemplaza la
+// interpretación econométrica general, sólo se agrega al lado.
+export function presentAgroInterpretationForRegression(
+  yName: string,
+  result: RegressionResult,
+  form: FunctionalForm
+): void {
+  if (!activeAgroContext || activeAgroContext.targetColumn !== yName) {
+    renderInterpretationPanel('qb-agro-interpretation-panel', 'qb-agro-interpretation-content', null);
+    return;
+  }
+  const interpretation = interpretAgroRegressionResult(fromRegressionResult(result, form), activeAgroContext);
+  renderInterpretationPanel('qb-agro-interpretation-panel', 'qb-agro-interpretation-content', interpretation);
+}
+
+// Idem para el motor Pro (Pyodide / statsmodels). Recibe el resultado real de
+// Pro (PyodideOlsResult) a través del tipo estructural AgroPyodideResultLike
+// — ver el comentario en agroInterpretation.ts sobre por qué Agro no importa
+// pro/pyodide/proResultTypes.ts directamente.
+export function presentAgroInterpretationForPro(yName: string, result: AgroPyodideResultLike): void {
+  if (!activeAgroContext || activeAgroContext.targetColumn !== yName) {
+    renderInterpretationPanel('qb-agro-pro-interpretation-panel', 'qb-agro-pro-interpretation-content', null);
+    return;
+  }
+  const adapted = fromPyodideOlsResult(result);
+  const interpretation = adapted ? interpretAgroRegressionResult(adapted, activeAgroContext) : null;
+  renderInterpretationPanel('qb-agro-pro-interpretation-panel', 'qb-agro-pro-interpretation-content', interpretation);
+}
+
+// ── Simulador de margen ──────────────────────────────────────────────────────
 
 function readMarginInput(): AgroMarginInput {
   const cropValue = ($('qb-agro-m-crop') as HTMLSelectElement | null)?.value ?? 'otro';
@@ -142,13 +384,26 @@ function readMarginInput(): AgroMarginInput {
   };
 }
 
+function setMarginExportEnabled(enabled: boolean): void {
+  const copyBtn = $('qb-agro-m-copy') as HTMLButtonElement | null;
+  const exportBtn = $('qb-agro-m-export-txt') as HTMLButtonElement | null;
+  if (copyBtn) copyBtn.disabled = !enabled;
+  if (exportBtn) exportBtn.disabled = !enabled;
+}
+
 function onMarginRun(): void {
   const errorEl = $('qb-agro-margin-error');
   const resultEl = $('qb-agro-margin-result');
+  const copyStatus = $('qb-agro-m-copy-status');
   if (!resultEl) return;
 
   try {
-    const result = calculateAgroMargin(readMarginInput());
+    const input = readMarginInput();
+    const result = calculateAgroMargin(input);
+    lastMarginInput = input;
+    lastMarginResult = result;
+    setMarginExportEnabled(true);
+    if (copyStatus) copyStatus.textContent = '';
     if (errorEl) {
       errorEl.textContent = '';
       errorEl.style.display = 'none';
@@ -190,6 +445,9 @@ function onMarginRun(): void {
       `<thead><tr><th>Escenario</th><th>Rinde</th><th>Precio USD/tn</th><th>Margen bruto</th><th>Margen/ha</th></tr></thead>` +
       `<tbody>${scenarioRows}</tbody></table></div>${warnings}`;
   } catch (err) {
+    lastMarginInput = null;
+    lastMarginResult = null;
+    setMarginExportEnabled(false);
     resultEl.innerHTML = '';
     if (errorEl) {
       errorEl.textContent = `Error en el simulador de margen: ${(err as Error).message}`;
@@ -198,11 +456,42 @@ function onMarginRun(): void {
   }
 }
 
-// Inicializa el panel de ChartBay Agro. No-op si el vertical está apagado o
-// el panel no existe en la página (así Econometría nunca depende de Agro).
-export function initAgroVertical(enabled: boolean = isVerticalEnabled('agro')): void {
+function onMarginCopy(): void {
+  const statusEl = $('qb-agro-m-copy-status');
+  if (!lastMarginInput || !lastMarginResult) return;
+  const text = formatAgroMarginSummary(lastMarginInput, lastMarginResult);
+  const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
+  if (clipboard?.writeText) {
+    clipboard.writeText(text)
+      .then(() => { if (statusEl) statusEl.textContent = 'Copiado ✓'; })
+      .catch(() => { if (statusEl) statusEl.textContent = 'No se pudo copiar (permisos del navegador).'; });
+  } else if (statusEl) {
+    statusEl.textContent = 'El navegador no soporta copiar al portapapeles.';
+  }
+}
+
+function onMarginExportTxt(): void {
+  if (!lastMarginInput || !lastMarginResult) return;
+  downloadTextFile(
+    'chartbay_agro_margen.txt',
+    formatAgroMarginSummary(lastMarginInput, lastMarginResult),
+    'text/plain'
+  );
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+// Inicializa el panel de ChartBay Agro. No-op si el panel no existe en la
+// página (así Econometría nunca depende de Agro); oculta el panel si el
+// vertical está apagado por flag. `economiaBridge` es la única puerta de
+// entrada al flujo existente de Econometría (ver AgroEconometriaBridge arriba).
+export function initAgroVertical(
+  economiaBridge: AgroEconometriaBridge,
+  enabled: boolean = isVerticalEnabled('agro')
+): void {
   const panel = $('qb-agro-panel');
   if (!panel) return;
+  bridge = economiaBridge;
   if (!enabled) {
     panel.style.display = 'none';
     return;
@@ -242,7 +531,16 @@ export function initAgroVertical(enabled: boolean = isVerticalEnabled('agro')): 
     }
   }
 
-  $('qb-agro-m-run')?.addEventListener('click', onMarginRun);
+  // Los listeners de click sólo se atan una vez por panel (evita duplicarlos
+  // si initAgroVertical se llama más de una vez, p. ej. en tests).
+  if (panel.dataset.agroBound !== '1') {
+    panel.dataset.agroBound = '1';
+    $('qb-agro-use-dataset')?.addEventListener('click', onUseDatasetInEconometria);
+    $('qb-agro-presets')?.addEventListener('click', onPresetsClick);
+    $('qb-agro-m-run')?.addEventListener('click', onMarginRun);
+    $('qb-agro-m-copy')?.addEventListener('click', onMarginCopy);
+    $('qb-agro-m-export-txt')?.addEventListener('click', onMarginExportTxt);
+  }
 
   panel.style.display = '';
   renderDatasetNote('');

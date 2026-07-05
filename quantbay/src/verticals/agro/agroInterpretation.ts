@@ -14,6 +14,27 @@ import type {
 } from './agroTypes';
 import { agroRoleLabel } from './agroModelPresets';
 
+// Vertical Agro no puede importar nada de pro/ ni de Pyodide (invariante
+// verificado por tests/pro/liteIsolation.test.ts: el bundle Lite no debe
+// depender del motor Pro). Este tipo espeja estructuralmente la forma pública
+// de PyodideOlsResult (pro/pyodide/proResultTypes.ts) sin importarlo: como
+// TypeScript usa tipado estructural, un PyodideOlsResult real (que main.ts sí
+// puede importar) es asignable acá sin crear la dependencia de módulo.
+export interface AgroPyodideResultLike {
+  ok: boolean;
+  functionalForm?: FunctionalForm;
+  coefficients?: Array<{
+    name: string;
+    estimate: number;
+    stdError: number | null;
+    pValue: number | null;
+  }>;
+  rSquared?: number;
+  rSquaredAdj?: number;
+  nobs?: number;
+  warnings: string[];
+}
+
 // Adapter mínimo sobre el resultado de una corrida de regresión, para no
 // acoplar la interpretación a un motor puntual (sirve para Lite, Pro o
 // cualquier resultado con esta forma). Los coeficientes son SÓLO pendientes,
@@ -51,6 +72,32 @@ export function fromRegressionResult(
     observations: result.nObs,
     warnings: [],
     functionalForm: form,
+  };
+}
+
+// Adapta el resultado del motor Pro (Pyodide/statsmodels) al shape neutro que
+// consume la interpretación agro. Python antepone "Intercept" a la lista de
+// coeficientes (ver pythonOlsRunner.ts: `names = ["Intercept"] + x_labels`),
+// por eso se descarta la primera entrada — igual que fromRegressionResult
+// excluye el intercepto de RegressionResult. Devuelve null si el resultado
+// no fue exitoso o le faltan campos imprescindibles (nunca lanza error).
+export function fromPyodideOlsResult(result: AgroPyodideResultLike): ModelRunResultLike | null {
+  if (!result.ok || !result.coefficients || !result.functionalForm) return null;
+  const [, ...slopes] = result.coefficients;
+  if (slopes.length === 0) return null;
+
+  return {
+    coefficients: slopes.map(coefficient => ({
+      name: coefficient.name,
+      estimate: coefficient.estimate,
+      pValue: coefficient.pValue ?? undefined,
+      standardError: coefficient.stdError ?? undefined,
+    })),
+    rSquared: result.rSquared,
+    adjustedRSquared: result.rSquaredAdj,
+    observations: result.nobs,
+    warnings: result.warnings,
+    functionalForm: result.functionalForm,
   };
 }
 
