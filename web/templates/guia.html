@@ -14,15 +14,10 @@
       <div class="ship" aria-hidden="true"></div>
       <h1 class="wordmark" aria-label="Chart Bay">Chart Bay</h1>
       <nav class="mainnav">
-        <a href="{{ url_for('chartbay') }}">Hub</a><span class="sep">.</span>
-        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">.</span>
-        <a href="{{ url_for('reports') }}">Reportes</a><span class="sep">.</span>
-        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">.</span>
-        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">.</span>
-        <strong>Guia</strong><span class="sep">.</span>
         <a href="{{ url_for('econometria') }}">Econometria</a><span class="sep">.</span>
+        <a href="{{ url_for('agro') }}">Agro</a><span class="sep">.</span>
         <a href="{{ url_for('finanzas') }}">Finanzas</a><span class="sep">.</span>
-        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">.</span>
+        <strong>Documentacion</strong><span class="sep">.</span>
         {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">.</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
       </nav>
     </header>
@@ -114,7 +109,7 @@
         </section>
 
         <!-- ===================== FINANZAS ===================== -->
-        <section class="guia-panel" id="area-finanzas" data-area="finanzas" role="tabpanel" aria-labelledby="tab-finanzas">
+        <section class="guia-panel" id="area-finanzas" data-area="finanzas" role="tabpanel" aria-labelledby="tab-finanzas" hidden>
           <h3 class="guia-group">Indicadores de mercado</h3>
 
           <details class="guia-acc"><summary>Tendencia (EMA 20/50/200)</summary><div class="guia-acc-body">
@@ -191,7 +186,7 @@
         </section>
 
         <!-- ===================== APRENDER ===================== -->
-        <section class="guia-panel" id="area-aprender" data-area="aprender" role="tabpanel" aria-labelledby="tab-aprender">
+        <section class="guia-panel" id="area-aprender" data-area="aprender" role="tabpanel" aria-labelledby="tab-aprender" hidden>
           <p class="guia-lead">Curso gratuito. De los fundamentos a series de tiempo y finanzas. Cada tema dice que es, para que sirve, como se lee y donde aparece en ChartBay.</p>
 
           <!-- Modulo: Empezar -->
@@ -600,7 +595,7 @@
       var panels = [].slice.call(areas.querySelectorAll('.guia-panel'));
       areas.classList.add('js'); // habilita el modo pestañas via CSS
 
-      function activate(id) {
+      function showDocumentationArea(id) {
         var found = false;
         tabs.forEach(function (t) {
           var on = t.dataset.area === id;
@@ -618,13 +613,13 @@
 
       tabs.forEach(function (t) {
         t.addEventListener('click', function () {
-          activate(t.dataset.area);
+          showDocumentationArea(t.dataset.area);
           history.replaceState(null, '', '#' + t.dataset.area);
         });
       });
 
       var start = decodeURIComponent(location.hash.slice(1));
-      if (!activate(start)) activate('econometria');
+      if (!showDocumentationArea(start)) showDocumentationArea('econometria');
     })();
   </script>
 </body>

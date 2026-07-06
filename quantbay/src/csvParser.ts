@@ -68,6 +68,64 @@ export function extractMatrix(
   return { X, validIndices };
 }
 
+// Splits one CSV line respecting double-quoted fields (so a quoted value can
+// contain commas or escaped "" quotes). Used by parseCSVText below.
+function splitCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (inQuotes) {
+      if (char === '"') {
+        if (line[i + 1] === '"') { current += '"'; i++; }
+        else inQuotes = false;
+      } else {
+        current += char;
+      }
+    } else if (char === '"') {
+      inQuotes = true;
+    } else if (char === ',') {
+      cells.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  cells.push(current);
+  return cells;
+}
+
+// Synchronous CSV-text parser (no PapaParse/CDN dependency), for callers that
+// already hold CSV text in memory rather than a File — e.g. ChartBay Agro
+// loading a synthetic dataset. Mirrors parseCSVFile's shape (header row,
+// dynamic typing, numericColumns detection) so both paths feed the same
+// downstream code (renderPreview, runRegressionMode, etc.) identically.
+export function parseCSVText(text: string): ParsedCSV {
+  const lines = text.trim().split(/\r?\n/).filter(line => line.trim().length > 0);
+  if (lines.length === 0) return { headers: [], rows: [], numericColumns: [] };
+
+  const [headerLine, ...dataLines] = lines;
+  const headers = splitCsvLine(headerLine).map(h => h.trim());
+  const rows: Record<string, unknown>[] = dataLines.map(line => {
+    const values = splitCsvLine(line);
+    return Object.fromEntries(
+      headers.map((header, index) => {
+        const raw = (values[index] ?? '').trim();
+        if (raw === '') return [header, null];
+        const num = Number(raw);
+        return [header, Number.isFinite(num) ? num : raw];
+      })
+    );
+  });
+
+  const numericColumns = headers.filter(header =>
+    rows.length > 0 && rows.every(row => typeof row[header] === 'number' && Number.isFinite(row[header] as number))
+  );
+
+  return { headers, rows, numericColumns };
+}
+
 export function getValidRows(
   rows: Record<string, unknown>[],
   yName: string,
