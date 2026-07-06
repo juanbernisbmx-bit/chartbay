@@ -78,6 +78,12 @@ export interface AgroModelPreset {
   // sugerir el preset (evita sugerencias vacías tipo "precio ~ campaña").
   coreXRoles: AgroColumnRole[];
   suggestedForm: FunctionalForm;
+  // Si hay una columna con rol 'rainfall', suma su columna derivada
+  // "<header>_cuadrado" como X candidata (ver agroDerivedColumns.ts).
+  includeRainfallSquared?: boolean;
+  // Si hay una columna con rol 'season', suma la columna derivada
+  // 'tendencia' como X candidata (ver agroDerivedColumns.ts).
+  includeTrend?: boolean;
 }
 
 export interface AgroModelPresetSuggestion {
@@ -166,6 +172,11 @@ export interface AgroInterpretationContext {
   targetRole: AgroColumnRole;                 // rol agro de la Y
   columnRoles: Record<string, AgroColumnRole>; // regresor → rol agro
   crop?: AgroCrop;
+  // Rango observado (min/max) de cada regresor numérico, tomado de las filas
+  // efectivamente cargadas (incluye columnas derivadas como lluvia al
+  // cuadrado). Sirve para advertir extrapolación, p. ej. en el óptimo
+  // hídrico del modelo de rinde.
+  columnRanges?: Record<string, { min: number; max: number }>;
 }
 
 export interface AgroInterpretation {

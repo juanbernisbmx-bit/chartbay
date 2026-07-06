@@ -406,6 +406,26 @@ describe('aviso de capacidad n/k en el status', () => {
     const status = document.getElementById('qb-agro-use-status')!.textContent ?? '';
     expect(status).toContain('categórica');
   });
+
+  it('cuenta las columnas derivadas (lluvia al cuadrado, tendencia) como regresores para el aviso n/k', () => {
+    const { bridge, calls } = makeFakeBridge();
+    initAgroVertical(bridge);
+    selectDataset('soja_rinde_demo'); // 16 filas, lluvia + temperatura + campaña
+
+    const presetButton = document.querySelector<HTMLElement>('[data-agro-preset-id="agro-yield-hidrico"]')!;
+    presetButton.dispatchEvent(new Event('click', { bubbles: true }));
+
+    // X = lluvia_mm, temperatura_media, lluvia_mm_cuadrado, tendencia -> 4
+    // regresores; con 16 filas eso es menos de 5 obs/regresor (16 < 4*5).
+    expect(calls[0].suggestedX).toEqual(
+      expect.arrayContaining(['lluvia_mm', 'temperatura_media', 'lluvia_mm_cuadrado', 'tendencia'])
+    );
+    expect(calls[0].suggestedX).toHaveLength(4);
+
+    const status = document.getElementById('qb-agro-use-status')!.textContent ?? '';
+    expect(status).toContain('4 variable(s) X');
+    expect(status).toContain('menos de 5 observaciones');
+  });
 });
 
 describe('"Generar demo grande"', () => {

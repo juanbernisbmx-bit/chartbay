@@ -11,8 +11,8 @@ function suggestFor(headers: string[]) {
 }
 
 describe('AGRO_MODEL_PRESETS', () => {
-  it('define los 4 presets iniciales con ids únicos', () => {
-    expect(AGRO_MODEL_PRESETS.map(p => p.type)).toEqual(['yield', 'price', 'margin', 'production']);
+  it('define los 5 presets iniciales con ids únicos', () => {
+    expect(AGRO_MODEL_PRESETS.map(p => p.type)).toEqual(['yield', 'yield', 'price', 'margin', 'production']);
     const ids = AGRO_MODEL_PRESETS.map(p => p.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
@@ -24,14 +24,32 @@ describe('AGRO_MODEL_PRESETS', () => {
 });
 
 describe('suggestAgroModelPresets', () => {
-  it('sugiere modelo de rinde con rinde + lluvia', () => {
+  it('sugiere modelo de rinde con rinde + lluvia (básico e hídrico, con lluvia al cuadrado)', () => {
     const suggestions = suggestFor(['rinde', 'lluvia']);
-    expect(suggestions).toHaveLength(1);
-    expect(suggestions[0].preset.id).toBe('agro-yield');
-    expect(suggestions[0].yColumn).toBe('rinde');
-    expect(suggestions[0].xColumns).toEqual(['lluvia']);
-    expect(suggestions[0].reason).toContain('rinde');
-    expect(suggestions[0].missingRoles).toContain('temperature');
+    expect(suggestions.map(s => s.preset.id)).toEqual(['agro-yield-hidrico', 'agro-yield']);
+
+    const hidrico = suggestions.find(s => s.preset.id === 'agro-yield-hidrico')!;
+    expect(hidrico.yColumn).toBe('rinde');
+    expect(hidrico.xColumns).toEqual(['lluvia', 'lluvia_cuadrado']);
+    expect(hidrico.reason).toContain('óptimo hídrico');
+
+    const basico = suggestions.find(s => s.preset.id === 'agro-yield')!;
+    expect(basico.yColumn).toBe('rinde');
+    expect(basico.xColumns).toEqual(['lluvia']);
+    expect(basico.reason).toContain('rinde');
+    expect(basico.missingRoles).toContain('temperature');
+  });
+
+  it('sugiere tendencia como X candidata en los presets de rinde cuando hay campaña', () => {
+    const suggestions = suggestFor(['rinde', 'lluvia', 'campaña']);
+    const basico = suggestions.find(s => s.preset.id === 'agro-yield')!;
+    expect(basico.xColumns).toContain('tendencia');
+    expect(basico.reason).toContain('tendencia');
+
+    const hidrico = suggestions.find(s => s.preset.id === 'agro-yield-hidrico')!;
+    expect(hidrico.xColumns).toEqual(
+      expect.arrayContaining(['lluvia', 'lluvia_cuadrado', 'tendencia'])
+    );
   });
 
   it('sugiere modelo de precio con precio + tipo_cambio', () => {
@@ -91,10 +109,12 @@ describe('suggestAgroModelPresets', () => {
 
   it('lista los roles faltantes cuando el preset está incompleto', () => {
     const suggestions = suggestFor(['rinde', 'lluvia']);
-    const missing = suggestions[0].missingRoles;
-    expect(missing).toEqual(
+    const basico = suggestions.find(s => s.preset.id === 'agro-yield')!;
+    expect(basico.missingRoles).toEqual(
       expect.arrayContaining(['temperature', 'fertilizer', 'price', 'season', 'province'])
     );
+    const hidrico = suggestions.find(s => s.preset.id === 'agro-yield-hidrico')!;
+    expect(hidrico.missingRoles).toEqual(expect.arrayContaining(['temperature', 'fertilizer']));
   });
 
   it('no lanza error si faltan columnas y no repite la Y entre las X', () => {

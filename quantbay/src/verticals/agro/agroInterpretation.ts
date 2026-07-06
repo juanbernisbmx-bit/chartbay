@@ -13,6 +13,7 @@ import type {
   AgroInterpretationContext,
 } from './agroTypes';
 import { agroRoleLabel } from './agroModelPresets';
+import { AGRO_TREND_COLUMN, rainfallHeaderFromSquaredColumn } from './agroDerivedColumns';
 
 // Vertical Agro no puede importar nada de pro/ ni de Pyodide (invariante
 // verificado por tests/pro/liteIsolation.test.ts: el bundle Lite no debe
@@ -167,6 +168,97 @@ function agroPairReading(
   return null;
 }
 
+interface RainfallOptimumReading {
+  rainfallColumn: string;
+  squaredColumn: string;
+  vertexMm: number;
+  // false si el coeficiente de lluvia² es >= 0: la parábola es convexa (o
+  // degenera en una recta) y no hay un máximo, sólo un mínimo o ninguno.
+  hasOptimum: boolean;
+  // true si el vértice cae fuera del rango de lluvia observado en los datos
+  // (requiere columnRanges en el contexto; sin rango, queda en false).
+  outOfRange: boolean;
+  range: { min: number; max: number } | null;
+}
+
+// Busca, entre los coeficientes de un modelo de rinde, un par (lluvia,
+// lluvia²) — la segunda reconocida por convención de nombre, no por rol,
+// porque es una columna derivada que el vertical genera al cargar el
+// dataset (ver agroDerivedColumns.ts). Sólo tiene sentido para formas con
+// X sin transformar (lin-lin/log-lin): en lin-log/log-log el regresor sería
+// log(lluvia), y log(lluvia²) = 2·log(lluvia) sería perfectamente colineal
+// con él, así que el motor nunca llegaría a estimar ese modelo.
+function findRainfallOptimum(
+  coefficients: ModelRunResultLike['coefficients'],
+  columnRoles: Record<string, AgroColumnRole>,
+  form: FunctionalForm,
+  columnRanges?: Record<string, { min: number; max: number }>
+): RainfallOptimumReading | null {
+  if (form !== 'lin-lin' && form !== 'log-lin') return null;
+
+  for (const coefficient of coefficients) {
+    if (columnRoles[coefficient.name] !== 'rainfall') continue;
+    const squared = coefficients.find(c => rainfallHeaderFromSquaredColumn(c.name) === coefficient.name);
+    if (!squared) continue;
+
+    const b1 = coefficient.estimate;
+    const b2 = squared.estimate;
+    const hasOptimum = b2 < 0;
+    const vertexMm = -b1 / (2 * b2);
+    const range = columnRanges?.[coefficient.name] ?? null;
+    const outOfRange = hasOptimum && range !== null && (vertexMm < range.min || vertexMm > range.max);
+
+    return { rainfallColumn: coefficient.name, squaredColumn: squared.name, vertexMm, hasOptimum, outOfRange, range };
+  }
+  return null;
+}
+
+function rainfallOptimumReading(optimum: RainfallOptimumReading): { reading: string; warning: string | null } {
+  if (!optimum.hasOptimum) {
+    return {
+      reading:
+        `Lluvia y rinde (relación cuadrática): el coeficiente de "${optimum.squaredColumn}" no dio negativo, así ` +
+        `que el modelo no tiene un óptimo hídrico (máximo): la forma estimada es convexa o lineal, lo que ` +
+        `implicaría que el rinde sigue subiendo sin límite con más lluvia — agronómicamente poco plausible.`,
+      warning:
+        `El coeficiente de "${optimum.squaredColumn}" es ≥ 0 (forma convexa, sin óptimo hídrico): revisá los ` +
+        `datos y la especificación — es habitual con pocas observaciones, outliers o rangos de lluvia muy acotados.`,
+    };
+  }
+
+  const vertexLabel = optimum.vertexMm.toFixed(0);
+  const reading =
+    `Óptimo hídrico: según este modelo, ~${vertexLabel} mm de "${optimum.rainfallColumn}" maximizarían el rinde ` +
+    `(vértice de la parábola lluvia–lluvia²); por debajo de ese nivel el agua es limitante, por encima el exceso ` +
+    `perjudica el rinde (anegamiento, lixiviación de nutrientes, enfermedades favorecidas por humedad).`;
+
+  if (!optimum.outOfRange || !optimum.range) {
+    return { reading, warning: null };
+  }
+
+  return {
+    reading,
+    warning:
+      `El óptimo hídrico estimado (~${vertexLabel} mm) cae fuera del rango de "${optimum.rainfallColumn}" ` +
+      `observado en los datos (${optimum.range.min.toFixed(0)}–${optimum.range.max.toFixed(0)} mm): es una ` +
+      `extrapolación, no un valor respaldado directamente por las observaciones.`,
+  };
+}
+
+// Lectura del coeficiente de tendencia tecnológica (ver AGRO_TREND_COLUMN en
+// agroDerivedColumns.ts): en un modelo de rinde en niveles (lin-lin/log-lin),
+// se interpreta directamente como kg/ha de rinde ganados (o perdidos) por
+// cada campaña adicional, atribuible a mejora genética y de manejo — no al
+// clima, que ya está controlado por las demás variables del modelo.
+function trendReading(estimate: number): string {
+  const kgHa = Math.abs(estimate).toFixed(1);
+  return (
+    `Tendencia tecnológica: el coeficiente de "${AGRO_TREND_COLUMN}" (${estimate.toFixed(3)}) equivale a ` +
+    `${kgHa} kg/ha de ${direction(estimate, 'ganancia', 'pérdida')} de rinde por campaña, atribuible a mejora ` +
+    `genética y de manejo. Sin este término, el modelo tendería a atribuirle esa tendencia al clima.`
+  );
+}
+
 // Interpreta un resultado de regresión YA calculado, en clave agropecuaria.
 // No re-estima nada ni valida los datos originales.
 export function interpretAgroRegressionResult(
@@ -204,15 +296,30 @@ export function interpretAgroRegressionResult(
     if (reading) acc.push(reading);
     return acc;
   }, []);
-  const agroReading =
-    pairReadings.length > 0
-      ? pairReadings.join('\n')
-      : 'No hay una lectura agro específica para esta combinación de variables; aplican las lecturas econométricas generales de arriba.';
 
   // ── Advertencias ────────────────────────────────────────────────────────
   const warnings: string[] = [
     'Correlación no implica causalidad: el modelo describe asociaciones en los datos, no efectos causales.',
   ];
+
+  // ── Óptimo hídrico y tendencia (columnas derivadas del modelo de rinde) ─
+  if (context.targetRole === 'yield') {
+    const optimum = findRainfallOptimum(result.coefficients, context.columnRoles, form, context.columnRanges);
+    if (optimum) {
+      const { reading, warning } = rainfallOptimumReading(optimum);
+      pairReadings.push(reading);
+      if (warning) warnings.push(warning);
+    }
+
+    const trendCoefficient = result.coefficients.find(c => c.name === AGRO_TREND_COLUMN);
+    if (trendCoefficient) pairReadings.push(trendReading(trendCoefficient.estimate));
+  }
+
+  const agroReading =
+    pairReadings.length > 0
+      ? pairReadings.join('\n')
+      : 'No hay una lectura agro específica para esta combinación de variables; aplican las lecturas econométricas generales de arriba.';
+
   if (result.observations !== undefined && result.observations < MIN_COMFORTABLE_OBS) {
     warnings.push(
       `Muestra chica (n = ${result.observations}): con menos de ${MIN_COMFORTABLE_OBS} observaciones las conclusiones son frágiles y los p-values poco confiables.`

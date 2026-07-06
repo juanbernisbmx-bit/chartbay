@@ -12,6 +12,7 @@ import type {
   AgroModelPresetSuggestion,
 } from './agroTypes';
 import { normalizeAgroHeader } from './agroColumnDetection';
+import { AGRO_TREND_COLUMN, rainfallSquaredColumnName } from './agroDerivedColumns';
 
 export const AGRO_MODEL_PRESETS: AgroModelPreset[] = [
   {
@@ -23,6 +24,21 @@ export const AGRO_MODEL_PRESETS: AgroModelPreset[] = [
     xRoles: ['rainfall', 'temperature', 'fertilizer', 'price', 'season', 'province'],
     coreXRoles: ['rainfall', 'temperature', 'fertilizer'],
     suggestedForm: 'lin-lin',
+    includeTrend: true,
+  },
+  {
+    id: 'agro-yield-hidrico',
+    type: 'yield',
+    label: 'Modelo de rinde (óptimo hídrico)',
+    objective:
+      'Explicar el rinde con lluvia y lluvia al cuadrado, para estimar el nivel de agua que ' +
+      'maximiza el rinde (relación cóncava: rinde sube con la lluvia hasta un punto y después cae).',
+    yRoles: ['yield'],
+    xRoles: ['rainfall', 'temperature', 'fertilizer'],
+    coreXRoles: ['rainfall'],
+    suggestedForm: 'lin-lin',
+    includeRainfallSquared: true,
+    includeTrend: true,
   },
   {
     id: 'agro-price',
@@ -142,11 +158,36 @@ export function suggestAgroModelPresets(
     if (xColumns.length === 0) continue;
     if (!preset.coreXRoles.some(role => foundRoles.includes(role))) continue;
 
+    // Columnas derivadas agronómicas (lluvia al cuadrado, tendencia): se
+    // suman como X candidatas por nombre, no por rol — las genera el vertical
+    // recién al cargar el dataset en Econometría (ver agroDerivedColumns.ts
+    // y el bridge en agroView.ts), así que acá todavía no existen en el CSV.
+    const derivedNotes: string[] = [];
+    if (preset.includeRainfallSquared) {
+      for (const rainfallHeader of detection.byRole.rainfall ?? []) {
+        if (rainfallHeader === yColumn) continue;
+        const squaredHeader = rainfallSquaredColumnName(rainfallHeader);
+        if (!xColumns.includes(squaredHeader)) {
+          xColumns.push(squaredHeader);
+          derivedNotes.push(`"${squaredHeader}" (lluvia al cuadrado, para estimar el óptimo hídrico)`);
+        }
+      }
+    }
+    if (preset.includeTrend && (detection.byRole.season ?? []).length > 0 && !xColumns.includes(AGRO_TREND_COLUMN)) {
+      xColumns.push(AGRO_TREND_COLUMN);
+      derivedNotes.push(
+        `"${AGRO_TREND_COLUMN}" (tendencia tecnológica por campaña: sin ella el modelo le atribuye al clima ` +
+        `la mejora genética y de manejo)`
+      );
+    }
+
     const score = 0.4 + 0.6 * (foundRoles.length / preset.xRoles.length);
     const reason =
       `Se detectó "${yColumn}" como ${ROLE_LABELS[preset.yRoles[0]]} (variable objetivo) y ` +
       `${xColumns.length} regresor(es) candidato(s): ${xColumns.map(c => `"${c}"`).join(', ')} ` +
-      `(${foundRoles.map(r => ROLE_LABELS[r]).join(', ')}).`;
+      `(${foundRoles.map(r => ROLE_LABELS[r]).join(', ')})` +
+      (derivedNotes.length > 0 ? `. Se suman columnas derivadas: ${derivedNotes.join('; ')}` : '') +
+      '.';
 
     suggestions.push({
       preset,

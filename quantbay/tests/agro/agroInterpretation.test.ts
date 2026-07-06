@@ -148,6 +148,132 @@ describe('interpretAgroRegressionResult', () => {
   });
 });
 
+describe('óptimo hídrico (lluvia + lluvia al cuadrado)', () => {
+  it('calcula el vértice y lo reporta en mm cuando la forma es cóncava (b2 < 0)', () => {
+    const result = baseResult({
+      coefficients: [
+        { name: 'lluvia_mm', estimate: 10, pValue: 0.01 },
+        { name: 'lluvia_mm_cuadrado', estimate: -0.01, pValue: 0.02 },
+      ],
+    });
+    const context = yieldContext({
+      columnRoles: { lluvia_mm: 'rainfall', lluvia_mm_cuadrado: 'unknown' },
+      columnRanges: { lluvia_mm: { min: 300, max: 900 } },
+    });
+    const interpretation = interpretAgroRegressionResult(result, context);
+    expect(interpretation.agroReading).toContain('Óptimo hídrico');
+    expect(interpretation.agroReading).toContain('500 mm'); // -10 / (2 * -0.01) = 500
+    expect(interpretation.warnings.some(w => w.includes('fuera del rango'))).toBe(false);
+  });
+
+  it('advierte si el vértice cae fuera del rango de lluvia observado', () => {
+    const result = baseResult({
+      coefficients: [
+        { name: 'lluvia_mm', estimate: 10, pValue: 0.01 },
+        { name: 'lluvia_mm_cuadrado', estimate: -0.01, pValue: 0.02 },
+      ],
+    });
+    const context = yieldContext({
+      columnRoles: { lluvia_mm: 'rainfall', lluvia_mm_cuadrado: 'unknown' },
+      columnRanges: { lluvia_mm: { min: 200, max: 400 } }, // el vértice (500) queda afuera
+    });
+    const interpretation = interpretAgroRegressionResult(result, context);
+    expect(interpretation.agroReading).toContain('Óptimo hídrico');
+    expect(interpretation.warnings.some(w => w.includes('fuera del rango'))).toBe(true);
+    expect(interpretation.warnings.some(w => w.includes('extrapolación'))).toBe(true);
+  });
+
+  it('advierte cuando b2 >= 0 (forma convexa: no hay óptimo)', () => {
+    const result = baseResult({
+      coefficients: [
+        { name: 'lluvia_mm', estimate: 10, pValue: 0.01 },
+        { name: 'lluvia_mm_cuadrado', estimate: 0.005, pValue: 0.2 },
+      ],
+    });
+    const context = yieldContext({
+      columnRoles: { lluvia_mm: 'rainfall', lluvia_mm_cuadrado: 'unknown' },
+    });
+    const interpretation = interpretAgroRegressionResult(result, context);
+    expect(interpretation.agroReading).toContain('no tiene un óptimo hídrico');
+    expect(interpretation.warnings.some(w => w.includes('convexa'))).toBe(true);
+  });
+
+  it('no calcula óptimo si falta la columna al cuadrado', () => {
+    const interpretation = interpretAgroRegressionResult(baseResult(), yieldContext());
+    expect(interpretation.agroReading).not.toContain('Óptimo hídrico');
+  });
+
+  it('no calcula óptimo si el target no es rinde', () => {
+    const result = baseResult({
+      coefficients: [
+        { name: 'lluvia_mm', estimate: 10 },
+        { name: 'lluvia_mm_cuadrado', estimate: -0.01 },
+      ],
+    });
+    const context = yieldContext({
+      targetRole: 'production',
+      targetColumn: 'produccion_tn',
+      columnRoles: { lluvia_mm: 'rainfall', lluvia_mm_cuadrado: 'unknown' },
+    });
+    const interpretation = interpretAgroRegressionResult(result, context);
+    expect(interpretation.agroReading).not.toContain('Óptimo hídrico');
+  });
+
+  it('no calcula óptimo con formas donde X está transformada (log-log)', () => {
+    const result = baseResult({
+      functionalForm: 'log-log',
+      coefficients: [
+        { name: 'lluvia_mm', estimate: 0.4 },
+        { name: 'lluvia_mm_cuadrado', estimate: -0.1 },
+      ],
+    });
+    const context = yieldContext({
+      form: 'log-log',
+      columnRoles: { lluvia_mm: 'rainfall', lluvia_mm_cuadrado: 'unknown' },
+    });
+    const interpretation = interpretAgroRegressionResult(result, context);
+    expect(interpretation.agroReading).not.toContain('Óptimo hídrico');
+  });
+});
+
+describe('tendencia tecnológica', () => {
+  it('interpreta el coeficiente de tendencia como kg/ha de ganancia por campaña', () => {
+    const result = baseResult({
+      coefficients: [
+        { name: 'lluvia_mm', estimate: 2.5, pValue: 0.01 },
+        { name: 'tendencia', estimate: 45.231, pValue: 0.01 },
+      ],
+    });
+    const context = yieldContext({ columnRoles: { lluvia_mm: 'rainfall', tendencia: 'unknown' } });
+    const interpretation = interpretAgroRegressionResult(result, context);
+    expect(interpretation.agroReading).toContain('Tendencia tecnológica');
+    expect(interpretation.agroReading).toContain('45.2 kg/ha');
+    expect(interpretation.agroReading).toContain('ganancia');
+  });
+
+  it('interpreta un coeficiente de tendencia negativo como pérdida', () => {
+    const result = baseResult({
+      coefficients: [{ name: 'tendencia', estimate: -12.5, pValue: 0.01 }],
+    });
+    const context = yieldContext({ columnRoles: { tendencia: 'unknown' } });
+    const interpretation = interpretAgroRegressionResult(result, context);
+    expect(interpretation.agroReading).toContain('pérdida');
+  });
+
+  it('no interpreta tendencia si el target no es rinde', () => {
+    const result = baseResult({
+      coefficients: [{ name: 'tendencia', estimate: 45.2 }],
+    });
+    const context = yieldContext({
+      targetRole: 'margin',
+      targetColumn: 'margen_bruto',
+      columnRoles: { tendencia: 'unknown' },
+    });
+    const interpretation = interpretAgroRegressionResult(result, context);
+    expect(interpretation.agroReading).not.toContain('Tendencia tecnológica');
+  });
+});
+
 describe('fromRegressionResult (adapter del motor común)', () => {
   it('adapta un RegressionResult real de runOLS sin tocar el core', () => {
     // y ≈ 2x + 1 con ruido chico: el motor común estima, Agro sólo interpreta.

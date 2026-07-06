@@ -18,11 +18,12 @@ import type { RegressionResult } from '../../regression';
 import { detectAgroColumns } from './agroColumnDetection';
 import { AGRO_CSV_TEMPLATES, agroCsvTemplateToCsv } from './agroCsvTemplates';
 import { AGRO_DATA_CATALOG } from './agroDataCatalog';
+import { addAgroDerivedColumns } from './agroDerivedColumns';
 import {
   AGRO_EXAMPLE_DATASETS,
-  agroDatasetToCsv,
   generateLargeAgroSyntheticDataset,
   getAgroExampleById,
+  rowsToCsv,
 } from './agroExamples';
 import { isVerticalEnabled } from './agroFeatureFlags';
 import {
@@ -125,10 +126,33 @@ function buildColumnRoles(detection: AgroColumnDetectionResult, columns: string[
   return roles;
 }
 
+// Rango (min/max) de cada columna numérica dada, sobre las filas efectivamente
+// cargadas. Ignora valores no numéricos; si una columna no tiene ningún valor
+// numérico, queda fuera del resultado.
+function computeColumnRanges(
+  rows: Array<Record<string, string | number>>,
+  columns: string[]
+): Record<string, { min: number; max: number }> {
+  const ranges: Record<string, { min: number; max: number }> = {};
+  for (const column of columns) {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const row of rows) {
+      const value = Number(row[column]);
+      if (!Number.isFinite(value)) continue;
+      if (value < min) min = value;
+      if (value > max) max = value;
+    }
+    if (Number.isFinite(min) && Number.isFinite(max)) ranges[column] = { min, max };
+  }
+  return ranges;
+}
+
 function setAgroContextFromSuggestion(
   dataset: AgroExampleDataset,
   detection: AgroColumnDetectionResult,
-  suggestion: AgroModelPresetSuggestion
+  suggestion: AgroModelPresetSuggestion,
+  rows: Array<Record<string, string | number>>
 ): void {
   const targetRole = detection.columns.find(c => c.original === suggestion.yColumn)?.role ?? suggestion.preset.yRoles[0];
   activeAgroContext = {
@@ -137,6 +161,7 @@ function setAgroContextFromSuggestion(
     targetRole,
     columnRoles: buildColumnRoles(detection, suggestion.xColumns),
     crop: dataset.crop,
+    columnRanges: computeColumnRanges(rows, suggestion.xColumns),
   };
 }
 
@@ -265,8 +290,11 @@ function loadDatasetWithSuggestion(
   const statusEl = $('qb-agro-use-status');
   if (!bridge) return;
 
+  // Agrega columnas derivadas agronómicas (lluvia al cuadrado, tendencia)
+  // antes de armar el CSV: el motor común las ve como regresores comunes.
+  const derived = addAgroDerivedColumns(dataset, detection);
   const result = bridge.loadDataset({
-    csvText: agroDatasetToCsv(dataset),
+    csvText: rowsToCsv(derived.columns, derived.rows),
     label: dataset.name,
     suggestedY: suggestion?.yColumn,
     suggestedX: suggestion?.xColumns,
@@ -278,7 +306,7 @@ function loadDatasetWithSuggestion(
   }
 
   if (suggestion) {
-    setAgroContextFromSuggestion(dataset, detection, suggestion);
+    setAgroContextFromSuggestion(dataset, detection, suggestion, derived.rows);
   } else {
     activeAgroContext = null;
   }
