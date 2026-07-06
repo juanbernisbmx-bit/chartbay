@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   AGRO_EXAMPLE_DATASETS,
+  MAGYP_MAIZ_PRODUCCION_PROVINCIA,
+  MAGYP_SOJA_RINDE_PROVINCIA,
   MAIZ_MARGEN_DEMO,
   SOJA_RINDE_DEMO,
   TRIGO_PRECIO_DEMO,
@@ -10,20 +12,37 @@ import {
 import { detectAgroColumns } from '../../src/verticals/agro/agroColumnDetection';
 import { getAgroPresetById, suggestAgroModelPresets } from '../../src/verticals/agro/agroModelPresets';
 
+const SYNTHETIC_DEMO_DATASETS = [SOJA_RINDE_DEMO, MAIZ_MARGEN_DEMO, TRIGO_PRECIO_DEMO];
+const REAL_MAGYP_DATASETS = [MAGYP_SOJA_RINDE_PROVINCIA, MAGYP_MAIZ_PRODUCCION_PROVINCIA];
+
 describe('AGRO_EXAMPLE_DATASETS', () => {
-  it('expone los 3 datasets de demo', () => {
+  it('expone los 3 datasets sintéticos de demo y los 2 reales de MAGyP', () => {
     expect(AGRO_EXAMPLE_DATASETS.map(d => d.id)).toEqual([
       'soja_rinde_demo', 'maiz_margen_demo', 'trigo_precio_demo',
+      'magyp_soja_rinde_provincia', 'magyp_maiz_produccion_provincia',
     ]);
   });
 
-  it('cada dataset tiene columnas, entre 12 y 30 filas y synthetic = true', () => {
-    for (const dataset of AGRO_EXAMPLE_DATASETS) {
+  it('cada dataset sintético tiene columnas, entre 12 y 30 filas y synthetic = true', () => {
+    for (const dataset of SYNTHETIC_DEMO_DATASETS) {
       expect(dataset.columns.length).toBeGreaterThan(0);
       expect(dataset.rows.length).toBeGreaterThanOrEqual(12);
       expect(dataset.rows.length).toBeLessThanOrEqual(30);
       expect(dataset.synthetic).toBe(true);
+      expect(dataset.source).toBeUndefined();
       expect(dataset.description.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('cada dataset real de MAGyP es synthetic = false y trae metadatos de fuente', () => {
+    for (const dataset of REAL_MAGYP_DATASETS) {
+      expect(dataset.columns.length).toBeGreaterThan(0);
+      expect(dataset.rows.length).toBeGreaterThan(200);
+      expect(dataset.synthetic).toBe(false);
+      expect(dataset.description.length).toBeGreaterThan(0);
+      expect(dataset.source?.provider).toMatch(/MAGyP/);
+      expect(dataset.source?.url).toMatch(/^https:\/\//);
+      expect(dataset.source?.retrievedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     }
   });
 
@@ -87,6 +106,49 @@ describe('coherencia interna de los datos sintéticos', () => {
       expect(descuento).toBeGreaterThan(0);
       expect(descuento).toBeLessThan(60);
     }
+  });
+});
+
+describe('datasets reales de MAGyP', () => {
+  it('rinde_kg_ha es consistente con produccion_tn y superficie cosechada (redondeo)', () => {
+    for (const dataset of REAL_MAGYP_DATASETS) {
+      for (const row of dataset.rows) {
+        const esperado = (Number(row.produccion_tn) * 1000) / Number(row.sup_cosechada_ha);
+        // Tolerancia de 1 kg/ha: produccion_tn y rinde_kg_ha se redondearon por
+        // separado a partir de las sumas sin redondear de los departamentos.
+        expect(Math.abs(Number(row.rinde_kg_ha) - esperado)).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('superficie cosechada nunca supera la sembrada', () => {
+    for (const dataset of REAL_MAGYP_DATASETS) {
+      for (const row of dataset.rows) {
+        expect(Number(row.sup_cosechada_ha)).toBeLessThanOrEqual(Number(row.sup_sembrada_ha));
+      }
+    }
+  });
+
+  it('cargan en el motor de ChartBay y sugieren el preset de producción', () => {
+    for (const dataset of REAL_MAGYP_DATASETS) {
+      const detection = detectAgroColumns(dataset.columns);
+      expect(detection.byRole.production).toBeDefined();
+      expect(detection.byRole.area_planted).toBeDefined();
+      expect(detection.byRole.area_harvested).toBeDefined();
+      expect(detection.byRole.yield).toBeDefined();
+
+      const suggestions = suggestAgroModelPresets(detection);
+      expect(suggestions.length).toBeGreaterThan(0);
+      const top = suggestions[0];
+      expect(top.preset.id).toBe('agro-production');
+      expect(top.preset.id).toBe(dataset.suggestedPresetId);
+      expect(top.yColumn).toBe('produccion_tn');
+    }
+  });
+
+  it('MAGYP_SOJA_RINDE_PROVINCIA es de soja y MAGYP_MAIZ_PRODUCCION_PROVINCIA es de maíz', () => {
+    expect(MAGYP_SOJA_RINDE_PROVINCIA.crop).toBe('soja');
+    expect(MAGYP_MAIZ_PRODUCCION_PROVINCIA.crop).toBe('maiz');
   });
 });
 

@@ -119,6 +119,20 @@ describe('detectAgroColumns', () => {
     expect(parcial.confidence).toBeGreaterThan(0);
   });
 
+  it('detecta los headers reales del recorte de MAGyP (estimaciones agrícolas)', () => {
+    const headers = [
+      'cultivo', 'campania', 'provincia',
+      'sup_sembrada_ha', 'sup_cosechada_ha', 'produccion_tn', 'rinde_kg_ha',
+    ];
+    const detection = detectAgroColumns(headers);
+    const roles = detection.columns.map(c => c.role);
+    expect(roles).toEqual([
+      'crop', 'season', 'province',
+      'area_planted', 'area_harvested', 'production', 'yield',
+    ]);
+    expect(detection.warnings).toEqual([]);
+  });
+
   it('agrupa headers por rol en byRole', () => {
     const detection = detectAgroColumns(['precio_local_usd_tn', 'precio_chicago_usd_tn', 'tipo_cambio']);
     expect(detection.byRole.price).toEqual(['precio_local_usd_tn', 'precio_chicago_usd_tn']);

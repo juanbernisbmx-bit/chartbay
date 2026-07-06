@@ -1,15 +1,21 @@
-// ChartBay Agro — datasets sintéticos de demostración.
+// ChartBay Agro — datasets de ejemplo (sintéticos y reales empaquetados).
 //
-// IMPORTANTE: todos los datos son SINTÉTICOS. Los valores son plausibles para
-// el agro argentino (rindes, precios FOB/Chicago, costos por hectárea) pero
-// fueron generados a mano para la demo: no provienen de ninguna fuente real
-// y no deben usarse para decisiones productivas o comerciales.
+// Los datasets SOJA_RINDE_DEMO, MAIZ_MARGEN_DEMO, TRIGO_PRECIO_DEMO y el
+// generador de datasets grandes son SINTÉTICOS (synthetic: true): valores
+// plausibles para el agro argentino generados a mano para la demo, que no
+// provienen de ninguna fuente real y no deben usarse para decisiones
+// productivas o comerciales.
 //
-// Coherencia interna garantizada (y testeada):
+// Coherencia interna garantizada (y testeada) en los sintéticos:
 //   - soja:  produccion_tn = rinde_kg_ha × superficie_sembrada_ha / 1000
 //   - maíz:  margen_bruto_usd_ha = rinde_tn×precio − costos/ha − flete×rinde_tn
+//
+// Los datasets MAGYP_* (ver ./data/magyp.ts) son REALES (synthetic: false):
+// series históricas oficiales del MAGyP, empaquetadas estáticamente en el
+// bundle (el repo no llama APIs en runtime — ver agroDataCatalog.ts).
 
 import type { AgroCrop, AgroExampleDataset, AgroLargeSyntheticDatasetOptions } from './agroTypes';
+import { MAGYP_SOJA_RINDE_PROVINCIA, MAGYP_MAIZ_PRODUCCION_PROVINCIA } from './data/magyp';
 
 export const SOJA_RINDE_DEMO: AgroExampleDataset = {
   id: 'soja_rinde_demo',
@@ -113,7 +119,11 @@ export const AGRO_EXAMPLE_DATASETS: AgroExampleDataset[] = [
   SOJA_RINDE_DEMO,
   MAIZ_MARGEN_DEMO,
   TRIGO_PRECIO_DEMO,
+  MAGYP_SOJA_RINDE_PROVINCIA,
+  MAGYP_MAIZ_PRODUCCION_PROVINCIA,
 ];
+
+export { MAGYP_SOJA_RINDE_PROVINCIA, MAGYP_MAIZ_PRODUCCION_PROVINCIA };
 
 export function getAgroExampleById(id: string): AgroExampleDataset | undefined {
   return AGRO_EXAMPLE_DATASETS.find(dataset => dataset.id === id);

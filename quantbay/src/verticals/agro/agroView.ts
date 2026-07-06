@@ -151,18 +151,29 @@ export function clearAgroContext(): void {
   hideAgroInterpretationPanels();
 }
 
+// Etiqueta corta para distinguir datasets reales de sintéticos en el select
+// y en la nota de detalle.
+function agroDatasetOriginLabel(dataset: AgroExampleDataset): string {
+  return dataset.synthetic ? 'sintético' : `datos reales — ${dataset.source?.provider ?? 'fuente real'}`;
+}
+
 function renderDatasetNote(datasetId: string): void {
   const note = $('qb-agro-dataset-note');
   if (!note) return;
   const dataset = resolveAgroDataset(datasetId);
   if (!dataset) {
-    note.textContent = 'Elegí un dataset sintético para ver columnas detectadas y presets sugeridos.';
+    note.textContent = 'Elegí un dataset para ver columnas detectadas y presets sugeridos.';
     return;
   }
+  const originNote = dataset.synthetic
+    ? 'datos 100% sintéticos (no usar para decisiones reales).'
+    : `datos reales — ${escapeHtml(dataset.source?.provider ?? 'fuente real')}` +
+      (dataset.source?.url ? ` (<a href="${escapeHtml(dataset.source.url)}" target="_blank" rel="noopener">fuente</a>)` : '') +
+      '.';
   note.innerHTML =
     `<strong>${escapeHtml(dataset.name)}</strong><br>` +
     `${escapeHtml(dataset.description)}<br>` +
-    `<span class="muted">${dataset.rows.length} filas · datos 100% sintéticos (no usar para decisiones reales).</span>`;
+    `<span class="muted">${dataset.rows.length} filas · ${originNote}</span>`;
 }
 
 function renderDetection(datasetId: string): void {
@@ -633,7 +644,7 @@ export function initAgroVertical(
     for (const dataset of AGRO_EXAMPLE_DATASETS) {
       const option = document.createElement('option');
       option.value = dataset.id;
-      option.textContent = dataset.name;
+      option.textContent = `${dataset.name} — ${agroDatasetOriginLabel(dataset)}`;
       select.appendChild(option);
     }
     select.addEventListener('change', onDatasetChange);

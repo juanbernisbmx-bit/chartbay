@@ -183,7 +183,13 @@ export interface AgroExampleDataset {
   name: string;
   description: string;
   crop: AgroCrop;
-  synthetic: true;               // siempre true: no usamos datos reales todavía
+  synthetic: boolean;             // false para datasets reales empaquetados (ver source)
+  // Presente sólo cuando synthetic es false: de dónde viene el dato real.
+  source?: {
+    provider: string;
+    url: string;
+    retrievedAt: string;         // fecha de descarga, ISO (YYYY-MM-DD)
+  };
   columns: string[];
   rows: Array<Record<string, string | number>>;
   suggestedPresetId?: string;

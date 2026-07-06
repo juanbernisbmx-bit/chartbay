@@ -93,8 +93,8 @@ describe('initAgroVertical', () => {
     const panel = document.getElementById('qb-agro-panel')!;
     expect(panel.style.display).toBe('');
     const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
-    // opción vacía + 3 datasets
-    expect(select.options.length).toBe(4);
+    // opción vacía + 3 datasets sintéticos + 2 reales de MAGyP
+    expect(select.options.length).toBe(6);
   });
 
   it('mantiene el panel oculto cuando el vertical está deshabilitado', () => {
@@ -114,7 +114,7 @@ describe('initAgroVertical', () => {
     initAgroVertical(bridge);
     initAgroVertical(bridge);
     const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
-    expect(select.options.length).toBe(4);
+    expect(select.options.length).toBe(6);
 
     selectDataset('soja_rinde_demo');
     document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
@@ -139,6 +139,26 @@ describe('selección de dataset', () => {
 
     const note = document.getElementById('qb-agro-dataset-note')!.innerHTML;
     expect(note).toContain('sintéticos');
+  });
+
+  it('distingue datasets reales de MAGyP de los sintéticos, en el select y en la nota', () => {
+    initAgroVertical(makeFakeBridge().bridge);
+    const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
+    const options = Array.from(select.options);
+
+    const sinteticoOpt = options.find(o => o.value === 'soja_rinde_demo')!;
+    expect(sinteticoOpt.textContent).toContain('sintético');
+    expect(sinteticoOpt.textContent).not.toContain('MAGyP');
+
+    const realOpt = options.find(o => o.value === 'magyp_soja_rinde_provincia')!;
+    expect(realOpt.textContent).toContain('datos reales');
+    expect(realOpt.textContent).toContain('MAGyP');
+
+    selectDataset('magyp_soja_rinde_provincia');
+    const note = document.getElementById('qb-agro-dataset-note')!.innerHTML;
+    expect(note).toContain('datos reales');
+    expect(note).toContain('MAGyP');
+    expect(note).not.toContain('sintéticos');
   });
 
   it('limpia los paneles al volver a la opción vacía', () => {
@@ -394,8 +414,8 @@ describe('"Generar demo grande"', () => {
     document.getElementById('qb-agro-generate-large')!.dispatchEvent(new Event('click'));
 
     const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
-    // opción vacía + 3 datasets fijos + 1 generado
-    expect(select.options.length).toBe(5);
+    // opción vacía + 5 datasets fijos (3 sintéticos + 2 reales) + 1 generado
+    expect(select.options.length).toBe(7);
     expect(select.value).toContain('_large_synthetic_demo');
 
     const status = document.getElementById('qb-agro-generate-status')!.textContent ?? '';
@@ -413,7 +433,7 @@ describe('"Generar demo grande"', () => {
     document.getElementById('qb-agro-generate-large')!.dispatchEvent(new Event('click'));
     document.getElementById('qb-agro-generate-large')!.dispatchEvent(new Event('click'));
     const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
-    expect(select.options.length).toBe(5);
+    expect(select.options.length).toBe(7);
   });
 
   it('el dataset generado se puede cargar en Econometría con el preset por defecto', () => {
