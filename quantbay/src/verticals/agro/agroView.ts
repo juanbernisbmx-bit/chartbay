@@ -412,6 +412,11 @@ function readMarginInput(): AgroMarginInput {
     freightCostUsdPerTon: numberInput('qb-agro-m-freight'),
     rentCostUsdPerHa: numberInput('qb-agro-m-rent'),
     otherCostUsdPerHa: numberInput('qb-agro-m-other'),
+    rentQqSojaPerHa: numberInput('qb-agro-m-rent-qq'),
+    // 0 se interpreta como "sin referencia": para soja usa el precio esperado.
+    sojaReferencePriceUsdPerTon: numberInput('qb-agro-m-soja-ref') || undefined,
+    harvestCostPctRevenue: numberInput('qb-agro-m-harvest-pct'),
+    sellingCostPctRevenue: numberInput('qb-agro-m-selling-pct'),
   };
 }
 
@@ -467,6 +472,20 @@ function onMarginRun(): void {
       ? `<div class="qb-interp" style="margin-top:8px">${result.warnings.map(escapeHtml).join('<br>')}</div>`
       : '';
 
+    // Matriz de sensibilidad precio × rinde (filas = rinde, columnas = precio).
+    const sens = result.sensitivity;
+    const sensHead =
+      `<tr><th>Rinde ${escapeHtml(unitLabel)} \\ Precio USD/tn</th>` +
+      sens.priceStepsUsdPerTon.map(p => `<th>${p.toFixed(0)}</th>`).join('') + '</tr>';
+    const sensRows = sens.yieldSteps
+      .map((yieldValue, i) =>
+        `<tr><td>${yieldValue.toFixed(0)}</td>` +
+        sens.marginPerHaUsd[i]
+          .map(m => `<td style="${m < 0 ? 'color:#e55' : ''}">${m.toFixed(0)}</td>`)
+          .join('') + '</tr>'
+      )
+      .join('');
+
     resultEl.innerHTML =
       `<p class="qb-label" style="margin-top:12px">Resultado (${escapeHtml(result.crop)}, ${result.hectares} ha)</p>` +
       `<div class="qb-table-scroll"><table class="ledger">` +
@@ -474,7 +493,10 @@ function onMarginRun(): void {
       `<p class="qb-label" style="margin-top:10px">Escenarios (±10% rinde y precio)</p>` +
       `<div class="qb-table-scroll"><table class="ledger">` +
       `<thead><tr><th>Escenario</th><th>Rinde</th><th>Precio USD/tn</th><th>Margen bruto</th><th>Margen/ha</th></tr></thead>` +
-      `<tbody>${scenarioRows}</tbody></table></div>${warnings}`;
+      `<tbody>${scenarioRows}</tbody></table></div>` +
+      `<p class="qb-label" style="margin-top:10px">Sensibilidad precio × rinde (margen/ha en USD)</p>` +
+      `<div class="qb-table-scroll"><table class="ledger">` +
+      `<thead>${sensHead}</thead><tbody>${sensRows}</tbody></table></div>${warnings}`;
   } catch (err) {
     lastMarginInput = null;
     lastMarginResult = null;

@@ -32,6 +32,10 @@ function agroPanelSkeleton(): string {
       <input id="qb-agro-m-labor" value="90">
       <input id="qb-agro-m-freight" value="25">
       <input id="qb-agro-m-rent" value="400">
+      <input id="qb-agro-m-rent-qq" value="0">
+      <input id="qb-agro-m-soja-ref" value="0">
+      <input id="qb-agro-m-harvest-pct" value="0">
+      <input id="qb-agro-m-selling-pct" value="0">
       <input id="qb-agro-m-other" value="50">
       <button id="qb-agro-m-run"></button>
       <div id="qb-agro-margin-error" style="display:none"></div>
@@ -307,6 +311,24 @@ describe('simulador de margen (UI)', () => {
     expect(result).toContain('87500 USD');
     expect(result).toContain('2500 USD');
     expect(result).toContain('Escenarios');
+    expect(result).toContain('Sensibilidad precio × rinde');
+    expect(document.getElementById('qb-agro-margin-error')!.textContent).toBe('');
+  });
+
+  it('incluye cosecha, comercialización y alquiler en qq en el cálculo del margen', () => {
+    initAgroVertical(makeFakeBridge().bridge);
+    (document.getElementById('qb-agro-m-harvest-pct') as HTMLInputElement).value = '9';
+    (document.getElementById('qb-agro-m-selling-pct') as HTMLInputElement).value = '8';
+    (document.getElementById('qb-agro-m-rent') as HTMLInputElement).value = '0';
+    (document.getElementById('qb-agro-m-rent-qq') as HTMLInputElement).value = '18';
+    (document.getElementById('qb-agro-m-soja-ref') as HTMLInputElement).value = '320';
+    document.getElementById('qb-agro-m-run')!.dispatchEvent(new Event('click'));
+
+    const result = document.getElementById('qb-agro-margin-result')!.innerHTML;
+    // Ingreso 90.000; costos: 400/ha fijos × 100 + alquiler 18 qq × 0,1 × 320 = 576/ha × 100
+    // + flete 7.500 + 17% de 90.000 = 15.300 → 40.000 + 57.600 + 7.500 + 15.300 = 120.400.
+    expect(result).toContain('90000 USD');
+    expect(result).toContain('120400 USD');
     expect(document.getElementById('qb-agro-margin-error')!.textContent).toBe('');
   });
 

@@ -106,6 +106,17 @@ export interface AgroMarginInput {
   freightCostUsdPerTon?: number;
   rentCostUsdPerHa?: number;
   otherCostUsdPerHa?: number;
+  // Cosecha cobrada como % del ingreso bruto (convención UMA/contratistas:
+  // ~8-10%). Valor en puntos porcentuales, 0 a 100.
+  harvestCostPctRevenue?: number;
+  // Gastos de comercialización (paritaria, secada, zarandeo, comisión de
+  // acopio/corredor) como % del ingreso bruto. Puntos porcentuales, 0 a 100.
+  sellingCostPctRevenue?: number;
+  // Alquiler pactado en quintales de soja por hectárea (la convención más
+  // usada en Argentina). Se valúa con sojaReferencePriceUsdPerTon; si el
+  // cultivo ES soja y no se indica referencia, se usa expectedPriceUsdPerTon.
+  rentQqSojaPerHa?: number;
+  sojaReferencePriceUsdPerTon?: number;
 }
 
 export interface AgroMarginScenario {
@@ -117,6 +128,16 @@ export interface AgroMarginScenario {
   totalCostUsd: number;
   grossMarginUsd: number;
   marginPerHectareUsd: number;
+}
+
+// Matriz de sensibilidad precio × rinde: el formato estándar de los informes
+// de márgenes agropecuarios (tabla de doble entrada con el margen/ha en cada
+// celda). cells se indexa [fila de rinde][columna de precio].
+export interface AgroSensitivityMatrix {
+  priceStepsUsdPerTon: number[];   // ascendente
+  yieldSteps: number[];            // ascendente, en la unidad del input
+  yieldUnit: AgroYieldUnit;
+  marginPerHaUsd: number[][];      // [yieldIdx][priceIdx]
 }
 
 export interface AgroMarginResult {
@@ -133,6 +154,7 @@ export interface AgroMarginResult {
   breakEvenYieldUnit: AgroYieldUnit;
   breakEvenPriceUsdPerTon: number | null;
   scenarios: AgroMarginScenario[];
+  sensitivity: AgroSensitivityMatrix;
   warnings: string[];
 }
 

@@ -13,6 +13,7 @@ export {
   suggestAgroModelPresets,
 } from './agroModelPresets';
 export {
+  buildAgroSensitivityMatrix,
   calculateAgroGrossMargin,
   calculateAgroMargin,
   calculateAgroMarginPerHectare,
@@ -21,8 +22,10 @@ export {
   calculateBreakEvenPrice,
   calculateBreakEvenYield,
   formatAgroMarginSummary,
+  formatAgroSensitivityMatrix,
   runAgroMarginScenarios,
   yieldToTonsPerHa,
+  type AgroSensitivityOptions,
 } from './agroMargin';
 export {
   fromPyodideOlsResult,
