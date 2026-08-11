@@ -9,7 +9,13 @@ services:
     # debe viajar en el repositorio como artefacto compilado.
     # Migración futura: Docker con python:3.12 + node:20 para build automático.
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn web.app:app --bind 0.0.0.0:$PORT
+    # Un solo worker con hilos: la carga es I/O-bound (Yahoo, Anthropic, FRED),
+    # así que los --threads son los que evitan que una request lenta bloquee al
+    # resto. Un segundo worker duplicaría pandas/numpy en RAM y el plan free
+    # tiene 512 MB. Tampoco usamos --preload: forkear después de importar la app
+    # (que abre sqlite en el import, web/app.py:180) es justo el patrón que
+    # rompe en local, y no gana nada con un único worker.
+    startCommand: gunicorn web.app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.5"

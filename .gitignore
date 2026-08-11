@@ -7,6 +7,10 @@ informes/
 venv/
 web/chartbay.db
 *.db
+# sqlite corre en modo WAL (db.py: PRAGMA journal_mode=WAL) y deja estos
+# sidecars al lado de la base; *.db solo no los cubre.
+*.db-shm
+*.db-wal
 
 # JS toolchain — never version dependencies or caches
 node_modules/
