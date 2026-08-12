@@ -25,12 +25,11 @@
     <p class="catalog-title">Guia de ChartBay</p>
 
     <div class="guia-wrap">
-      <p class="guia-intro">Tres areas. Elegi una pestaña y abri cada concepto.</p>
+      <p class="guia-intro">Dos areas. Elegi una pestaña y abri cada concepto.</p>
 
       <div class="guia-areas">
         <div class="guia-tabs" role="tablist" aria-label="Areas de ChartBay">
           <button class="guia-tab active" id="tab-econometria" data-area="econometria" role="tab" aria-selected="true" aria-controls="area-econometria">Econometria</button>
-          <button class="guia-tab" id="tab-finanzas" data-area="finanzas" role="tab" aria-selected="false" aria-controls="area-finanzas">Finanzas</button>
           <button class="guia-tab" id="tab-aprender" data-area="aprender" role="tab" aria-selected="false" aria-controls="area-aprender">Aprender</button>
         </div>
 
@@ -108,83 +107,6 @@
           </div></details>
         </section>
 
-        <!-- ===================== FINANZAS ===================== -->
-        <section class="guia-panel" id="area-finanzas" data-area="finanzas" role="tabpanel" aria-labelledby="tab-finanzas" hidden>
-          <h3 class="guia-group">Indicadores de mercado</h3>
-
-          <details class="guia-acc"><summary>Tendencia (EMA 20/50/200)</summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> El rumbo del precio segun sus promedios.</p>
-            <p><strong>Como se lee.</strong> EMA50 sobre EMA200 y precio arriba = alcista. Al reves = bajista.</p>
-          </div></details>
-
-          <details class="guia-acc"><summary>RSI</summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Oscilador 0-100 de fuerza del movimiento.</p>
-            <p><strong>Como se lee.</strong> Mayor a 70 sobrecompra, menor a 30 sobreventa.</p>
-          </div></details>
-
-          <details class="guia-acc"><summary>MACD</summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Compara medias para ver impulso.</p>
-            <p><strong>Como se lee.</strong> Histograma a positivo = comprador; a negativo = vendedor.</p>
-          </div></details>
-
-          <details class="guia-acc"><summary>Estocastico</summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Mide sobrecompra y sobreventa rapida.</p>
-            <p><strong>Como se lee.</strong> Mayor a 80 sobrecompra, menor a 20 sobreventa.</p>
-          </div></details>
-
-          <details class="guia-acc"><summary>ATR</summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Cuanto se mueve el precio en promedio.</p>
-            <p><strong>Como se lee.</strong> Alto = mas volatilidad y riesgo. Sirve para stops.</p>
-          </div></details>
-
-          <details class="guia-acc"><summary>Bollinger</summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Bandas por volatilidad alrededor del precio.</p>
-            <p><strong>Como se lee.</strong> Tocar banda = precio estirado. Bandas juntas = posible movimiento fuerte.</p>
-          </div></details>
-
-          <details class="guia-acc"><summary>Soporte y resistencia</summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Zonas donde el precio suele frenar.</p>
-            <p><strong>Como se lee.</strong> Soporte abajo, resistencia arriba. Ruptura fuerte continua.</p>
-          </div></details>
-
-          <details class="guia-acc"><summary>Volumen relativo</summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Volumen actual vs su promedio.</p>
-            <p><strong>Como se lee.</strong> Mayor a 1 mas actividad, menor a 1 poco interes.</p>
-          </div></details>
-
-          <details class="guia-acc"><summary>OBV</summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Acumula volumen segun sube o baja el precio.</p>
-            <p><strong>Como se lee.</strong> Junto al precio confirma fuerza. Divergencia avisa.</p>
-          </div></details>
-
-          <details class="guia-acc"><summary>Ichimoku</summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Tendencia + soporte/resistencia + momentum.</p>
-            <p><strong>Como se lee.</strong> Sobre la nube alcista, bajo bajista, dentro indecision.</p>
-          </div></details>
-
-          <details class="guia-acc"><summary>Fibonacci</summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Niveles de retroceso tras un movimiento.</p>
-            <p><strong>Como se lee.</strong> 0.382, 0.5 y 0.618 se miran como soporte o resistencia.</p>
-          </div></details>
-
-          <h3 class="guia-group">Proximamente</h3>
-
-          <details class="guia-acc"><summary>Portafolio <span class="guia-soon">en construccion</span></summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Pesos y optimizacion de cartera.</p>
-            <p><strong>Estado.</strong> Esqueleto en el motor. Se amplia mas adelante.</p>
-          </div></details>
-
-          <details class="guia-acc"><summary>Riesgo <span class="guia-soon">en construccion</span></summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Volatilidad, VaR y drawdown.</p>
-            <p><strong>Estado.</strong> Esqueleto en el motor. Se amplia mas adelante.</p>
-          </div></details>
-
-          <details class="guia-acc"><summary>Valuacion <span class="guia-soon">en construccion</span></summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Modelos de valor (ej: DCF).</p>
-            <p><strong>Estado.</strong> Esqueleto en el motor. Se amplia mas adelante.</p>
-          </div></details>
-        </section>
-
         <!-- ===================== APRENDER ===================== -->
         <section class="guia-panel" id="area-aprender" data-area="aprender" role="tabpanel" aria-labelledby="tab-aprender" hidden>
           <p class="guia-lead">Curso gratuito. De los fundamentos a series de tiempo y finanzas. Cada tema dice que es, para que sirve, como se lee y donde aparece en ChartBay.</p>
@@ -195,7 +117,7 @@
             <details class="guia-sub"><summary>Que es ChartBay</summary><div class="guia-sub-body">
               <p><strong>Que es.</strong> Plataforma web educativa de analisis cuantitativo.</p>
               <p><strong>Para que.</strong> Cargar datos, estimar modelos y leer diagnosticos sin programar.</p>
-              <p><strong>En ChartBay.</strong> Tres areas: Econometria, Finanzas y Aprender.</p>
+              <p><strong>En ChartBay.</strong> Dos areas: Econometria y Aprender.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
@@ -481,9 +403,9 @@
 
             <details class="guia-sub"><summary>Indicadores tecnicos</summary><div class="guia-sub-body">
               <p><strong>Que es.</strong> Señales sobre precio y volumen (RSI, MACD, etc.).</p>
-              <p><strong>Como se interpreta.</strong> Ver el area Finanzas para cada uno.</p>
-              <p><strong>En ChartBay.</strong> Area Finanzas y panel Mercados.</p>
-              <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
+              <p><strong>Como se interpreta.</strong> Cada uno tiene su propia lectura de sobrecompra, sobreventa y cruce.</p>
+              <p><strong>En ChartBay.</strong> Fuera del alcance actual del motor, centrado en econometria.</p>
+              <p><strong>Estado.</strong> <span class="guia-st road">Roadmap</span></p>
             </div></details>
 
             <details class="guia-sub"><summary>Portafolio y diversificacion</summary><div class="guia-sub-body">
