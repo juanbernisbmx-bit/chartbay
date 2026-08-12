@@ -1,111 +1,136 @@
-# The Chart Bay — Análisis Técnico con IA (swing / acciones e índices)
+# ChartBay Engine — laboratorio de econometría
 
-Pipeline en Python que baja datos de mercado, calcula indicadores técnicos y le
-pide a la IA (Claude) un análisis técnico **frío, objetivo y con base
-estadística** — sin emociones. Pensado para swing trading en acciones e índices.
+Aplicación web para estimar modelos econométricos desde el navegador: cargás un
+CSV, corrés una regresión, validás supuestos y exportás resultados. El cálculo
+ocurre **en el navegador** (motor en TypeScript), así que no hay datos que suban
+a ningún servidor.
 
-## Por qué fuera de TradingView
+En producción: <https://chartbay.onrender.com>
 
-TradingView usa Pine Script, que corre en sus servidores y **no puede llamar a
-una IA ni a internet**. Por eso el análisis con IA vive en este pipeline externo:
-TradingView se usa para ver el gráfico, y este programa para el veredicto de la IA.
+## Qué incluye
 
-## Qué hace
+| Sección | Ruta | Qué hace |
+|---|---|---|
+| Econometría | `/econometria` | OLS por descomposición QR, RLS con test de Wald, inferencia t/F, intervalos al 95%, diagnósticos de residuos y colinealidad (VIF), series de tiempo (ADF, ACF, PACF, Ljung-Box) |
+| Datos | `/data` | 49 indicadores macro (37 de FRED, 12 de World Bank), con caché diaria y descarga en CSV o JSON |
+| Documentación | `/guia` | Conceptos, ejemplos guiados y un curso de econometría |
 
-1. **Datos** (`data.py`) — baja OHLCV diario vía Yahoo Finance (sin API key).
-2. **Indicadores** (`indicators.py`) — calcula tendencia (EMAs 20/50/200), RSI,
-   MACD + cruces, ATR, Bollinger, soportes/resistencias y volumen relativo.
-3. **IA** (`analyze.py`) — manda esa "foto" a Claude, que devuelve lectura por
-   indicador, escenarios alcista/bajista y un veredicto con niveles clave.
-4. **Informe** (`main.py`) — guarda todo en un `.md` dentro de `informes/`.
+## Secciones desenchufadas
 
-## Instalación
+El repo contiene dos verticales que **hoy están apagados**: Agro (rindes, clima,
+márgenes agrícolas) y Mercados (panel de tickers, veredictos IA, comparador,
+heatmap, comunidad de bots).
 
-Necesitas Python 3.10+.
+No se borraron, se desenchufaron con flags. Sus rutas devuelven 404 y sus
+enlaces desaparecen del menú, pero el código, las plantillas y los tests siguen
+en el repo:
+
+- **Python** — `SECCIONES` en [`web/app.py`](web/app.py). Poner una clave en
+  `True` reactiva sus rutas y sus enlaces.
+- **TypeScript** — `CHARTBAY_VERTICALS` en
+  [`quantbay/src/verticals/agro/agroFeatureFlags.ts`](quantbay/src/verticals/agro/agroFeatureFlags.ts).
+  Al tocarlo hay que recompilar el bundle (ver más abajo).
+
+Los dos flags tienen que coincidir: el de Python saca la ruta, el de TypeScript
+evita que la vista se inicialice.
+
+## Estructura
+
+```
+web/          app Flask: rutas, plantillas y estáticos
+quantbay/     motor econométrico en TypeScript (se compila a un bundle)
+providers/    fuentes de datos macro (FRED, World Bank)
+backend/      motor equivalente en Python + FastAPI — no se despliega (ver abajo)
+datasets/     CSV de ejemplo para el laboratorio
+```
+
+> El paquete `backend/` es un motor FastAPI independiente que **no forma parte
+> del despliegue**: `render.yaml` levanta un único servicio con
+> `gunicorn web.app:app`, y la app Flask no lo invoca. Requiere Python ≥ 3.12 y
+> se corre por separado.
+
+## Correr en local
+
+Necesitás Python 3.10+.
 
 ```bash
 pip install -r requirements.txt
-```
-
-## Configuración
-
-1. **Clave de IA:** copia `.env.example` a `.env` y pega tu clave de Anthropic
-   (se consigue en https://console.anthropic.com/):
-
-   ```
-   ANTHROPIC_API_KEY=sk-ant-...
-   ```
-
-2. **Activos y ajustes:** edita `config.py`
-   - `TICKERS`: símbolos de Yahoo Finance (`AAPL`, `MSFT`, `SPY`, `^GSPC`...)
-   - `INTERVAL` / `PERIOD`: temporalidad e histórico (por defecto diario, 1 año)
-   - `PERFIL_RIESGO`: `conservador` | `moderado` | `agresivo`
-
-## Uso
-
-```bash
-python main.py                 # analiza los tickers de config.py
-python main.py AAPL NVDA       # analiza solo esos
-```
-
-El informe queda en `informes/analisis_<fecha>.md`.
-
-## Diario financiero web (con login)
-
-La carpeta `web/` contiene una aplicación web privada (Flask) que muestra un
-"diario financiero": tarjetas por activo (precio, tendencia, RSI/MACD/ATR,
-soportes), mini-gráficos de precio, el veredicto IA del día y el historial de
-informes. Tiene **login de un solo usuario**.
-
-### Probarla en local
-
-```bash
-pip install -r requirements.txt
-# rellena el .env (ANTHROPIC_API_KEY, APP_USERNAME, APP_PASSWORD, SECRET_KEY)
+cp .env.example .env      # y completá los valores
 python web/app.py
 ```
 
-Abre http://127.0.0.1:5000 y entra con el usuario/clave del `.env`.
-Las tarjetas y gráficos cargan solos (datos gratuitos de Yahoo). El veredicto IA
-se genera al pulsar el botón "🤖 Generar veredicto IA del día" (se cachea por día
-para no repetir coste). El historial lee los `.md` de la carpeta `informes/`.
+Abre <http://127.0.0.1:5000>.
 
-### Publicarla en internet (Render) + dominio propio
+Variables del `.env`:
 
-El proyecto ya incluye `Procfile` y `render.yaml`, así que el despliegue es casi
+| Variable | Para qué | ¿Obligatoria? |
+|---|---|---|
+| `SECRET_KEY` | firma de sesiones | sí en producción; en dev hay fallback |
+| `APP_USERNAME` / `APP_PASSWORD` | login de un solo usuario | sí en producción |
+| `FRED_API_KEY` | descargas de la sección Datos ([clave gratuita](https://fredaccount.stlouisfed.org/apikeys)) | sin ella la sección se ve pero no descarga |
+| `ANTHROPIC_API_KEY` | solo el pipeline de análisis técnico (ver el final) | no, para la web |
+
+## Compilar el motor
+
+El bundle `web/static/js/quantbay.bundle.js` **viaja compilado en el repo**,
+porque el runtime Python de Render no incluye Node. Después de tocar cualquier
+`.ts` hay que recompilarlo y commitearlo, o el deploy sigue sirviendo el
+JavaScript viejo:
+
+```bash
+cd quantbay && npm install && npm run build
+```
+
+## Tests
+
+El motor de cálculo se testea desde `quantbay/` con vitest (1108 tests):
+
+```bash
+cd quantbay && npm install && npm run test
+```
+
+Dieciocho de esos tests —los de `statsmodelsValidation.test.ts`— no se conforman
+con comparar contra valores fijos: levantan un intérprete de Python y validan
+OLS y RLS contra **statsmodels y scipy** en vivo. Necesitan sus dependencias:
+
+```bash
+python3 -m venv .venv
+./.venv/bin/pip install -r requirements-dev.txt
+PATH="$PWD/.venv/bin:$PATH" npm --prefix quantbay run test
+```
+
+El `PATH` no es opcional: el test invoca el binario **`python`**, y macOS solo
+trae `python3`. El venv resuelve ambas cosas, porque instala los paquetes y
+expone `python` en su `bin/`. Sin eso, esos 18 fallan con `spawnSync python
+ENOENT` — un fallo de entorno, no del código.
+
+El paquete `backend/` tiene su propia suite de pytest, que requiere Python 3.12.
+
+## Desplegar en Render
+
+El repo incluye `Procfile` y `render.yaml`, así que el despliegue es casi
 automático.
 
-**A. Subir el código a GitHub**
-
-1. Crea un repositorio (privado recomendado) en https://github.com.
-2. Sube esta carpeta. El `.gitignore` ya evita subir `.env` y la base de datos.
-
-**B. Publicar en Render (plan gratuito)**
-
-1. Entra a https://render.com e inicia sesión con GitHub.
-2. New → **Blueprint** y elige tu repo (Render detecta el `render.yaml`).
-3. Te pedirá rellenar las variables marcadas: `APP_USERNAME`, `APP_PASSWORD` y,
-   si quieres el oráculo IA, `ANTHROPIC_API_KEY`. (`SECRET_KEY` se genera sola.)
+1. Entrá a <https://render.com> e iniciá sesión con GitHub.
+2. New → **Blueprint** y elegí el repo (Render detecta el `render.yaml`).
+3. Completá las variables marcadas: `APP_USERNAME`, `APP_PASSWORD` y, si vas a
+   usar el pipeline de IA, `ANTHROPIC_API_KEY`. (`SECRET_KEY` se genera sola.)
 4. Deploy. En 1-2 minutos te da una URL tipo `https://chartbay.onrender.com`.
 
-**C. Conectar tu dominio**
+Para un dominio propio: en Render, servicio → **Settings → Custom Domains**,
+añadí el dominio y creá en tu registrador los registros que te indique
+(normalmente un `CNAME` para `www` y un `A`/`ALIAS` para el raíz). El
+certificado HTTPS lo emite Render solo.
 
-1. En tu registrador (donde compraste el dominio) abre la zona DNS.
-2. En Render, en tu servicio → **Settings → Custom Domains** → añade tu dominio.
-   Render te dirá qué registro crear: normalmente un `CNAME` (para `www`) y/o un
-   `A`/`ALIAS` para el dominio raíz, apuntando al destino que te indica Render.
-3. Crea esos registros en tu registrador y espera la propagación (minutos a horas).
-   Render emite el certificado HTTPS automáticamente.
-
-Recomendaciones de seguridad: usa una contraseña larga y un `SECRET_KEY` aleatorio,
-y mantén el repositorio privado.
+Gunicorn corre con **1 worker y 8 hilos**. La carga es I/O-bound (FRED,
+Anthropic), así que los hilos evitan que una llamada lenta bloquee toda la web;
+un segundo worker duplicaría NumPy en RAM y el plan gratuito tiene 512 MB.
 
 > ⚠️ **Persistencia de datos.** El plan gratuito de Render usa un disco efímero:
 > la base de datos SQLite (`web/chartbay.db` con usuarios, bots y reseñas) **se
-> reinicia en cada redeploy**. Para conservar los datos en producción hay que
-> añadir un *Disk* de Render (plan de pago) montado en `web/`, o migrar a una base
-> de datos gestionada (PostgreSQL). Para pruebas o uso personal, el disco efímero
-> alcanza.
+> reinicia en cada redeploy**. Para conservarla hay que añadir un *Disk* de
+> Render (plan de pago) montado en `web/`, o migrar a PostgreSQL. Para uso
+> personal, el disco efímero alcanza.
 
 ### Comprobar qué versión está desplegada
 
@@ -161,41 +186,35 @@ No pongas credenciales ni cabeceras de autenticación en el cron: `/version` es
 público a propósito, justamente para poder monitorizarlo sin secretos de por
 medio.
 
-## Tests
+## Pipeline de análisis técnico con IA
 
-El motor de cálculo se testea desde `quantbay/` con vitest (1108 tests):
+En la raíz del repo sobrevive el proyecto original: un pipeline en Python que
+baja datos de mercado, calcula indicadores técnicos y le pide a Claude un
+análisis frío y con base estadística. **Ya no se expone en la web** —la sección
+Mercados está desenchufada— pero sigue funcionando desde la línea de comandos.
+
+1. **Datos** (`data.py`) — OHLCV diario vía Yahoo Finance, sin API key.
+2. **Indicadores** (`indicators.py`) — EMAs 20/50/200, RSI, MACD y cruces, ATR,
+   Bollinger, soportes/resistencias y volumen relativo.
+3. **IA** (`analyze.py`) — manda esa "foto" a Claude, que devuelve lectura por
+   indicador, escenarios y un veredicto con niveles clave.
+4. **Informe** (`main.py`) — guarda todo en un `.md` dentro de `informes/`.
 
 ```bash
-cd quantbay && npm install && npm run test
+python main.py                 # analiza los tickers de config.py
+python main.py AAPL NVDA       # analiza solo esos
 ```
 
-Dieciocho de esos tests —los de `statsmodelsValidation.test.ts`— no se conforman
-con comparar contra valores fijos: levantan un intérprete de Python y validan
-OLS y RLS contra **statsmodels y scipy** en vivo. Necesitan sus dependencias:
-
-```bash
-python3 -m venv .venv
-./.venv/bin/pip install -r requirements-dev.txt
-PATH="$PWD/.venv/bin:$PATH" npm --prefix quantbay run test
-```
-
-El `PATH` no es opcional: el test invoca el binario **`python`**, y macOS solo
-trae `python3`. El venv resuelve ambas cosas, porque instala los paquetes y
-expone `python` en su `bin/`. Sin eso, esos 18 fallan con `spawnSync python
-ENOENT` — un fallo de entorno, no del código.
-
-> El bundle `web/static/js/quantbay.bundle.js` viaja compilado en el repo porque
-> el runtime Python de Render no incluye Node. Después de tocar cualquier `.ts`
-> hay que correr `npm run build` y commitear el bundle, o el deploy sigue
-> sirviendo el JavaScript viejo.
+Los activos y el perfil de riesgo se configuran en `config.py`. Necesita
+`ANTHROPIC_API_KEY` en el `.env`.
 
 ## Coste
 
-Solo pagas la API de Anthropic por cada análisis (céntimos por ticker). Los datos
-de Yahoo Finance son gratuitos. El hosting tiene plan gratuito en varios servicios.
+El hosting tiene plan gratuito en Render y los datos de FRED y Yahoo Finance son
+gratis. Lo único que se paga es la API de Anthropic, y solo si usás el pipeline
+de análisis técnico (céntimos por ticker).
 
 ## Aviso
 
-Herramienta educativa de análisis técnico para uso personal. **No es
-asesoramiento financiero.** Las decisiones de inversión son tuyas y conllevan
-riesgo de pérdida.
+Herramienta educativa. **No es asesoramiento financiero.** Las decisiones de
+inversión son tuyas y conllevan riesgo de pérdida.
