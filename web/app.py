@@ -366,6 +366,46 @@ def logout():
     return redirect(url_for("login"))
 
 
+# ─── Versión desplegada ──────────────────────────────────────────────────────
+# Sirve para confirmar desde afuera QUÉ código está corriendo. Sin esto, un
+# cambio que no altera ninguna respuesta (un arreglo de concurrencia, por caso)
+# es indistinguible de un deploy que nunca ocurrió.
+
+_STARTED = time.time()
+
+
+def _git_commit() -> str:
+    """SHA del commit desplegado.
+
+    Render inyecta RENDER_GIT_COMMIT en el entorno. En local no existe, así que
+    lo leemos del repo para que /version también sirva mientras se desarrolla.
+    """
+    sha = os.environ.get("RENDER_GIT_COMMIT", "")
+    if sha:
+        return sha
+    try:
+        head = (ROOT / ".git" / "HEAD").read_text(encoding="utf-8").strip()
+        if head.startswith("ref: "):
+            head = (ROOT / ".git" / head[5:]).read_text(encoding="utf-8").strip()
+        return head
+    except Exception:
+        return "desconocido"
+
+
+@app.route("/version")
+def version():
+    sha = _git_commit()
+    arranque = datetime.fromtimestamp(_STARTED)
+    return jsonify({
+        "commit": sha,
+        "commit_short": sha[:7] if sha != "desconocido" else sha,
+        "branch": os.environ.get("RENDER_GIT_BRANCH", ""),
+        # el uptime delata el redeploy: tras uno nuevo, vuelve a empezar de cero
+        "arrancado": arranque.isoformat(timespec="seconds"),
+        "uptime_s": round(time.time() - _STARTED),
+    })
+
+
 # ─── Herramienta ─────────────────────────────────────────────────────────────
 
 @app.route("/")
