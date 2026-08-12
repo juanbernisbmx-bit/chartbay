@@ -161,6 +161,34 @@ No pongas credenciales ni cabeceras de autenticación en el cron: `/version` es
 público a propósito, justamente para poder monitorizarlo sin secretos de por
 medio.
 
+## Tests
+
+El motor de cálculo se testea desde `quantbay/` con vitest (1108 tests):
+
+```bash
+cd quantbay && npm install && npm run test
+```
+
+Dieciocho de esos tests —los de `statsmodelsValidation.test.ts`— no se conforman
+con comparar contra valores fijos: levantan un intérprete de Python y validan
+OLS y RLS contra **statsmodels y scipy** en vivo. Necesitan sus dependencias:
+
+```bash
+python3 -m venv .venv
+./.venv/bin/pip install -r requirements-dev.txt
+PATH="$PWD/.venv/bin:$PATH" npm --prefix quantbay run test
+```
+
+El `PATH` no es opcional: el test invoca el binario **`python`**, y macOS solo
+trae `python3`. El venv resuelve ambas cosas, porque instala los paquetes y
+expone `python` en su `bin/`. Sin eso, esos 18 fallan con `spawnSync python
+ENOENT` — un fallo de entorno, no del código.
+
+> El bundle `web/static/js/quantbay.bundle.js` viaja compilado en el repo porque
+> el runtime Python de Render no incluye Node. Después de tocar cualquier `.ts`
+> hay que correr `npm run build` y commitear el bundle, o el deploy sigue
+> sirviendo el JavaScript viejo.
+
 ## Coste
 
 Solo pagas la API de Anthropic por cada análisis (céntimos por ticker). Los datos
