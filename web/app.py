@@ -210,9 +210,40 @@ seed_owner()
 seed_starter_bots()
 
 
+# ─── Secciones activas ───────────────────────────────────────────────────────
+# Espejo en Python de CHARTBAY_VERTICALS (quantbay/src/verticals/agro/
+# agroFeatureFlags.ts), que hace lo mismo del lado del navegador.
+#
+# Apagar una sección acá la desenchufa sin borrar nada: sus rutas pasan a
+# devolver 404 y sus enlaces desaparecen del menú, pero las vistas y las
+# plantillas siguen en el repo. Volver a encenderla es poner True.
+#
+# Las plantillas de las secciones apagadas se dejan como están a propósito: son
+# inalcanzables mientras el flag esté en False, y si algún día se reactiva la
+# sección vuelven a funcionar tal cual estaban.
+SECCIONES = {
+    "econometria": True,
+    "datos": True,
+    "agro": False,
+    "mercados": False,
+}
+
+
+def seccion(nombre: str):
+    """Deja la vista fuera de servicio (404) mientras su sección esté apagada."""
+    def decorador(fn):
+        @wraps(fn)
+        def envoltura(*args, **kwargs):
+            if not SECCIONES.get(nombre, False):
+                abort(404)
+            return fn(*args, **kwargs)
+        return envoltura
+    return decorador
+
+
 @app.context_processor
 def inject_globals():
-    return {"registration_open": REGISTRATION_OPEN}
+    return {"registration_open": REGISTRATION_OPEN, "secciones": SECCIONES}
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -422,16 +453,19 @@ def dashboard():
 
 
 @app.route("/chartbay")
+@seccion("mercados")
 def chartbay():
     return render_template("chartbay.html")
 
 
 @app.route("/finanzas")
+@seccion("mercados")
 def finanzas():
     return render_template("finanzas.html")
 
 
 @app.route("/reports")
+@seccion("mercados")
 def reports():
     files = []
     if REPORTS_DIR.exists():
@@ -440,11 +474,13 @@ def reports():
 
 
 @app.route("/reportes")
+@seccion("mercados")
 def reportes_alias():
     return redirect(url_for("reports"))
 
 
 @app.route("/reports/<path:name>")
+@seccion("mercados")
 def report_view(name):
     if not name.endswith(".md") or "/" in name or "\\" in name:
         abort(404)
@@ -457,6 +493,7 @@ def report_view(name):
 # ─── Comunidad ───────────────────────────────────────────────────────────────
 
 @app.route("/community")
+@seccion("mercados")
 def community():
     q = request.args.get("q", "").strip()
     market = request.args.get("market", "").strip()
@@ -500,6 +537,7 @@ def community():
 
 
 @app.route("/community/new", methods=["GET", "POST"])
+@seccion("mercados")
 @login_required
 def bot_new():
     error = None
@@ -525,6 +563,7 @@ def bot_new():
 
 
 @app.route("/community/bot/<int:bot_id>")
+@seccion("mercados")
 def bot_detail(bot_id):
     conn = db.get_conn()
     bot = conn.execute(
@@ -547,6 +586,7 @@ def bot_detail(bot_id):
 
 
 @app.route("/community/bot/<int:bot_id>/review", methods=["POST"])
+@seccion("mercados")
 @login_required
 def bot_review(bot_id):
     try:
@@ -569,6 +609,7 @@ def bot_review(bot_id):
 # ─── API análisis ────────────────────────────────────────────────────────────
 
 @app.route("/api/snapshot")
+@seccion("mercados")
 def api_snapshot():
     t = request.args.get("ticker", "").strip()
     if t not in config.TICKERS:
@@ -577,6 +618,7 @@ def api_snapshot():
 
 
 @app.route("/api/lookup")
+@seccion("mercados")
 def api_lookup():
     t = sanitize_ticker(request.args.get("ticker", ""))
     if not t:
@@ -600,6 +642,7 @@ def _snapshot_response(t: str, interval: str = "1d", period: str = "1y", tv_inte
 
 
 @app.route("/api/news")
+@seccion("mercados")
 def api_news():
     t = sanitize_ticker(request.args.get("ticker", ""))
     if not t:
@@ -629,6 +672,7 @@ def api_news():
 
 
 @app.route("/api/verdict_one", methods=["POST"])
+@seccion("mercados")
 @login_required
 def api_verdict_one():
     t = sanitize_ticker(request.args.get("ticker", ""))
@@ -657,6 +701,7 @@ def api_verdict_one():
 
 
 @app.route("/api/verdict", methods=["POST"])
+@seccion("mercados")
 @login_required
 def api_verdict():
     today = date.today().isoformat()
@@ -683,6 +728,7 @@ def api_verdict():
 
 
 @app.route("/api/verdict", methods=["GET"])
+@seccion("mercados")
 def api_verdict_get():
     today = date.today().isoformat()
     cache_fp = CACHE_DIR / f"verdict_{today}.json"
@@ -692,6 +738,7 @@ def api_verdict_get():
 
 
 @app.route("/compare")
+@seccion("mercados")
 def compare_view():
     a = sanitize_ticker(request.args.get("a", ""))
     b = sanitize_ticker(request.args.get("b", ""))
@@ -699,11 +746,13 @@ def compare_view():
 
 
 @app.route("/comparar")
+@seccion("mercados")
 def comparar_alias():
     return redirect(url_for("compare_view"))
 
 
 @app.route("/heatmap")
+@seccion("mercados")
 def heatmap():
     return render_template("heatmap.html",
                            tickers=config.TICKERS,
@@ -721,6 +770,7 @@ def econometria():
 
 
 @app.route("/agro")
+@seccion("agro")
 def agro():
     return render_template("quantbay.html", quantbay_module="agro")
 

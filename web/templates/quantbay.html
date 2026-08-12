@@ -36,8 +36,8 @@
       <nav class="mainnav">
         <a href="{{ url_for('dashboard') }}">Inicio</a><span class="sep">.</span>
         {% if qb_module == 'econometria' %}<strong>Econometría</strong>{% else %}<a href="{{ url_for('econometria') }}">Econometría</a>{% endif %}<span class="sep">.</span>
-        {% if qb_module == 'agro' %}<strong>Agro</strong>{% else %}<a href="{{ url_for('agro') }}">Agro</a>{% endif %}<span class="sep">.</span>
-        <a href="{{ url_for('finanzas') }}">Finanzas Quant</a><span class="sep">.</span>
+        {% if secciones.agro %}{% if qb_module == 'agro' %}<strong>Agro</strong>{% else %}<a href="{{ url_for('agro') }}">Agro</a>{% endif %}<span class="sep">.</span>{% endif %}
+        {% if secciones.mercados %}<a href="{{ url_for('finanzas') }}">Finanzas Quant</a><span class="sep">.</span>{% endif %}
         <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
         <a href="{{ url_for('guia') }}">Documentación</a><span class="sep">.</span>
         {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% endif %}

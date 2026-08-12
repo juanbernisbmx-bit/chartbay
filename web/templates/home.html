@@ -16,8 +16,8 @@
       <nav class="mainnav classic-nav">
         <strong>Inicio</strong><span class="sep">.</span>
         <a href="{{ url_for('econometria') }}">Econometría</a><span class="sep">.</span>
-        <a href="{{ url_for('agro') }}">Agro</a><span class="sep">.</span>
-        <a href="{{ url_for('finanzas') }}">Finanzas Quant</a><span class="sep">.</span>
+        {% if secciones.agro %}<a href="{{ url_for('agro') }}">Agro</a><span class="sep">.</span>{% endif %}
+        {% if secciones.mercados %}<a href="{{ url_for('finanzas') }}">Finanzas Quant</a><span class="sep">.</span>{% endif %}
         <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
         <a href="{{ url_for('guia') }}">Documentación</a><span class="sep">.</span>
         {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% endif %}
@@ -37,14 +37,18 @@
             <h3>Econometría</h3>
             <p>OLS, RLS, diagnósticos de residuos, series de tiempo, ACF, PACF, ADF y Ljung-Box. Carga CSV y calcula en el navegador.</p>
           </a>
+          {% if secciones.agro %}
           <a class="classic-card classic-card-large" href="{{ url_for('agro') }}">
             <h3>Agro</h3>
             <p>Rindes, precios, clima, costos y márgenes agrícolas.</p>
           </a>
+          {% endif %}
+          {% if secciones.mercados %}
           <a class="classic-card classic-card-large" href="{{ url_for('finanzas') }}">
             <h3>Finanzas Quant</h3>
             <p>Retornos, volatilidad, Sharpe, VaR, CVaR, Markowitz, CAPM y backtesting. En desarrollo.</p>
           </a>
+          {% endif %}
         </div>
       </section>
 
@@ -55,10 +59,12 @@
             <h3>Regresión OLS</h3>
             <p>Descomposición QR, inferencia t/F, intervalos de confianza al 95%, R² y diagnósticos de colinealidad.</p>
           </a>
+          {% if secciones.agro %}
           <a class="classic-card" href="{{ url_for('agro') }}">
             <h3>Agro</h3>
             <p>Modelos, márgenes y datos para el análisis agropecuario.</p>
           </a>
+          {% endif %}
           <a class="classic-card" href="{{ url_for('econometria') }}">
             <h3>Restricciones RLS</h3>
             <p>Mínimos cuadrados restringidos con test Wald. Restricciones lineales de la forma R·β = q.</p>
