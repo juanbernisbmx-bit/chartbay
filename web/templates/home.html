@@ -75,7 +75,7 @@
           </a>
           <a class="classic-card" href="{{ url_for('frequent_data') }}">
             <h3>Datos macro</h3>
-            <p>FRED (~60 indicadores), World Bank. Descarga en CSV o JSON con caché diario.</p>
+            <p>49 indicadores: 37 de FRED y 12 de World Bank. Descarga en CSV o JSON con caché diario.</p>
           </a>
           <a class="classic-card" href="{{ url_for('econometria') }}">
             <h3>Carga de CSV</h3>
@@ -89,13 +89,13 @@
       </section>
 
       <section class="classic-panel">
-        <h2>Motor Python · FastAPI</h2>
-        <p>El núcleo de cálculo corre en Python 3.12 con NumPy y SciPy. Cada módulo está validado contra statsmodels y scipy como referencia. La API expone endpoints REST en <code>/api/v1/</code>.</p>
+        <h2>Motor de cálculo</h2>
+        <p>El núcleo corre <strong>en tu navegador</strong>, en TypeScript: los datos que cargás no se suben a ningún servidor. Cada módulo está validado contra statsmodels y scipy como referencia. El modo Pro carga un intérprete de Python real (NumPy, pandas y statsmodels vía WebAssembly) sin salir de la página.</p>
         <ul class="classic-list classic-columns">
           <li>OLS vía descomposición QR</li>
           <li>RLS con test F/Wald</li>
-          <li>ADF con p-values MacKinnon</li>
-          <li>ACF / PACF vía Durbin-Levinson</li>
+          <li>ADF con lag de Schwert y valores críticos</li>
+          <li>ACF y PACF con bandas de significatividad</li>
           <li>Ljung-Box a lags 5, 10, 20</li>
           <li>VIF y detección de colinealidad</li>
         </ul>
