@@ -89,7 +89,7 @@ beforeEach(() => {
 
 describe('initAgroVertical', () => {
   it('muestra el panel y carga los datasets cuando el vertical está habilitado', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     const panel = document.getElementById('qb-agro-panel')!;
     expect(panel.style.display).toBe('');
     const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
@@ -106,13 +106,13 @@ describe('initAgroVertical', () => {
 
   it('es un no-op si el panel no existe (Econometría no depende de Agro)', () => {
     document.body.innerHTML = '<div id="qb-results"></div>';
-    expect(() => initAgroVertical(makeFakeBridge().bridge)).not.toThrow();
+    expect(() => initAgroVertical(makeFakeBridge().bridge, true)).not.toThrow();
   });
 
   it('no duplica opciones ni listeners si se inicializa dos veces', () => {
     const { bridge, calls } = makeFakeBridge();
-    initAgroVertical(bridge);
-    initAgroVertical(bridge);
+    initAgroVertical(bridge, true);
+    initAgroVertical(bridge, true);
     const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
     expect(select.options.length).toBe(6);
 
@@ -124,7 +124,7 @@ describe('initAgroVertical', () => {
 
 describe('selección de dataset', () => {
   it('renderiza columnas detectadas y presets sugeridos para soja, con botón "Usar este preset"', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     selectDataset('soja_rinde_demo');
 
     const detection = document.getElementById('qb-agro-detection')!.innerHTML;
@@ -142,7 +142,7 @@ describe('selección de dataset', () => {
   });
 
   it('distingue datasets reales de MAGyP de los sintéticos, en el select y en la nota', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
     const options = Array.from(select.options);
 
@@ -162,7 +162,7 @@ describe('selección de dataset', () => {
   });
 
   it('limpia los paneles al volver a la opción vacía', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     selectDataset('soja_rinde_demo');
     selectDataset('');
     expect(document.getElementById('qb-agro-detection')!.innerHTML).toBe('');
@@ -173,7 +173,7 @@ describe('selección de dataset', () => {
 describe('"Usar en Econometría" (botón por dataset)', () => {
   it('avisa si no hay dataset seleccionado y no llama al bridge', () => {
     const { bridge, calls } = makeFakeBridge();
-    initAgroVertical(bridge);
+    initAgroVertical(bridge, true);
     document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
     expect(calls).toHaveLength(0);
     expect(document.getElementById('qb-agro-use-status')!.textContent).toContain('Elegí un dataset');
@@ -181,7 +181,7 @@ describe('"Usar en Econometría" (botón por dataset)', () => {
 
   it('carga el CSV del dataset con las columnas del preset por defecto preseleccionadas', () => {
     const { bridge, calls } = makeFakeBridge();
-    initAgroVertical(bridge);
+    initAgroVertical(bridge, true);
     selectDataset('soja_rinde_demo');
     document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
 
@@ -199,7 +199,7 @@ describe('"Usar en Econometría" (botón por dataset)', () => {
 
   it('muestra el mensaje del bridge y no fija contexto agro si la carga falla', () => {
     const { bridge } = makeFakeBridge({ ok: false, numericColumns: [], message: 'CSV inválido' });
-    initAgroVertical(bridge);
+    initAgroVertical(bridge, true);
     selectDataset('soja_rinde_demo');
     document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
 
@@ -211,7 +211,7 @@ describe('"Usar en Econometría" (botón por dataset)', () => {
 describe('"Usar este preset" (por preset sugerido)', () => {
   it('aplica el preset elegido y actualiza el status con Y/X y la razón', () => {
     const { bridge, calls } = makeFakeBridge();
-    initAgroVertical(bridge);
+    initAgroVertical(bridge, true);
     selectDataset('maiz_margen_demo');
 
     const presetButton = document.querySelector<HTMLElement>('[data-agro-preset-id="agro-margin"]')!;
@@ -225,7 +225,7 @@ describe('"Usar este preset" (por preset sugerido)', () => {
 
   it('ignora el click si no hay un dataset seleccionado en el desplegable', () => {
     const { bridge, calls } = makeFakeBridge();
-    initAgroVertical(bridge);
+    initAgroVertical(bridge, true);
     // Simula un botón de preset "huérfano" sin dataset activo en el select.
     document.getElementById('qb-agro-presets')!.innerHTML =
       '<button data-agro-preset-id="agro-yield">Usar este preset</button>';
@@ -249,7 +249,7 @@ describe('presentAgroInterpretationForRegression', () => {
 
   it('no muestra nada si la Y corrida no coincide con la del preset agro activo', () => {
     const { bridge } = makeFakeBridge();
-    initAgroVertical(bridge);
+    initAgroVertical(bridge, true);
     selectDataset('soja_rinde_demo');
     document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
 
@@ -259,7 +259,7 @@ describe('presentAgroInterpretationForRegression', () => {
 
   it('muestra la lectura agropecuaria cuando la Y coincide con el contexto activo', () => {
     const { bridge } = makeFakeBridge();
-    initAgroVertical(bridge);
+    initAgroVertical(bridge, true);
     selectDataset('soja_rinde_demo');
     document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
 
@@ -289,7 +289,7 @@ describe('presentAgroInterpretationForPro', () => {
 
   it('no muestra nada si el resultado Pro no fue exitoso', () => {
     const { bridge } = makeFakeBridge();
-    initAgroVertical(bridge);
+    initAgroVertical(bridge, true);
     selectDataset('soja_rinde_demo');
     document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
 
@@ -299,7 +299,7 @@ describe('presentAgroInterpretationForPro', () => {
 
   it('muestra la lectura agropecuaria para un resultado Pro exitoso con Y coincidente', () => {
     const { bridge } = makeFakeBridge();
-    initAgroVertical(bridge);
+    initAgroVertical(bridge, true);
     selectDataset('soja_rinde_demo');
     document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
 
@@ -314,14 +314,14 @@ describe('presentAgroInterpretationForPro', () => {
 
 describe('simulador de margen (UI)', () => {
   it('no hace nada al copiar/exportar si todavía no se calculó ningún margen', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     document.getElementById('qb-agro-m-copy')!.dispatchEvent(new Event('click'));
     document.getElementById('qb-agro-m-export-txt')!.dispatchEvent(new Event('click'));
     expect(document.getElementById('qb-agro-m-copy-status')!.textContent).toBe('');
   });
 
   it('calcula y muestra el margen con los valores del formulario', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     document.getElementById('qb-agro-m-run')!.dispatchEvent(new Event('click'));
 
     const result = document.getElementById('qb-agro-margin-result')!.innerHTML;
@@ -336,7 +336,7 @@ describe('simulador de margen (UI)', () => {
   });
 
   it('incluye cosecha, comercialización y alquiler en qq en el cálculo del margen', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     (document.getElementById('qb-agro-m-harvest-pct') as HTMLInputElement).value = '9';
     (document.getElementById('qb-agro-m-selling-pct') as HTMLInputElement).value = '8';
     (document.getElementById('qb-agro-m-rent') as HTMLInputElement).value = '0';
@@ -353,7 +353,7 @@ describe('simulador de margen (UI)', () => {
   });
 
   it('muestra el error de validación sin romper la vista', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     (document.getElementById('qb-agro-m-hectares') as HTMLInputElement).value = '0';
     document.getElementById('qb-agro-m-run')!.dispatchEvent(new Event('click'));
 
@@ -363,7 +363,7 @@ describe('simulador de margen (UI)', () => {
   });
 
   it('habilita copiar/exportar tras un cálculo exitoso y los deshabilita si falla', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     document.getElementById('qb-agro-m-run')!.dispatchEvent(new Event('click'));
     expect((document.getElementById('qb-agro-m-copy') as HTMLButtonElement).disabled).toBe(false);
     expect((document.getElementById('qb-agro-m-export-txt') as HTMLButtonElement).disabled).toBe(false);
@@ -381,7 +381,7 @@ describe('simulador de margen (UI)', () => {
       configurable: true,
     });
 
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     document.getElementById('qb-agro-m-run')!.dispatchEvent(new Event('click'));
     document.getElementById('qb-agro-m-copy')!.dispatchEvent(new Event('click'));
 
@@ -399,7 +399,7 @@ describe('simulador de margen (UI)', () => {
 describe('aviso de capacidad n/k en el status', () => {
   it('incluye el aviso de capacidad al usar un dataset chico con variables categóricas', () => {
     const { bridge } = makeFakeBridge();
-    initAgroVertical(bridge);
+    initAgroVertical(bridge, true);
     selectDataset('soja_rinde_demo');
     document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
 
@@ -409,7 +409,7 @@ describe('aviso de capacidad n/k en el status', () => {
 
   it('cuenta las columnas derivadas (lluvia al cuadrado, tendencia) como regresores para el aviso n/k', () => {
     const { bridge, calls } = makeFakeBridge();
-    initAgroVertical(bridge);
+    initAgroVertical(bridge, true);
     selectDataset('soja_rinde_demo'); // 16 filas, lluvia + temperatura + campaña
 
     const presetButton = document.querySelector<HTMLElement>('[data-agro-preset-id="agro-yield-hidrico"]')!;
@@ -430,7 +430,7 @@ describe('aviso de capacidad n/k en el status', () => {
 
 describe('"Generar demo grande"', () => {
   it('genera el dataset, lo agrega al select, lo selecciona y refresca detección/presets', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     document.getElementById('qb-agro-generate-large')!.dispatchEvent(new Event('click'));
 
     const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
@@ -449,7 +449,7 @@ describe('"Generar demo grande"', () => {
   });
 
   it('no duplica la opción del select si se genera más de una vez', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     document.getElementById('qb-agro-generate-large')!.dispatchEvent(new Event('click'));
     document.getElementById('qb-agro-generate-large')!.dispatchEvent(new Event('click'));
     const select = document.getElementById('qb-agro-dataset') as HTMLSelectElement;
@@ -458,7 +458,7 @@ describe('"Generar demo grande"', () => {
 
   it('el dataset generado se puede cargar en Econometría con el preset por defecto', () => {
     const { bridge, calls } = makeFakeBridge();
-    initAgroVertical(bridge);
+    initAgroVertical(bridge, true);
     document.getElementById('qb-agro-generate-large')!.dispatchEvent(new Event('click'));
     document.getElementById('qb-agro-use-dataset')!.dispatchEvent(new Event('click'));
 
@@ -470,14 +470,14 @@ describe('"Generar demo grande"', () => {
 
 describe('fuentes de datos y templates CSV', () => {
   it('renderiza el catálogo de fuentes al iniciar', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     const sources = document.getElementById('qb-agro-sources')!.innerHTML;
     expect(sources).toContain('Estimaciones Agrícolas Argentina');
     expect(sources).toContain('FAOSTAT');
   });
 
   it('renderiza los templates CSV con botón de descarga', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     const templates = document.getElementById('qb-agro-templates')!.innerHTML;
     expect(templates).toContain('data-agro-template-id="rinde"');
     expect(templates).toContain('Descargar template CSV');
@@ -489,7 +489,7 @@ describe('fuentes de datos y templates CSV', () => {
     URL.createObjectURL = vi.fn(() => 'blob:mock');
     URL.revokeObjectURL = vi.fn();
     try {
-      initAgroVertical(makeFakeBridge().bridge);
+      initAgroVertical(makeFakeBridge().bridge, true);
       const button = document.querySelector<HTMLElement>('[data-agro-template-id="margen"]')!;
       expect(() => button.dispatchEvent(new Event('click', { bubbles: true }))).not.toThrow();
       expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
@@ -500,7 +500,7 @@ describe('fuentes de datos y templates CSV', () => {
   });
 
   it('ignora el click si no viene de un botón de template', () => {
-    initAgroVertical(makeFakeBridge().bridge);
+    initAgroVertical(makeFakeBridge().bridge, true);
     expect(() =>
       document.getElementById('qb-agro-templates')!.dispatchEvent(new Event('click', { bubbles: true }))
     ).not.toThrow();
