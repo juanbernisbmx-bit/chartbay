@@ -6,9 +6,9 @@ describe('CHARTBAY_VERTICALS', () => {
     expect(Object.keys(CHARTBAY_VERTICALS).sort()).toEqual(['agro', 'econometria', 'finanzas']);
   });
 
-  it('econometría siempre está habilitada y agro está activo en el MVP', () => {
+  it('econometría siempre está habilitada; los demás verticales están desenchufados', () => {
     expect(isVerticalEnabled('econometria')).toBe(true);
-    expect(isVerticalEnabled('agro')).toBe(true);
+    expect(isVerticalEnabled('agro')).toBe(false);
     expect(isVerticalEnabled('finanzas')).toBe(false);
   });
 });

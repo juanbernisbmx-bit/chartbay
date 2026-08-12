@@ -7,7 +7,7 @@
 
 export const CHARTBAY_VERTICALS = {
   econometria: true,
-  agro: true,
+  agro: false,
   finanzas: false,
 } as const;
 
