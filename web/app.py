@@ -12,6 +12,8 @@ import os
 import re
 import sqlite3
 import sys
+import tempfile
+import threading
 import time
 from collections import defaultdict
 from datetime import date, datetime
@@ -41,6 +43,32 @@ from seed_data import BOTS_BASE  # noqa: E402
 CACHE_DIR = Path(__file__).resolve().parent / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
 REPORTS_DIR = ROOT / config.OUTPUT_DIR
+
+
+def write_atomic(fp: Path, text: str) -> None:
+    """Escribe el archivo completo o no lo escribe: nunca deja un JSON a medias.
+
+    Gunicorn corre con hilos, así que dos requests pueden cachear la misma clave
+    al mismo tiempo. Con `fp.write_text()` la segunda trunca el archivo y lo
+    reescribe, y una tercera que lea justo en el medio se lleva un JSON cortado.
+    Acá cada llamada escribe en su propio temporal —en el mismo directorio, que
+    es lo que hace que `os.replace` sea atómico— y recién al final lo mueve
+    sobre el destino. Los lectores ven siempre la versión vieja o la nueva,
+    nunca una intermedia. Si dos escriben a la vez gana la última, que para una
+    caché de contenido equivalente da igual.
+    """
+    tmp_fd, tmp_name = tempfile.mkstemp(dir=str(fp.parent), prefix=f".{fp.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.replace(tmp_name, fp)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+
 
 app = Flask(__name__)
 
@@ -227,18 +255,26 @@ ALLOWED_INTERVALS = {
 }
 
 
+# El contador es un leer-sumar-escribir: sin candado, dos hilos leen el mismo
+# valor y la segunda visita pisa a la primera en vez de sumarse (medido: 30
+# cargas en paralelo contaban 15). Vale por proceso, que alcanza con el worker
+# único de Render free; con más de un worker habría que mover esto a sqlite.
+_visits_lock = threading.Lock()
+
+
 def bump_visits() -> int:
     fp = CACHE_DIR / "visits.txt"
-    try:
-        n = int(fp.read_text().strip())
-    except Exception:
-        n = 0
-    n += 1
-    try:
-        fp.write_text(str(n))
-    except Exception:
-        pass
-    return n
+    with _visits_lock:
+        try:
+            n = int(fp.read_text().strip())
+        except Exception:
+            n = 0
+        n += 1
+        try:
+            write_atomic(fp, str(n))
+        except Exception:
+            pass
+        return n
 
 
 # ─── Auth ────────────────────────────────────────────────────────────────────
@@ -576,7 +612,7 @@ def api_verdict_one():
 
     payload = {"ticker": t, "generado": datetime.now().isoformat(timespec="seconds"),
                "veredicto": texto}
-    cache_fp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_atomic(cache_fp, json.dumps(payload, ensure_ascii=False, indent=2))
     return jsonify(payload)
 
 
@@ -602,7 +638,7 @@ def api_verdict():
 
     payload = {"fecha": today, "generado": datetime.now().isoformat(timespec="seconds"),
                "veredictos": result}
-    cache_fp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_atomic(cache_fp, json.dumps(payload, ensure_ascii=False, indent=2))
     return jsonify(payload)
 
 
@@ -698,7 +734,7 @@ def _series_cached(indicator_id: str):
             pass  # caché corrupta: se vuelve a pedir
     series = providers.fetch_series(indicator_id)
     try:
-        fp.write_text(providers.to_json_str(series), encoding="utf-8")
+        write_atomic(fp, providers.to_json_str(series))
     except Exception:
         pass
     return series
@@ -765,7 +801,7 @@ def api_data_meta(indicator_id):
             "value": obs.value if obs else None,
         }
         try:
-            fp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            write_atomic(fp, json.dumps(payload, ensure_ascii=False))
         except Exception:
             pass
         return jsonify(payload)
