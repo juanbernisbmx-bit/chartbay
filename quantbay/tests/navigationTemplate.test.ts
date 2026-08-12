@@ -53,10 +53,13 @@ describe('Documentation navigation cleanup', () => {
   });
 
   it('starts with non-active guide panels hidden', () => {
-    expect(GUIA).toContain('id="area-finanzas"');
-    expect(GUIA).toContain('id="area-finanzas" data-area="finanzas" role="tabpanel" aria-labelledby="tab-finanzas" hidden');
     expect(GUIA).toContain('id="area-aprender" data-area="aprender" role="tabpanel" aria-labelledby="tab-aprender" hidden');
     expect(GUIA).toContain('function showDocumentationArea(id)');
+  });
+
+  it('no longer ships the unplugged Finanzas area', () => {
+    expect(GUIA).not.toContain('area-finanzas');
+    expect(GUIA).not.toContain('tab-finanzas');
   });
 
   it('switches guide tabs by leaving only one visible panel', () => {
@@ -69,7 +72,6 @@ describe('Documentation navigation cleanup', () => {
 
     expect(document.getElementById('area-aprender')!.hasAttribute('hidden')).toBe(false);
     expect(document.getElementById('area-econometria')!.hasAttribute('hidden')).toBe(true);
-    expect(document.getElementById('area-finanzas')!.hasAttribute('hidden')).toBe(true);
     expect(document.getElementById('tab-aprender')!.getAttribute('aria-selected')).toBe('true');
     expect(document.getElementById('tab-econometria')!.getAttribute('aria-selected')).toBe('false');
   });
