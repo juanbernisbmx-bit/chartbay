@@ -107,6 +107,60 @@ y mantén el repositorio privado.
 > de datos gestionada (PostgreSQL). Para pruebas o uso personal, el disco efímero
 > alcanza.
 
+### Comprobar qué versión está desplegada
+
+`GET /version` (sin login) devuelve el commit que está corriendo y hace cuánto
+arrancó el proceso:
+
+```bash
+curl -s https://chartbay.onrender.com/version
+```
+
+```json
+{"commit":"0d1425d…","commit_short":"0d1425d","branch":"main",
+ "arrancado":"2026-08-12T13:36:18","uptime_s":7}
+```
+
+El `uptime_s` es el que delata un redeploy: si vuelve a empezar de cero, la
+instancia se reinició de verdad. Sirve sobre todo para los cambios que no
+alteran ninguna respuesta (un arreglo de concurrencia, por ejemplo), donde de
+otro modo un deploy fallido es indistinguible de uno exitoso.
+
+### Evitar el arranque en frío (keep-alive)
+
+El plan gratuito de Render **duerme la instancia tras ~15 minutos sin tráfico**,
+y despertarla tarda 40-50 segundos. Quien entre en ese momento se come la espera
+(y, si se cruza con el arranque, algún 520 esporádico de Cloudflare).
+
+La solución es un ping periódico desde fuera. Conviene apuntar a `/version`, que
+es la ruta más barata del sitio: no toca la base ni renderiza plantillas, y
+responde menos de 200 bytes.
+
+Configuración en [cron-job.org](https://cron-job.org) (gratis):
+
+| Campo | Valor |
+|---|---|
+| URL | `https://chartbay.onrender.com/version` |
+| Zona horaria | `America/Argentina/Buenos_Aires` |
+| Programación | `*/10 9-18 * * *` (cada 10 min, de 9:00 a 19:00) |
+| Timeout | el máximo que permita |
+| Notificaciones | solo tras **varios** fallos seguidos |
+
+Dos cosas que conviene saber:
+
+- **El primer ping del día casi siempre falla**, y no significa que el sitio esté
+  caído: a las 9:00 la instancia lleva toda la noche dormida y tarda más que
+  cualquier timeout razonable. La petición igual dispara el arranque, así que a
+  las 9:10 ya responde. Por eso las notificaciones deben exigir varios fallos
+  seguidos, o vas a recibir una alerta falsa cada mañana.
+- **No cubrir las 24 h es deliberado.** Render regala 750 horas de instancia al
+  mes; 24/7 son ~730, es decir sin margen para ningún otro servicio gratuito.
+  La franja de 10 h diarias consume ~300 h/mes y deja sitio de sobra.
+
+No pongas credenciales ni cabeceras de autenticación en el cron: `/version` es
+público a propósito, justamente para poder monitorizarlo sin secretos de por
+medio.
+
 ## Coste
 
 Solo pagas la API de Anthropic por cada análisis (céntimos por ticker). Los datos
