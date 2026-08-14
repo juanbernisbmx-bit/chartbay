@@ -1,0 +1,11 @@
+﻿fecha;pais;pbi;inflacion;deuda;vacia;constante;nota
+01/03/2024;Argentina;1.234,50;211,4%;$ 45.000;;7;"primer, trimestre"
+02/03/2024;Brasil;2.173,00;4,6%;$ 120.000;;7;segundo
+03/03/2024;Chile;-;n/d;($ 3.000);;7;"con ""comillas"""
+04/03/2024;Argentina;1.234,50;211,4%;$ 45.000;;7;"primer, trimestre"
+
+05/03/2024;Uruguay;98,75;8,1%;$ 1.500;;7;quinto
+06/03/2024;Brasil;999999,00;5,0%;$ 2.000;;7;sexto
+07/03/2024;Chile;120,25;3,2%;$ 1.800;;7;septimo
+08/03/2024;Uruguay;115,00;7,9%;$ 1.700;;7;octavo
+09/03/2024;Argentina;abc;6,0%;$ 1.900;;7;noveno
