@@ -1,5 +1,7 @@
 #include "chartbay/value.hpp"
 
+#include <cstdlib>
+
 #include "harness.hpp"
 
 using namespace chartbay;
@@ -99,6 +101,45 @@ CB_TEST(number, currency_percent_and_accounting) {
   // property of the column, never of the cell — hence the voting pass.
   CB_CHECK_NEAR(parse_number("($1.234)", NumberFormat{'.'}).value, -1.234, 1e-9);
   CB_CHECK_NEAR(parse_number("($1.234)", NumberFormat{','}).value, -1234.0, 1e-9);
+}
+
+CB_TEST(number, fast_path_agrees_with_strtod_bit_for_bit) {
+  // parse_number has two routes: an exact fast path for values whose
+  // significand and power of ten are both representable, and strtod for the
+  // rest. They must not disagree, so check against strtod directly — including
+  // values chosen to sit just outside the fast path's limits.
+  static const char* kCases[] = {
+      "0", "1", "-1", "0.1", "0.5", "3.14159265358979", "1e0", "2.5e-8",
+      "9007199254740992",      // 2^53 exactly
+      "9007199254740993",      // 2^53 + 1, no longer exact — must fall back
+      "0.00000000000000000001",
+      "12345678901234567890",  // 20 digits, overflows the accumulator
+      "1e22", "1e23", "1e-22", "1e-23", "1.7976931348623157e308",
+      "123456789.123456789", "0.000123", "1000000", "4.9e-300",
+  };
+  for (const char* text : kCases) {
+    const NumberParse got = parse_number(text, NumberFormat{'.'});
+    const double want = std::strtod(text, nullptr);
+    ++::test::checks();
+    // Bit equality, not a tolerance: a data cleaner that quietly shifts the
+    // last ulp is a data cleaner nobody can reconcile against pandas.
+    if (!got.ok || got.value != want) {
+      ::test::report(__FILE__, __LINE__,
+                     std::string(text) + "  →  got " + ::test::show(got.value) + ", want " +
+                         ::test::show(want));
+    }
+  }
+}
+
+CB_TEST(number, fast_path_handles_grouping_and_decoration) {
+  // The accumulator runs inside the grouping validator, so anything that skips
+  // characters — separators, currency, parentheses — could desynchronise it.
+  CB_CHECK_NEAR(num("1.234.567,89", ','), 1234567.89, 1e-9);
+  CB_CHECK_NEAR(num("$ 1 234 567.25"), 1234567.25, 1e-9);
+  CB_CHECK_NEAR(num("(1'234,5)", ','), -1234.5, 1e-9);
+  CB_CHECK_NEAR(num("000123.45"), 123.45, 1e-12);
+  CB_CHECK_NEAR(num("0.000000000000000000001"), 1e-21, 1e-33);
+  CB_CHECK_NEAR(num("1.234.567.890.123.456,5", ','), 1234567890123456.5, 1.0);
 }
 
 CB_TEST(number, format_votes) {
