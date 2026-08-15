@@ -27,13 +27,14 @@ ni siquiera de la columna (ver más abajo).
 
 | Pieza | Estado |
 |---|---|
-| Core C++ (parser, tipado, limpieza, reporte) | listo, 355 checks en verde |
+| Core C++ (parser, tipado, limpieza, reporte) | listo, 382 checks en verde |
 | CLI nativo `csvclean` | listo |
-| Binding WASM (`wasm/bindings.cpp`) | escrito y compilando; **falta compilarlo con emsdk** |
+| Modulo WASM (`web/static/wasm/csvclean.wasm`, 160 KB) | compilado y verificado contra el binario nativo |
 | Wrapper TypeScript (`js/csvclean.ts`) | escrito; **falta conectarlo a `quantbay/`** |
 
-Los dos últimos puntos necesitan Emscripten instalado, que no está en esta
-máquina. Ver [Integrar en ChartBay](#integrar-en-chartbay).
+`make wasm-test` corre el modulo compilado bajo Node y exige que su reporte sea
+**identico byte a byte** al del binario nativo. Compilar no prueba nada por si
+solo; esto si.
 
 ## Correr
 
@@ -100,15 +101,26 @@ Archivos generados con `tools/gen_csv.py`: 7 columnas, punto y coma, decimales
 con coma, moneda, porcentajes, fechas DD/MM/AAAA, faltantes variados y filas
 duplicadas. En un M-series:
 
-| Entrada | Filas | Columnas listas | Pico de memoria | Ratio |
-|---|---|---|---|---|
-| 129 MB | 2 M | 2,3 s | 159 MB | 1,23× |
-| 516 MB | 8 M | 9,7 s | 617 MB | 1,20× |
-| 1,03 GB | 16 M | 19,5 s | 1,23 GB | 1,19× |
+| Entrada | Filas | Nativo | WASM | Memoria nativa | Heap WASM |
+|---|---|---|---|---|---|
+| 129 MB | 2 M | 2,2 s | 4,2 s | 159 MB | 180 MB |
+| 516 MB | 8 M | 9,1 s | 16,8 s | 617 MB | 727 MB |
+| 1,03 GB | 16 M | 18,5 s | — | 1,23 GB | — |
 
-Escala lineal en las dos dimensiones: ~55 MB/s y **pico ≈ 1,2 × el tamaño de
-entrada** para esta forma de datos. El CLI tarda otro tanto en volver a escribir
-el CSV, cosa que el camino WASM no hace.
+Escala lineal: **58 MB/s nativo, 31 MB/s en WASM** (1,8×, que es la relación
+habitual), y pico de memoria ≈ 1,2× la entrada. El CLI tarda otro tanto en
+volver a escribir el CSV, cosa que el camino WASM no hace.
+
+Dos cosas costaron la mitad del rendimiento en WASM y no se ven en el codigo:
+
+- **`strtod` de musl usa `long double` internamente.** WASM no tiene ese tipo en
+  hardware, asi que se emula en software (`__multf3`, `__addtf3`, `fmodl`):
+  **37 % del runtime** en el perfil. `parse_number` ahora resuelve el caso comun
+  con una multiplicacion exacta y solo cae a `strtod` cuando el significando o
+  la potencia de diez no son representables. De 17 a 31 MB/s.
+- **`-ffp-contract=off`.** clang fusiona `a*b + c*d` en un FMA en arm64 y WASM no
+  puede; el mismo cuartil daba `58.925000000000004` nativo y `58.925` en el
+  navegador. Lo detecto `make wasm-test`.
 
 ```bash
 make bench
@@ -174,9 +186,14 @@ Falta esto, y necesita [emsdk](https://emscripten.org/docs/getting_started/downl
 
 ```bash
 git clone https://github.com/emscripten-core/emsdk && cd emsdk
-./emsdk install latest && ./emsdk activate latest && source ./emsdk_env.sh
-cd ../cleaner && make wasm
+./emsdk install 3.1.74 && ./emsdk activate 3.1.74 && source ./emsdk_env.sh
+cd ../cleaner && make wasm && make wasm-test
 ```
+
+**Por que 3.1.74 y no `latest`:** las versiones actuales de emsdk exigen Python
+3.10 o superior, y macOS trae 3.9.6 con las Command Line Tools. La 3.1.74 es la
+ultima que corre sobre 3.9, trae su propio Node y compila todo esto sin
+problemas. Si instalas un Python mas nuevo, `latest` deberia andar igual.
 
 Eso deja `web/static/wasm/csvclean.{js,wasm}`. Igual que
 `quantbay.bundle.js`, **hay que commitearlos**: el runtime Python de Render no
@@ -202,14 +219,15 @@ en producción.
 ### Cuánto aguanta el navegador
 
 El límite duro es del formato, no del código: **wasm32 direcciona 4 GB** y no
-hay forma de pasarlo sin `-sMEMORY64`, cuyo soporte todavía es parcial. Sobre
-ese techo, y con el pico de 1,2 × la entrada medido arriba:
+hay forma de pasarlo sin `-sMEMORY64`, cuyo soporte todavía es parcial. Contra
+ese techo, medido sobre el módulo compilado:
 
-| Entrada | Heap WASM | Margen sobre wasm32 |
-|---|---|---|
-| 512 MB | ~620 MB | holgado |
-| 1 GB | ~1,2 GB | cómodo en desktop |
-| ~3 GB | ~3,6 GB | contra la pared |
+| Entrada | Heap WASM | Tiempo | Margen sobre wasm32 |
+|---|---|---|---|
+| 129 MB | 180 MB (medido) | 4,2 s | — |
+| 512 MB | 727 MB (medido) | 16,8 s | holgado |
+| 1 GB | ~1,4 GB (proyectado) | ~34 s | cómodo en desktop |
+| ~2,8 GB | ~3,9 GB | — | contra la pared |
 
 Hay un detalle que cambia la cuenta: **la memoria WASM solo crece, nunca se
 devuelve**. Copiar las columnas a JavaScript no reemplaza los buffers del

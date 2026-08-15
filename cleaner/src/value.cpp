@@ -182,12 +182,31 @@ bool strip_currency(std::string_view& s) {
   return false;
 }
 
+// Significand accumulated while validating, so the common case never has to
+// go through strtod. Leading zeros do not count against the digit budget.
+struct Mantissa {
+  std::uint64_t value = 0;
+  int digits = 0;
+  bool overflow = false;
+
+  void push(char c) {
+    if (value == 0 && c == '0') return;  // leading zero: contributes nothing
+    if (digits >= 19) {                  // would overflow the accumulator
+      overflow = true;
+      return;
+    }
+    value = value * 10 + static_cast<std::uint64_t>(c - '0');
+    ++digits;
+  }
+};
+
 // Copies the digits of an integer part into `buf` while validating the
-// thousands grouping. "1.234.567" passes under group '.', "1.23" does not —
-// a separator that is not followed by exactly three digits is not a separator,
-// it is a decimal point, and the column format says otherwise.
+// thousands grouping, and accumulates the significand on the way. "1.234.567"
+// passes under group '.', "1.23" does not — a separator that is not followed by
+// exactly three digits is not a separator, it is a decimal point, and the
+// column format says otherwise.
 bool append_integer_part(std::string_view in, char group, char* buf, std::size_t cap,
-                         std::size_t* n) {
+                         std::size_t* n, Mantissa* mantissa) {
   std::size_t run = 0;
   bool seen_sep = false;
   for (std::size_t i = 0; i < in.size(); ++i) {
@@ -195,6 +214,7 @@ bool append_integer_part(std::string_view in, char group, char* buf, std::size_t
     if (is_digit(c)) {
       if (*n + 1 >= cap) return false;
       buf[(*n)++] = c;
+      mantissa->push(c);
       ++run;
       continue;
     }
@@ -214,6 +234,15 @@ bool append_integer_part(std::string_view in, char group, char* buf, std::size_t
   }
   return !seen_sep || run == 3;
 }
+
+// Powers of ten that a double represents exactly. Past 1e22 the value is
+// rounded, and the fast path below stops being exact.
+constexpr double kPow10[] = {
+    1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,  1e8,  1e9,  1e10, 1e11,
+    1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22,
+};
+constexpr int kMaxExactPow10 = 22;
+constexpr std::uint64_t kMaxExactMantissa = 1ULL << 53;
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -448,7 +477,8 @@ NumberParse parse_number(std::string_view raw, NumberFormat fmt) {
 
   char buf[64];
   std::size_t n = 0;
-  if (!append_integer_part(int_part, fmt.group(), buf, sizeof buf, &n)) return out;
+  Mantissa sig;
+  if (!append_integer_part(int_part, fmt.group(), buf, sizeof buf, &n, &sig)) return out;
   const std::size_t int_digits = n;
 
   if (dot != kNpos) {
@@ -456,17 +486,45 @@ NumberParse parse_number(std::string_view raw, NumberFormat fmt) {
     if (int_digits == 0 && frac_part.empty()) return out;
     if (n + 1 + frac_part.size() >= sizeof buf) return out;
     buf[n++] = '.';
-    for (char c : frac_part) buf[n++] = c;
+    for (char c : frac_part) {
+      buf[n++] = c;
+      sig.push(c);
+    }
   } else if (int_digits == 0) {
     return out;
   }
 
+  int exp10 = -static_cast<int>(frac_part.size());
   if (!exponent.empty()) {
     if (n + 1 + exponent.size() >= sizeof buf) return out;
     buf[n++] = 'e';
+    std::string_view digits = exponent;
+    const bool exp_neg = digits.front() == '-';
+    if (exp_neg || digits.front() == '+') digits.remove_prefix(1);
+    int value = 0;
+    for (char c : digits) value = value * 10 + (c - '0');
+    exp10 += exp_neg ? -value : value;
     for (char c : exponent) buf[n++] = c;
   }
   buf[n] = '\0';
+
+  // Fast path. When the significand is exactly representable and the power of
+  // ten is too, a single multiply or divide is correctly rounded, so this
+  // returns the very same bits strtod would.
+  //
+  // It is worth far more than it looks. musl's strtod — which is what the
+  // WebAssembly build links — does its intermediate work in long double, and
+  // wasm has no such type in hardware: it becomes software-emulated 128-bit
+  // arithmetic (__multf3, __addtf3, fmodl) and burned 37 % of total runtime
+  // in the browser profile.
+  if (!sig.overflow && sig.value <= kMaxExactMantissa && exp10 >= -kMaxExactPow10 &&
+      exp10 <= kMaxExactPow10) {
+    const double m = static_cast<double>(sig.value);
+    const double v = exp10 >= 0 ? m * kPow10[exp10] : m / kPow10[-exp10];
+    out.ok = true;
+    out.value = neg ? -v : v;
+    return out;
+  }
 
   // strtod reads the decimal point from LC_NUMERIC. The buffer is already
   // normalised to '.', and nothing in this library calls setlocale, so the
