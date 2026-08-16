@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && vite build --config vite.worker.config.ts",
     "dev": "vite build --watch",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:worker": "vite build --config vite.worker.config.ts"
   },
   "devDependencies": {
     "@types/papaparse": "^5.3.14",

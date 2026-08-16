@@ -1,6 +1,28 @@
 import { materializeRows, parseCSVFile, parseCSVText, rowCountOf, type ParsedCSV } from './csvParser';
 import { type BridgedDataset } from './services/cleanerBridge';
-import { loadCsv } from './services/cleanerLoader';
+import { loadCsv, type LoadResult } from './services/cleanerLoader';
+import { renderDeviceProfile } from '../../cleaner/js/deviceProfileView';
+import { detectDeviceProfile } from '../../cleaner/js/deviceProfiler';
+
+/**
+ * Shows what the device is thought to be and what that implied. Only on the
+ * WASM path: the PapaParse fallback makes none of these decisions, so a panel
+ * describing them would be describing something that did not happen.
+ */
+function showDeviceProfile(loaded: LoadResult): void {
+  const container = $('qb-device-profile');
+  if (!container) return;
+  if (loaded.engine !== 'wasm') {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = '';
+  renderDeviceProfile(container, {
+    profile: detectDeviceProfile(),
+    budget: loaded.budget,
+    preflight: loaded.preflight,
+  });
+}
 import type { RLSConstraint } from './rls';
 import { parseRLSRestriction } from './rlsParser';
 import { runRegressionMode, runAutoRegressionMode } from './modes/regressionMode';
@@ -515,6 +537,7 @@ async function onFileChange(e: Event): Promise<void> {
     appState.csvData = loaded.data;
     appState.loadNotes = loaded.notes;
     appState.loadEngine = loaded.engine;
+    showDeviceProfile(loaded);
     if (!isTimeSeriesMode() && appState.csvData.numericColumns.length < 2) {
       showError('El CSV necesita al menos 2 columnas numéricas.');
       return;
