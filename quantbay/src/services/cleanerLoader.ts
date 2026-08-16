@@ -10,7 +10,7 @@
 
 import { parseCSVFile, type ParsedCSV } from '../csvParser';
 import { bridgeCleanedTable, type BridgedDataset } from './cleanerBridge';
-import { cleanCsv, loadCleaner } from '../../../cleaner/js/csvclean';
+import { cleanCsv, loadCleaner, setCleanerBaseUrl } from '../../../cleaner/js/csvclean';
 import {
   cleanCsvInWorker,
   createCleanerWorker,
@@ -40,6 +40,10 @@ export interface LoadOptions {
 
 /** Where the worker bundle is served from. Built by `npm run build`. */
 const WORKER_URL = '/static/js/quantbay.worker.js';
+
+// Explicit on the main thread too. It happens to resolve correctly there, but
+// relying on that would leave the two paths differing for no reason.
+setCleanerBaseUrl('/static/wasm/');
 
 function canUseWorker(): boolean {
   return typeof Worker !== 'undefined';
