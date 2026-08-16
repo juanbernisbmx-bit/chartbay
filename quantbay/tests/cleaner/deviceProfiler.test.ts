@@ -8,6 +8,7 @@ import {
 import {
   MAX_CHUNK_BYTES,
   MAX_TARGET_MEMORY_BYTES,
+  MEMORY_TIERS,
   MIN_CHUNK_BYTES,
   MIN_TARGET_MEMORY_BYTES,
 } from '../../../cleaner/js/processingLimits';
@@ -136,7 +137,7 @@ describe('calculateMemoryBudget', () => {
     const sixteen = calculateMemoryBudget(
       profileWith({ estimatedDeviceMemoryGB: 16, memoryOverrideApplied: true })
     );
-    expect(sixteen.targetMemoryBytes).toBe(1 * GB);
+    expect(sixteen.targetMemoryBytes).toBe(1.25 * GB);
     expect(sixteen.recommendedChunkBytes).toBe(32 * MB);
 
     const thirtyTwo = calculateMemoryBudget(
@@ -163,6 +164,29 @@ describe('calculateMemoryBudget', () => {
       })
     );
     expect(overridden.confidence).toBe('high');
+  });
+
+  it('the tier ladder is strictly increasing', () => {
+    // A rung equal to the one below it is a rung that does nothing: tierFor
+    // picks the first tier the device fits under, so a duplicate target makes
+    // the upper tier unreachable in effect. This happened once already, when
+    // raising the 8 GB rung to 1 GB left it level with the 16 GB one.
+    for (let i = 1; i < MEMORY_TIERS.length; i++) {
+      const lower = MEMORY_TIERS[i - 1];
+      const upper = MEMORY_TIERS[i];
+      expect(upper.maxDeviceMemoryGB).toBeGreaterThan(lower.maxDeviceMemoryGB);
+      expect(upper.targetMemoryBytes).toBeGreaterThan(lower.targetMemoryBytes);
+      expect(upper.chunkBytes).toBeGreaterThanOrEqual(lower.chunkBytes);
+    }
+  });
+
+  it('every tier stays inside the absolute bounds and the chunk range', () => {
+    for (const tier of MEMORY_TIERS) {
+      expect(tier.targetMemoryBytes).toBeGreaterThanOrEqual(MIN_TARGET_MEMORY_BYTES);
+      expect(tier.targetMemoryBytes).toBeLessThanOrEqual(MAX_TARGET_MEMORY_BYTES);
+      expect(tier.chunkBytes).toBeGreaterThanOrEqual(MIN_CHUNK_BYTES);
+      expect(tier.chunkBytes).toBeLessThanOrEqual(MAX_CHUNK_BYTES);
+    }
   });
 
   it('unknown device falls back to the conservative profile with low confidence', () => {

@@ -59,10 +59,15 @@ export interface MemoryTier {
 // advised against a file that demonstrably works. 1 GB is still only ~12 % of
 // an 8 GB machine, which keeps the posture conservative while no longer
 // crying wolf on the most common case this tool exists for.
+//
+// The ladder must stay strictly increasing — a rung equal to the one below it
+// is a rung that does nothing. `tierFor` picks the first tier whose bound the
+// device fits under, so equal targets would silently make the upper tier
+// unreachable in effect. There is a test pinning this.
 export const MEMORY_TIERS: MemoryTier[] = [
   { maxDeviceMemoryGB: 4, targetMemoryBytes: 256 * MB, chunkBytes: 8 * MB },
   { maxDeviceMemoryGB: 8, targetMemoryBytes: 1 * GB, chunkBytes: 16 * MB },
-  { maxDeviceMemoryGB: 16, targetMemoryBytes: 1 * GB, chunkBytes: 32 * MB },
+  { maxDeviceMemoryGB: 16, targetMemoryBytes: 1.25 * GB, chunkBytes: 32 * MB },
   { maxDeviceMemoryGB: Infinity, targetMemoryBytes: 1.5 * GB, chunkBytes: 64 * MB },
 ];
 
