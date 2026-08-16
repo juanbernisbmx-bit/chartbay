@@ -502,6 +502,21 @@ async function loadDemoCase(id: string): Promise<void> {
     showError(`Error al cargar demo: ${(err as Error).message}`);
   }
 }
+/**
+ * El CSV como texto, para el único motor que lo necesita.
+ *
+ * Pro corre statsmodels en Pyodide y le pasa el archivo entero a Python, así
+ * que ahí el string es inevitable. Leerlo recién en este punto, y no al subir,
+ * es lo que permite que el camino Lite procese archivos que como texto no
+ * entrarían en memoria.
+ */
+async function proCsvText(): Promise<string> {
+  if (appState.csvText !== null) return appState.csvText;
+  if (!appState.csvFile) throw new Error('No hay archivo original disponible.');
+  appState.csvText = await appState.csvFile.text();
+  return appState.csvText;
+}
+
 // ── Upload ────────────────────────────────────────────────────────────────────
 
 async function onFileChange(e: Event): Promise<void> {
@@ -530,7 +545,11 @@ async function onFileChange(e: Event): Promise<void> {
   writeRunLog(['Leyendo archivo CSV...']);
 
   try {
-    appState.csvText = await file.text();
+    // No se lee el texto acá. Un CSV de 500 MB serían ~1 GB de string UTF-16
+    // en el heap antes de que el limpiador leyera el primer byte, y en el
+    // camino Lite nadie lo usa. Pro lo pide bajo demanda en proCsvText().
+    appState.csvText = null;
+    appState.csvFile = file;
     const loaded = await loadCsv(file, {
       onProgress: fraction => setText('qb-status-obs', `${Math.round(fraction * 100)} %`),
     });
@@ -696,7 +715,7 @@ async function onRunPro(
   rlsConstraint: RLSConstraint | undefined
 ): Promise<void> {
   if (proRunInFlight) return;
-  if (!appState.csvText || !appState.csvData) {
+  if ((!appState.csvText && !appState.csvFile) || !appState.csvData) {
     showError('No hay CSV original disponible para el motor Pro. Volvé a cargar el archivo.');
     return;
   }
@@ -725,7 +744,7 @@ async function onRunPro(
     // untouched (byte-for-byte, same as before this feature existed).
     const effectiveCsvText = hasCategorical
       ? buildEncodedCsvText(encoding.rows, [yName, ...encoding.expandedXNames])
-      : appState.csvText;
+      : await proCsvText();
     // `columns` MUST be dropped here. Encoding produced new dummy columns that
     // live only in `encoding.rows`; leaving the old columnar store in place
     // would make getValidRowsFrom read the pre-encoding data and silently

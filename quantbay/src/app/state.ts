@@ -18,7 +18,15 @@ export interface QuantBayAppState {
   loadNotes?: string[];
   loadEngine?: 'wasm' | 'papaparse';
   /** Raw CSV text of the loaded file/demo — needed by the Pro (Pyodide) engine. */
+  /**
+   * El CSV como texto. Solo lo necesita el motor Pro (Pyodide), que le pasa el
+   * archivo entero a Python. En el camino Lite queda en null: leerlo costaría
+   * el doble del archivo en heap — los strings de JS son UTF-16 — justo lo que
+   * el limpiador en WASM evita procesando por chunks.
+   */
   csvText: string | null;
+  /** El archivo original, para leer el texto recién si Pro lo pide. */
+  csvFile: File | null;
   activeChart: any;
   residFittedChart: any;
   residHistChart: any;
@@ -41,6 +49,7 @@ export const appState: QuantBayAppState = {
   activeFunctionalForm: 'lin-lin',
   csvData: null,
   csvText: null,
+  csvFile: null,
   activeChart: null,
   residFittedChart: null,
   residHistChart: null,

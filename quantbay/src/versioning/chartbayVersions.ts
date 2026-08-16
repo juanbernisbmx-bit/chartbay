@@ -43,8 +43,12 @@ export const CHARTBAY_VERSIONS: Record<ChartBayVersion, ChartBayVersionConfig> =
     id: 'lite',
     label: 'Lite',
     status: 'available',
-    description: 'Versión educativa y liviana. Corre en el navegador con motor TypeScript. Pensada para estudiantes y archivos chicos.',
-    maxCsvSizeMb: 2,
+    description: 'Versión educativa. Corre entera en el navegador: el CSV se limpia y se tipa con un motor en C++ compilado a WebAssembly, y el cálculo lo hace el motor TypeScript.',
+    // Medido: 516 MB y 7,9 M de filas se procesan en 17 s con 727 MB de heap
+    // WASM. El tope de 100 MB deja margen sobre eso y, por encima, el preflight
+    // avisa según el equipo de cada uno. Era 2 MB, calculado para cuando esto
+    // pasaba por PapaParse y armaba un objeto por fila.
+    maxCsvSizeMb: 100,
     engine: 'typescript',
     features: { ...LITE_FEATURES },
   },
@@ -59,6 +63,10 @@ export const CHARTBAY_VERSIONS: Record<ChartBayVersion, ChartBayVersionConfig> =
       'Breusch-Pagan y test de restricciones lineales Rβ = q (Wald/F vía statsmodels, sin re-estimar los ' +
       'coeficientes bajo la restricción). En series de tiempo Pro incluye ADF, ACF, PACF, Ljung-Box, ARIMA ' +
       'manual, forecast con intervalos, gráfico e índice temporal opcional con fechas reales cuando el CSV lo permite.',
+    // Sin cambios a propósito. Pro no usa el limpiador: le pasa el CSV entero
+    // como texto a Python, que además carga numpy, pandas y statsmodels en el
+    // navegador. Ese perfil de memoria no se midió nunca, así que subir el tope
+    // sería inventar un número. Medir Pyodide es su propia tarea.
     maxCsvSizeMb: 10,
     engine: 'pyodide',
     features: {
