@@ -147,14 +147,14 @@ describe('calculateMemoryBudget', () => {
     expect(thirtyTwo.recommendedChunkBytes).toBe(64 * MB);
   });
 
-  it('treats a clamped deviceMemory of 8 as a floor, not a value', () => {
-    // The spec clamps navigator.deviceMemory at 8, so a 64 GB workstation is
-    // indistinguishable from an 8 GB laptop. Confidence must reflect that.
+  it('treats a deviceMemory of exactly 8 as a floor, not a value', () => {
+    // Chrome clamps navigator.deviceMemory at 8, so there a 64 GB workstation
+    // is indistinguishable from an 8 GB laptop. Confidence must reflect that.
     const clamped = calculateMemoryBudget(
       profileWith({ estimatedDeviceMemoryGB: 8, jsHeapLimitBytes: 4 * GB })
     );
     expect(clamped.confidence).toBe('medium');
-    expect(clamped.reason).toContain('máximo que la especificación');
+    expect(clamped.reason).toContain('donde varios navegadores topean');
 
     const overridden = calculateMemoryBudget(
       profileWith({
@@ -164,6 +164,16 @@ describe('calculateMemoryBudget', () => {
       })
     );
     expect(overridden.confidence).toBe('high');
+  });
+
+  it('takes a value above the usual clamp at face value', () => {
+    // Not every engine clamps at 8: a browser reporting 16 was observed while
+    // testing this, and downgrading that would throw away real information.
+    const budget = calculateMemoryBudget(
+      profileWith({ estimatedDeviceMemoryGB: 16, jsHeapLimitBytes: 4 * GB })
+    );
+    expect(budget.confidence).toBe('high');
+    expect(budget.targetMemoryBytes).toBe(1.25 * GB);
   });
 
   it('the tier ladder is strictly increasing', () => {

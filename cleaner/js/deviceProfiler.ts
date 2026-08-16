@@ -31,9 +31,11 @@ export interface DeviceProfile {
   /**
    * `navigator.deviceMemory`, in GB. Chromium only.
    *
-   * Read the spec before trusting this: it is RAM rounded *down* to a power of
-   * two, then clamped to the range 0.25–8. A 32 GB machine reports 8, and so
-   * does an 8 GB one. Treat any value of 8 as "8 or more", never as "8".
+   * It is RAM rounded *down* to a power of two, then clamped. The clamp bound
+   * is implementation-defined: Chrome caps it at 8, so there a 32 GB machine
+   * and an 8 GB one both report exactly 8 — but not every engine does, and a
+   * browser reporting 16 has been observed. So the ambiguous value is 8
+   * specifically ("8 or more"), not everything at or above it.
    */
   estimatedDeviceMemoryGB?: number;
   /** `navigator.hardwareConcurrency`. Widely available; may be capped for privacy. */
@@ -215,10 +217,10 @@ export function calculateMemoryBudget(profile: DeviceProfile): MemoryBudget {
     chunk = tier.chunkBytes;
     if (profile.memoryOverrideApplied) {
       reasons.push(`Memoria informada por el entorno: ${memoryGB} GB.`);
-    } else if (memoryGB >= 8) {
+    } else if (memoryGB === 8) {
       reasons.push(
-        'navigator.deviceMemory informa 8 GB, que es el máximo que la especificación ' +
-          'permite reportar: la máquina puede tener 8 GB o mucho más. Se toma como 8.'
+        'navigator.deviceMemory informa 8 GB, que es donde varios navegadores topean ' +
+          'el valor: la máquina puede tener 8 GB o mucho más. Se toma como 8.'
       );
     } else {
       reasons.push(`navigator.deviceMemory informa ~${memoryGB} GB.`);
@@ -249,8 +251,10 @@ export function calculateMemoryBudget(profile: DeviceProfile): MemoryBudget {
     (profile.availableApis.deviceMemory || profile.memoryOverrideApplied ? 1 : 0) +
     (profile.availableApis.performanceMemory ? 1 : 0);
   let confidence: BudgetConfidence = signals >= 2 ? 'high' : signals === 1 ? 'medium' : 'low';
-  // A clamped 8 tells us a floor, not a value, so it cannot support "high".
-  if (!profile.memoryOverrideApplied && memoryGB !== undefined && memoryGB >= 8 && confidence === 'high') {
+  // Exactly 8 is where the common clamp lands, so it tells us a floor rather
+  // than a value. A higher figure came from an engine that does not clamp
+  // there, and is worth taking at face value.
+  if (!profile.memoryOverrideApplied && memoryGB === 8 && confidence === 'high') {
     confidence = 'medium';
     reasons.push('Confianza reducida a media: el valor de deviceMemory está topeado.');
   }

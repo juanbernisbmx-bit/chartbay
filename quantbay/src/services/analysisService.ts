@@ -58,6 +58,38 @@ export class AnalysisValidationError extends Error {
   }
 }
 
+/**
+ * Columnar form of getCompleteNumericColumns.
+ *
+ * Same result — the numeric columns restricted to rows where every one of them
+ * is present — but read straight off the typed arrays. This feeds the
+ * correlation matrix, which touches every value of every numeric column, so it
+ * is one of the passes worth keeping off the row-object path.
+ */
+export function getCompleteNumericColumnsFrom(data: ParsedCSV): number[][] {
+  if (!data.columns) return getCompleteNumericColumns(data.rows, data.numericColumns);
+
+  const { numeric, rowCount } = data.columns;
+  const cols = data.numericColumns.map(name => numeric.get(name));
+  if (cols.some(col => !col)) {
+    return getCompleteNumericColumns(data.rows, data.numericColumns);
+  }
+
+  const out: number[][] = cols.map(() => []);
+  for (let i = 0; i < rowCount; i++) {
+    let complete = true;
+    for (const col of cols) {
+      if (!col!.mask[i]) {
+        complete = false;
+        break;
+      }
+    }
+    if (!complete) continue;
+    for (let j = 0; j < cols.length; j++) out[j].push(cols[j]!.values[i]);
+  }
+  return out;
+}
+
 export function getCompleteNumericColumns(
   rows: Record<string, unknown>[],
   colNames: string[]

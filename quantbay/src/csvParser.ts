@@ -1,10 +1,56 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare const Papa: any; // loaded via CDN (PapaParse)
 
+/**
+ * Columnar backing for a dataset, as produced by the C++/WASM cleaner.
+ *
+ * Present only on the columnar path. When it is there, the hot functions in
+ * this file read it directly and never touch `rows`, which is what keeps a
+ * multi-million-row file from becoming multi-million JavaScript objects.
+ */
+export interface ColumnStore {
+  /** Column name → values. `mask[i] === 0` marks a missing cell. */
+  numeric: Map<string, { values: Float64Array; mask: Uint8Array }>;
+  /**
+   * Low-cardinality columns, kept as dictionary codes rather than strings.
+   * One Int32 per row plus the level list, instead of one string per row —
+   * which is the difference between 4 bytes and ~40 for a country name.
+   */
+  categorical: Map<string, { codes: Int32Array; levels: string[] }>;
+  /** Free text. The one column kind that genuinely costs a string per row. */
+  text: Map<string, string[]>;
+  rowCount: number;
+}
+
 export interface ParsedCSV {
   headers: string[];
+  /**
+   * Row objects.
+   *
+   * On the PapaParse path this is the whole dataset. On the columnar path it
+   * holds only a bounded preview — `PREVIEW_ROWS` of them — because
+   * materialising every row is the cost the columnar path exists to avoid.
+   * Anything that needs a full row-wise pass must call `materializeRows`,
+   * which says so in its name and is O(rows) on purpose.
+   */
   rows: Record<string, unknown>[];
   numericColumns: string[];
+  /**
+   * Authoritative row count. Optional so the many existing row-wise call sites
+   * keep constructing a ParsedCSV the way they always did; use `rowCountOf`
+   * rather than reading it, and never use `rows.length` when `columns` may be
+   * present, because there `rows` is only the preview.
+   */
+  rowCount?: number;
+  columns?: ColumnStore;
+}
+
+/** Rows kept for the preview table on the columnar path. */
+export const PREVIEW_ROWS = 50;
+
+/** The row count, whichever representation the dataset happens to use. */
+export function rowCountOf(data: ParsedCSV): number {
+  return data.rowCount ?? data.rows.length;
 }
 
 export function parseCSVFile(file: File): Promise<ParsedCSV> {
@@ -51,6 +97,41 @@ export function extractColumn(
     if (isValidNumeric(raw)) acc.push(Number(raw));
     return acc;
   }, []);
+}
+
+/**
+ * Builds row objects from the columnar store.
+ *
+ * Named for what it costs. This is the one bridge back to the row-wise world,
+ * for code that has not been converted — the time-series engine, mainly — and
+ * it allocates one object per row, which is exactly the representation the
+ * columnar path avoids. Call it deliberately, never in a loop.
+ */
+export function materializeRows(data: ParsedCSV): Record<string, unknown>[] {
+  if (!data.columns) return data.rows;
+  const { numeric, text, rowCount } = data.columns;
+
+  const out: Record<string, unknown>[] = new Array(rowCount);
+  for (let i = 0; i < rowCount; i++) {
+    const row: Record<string, unknown> = {};
+    for (const header of data.headers) {
+      const column = numeric.get(header);
+      if (column) {
+        row[header] = column.mask[i] ? column.values[i] : null;
+        continue;
+      }
+      const factor = data.columns.categorical.get(header);
+      if (factor) {
+        const code = factor.codes[i];
+        row[header] = code >= 0 ? factor.levels[code] : null;
+        continue;
+      }
+      const strings = text.get(header);
+      row[header] = strings ? (strings[i] ?? null) : null;
+    }
+    out[i] = row;
+  }
+  return out;
 }
 
 export function extractMatrix(
@@ -138,4 +219,48 @@ export function getValidRows(
     y: valid.map(row => Number(row[yName])),
     dropped: rows.length - valid.length,
   };
+}
+
+/**
+ * Same contract as getValidRows, reading typed arrays instead of row objects.
+ *
+ * This is the function the whole columnar path exists for: it walks
+ * Float64Arrays and allocates only the result, so a million-row regression
+ * never builds a million objects. Falls back to the row-wise version when
+ * there is no columnar store, so callers do not have to branch.
+ */
+export function getValidRowsFrom(
+  data: ParsedCSV,
+  yName: string,
+  xNames: string[]
+): { X: number[][]; y: number[]; dropped: number } {
+  if (!data.columns) return getValidRows(data.rows, yName, xNames);
+
+  const { numeric, rowCount } = data.columns;
+  const yCol = numeric.get(yName);
+  const xCols = xNames.map(name => numeric.get(name));
+  // A name that is not a numeric column cannot take part in a regression; let
+  // the row-wise path produce the same error it always did.
+  if (!yCol || xCols.some(col => !col)) {
+    return getValidRows(materializeRows(data), yName, xNames);
+  }
+
+  const X: number[][] = [];
+  const y: number[] = [];
+  for (let i = 0; i < rowCount; i++) {
+    if (!yCol.mask[i]) continue;
+    let complete = true;
+    for (const col of xCols) {
+      if (!col!.mask[i]) {
+        complete = false;
+        break;
+      }
+    }
+    if (!complete) continue;
+    const rowValues = new Array<number>(xCols.length);
+    for (let j = 0; j < xCols.length; j++) rowValues[j] = xCols[j]!.values[i];
+    X.push(rowValues);
+    y.push(yCol.values[i]);
+  }
+  return { X, y, dropped: rowCount - y.length };
 }

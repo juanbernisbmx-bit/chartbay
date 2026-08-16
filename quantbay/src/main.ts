@@ -1,4 +1,6 @@
-import { parseCSVFile, parseCSVText, type ParsedCSV } from './csvParser';
+import { materializeRows, parseCSVFile, parseCSVText, rowCountOf, type ParsedCSV } from './csvParser';
+import { type BridgedDataset } from './services/cleanerBridge';
+import { loadCsv } from './services/cleanerLoader';
 import type { RLSConstraint } from './rls';
 import { parseRLSRestriction } from './rlsParser';
 import { runRegressionMode, runAutoRegressionMode } from './modes/regressionMode';
@@ -190,6 +192,10 @@ function parseDemoCsv(text: string): ParsedCSV {
 }
 
 function categoricalColumnsFor(csvData: ParsedCSV): string[] {
+  // The cleaner voted on column types while parsing, so on that path the
+  // answer is already known and exact rather than sampled.
+  const bridged = csvData as Partial<BridgedDataset>;
+  if (bridged.categoricalColumns) return bridged.categoricalColumns;
   return detectCategoricalColumns(csvData.rows, csvData.headers, csvData.numericColumns);
 }
 
@@ -444,7 +450,7 @@ async function loadDemoCase(id: string): Promise<void> {
     const fn = $('qb-filename');
     if (fn) fn.textContent = demo.file;
     setText('qb-status-dataset', demo.file);
-    setText('qb-status-obs', appState.csvData.rows.length);
+    setText('qb-status-obs', rowCountOf(appState.csvData));
     setText('qb-status-vars', appState.csvData.numericColumns.length);
     setEngineStatus('LISTO');
     writeRunLog([
@@ -503,18 +509,24 @@ async function onFileChange(e: Event): Promise<void> {
 
   try {
     appState.csvText = await file.text();
-    appState.csvData = await parseCSVFile(file);
+    const loaded = await loadCsv(file, {
+      onProgress: fraction => setText('qb-status-obs', `${Math.round(fraction * 100)} %`),
+    });
+    appState.csvData = loaded.data;
+    appState.loadNotes = loaded.notes;
+    appState.loadEngine = loaded.engine;
     if (!isTimeSeriesMode() && appState.csvData.numericColumns.length < 2) {
       showError('El CSV necesita al menos 2 columnas numéricas.');
       return;
     }
-    setText('qb-status-obs', appState.csvData.rows.length);
+    setText('qb-status-obs', rowCountOf(appState.csvData));
     setText('qb-status-vars', appState.csvData.numericColumns.length);
     setEngineStatus('LISTO');
     writeRunLog([
-      `Dataset cargado: ${appState.csvData.rows.length} observaciones`,
+      `Dataset cargado: ${rowCountOf(appState.csvData)} observaciones`,
       `Variables numéricas detectadas: ${appState.csvData.numericColumns.length}`,
       isTimeSeriesMode() ? 'Motor de Time Series listo.' : 'Motor de regresión listo.',
+      ...(appState.loadNotes ?? []),
     ]);
     renderPreview(appState.csvData);
     {
@@ -566,7 +578,9 @@ async function onRun(): Promise<void> {
     // Same encoding Lite uses internally (regressionMode.ts) — computed here
     // so both the RLS restriction and the capability check operate on the
     // FINAL post-dummy coefficient names, not the raw pre-encoding selection.
-    const encoding = encodeCategoricalX(appState.csvData.rows, xNames);
+    // Dummy encoding is still row-wise, so this is one of the two places that
+    // pays to rebuild rows. materializeRows says so in its name.
+    const encoding = encodeCategoricalX(materializeRows(appState.csvData), xNames);
     const invalidCategoricalNames = xNames.filter(
       name =>
         categoricalColumnsFor(appState.csvData!).includes(name) &&
@@ -680,7 +694,7 @@ async function onRunPro(
     // self-contained; encodeCategoricalX is pure/deterministic, so this
     // reproduces exactly what the pre-flight capability check already
     // validated.
-    const encoding = encodeCategoricalX(appState.csvData.rows, xNames);
+    const encoding = encodeCategoricalX(materializeRows(appState.csvData), xNames);
     const dummyNames = encoding.categoricalInfo.flatMap(c => c.createdDummies);
     const hasCategorical = encoding.categoricalInfo.length > 0;
     // Only re-serialize to CSV when dummies actually exist — the common
@@ -689,7 +703,16 @@ async function onRunPro(
     const effectiveCsvText = hasCategorical
       ? buildEncodedCsvText(encoding.rows, [yName, ...encoding.expandedXNames])
       : appState.csvText;
-    const effectiveCsvData: ParsedCSV = { ...appState.csvData, rows: encoding.rows };
+    // `columns` MUST be dropped here. Encoding produced new dummy columns that
+    // live only in `encoding.rows`; leaving the old columnar store in place
+    // would make getValidRowsFrom read the pre-encoding data and silently
+    // ignore every dummy.
+    const effectiveCsvData: ParsedCSV = {
+      ...appState.csvData,
+      rows: encoding.rows,
+      rowCount: encoding.rows.length,
+      columns: undefined,
+    };
 
     // Fail fast on an invalid log domain (Y/X <= 0) before paying the cost of
     // loading Pyodide/numpy/pandas/statsmodels. The Python script re-validates
@@ -858,7 +881,7 @@ function onTimeSeriesRun(): void {
   }
 
   showError('');
-  const result = runTimeSeriesAnalysis(appState.csvData.rows, {
+  const result = runTimeSeriesAnalysis(materializeRows(appState.csvData), {
     dateColumn,
     valueColumn,
     transformation: getSelectedTimeSeriesTransformation(),
@@ -1086,11 +1109,11 @@ function agroLoadDataset(params: {
     if (appState.csvData.numericColumns.length < 2) {
       throw new Error('El dataset necesita al menos 2 columnas numéricas.');
     }
-    setText('qb-status-obs', appState.csvData.rows.length);
+    setText('qb-status-obs', rowCountOf(appState.csvData));
     setText('qb-status-vars', appState.csvData.numericColumns.length);
     setEngineStatus('LISTO');
     writeRunLog([
-      `Dataset cargado: ${appState.csvData.rows.length} observaciones`,
+      `Dataset cargado: ${rowCountOf(appState.csvData)} observaciones`,
       `Variables numéricas detectadas: ${appState.csvData.numericColumns.length}`,
       'Motor de regresión listo.',
     ]);
