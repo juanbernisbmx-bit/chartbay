@@ -18,7 +18,18 @@ import {
   type ColumnStore,
   type ParsedCSV,
 } from '../csvParser';
-import type { CleanColumn, CleanReport, CleanedTable } from '../../../cleaner/js/csvclean';
+import type { CleanColumn, CleanReport } from '../../../cleaner/js/csvclean';
+
+/**
+ * The parts of a result this bridge reads. Structural on purpose: the in-page
+ * path returns a CleanedTable and the worker path returns a WorkerTable, and
+ * both satisfy this.
+ */
+export interface BridgeableTable {
+  rows: number;
+  columns: CleanColumn[];
+  report: CleanReport;
+}
 
 export interface BridgedDataset extends ParsedCSV {
   /** Columns the cleaner typed as low-cardinality factors. */
@@ -42,7 +53,7 @@ function previewValue(column: CleanColumn, i: number): unknown {
   }
 }
 
-export function bridgeCleanedTable(table: CleanedTable): BridgedDataset {
+export function bridgeCleanedTable(table: BridgeableTable): BridgedDataset {
   const headers = table.columns.map(column => column.name);
   const numericColumns: string[] = [];
   const categoricalColumns: string[] = [];

@@ -36,8 +36,10 @@ let nextId = 1;
  * bundlers each have their own idea of how a worker should be referenced, and
  * hard-coding one would tie this file to a build system.
  */
-export function createCleanerWorker(url: URL | string): Worker {
-  return new Worker(url, { type: 'module' });
+export function createCleanerWorker(url: URL | string, type: WorkerType = 'classic'): Worker {
+  // Classic by default: the shipped worker bundle is an IIFE that pulls the
+  // Emscripten glue in with importScripts, which module workers do not have.
+  return new Worker(url, type === 'module' ? { type: 'module' } : undefined);
 }
 
 export function setCleanerWorker(instance: Worker | null): void {

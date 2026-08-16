@@ -11,6 +11,11 @@
 import { parseCSVFile, type ParsedCSV } from '../csvParser';
 import { bridgeCleanedTable, type BridgedDataset } from './cleanerBridge';
 import { cleanCsv, loadCleaner } from '../../../cleaner/js/csvclean';
+import {
+  cleanCsvInWorker,
+  createCleanerWorker,
+  setCleanerWorker,
+} from '../../../cleaner/js/workerClient';
 import { calculateMemoryBudget, detectDeviceProfile } from '../../../cleaner/js/deviceProfiler';
 import { preflight, type PreflightResult } from '../../../cleaner/js/preflight';
 import type { MemoryBudget } from '../../../cleaner/js/deviceProfiler';
@@ -29,6 +34,15 @@ export interface LoadOptions {
   onProgress?: (fraction: number) => void;
   /** Forces the fallback. Used by tests and by a manual escape hatch. */
   disableWasm?: boolean;
+  /** Keeps the work on the main thread. Only useful for debugging. */
+  disableWorker?: boolean;
+}
+
+/** Where the worker bundle is served from. Built by `npm run build`. */
+const WORKER_URL = '/static/js/quantbay.worker.js';
+
+function canUseWorker(): boolean {
+  return typeof Worker !== 'undefined';
 }
 
 /** Detected once per page: the answer cannot change while the tab is open. */
@@ -77,18 +91,29 @@ export async function loadCsv(file: File, options: LoadOptions = {}): Promise<Lo
       );
     }
 
-    await loadCleaner();
-    const table = await cleanCsv(file, {
+    const runOptions = {
       mode: runMode,
       budget,
       estimatedMemoryBytes: plan.recommendations[runMode].estimatedMemoryBytes,
       onProgress: options.onProgress,
-      onMemoryWarning: message => notes.push(message),
+      onMemoryWarning: (message: string) => notes.push(message),
       // The engine keeps the arrays for the life of the session, and borrowed
       // views would be invalidated by the next upload.
-      copy: true,
-    });
+      copy: true as const,
+    };
 
+    if (!options.disableWorker && canUseWorker()) {
+      // Off the main thread the page keeps painting, and — less obviously —
+      // terminating the worker afterwards is the only way to hand the WASM
+      // heap back, since WASM memory never shrinks inside a live context.
+      setCleanerWorker(createCleanerWorker(WORKER_URL));
+      const table = await cleanCsvInWorker(file, { ...runOptions, terminateAfterRun: true });
+      notes.push('Procesado en un worker; la interfaz no se bloqueó.');
+      return { data: bridgeCleanedTable(table), engine: 'wasm', budget, preflight: plan, notes };
+    }
+
+    await loadCleaner();
+    const table = await cleanCsv(file, runOptions);
     const data = bridgeCleanedTable(table);
     table.dispose();
     return { data, engine: 'wasm', budget, preflight: plan, notes };

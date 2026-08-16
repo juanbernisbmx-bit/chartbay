@@ -2856,3 +2856,98 @@ body:has(.terminal-finance){
     columns:1;
   }
 }
+
+
+/* ── Panel "Dispositivo y procesamiento" ─────────────────────────────────────
+   Lo monta renderDeviceProfile (cleaner/js/deviceProfileView.ts). Resumen
+   corto arriba, detalles tecnicos plegados abajo. */
+
+.cb-profile__header {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: .75rem;
+}
+
+.cb-profile__title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.cb-profile__badge {
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: .15rem .5rem;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+}
+
+.cb-profile__badge--safe { color: #1a7f4b; }
+.cb-profile__badge--warning { color: #a86b00; }
+.cb-profile__badge--not-recommended,
+.cb-profile__badge--blocked { color: #b3261e; }
+
+.cb-profile__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: .25rem 1.5rem;
+}
+
+.cb-profile__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .2rem 0;
+  border-bottom: 1px solid rgba(128, 128, 128, .15);
+  font-size: .85rem;
+}
+
+.cb-profile__label { opacity: .7; }
+.cb-profile__value { font-variant-numeric: tabular-nums; text-align: right; }
+
+.cb-profile__reason {
+  margin: .75rem 0 0;
+  font-size: .85rem;
+  line-height: 1.45;
+  opacity: .85;
+}
+
+.cb-profile__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-top: .75rem;
+}
+
+.cb-profile__mode {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  padding: .4rem .7rem;
+  border: 1px solid rgba(128, 128, 128, .35);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.cb-profile__mode.is-selected { border-color: currentColor; font-weight: 600; }
+.cb-profile__mode[data-status="warning"] .cb-profile__mode-status { color: #a86b00; }
+.cb-profile__mode[data-status="not-recommended"] .cb-profile__mode-status,
+.cb-profile__mode[data-status="blocked"] .cb-profile__mode-status { color: #b3261e; }
+
+.cb-profile__mode-name { font-size: .85rem; }
+.cb-profile__mode-status { font-size: .65rem; letter-spacing: .04em; opacity: .8; }
+
+.cb-profile__details { margin-top: 1rem; }
+.cb-profile__details-toggle { cursor: pointer; font-size: .85rem; opacity: .8; }
+.cb-profile__grid { margin-top: .5rem; }
+
+.cb-profile__caveat {
+  margin: .75rem 0 0;
+  font-size: .78rem;
+  line-height: 1.45;
+  opacity: .65;
+}
