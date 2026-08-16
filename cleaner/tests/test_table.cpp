@@ -304,6 +304,84 @@ CB_TEST(table, report_json_is_well_formed_enough) {
   CB_CHECK(!in_string);
 }
 
+CB_TEST(scan, agrees_with_the_full_pass_on_what_it_reports) {
+  const char* csv =
+      "fecha;pais;monto;nota\n"
+      "01/03/2024;AR;1.234,50;alfa\n"
+      "02/03/2024;BR;2.000,00;beta\n"
+      "03/03/2024;AR;-;gamma\n"
+      "04/03/2024;CL;98,75;delta\n"
+      "05/03/2024;BR;abc;epsilon\n"
+      "06/03/2024;AR;115,00;zeta\n";
+
+  CleanOptions scan;
+  scan.scan_only = true;
+  scan.drop_duplicate_rows = false;  // the full pass would use it; scan cannot
+  CleanOptions full;
+  full.drop_duplicate_rows = false;
+
+  const CleanResult a = clean_buffer(csv, scan);
+  const CleanResult b = clean_buffer(csv, full);
+
+  CB_CHECK_EQ(a.rows_out, b.rows_out);
+  CB_CHECK_EQ(a.columns.size(), b.columns.size());
+  for (std::size_t j = 0; j < a.columns.size() && j < b.columns.size(); ++j) {
+    CB_CHECK_EQ(a.columns[j].name, b.columns[j].name);
+    CB_CHECK_EQ(static_cast<int>(a.columns[j].type), static_cast<int>(b.columns[j].type));
+    CB_CHECK_EQ(a.columns[j].stats.present, b.columns[j].stats.present);
+    CB_CHECK_EQ(a.columns[j].stats.missing, b.columns[j].stats.missing);
+    CB_CHECK_EQ(a.columns[j].stats.invalid, b.columns[j].stats.invalid);
+    if (b.columns[j].stats.has_moments) {
+      CB_CHECK_NEAR(a.columns[j].stats.min, b.columns[j].stats.min, 1e-9);
+      CB_CHECK_NEAR(a.columns[j].stats.max, b.columns[j].stats.max, 1e-9);
+      CB_CHECK_NEAR(a.columns[j].stats.mean, b.columns[j].stats.mean, 1e-9);
+      CB_CHECK_NEAR(a.columns[j].stats.sd, b.columns[j].stats.sd, 1e-9);
+    }
+  }
+}
+
+CB_TEST(scan, stores_nothing_per_row) {
+  // The whole point: memory must not grow with the row count. Ten times the
+  // rows, byte-identical storage.
+  std::string small = "a,b\n";
+  std::string large = "a,b\n";
+  for (int i = 0; i < 50; ++i) small += std::to_string(i) + ",x" + std::to_string(i) + "\n";
+  for (int i = 0; i < 5000; ++i) large += std::to_string(i) + ",x" + std::to_string(i) + "\n";
+
+  CleanOptions opts;
+  opts.scan_only = true;
+  opts.drop_duplicate_rows = false;
+  const CleanResult a = clean_buffer(small, opts);
+  const CleanResult b = clean_buffer(large, opts);
+
+  CB_CHECK_EQ(a.rows_out, static_cast<std::size_t>(50));
+  CB_CHECK_EQ(b.rows_out, static_cast<std::size_t>(5000));
+  for (const CleanResult* r : {&a, &b}) {
+    for (const Column& col : r->columns) {
+      CB_CHECK_EQ(col.values.size(), static_cast<std::size_t>(0));
+      CB_CHECK_EQ(col.mask.size(), static_cast<std::size_t>(0));
+      CB_CHECK_EQ(col.codes.size(), static_cast<std::size_t>(0));
+      CB_CHECK_EQ(col.text.size(), static_cast<std::size_t>(0));
+    }
+  }
+}
+
+CB_TEST(scan, keeps_text_columns_and_reports_no_quantiles) {
+  CleanOptions opts;
+  opts.scan_only = true;
+  const CleanResult r = clean_buffer(
+      "id,libre\n1,uno\n2,dos\n3,tres\n4,cuatro\n5,cinco\n6,seis\n", opts);
+  // A text column has no unique count in scan mode, so it must not be mistaken
+  // for a constant column and dropped.
+  const Column* libre = col_by_name(r, "libre");
+  CB_CHECK(libre != nullptr);
+  CB_CHECK(libre->stats.unique_capped);
+  const Column* id = col_by_name(r, "id");
+  CB_CHECK(id != nullptr);
+  CB_CHECK(id->stats.has_moments);
+  CB_CHECK(!id->stats.has_quantiles);
+}
+
 CB_TEST(table, empty_input_is_not_a_crash) {
   const CleanResult r = clean_buffer("");
   CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(0));

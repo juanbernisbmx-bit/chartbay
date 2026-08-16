@@ -120,6 +120,8 @@ std::string to_json(const CleanResult& result) {
       json_number(out, s.mean);
       out += ",\"sd\":";
       json_number(out, s.sd);
+    }
+    if (s.has_quantiles) {
       out += ",\"p25\":";
       json_number(out, s.p25);
       out += ",\"p50\":";

@@ -27,10 +27,11 @@ ni siquiera de la columna (ver más abajo).
 
 | Pieza | Estado |
 |---|---|
-| Core C++ (parser, tipado, limpieza, reporte) | listo, 382 checks en verde |
+| Core C++ (parser, tipado, limpieza, reporte) | listo, 435 checks en verde |
 | CLI nativo `csvclean` | listo |
 | Modulo WASM (`web/static/wasm/csvclean.wasm`, 160 KB) | compilado y verificado contra el binario nativo |
-| Wrapper TypeScript (`js/csvclean.ts`) | escrito; **falta conectarlo a `quantbay/`** |
+| Capa adaptativa TypeScript (perfilado, preflight, worker, UI) | lista, 45 tests en verde |
+| Conexión a `quantbay/` | **pendiente** |
 
 `make wasm-test` corre el modulo compilado bajo Node y exige que su reporte sea
 **identico byte a byte** al del binario nativo. Compilar no prueba nada por si
@@ -153,6 +154,56 @@ Dos palancas:
 wrapper JS de `file.size`) pre-dimensiona los buffers. Sin ese dato las columnas
 crecen duplicando capacidad, lo que costaba 900 MB en el archivo de 516 MB en
 vez de 617 MB.
+
+## Perfilado del dispositivo y modos de procesamiento
+
+El navegador **no puede informar la RAM libre del sistema**, y nada acá lo
+finge. Lo que hay son señales opcionales y toscas — `navigator.deviceMemory`,
+`hardwareConcurrency`, `performance.memory.jsHeapSizeLimit` — que se combinan en
+un presupuesto conservador, con una etiqueta de confianza que dice cuánto vale.
+
+El aviso que ordena todo el diseño: `navigator.deviceMemory` está definida como
+la RAM redondeada hacia abajo a una potencia de dos y **topeada en 8**. Una
+workstation de 64 GB y una laptop de 8 GB informan lo mismo. Por eso los tramos
+por encima de 8 GB solo se alcanzan con `deviceMemoryOverrideGB`, que es lo que
+podría pasar una app de escritorio.
+
+### Cuatro modos, cuatro límites distintos
+
+Un único "tamaño máximo de archivo" sería erróneo en las dos direcciones a la
+vez, porque **la memoria la determina el algoritmo, no el tamaño**:
+
+| Modo | Qué guarda | Memoria | Medido sobre 516 MB / 7,9 M filas |
+|---|---|---|---|
+| Escaneo básico | nada por fila | O(columnas) | **16 MB**, 7,6 s |
+| Limpieza estándar | columnas tipadas | O(filas) | 727 MB, 17,2 s |
+| Duplicados globales | + tabla de hashes | O(filas) | +128 MB |
+| Análisis completo | + orden para cuantiles | O(filas) | +8 B/fila |
+
+El escaneo básico (`scan_only`) no materializa nada: cuenta filas, faltantes,
+inválidos y tipos, y lleva momentos por Welford. La memoria WASM **no creció ni
+una vez** sobre el archivo de 516 MB — se quedó en los 16 MB iniciales. Por eso
+ese modo no tiene límite de tamaño derivado de memoria, y el sistema no le
+inventa uno.
+
+### Archivos
+
+```
+js/processingLimits.ts    todas las constantes, con su procedencia documentada
+js/deviceProfiler.ts      detección de señales + cálculo del presupuesto
+js/preflight.ts           estimación de filas y recomendación por modo
+js/telemetry.ts           métricas locales y monitor de memoria en vivo
+js/csvclean.worker.ts     procesamiento fuera del hilo principal
+js/workerClient.ts        API del lado del hilo principal
+js/deviceProfileView.ts   panel "Dispositivo y procesamiento"
+```
+
+Los tests viven en `quantbay/tests/cleaner/` porque ahí está el vitest del
+proyecto:
+
+```bash
+npm --prefix quantbay run test
+```
 
 ## Estructura
 
