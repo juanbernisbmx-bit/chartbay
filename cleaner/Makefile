@@ -47,7 +47,7 @@ EMCC     ?= em++
 WASM_DIR := ../web/static/wasm
 WASM_OUT := $(WASM_DIR)/csvclean.js
 
-EM_EXPORTS := _cbc_alloc,_cbc_free,_cbc_heap_bytes,_cbc_reserve_heap,_cbc_create,_cbc_destroy,_cbc_feed,_cbc_finish,_cbc_error,_cbc_row_count,_cbc_column_count,_cbc_column_name,_cbc_column_type,_cbc_column_values,_cbc_column_mask,_cbc_column_codes,_cbc_level_count,_cbc_level_name,_cbc_text_blob,_cbc_text_offsets,_cbc_release_column,_cbc_report_json
+EM_EXPORTS := _cbc_alloc,_cbc_free,_cbc_heap_bytes,_cbc_reserve_heap,_cbc_create,_cbc_destroy,_cbc_feed,_cbc_finish,_cbc_error,_cbc_row_count,_cbc_column_count,_cbc_column_name,_cbc_column_type,_cbc_column_values,_cbc_column_mask,_cbc_column_codes,_cbc_level_count,_cbc_level_name,_cbc_text_blob,_cbc_text_offsets,_cbc_release_column,_cbc_csv,_cbc_csv_length,_cbc_report_json
 
 # Memory settings, and why each one is what it is:
 #

@@ -1,6 +1,16 @@
-export type ChartBayVersion = 'lite' | 'pro' | 'mega_pro';
+/**
+ * Las dos versiones son dos MOTORES, no una escalera.
+ *
+ * Lite corre entero en el navegador con TypeScript y el limpiador en WASM, así
+ * que aguanta archivos grandes. Pro levanta Python en el navegador para usar
+ * statsmodels de verdad, y por eso su techo de archivo es más bajo: le pasa el
+ * CSV entero como texto a Python y encima carga numpy, pandas y statsmodels.
+ * Que Pro admita menos MB que Lite no es una limitación de producto, es lo que
+ * cuesta correr Python en una pestaña.
+ */
+export type ChartBayVersion = 'lite' | 'pro';
 
-export type ChartBayEngine = 'typescript' | 'pyodide' | 'server_python';
+export type ChartBayEngine = 'typescript' | 'pyodide';
 
 export type ChartBayVersionConfig = {
   id: ChartBayVersion;
@@ -43,7 +53,10 @@ export const CHARTBAY_VERSIONS: Record<ChartBayVersion, ChartBayVersionConfig> =
     id: 'lite',
     label: 'Lite',
     status: 'available',
-    description: 'Versión educativa. Corre entera en el navegador: el CSV se limpia y se tipa con un motor en C++ compilado a WebAssembly, y el cálculo lo hace el motor TypeScript.',
+    description:
+      'Motor TypeScript en el navegador, con el CSV limpiado y tipado por un motor ' +
+      'en C++ compilado a WebAssembly. Es la versión que aguanta archivos grandes: ' +
+      'OLS, RLS, formas funcionales, dummies, diagnósticos y series de tiempo.',
     // Medido: 516 MB y 7,9 M de filas se procesan en 17 s con 727 MB de heap
     // WASM. El tope de 100 MB deja margen sobre eso y, por encima, el preflight
     // avisa según el equipo de cada uno. Era 2 MB, calculado para cuando esto
@@ -62,7 +75,8 @@ export const CHARTBAY_VERSIONS: Record<ChartBayVersion, ChartBayVersionConfig> =
       'lógica que Lite), intercepto automático, errores estándar clásicos o robustos (HC1/HC3), diagnóstico ' +
       'Breusch-Pagan y test de restricciones lineales Rβ = q (Wald/F vía statsmodels, sin re-estimar los ' +
       'coeficientes bajo la restricción). En series de tiempo Pro incluye ADF, ACF, PACF, Ljung-Box, ARIMA ' +
-      'manual, forecast con intervalos, gráfico e índice temporal opcional con fechas reales cuando el CSV lo permite.',
+      'manual, forecast con intervalos, gráfico e índice temporal opcional con fechas reales cuando el CSV lo permite. ' +
+      'Admite archivos más chicos que Lite: correr Python en el navegador cuesta memoria.',
     // Sin cambios a propósito. Pro no usa el limpiador: le pasa el CSV entero
     // como texto a Python, que además carga numpy, pandas y statsmodels en el
     // navegador. Ese perfil de memoria no se midió nunca, así que subir el tope
@@ -73,23 +87,9 @@ export const CHARTBAY_VERSIONS: Record<ChartBayVersion, ChartBayVersionConfig> =
       ...LITE_FEATURES,
       robustErrors: true,
       pyodideStatsmodels: true,
-      largeFiles: true,
-    },
-  },
-  mega_pro: {
-    id: 'mega_pro',
-    label: 'Mega Pro',
-    status: 'locked',
-    description: 'Mega Pro estará orientado a archivos grandes, series de tiempo avanzadas y finanzas cuantitativas.',
-    maxCsvSizeMb: 50,
-    engine: 'server_python',
-    features: {
-      ...LITE_FEATURES,
-      robustErrors: true,
-      pyodideStatsmodels: true,
-      advancedTimeSeries: true,
-      quantFinance: true,
-      largeFiles: true,
+      // largeFiles queda en false: es justamente Lite la que aguanta los
+      // archivos grandes. Marcarlo acá era parte de la lectura de escalera.
+      largeFiles: false,
     },
   },
 };

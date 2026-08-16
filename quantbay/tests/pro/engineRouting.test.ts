@@ -15,7 +15,4 @@ describe('engineRouting', () => {
     expect(resolveEngineAction('pro')).toBe('pro_pyodide');
   });
 
-  it('Mega Pro sigue bloqueado', () => {
-    expect(resolveEngineAction('mega_pro')).toBe('blocked');
-  });
 });

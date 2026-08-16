@@ -22,10 +22,12 @@ describe('renderVersionInfo', () => {
     expect(desc).toContain('índice temporal opcional');
   });
 
-  it('still shows the Lite description for clarity', () => {
+  it('describe Lite por su motor, no por su lugar en una escalera', () => {
     renderVersionInfo(getVersionConfig('lite'));
 
     expect(document.getElementById('qb-version-status')?.textContent).toBe('Disponible');
-    expect(document.getElementById('qb-version-desc')?.textContent).toContain('Versión educativa');
+    const desc = document.getElementById('qb-version-desc')?.textContent ?? '';
+    expect(desc).toContain('Motor TypeScript');
+    expect(desc).toContain('archivos grandes');
   });
 });

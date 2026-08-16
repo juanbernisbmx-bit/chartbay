@@ -22,19 +22,19 @@ describe('chartbayVersions', () => {
     expect(pro.description).toContain('ChartBay Pro v1');
     expect(pro.description).toContain('ARIMA');
     expect(pro.description).toContain('índice temporal opcional');
+    // Pro admite menos MB que Lite a propósito, y la copia lo dice: no es una
+    // escalera, son dos motores con costos distintos.
+    expect(pro.maxCsvSizeMb).toBeLessThan(getVersionConfig('lite').maxCsvSizeMb);
+    expect(pro.description).toContain('archivos más chicos que Lite');
   });
 
-  it('Mega Pro config matches spec', () => {
-    const megaPro = getVersionConfig('mega_pro');
-    expect(megaPro.id).toBe('mega_pro');
-    expect(megaPro.maxCsvSizeMb).toBe(50);
-    expect(megaPro.engine).toBe('server_python');
-    expect(megaPro.status).toBe('locked');
+  it('solo hay dos versiones, y son dos motores distintos', () => {
+    const ids = Object.keys(CHARTBAY_VERSIONS);
+    expect(ids).toEqual(['lite', 'pro']);
+    expect(getVersionConfig('lite').engine).toBe('typescript');
+    expect(getVersionConfig('pro').engine).toBe('pyodide');
   });
 
-  it('all three versions are defined', () => {
-    expect(Object.keys(CHARTBAY_VERSIONS).sort()).toEqual(['lite', 'mega_pro', 'pro']);
-  });
 
   describe('validateCsvFileSize', () => {
     it('accepts a file within the Lite limit', () => {
@@ -66,14 +66,6 @@ describe('chartbayVersions', () => {
       expect(result.ok).toBe(false);
     });
 
-    it('rejects a file over the Mega Pro limit', () => {
-      const result = validateCsvFileSize(51 * 1024 * 1024, getVersionConfig('mega_pro'));
-      expect(result.ok).toBe(false);
-    });
 
-    it('accepts a file within the Mega Pro limit', () => {
-      const result = validateCsvFileSize(50 * 1024 * 1024, getVersionConfig('mega_pro'));
-      expect(result.ok).toBe(true);
-    });
   });
 });

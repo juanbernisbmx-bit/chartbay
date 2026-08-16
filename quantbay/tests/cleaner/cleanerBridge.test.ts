@@ -31,6 +31,7 @@ function table(rows: number, columns: CleanedTable['columns']): CleanedTable {
     report: { ...emptyReport, rowsOut: rows, columnsOut: columns.length },
     column: name => byName.get(name),
     borrowed: false,
+    toCsv: () => null,
     dispose: () => {},
   };
 }

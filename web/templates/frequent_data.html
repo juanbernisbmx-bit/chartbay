@@ -18,6 +18,7 @@
       <nav class="mainnav">
         <a href="{{ url_for('dashboard') }}">Inicio</a><span class="sep">·</span>
         <a href="{{ url_for('econometria') }}">Econometría</a><span class="sep">·</span>
+        <a href="{{ url_for('limpiador') }}">Limpiador</a><span class="sep">·</span>
         {% if secciones.agro %}<a href="{{ url_for('agro') }}">Agro</a><span class="sep">·</span>{% endif %}
         {% if secciones.mercados %}<a href="{{ url_for('finanzas') }}">Finanzas Quant</a><span class="sep">·</span>{% endif %}
         <strong>Datos</strong><span class="sep">·</span>

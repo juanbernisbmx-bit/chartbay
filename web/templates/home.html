@@ -19,6 +19,7 @@
         {% if secciones.agro %}<a href="{{ url_for('agro') }}">Agro</a><span class="sep">.</span>{% endif %}
         {% if secciones.mercados %}<a href="{{ url_for('finanzas') }}">Finanzas Quant</a><span class="sep">.</span>{% endif %}
         <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
+        <a href="{{ url_for('limpiador') }}">Limpiador</a><span class="sep">.</span>
         <a href="{{ url_for('guia') }}">Documentación</a><span class="sep">.</span>
         {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% endif %}
       </nav>

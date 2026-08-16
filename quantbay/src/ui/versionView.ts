@@ -5,7 +5,6 @@ import { escapeHtml } from '../utils/format';
 const ENGINE_LABELS: Record<ChartBayVersionConfig['engine'], string> = {
   typescript: 'TypeScript en navegador',
   pyodide: 'Pyodide / Python en navegador',
-  server_python: 'Python avanzado / servidor',
 };
 
 const STATUS_LABELS: Record<ChartBayVersionConfig['status'], string> = {
