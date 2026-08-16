@@ -1,7 +1,13 @@
 import { rowCountOf, type ParsedCSV } from '../csvParser';
 import { AnalysisValidationError } from '../services/analysisService';
 
-export const CSV_LIMITS = { maxRows: 5000, maxCols: 50, maxXVars: 20 };
+// maxRows acota la REGRESIÓN, no la lectura. El limpiador entrega columnas
+// tipadas sin problema, pero getValidRowsFrom arma la matriz de diseño como
+// number[][] — un array de JS por fila — y ese sigue siendo el cuello. 500 000
+// filas por 3 regresoras son unos 40 MB de arrays; era 5 000, un tope pensado
+// para cuando el CSV entero vivía como objetos por fila.
+// Subir de acá pide convertir la matriz de diseño a arrays tipados también.
+export const CSV_LIMITS = { maxRows: 500_000, maxCols: 50, maxXVars: 20 };
 
 export function checkCSVLimits(data: ParsedCSV, xNames: string[]): string | null {
   if (rowCountOf(data) > CSV_LIMITS.maxRows)

@@ -1,4 +1,4 @@
-import { getValidRows, type ParsedCSV } from '../csvParser';
+import { getValidRows, getValidRowsFrom, type ParsedCSV } from '../csvParser';
 import { computeVIF, runOLS, type RegressionResult } from '../regression';
 import { pearsonMatrix } from '../statistics';
 
@@ -396,7 +396,7 @@ export function runQuantAnalysis(
     throw new AnalysisValidationError(validationIssues);
   }
 
-  const { X, y, dropped } = getValidRows(csvData.rows, yName, xNames);
+  const { X, y, dropped } = getValidRowsFrom(csvData, yName, xNames);
   if (y.length < xNames.length + 2) {
     throw new Error(`Observaciones insuficientes (${y.length}) para ${xNames.length} variable(s). Necesitas mas filas validas que parametros a estimar; agrega datos o usa menos variables X.`);
   }

@@ -8,7 +8,7 @@
 // data (see pro/pyodide/pythonOlsRunner.ts): this check does not replace that
 // one, it just gives faster feedback for the common case.
 
-import { getValidRows, type ParsedCSV } from '../csvParser';
+import { getValidRowsFrom, type ParsedCSV } from '../csvParser';
 import { applyFunctionalTransform, type FunctionalForm } from '../functionalForms';
 
 /**
@@ -34,7 +34,7 @@ export function checkProFunctionalDomain(
     return 'No se puede aplicar log(X) a una variable categórica. Usá lin-lin/log-lin o agregá una X numérica.';
   }
   try {
-    const { X, y } = getValidRows(csvData.rows, yName, xNames);
+    const { X, y } = getValidRowsFrom(csvData, yName, xNames);
     applyFunctionalTransform(y, X, yName, xNames, form, noLogXNames);
     return null;
   } catch (err) {

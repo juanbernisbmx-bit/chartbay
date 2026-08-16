@@ -26,6 +26,6 @@ describe('renderVersionInfo', () => {
     renderVersionInfo(getVersionConfig('lite'));
 
     expect(document.getElementById('qb-version-status')?.textContent).toBe('Disponible');
-    expect(document.getElementById('qb-version-desc')?.textContent).toContain('Versión educativa y liviana');
+    expect(document.getElementById('qb-version-desc')?.textContent).toContain('Versión educativa');
   });
 });

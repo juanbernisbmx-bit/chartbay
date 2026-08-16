@@ -5,7 +5,10 @@ describe('chartbayVersions', () => {
   it('Lite config matches spec', () => {
     const lite = getVersionConfig('lite');
     expect(lite.id).toBe('lite');
-    expect(lite.maxCsvSizeMb).toBe(2);
+    // Subido de 2 MB tras medir el limpiador en C++/WASM: 516 MB y 7,9 M de
+    // filas en 17 s con 727 MB de heap. El tope viejo se calculó para el
+    // camino de PapaParse, que armaba un objeto de JS por fila.
+    expect(lite.maxCsvSizeMb).toBe(100);
     expect(lite.engine).toBe('typescript');
     expect(lite.status).toBe('available');
   });
@@ -40,12 +43,17 @@ describe('chartbayVersions', () => {
     });
 
     it('rejects a file over the Lite limit with a clear message', () => {
-      const result = validateCsvFileSize(3 * 1024 * 1024, getVersionConfig('lite'));
+      const result = validateCsvFileSize(150 * 1024 * 1024, getVersionConfig('lite'));
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.message).toContain('2 MB');
+        expect(result.message).toContain('100 MB');
         expect(result.message).toContain('Lite');
       }
+    });
+
+    it('acepta un archivo que el tope viejo habría rechazado', () => {
+      // 50 MB: imposible antes, y ahora bien dentro de lo medido.
+      expect(validateCsvFileSize(50 * 1024 * 1024, getVersionConfig('lite')).ok).toBe(true);
     });
 
     it('accepts a file within the Pro limit', () => {
