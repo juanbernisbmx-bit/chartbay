@@ -1,11 +1,11 @@
-import type { ParsedCSV } from '../csvParser';
+import { rowCountOf, type ParsedCSV } from '../csvParser';
 import { AnalysisValidationError } from '../services/analysisService';
 
 export const CSV_LIMITS = { maxRows: 5000, maxCols: 50, maxXVars: 20 };
 
 export function checkCSVLimits(data: ParsedCSV, xNames: string[]): string | null {
-  if (data.rows.length > CSV_LIMITS.maxRows)
-    return `El CSV tiene ${data.rows.length} filas. El máximo soportado es ${CSV_LIMITS.maxRows}. Reducí el dataset antes de calcular.`;
+  if (rowCountOf(data) > CSV_LIMITS.maxRows)
+    return `El CSV tiene ${rowCountOf(data)} filas. El máximo soportado es ${CSV_LIMITS.maxRows}. Reducí el dataset antes de calcular.`;
   if (data.headers.length > CSV_LIMITS.maxCols)
     return `El CSV tiene ${data.headers.length} columnas. El máximo soportado es ${CSV_LIMITS.maxCols}.`;
   if (xNames.length > CSV_LIMITS.maxXVars)

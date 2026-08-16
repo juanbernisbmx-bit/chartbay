@@ -1,3 +1,4 @@
+import { materializeRows } from '../csvParser';
 import type { ParsedCSV } from '../csvParser';
 import { $ } from '../app/dom';
 import { escapeHtml } from '../utils/format';
@@ -176,7 +177,7 @@ export function renderProTimeSeriesSelectors(
   const dateSelect = $('qb-pro-ts-date') as HTMLSelectElement | null;
   const runButton = $('qb-pro-ts-run') as HTMLButtonElement | null;
 
-  const valueColumns = getProTimeSeriesValueColumns(data.rows, data.headers);
+  const valueColumns = getProTimeSeriesValueColumns(materializeRows(data), data.headers);
   if (valueColumns.length === 0) {
     renderProTimeSeriesNoData('No se detectó una columna numérica para analizar como serie de tiempo.');
     return;

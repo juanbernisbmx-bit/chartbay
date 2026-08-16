@@ -4,11 +4,11 @@
  * high VIF (multicollinearity), and insufficient observations.
  * Returns a structured log of every action taken and its statistical rationale.
  */
-import { getValidRows, type ParsedCSV } from '../csvParser';
+import { getValidRowsFrom, type ParsedCSV } from '../csvParser';
 import { computeVIF, runOLS } from '../regression';
 import { pearsonMatrix } from '../statistics';
 import {
-  getCompleteNumericColumns,
+  getCompleteNumericColumnsFrom,
   isBinaryTarget,
   detectLeakage,
   runLogistic,
@@ -64,7 +64,10 @@ export function autoRepairAndAnalyze(
   let xNames = [...xNamesInput];
 
   function getData() {
-    return getValidRows(csvData.rows, yName, xNames);
+    // Reads the typed columns directly when the dataset came from the WASM
+    // cleaner, so the repeated re-fits below walk Float64Arrays instead of
+    // rebuilding the design matrix out of row objects each time.
+    return getValidRowsFrom(csvData, yName, xNames);
   }
 
   // ── STEP 1: Remove perfectly collinear X pairs (|r| ≥ 0.9999) ────────────
@@ -219,7 +222,7 @@ export function autoRepairAndAnalyze(
   // ── Final model ───────────────────────────────────────────────────────────
   const { X: Xf, y: yf, dropped } = getData();
   const finalResult = runOLS({ X: Xf, y: yf, featureNames: xNames, yName });
-  const allColData  = getCompleteNumericColumns(csvData.rows, csvData.numericColumns);
+  const allColData  = getCompleteNumericColumnsFrom(csvData);
   const binary      = isBinaryTarget(yf);
   const leaks       = detectLeakage(Xf, yf, xNames);
   let   logitResult = null;

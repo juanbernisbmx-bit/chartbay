@@ -653,6 +653,10 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <!-- Limpiador de CSV en C++/WebAssembly. Servido desde el propio dominio, no
+       desde un CDN: los datos del usuario no salen del navegador y el .wasm
+       viaja compilado en el repo. Si no carga, el motor cae solo a PapaParse. -->
+  <script src="{{ url_for('static', filename='wasm/csvclean.js') }}"></script>
   <script src="{{ url_for('static', filename='js/quantbay.bundle.js') }}"></script>
 </body>
 </html>

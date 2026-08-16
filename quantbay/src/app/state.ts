@@ -14,6 +14,9 @@ export interface QuantBayAppState {
   activeVersion: ChartBayVersion;
   activeFunctionalForm: FunctionalForm;
   csvData: ParsedCSV | null;
+  /** Run-log lines produced while loading (cleaner actions, warnings). */
+  loadNotes?: string[];
+  loadEngine?: 'wasm' | 'papaparse';
   /** Raw CSV text of the loaded file/demo — needed by the Pro (Pyodide) engine. */
   csvText: string | null;
   activeChart: any;

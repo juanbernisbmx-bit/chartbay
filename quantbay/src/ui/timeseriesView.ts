@@ -1,3 +1,4 @@
+import { materializeRows } from '../csvParser';
 import type { ParsedCSV } from '../csvParser';
 import type {
   TimeSeriesACFDiagnostics,
@@ -50,12 +51,12 @@ export function getTimeSeriesColumnDefaults(
   selectedDateColumn?: string,
   selectedValueColumn?: string
 ): { dateColumn: string; valueColumn: string; valueColumns: string[]; detectedDateColumn: string | null } {
-  const detectedDateColumn = detectDateColumn(data.rows, data.headers);
+  const detectedDateColumn = detectDateColumn(materializeRows(data), data.headers);
   const dateColumn =
     (selectedDateColumn && data.headers.includes(selectedDateColumn))
       ? selectedDateColumn
       : detectedDateColumn ?? data.headers[0] ?? '';
-  const valueColumns = getTimeSeriesValueColumns(data.rows, data.headers, dateColumn);
+  const valueColumns = getTimeSeriesValueColumns(materializeRows(data), data.headers, dateColumn);
   const valueColumn =
     (selectedValueColumn && valueColumns.includes(selectedValueColumn))
       ? selectedValueColumn
