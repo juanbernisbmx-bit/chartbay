@@ -62,8 +62,10 @@ function formatDuration(seconds: number): string {
 function memoryLine(profile: DeviceProfile): string {
   if (profile.estimatedDeviceMemoryGB === undefined) return 'no informada por el navegador';
   if (profile.memoryOverrideApplied) return `${profile.estimatedDeviceMemoryGB} GB`;
-  // Saying "8 GB" flat would misrepresent a clamped value.
-  if (profile.estimatedDeviceMemoryGB >= 8) return '8 GB o más (aprox.)';
+  // Only exactly 8 is the clamped, ambiguous reading. A browser that reports
+  // more is not clamping there, and saying "8 GB o más" for a 16 would both
+  // understate the machine and contradict the technical details below.
+  if (profile.estimatedDeviceMemoryGB === 8) return '8 GB o más (aprox.)';
   return `~${profile.estimatedDeviceMemoryGB} GB (aprox.)`;
 }
 

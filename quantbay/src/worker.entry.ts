@@ -14,4 +14,9 @@ declare function importScripts(...urls: string[]): void;
 
 importScripts('/static/wasm/csvclean.js');
 
+import { setCleanerBaseUrl } from '../../cleaner/js/csvclean';
 import '../../cleaner/js/csvclean.worker';
+
+// Without this the module resolves csvclean.wasm next to the worker script
+// instead of next to the glue, and gets a 404 page where the binary should be.
+setCleanerBaseUrl('/static/wasm/');

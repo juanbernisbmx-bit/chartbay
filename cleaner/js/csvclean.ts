@@ -285,10 +285,30 @@ function encodeOptions(
 // ── Module loading ────────────────────────────────────────────────────────────
 
 let modulePromise: Promise<WasmModule> | null = null;
+let moduleBaseUrl = '';
+
+/**
+ * Where csvclean.wasm lives, as a URL prefix ending in '/'.
+ *
+ * Emscripten derives that path from `self.location` of whatever context is
+ * running, which is wrong inside a worker: the worker script sits in one
+ * directory and pulls the glue in from another with importScripts, so the
+ * module looks for the .wasm next to the *worker* and gets a 404 page back.
+ * The failure is loud but confusing — "expected magic word 00 61 73 6d, found
+ * 3c 21 64 6f", which is the first four bytes of "<!doctype".
+ */
+export function setCleanerBaseUrl(url: string): void {
+  moduleBaseUrl = url.endsWith('/') ? url : `${url}/`;
+}
 
 /** Loads (once) the WASM module emitted by `make wasm`. */
 export function loadCleaner(config?: Record<string, unknown>): Promise<WasmModule> {
-  if (!modulePromise) modulePromise = CsvCleanModule(config);
+  if (!modulePromise) {
+    modulePromise = CsvCleanModule({
+      ...(moduleBaseUrl ? { locateFile: (path: string) => `${moduleBaseUrl}${path}` } : {}),
+      ...config,
+    });
+  }
   return modulePromise;
 }
 

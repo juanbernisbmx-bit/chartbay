@@ -149,7 +149,12 @@ _CSP_QUANTBAY = (
     "frame-ancestors 'none'"
 )
 
-_QUANTBAY_PATHS = {"/econometria", "/agro"}
+# El worker del limpiador de CSV se incluye acá porque un Worker corre bajo el
+# CSP de la respuesta de su PROPIO script, no bajo el del documento que lo
+# creó. Sin esta línea, compilar WebAssembly dentro del worker queda bloqueado
+# aunque /econometria tenga el permiso, y el limpiador cae en silencio al
+# lector clásico.
+_QUANTBAY_PATHS = {"/econometria", "/agro", "/static/js/quantbay.worker.js"}
 
 
 @app.after_request
