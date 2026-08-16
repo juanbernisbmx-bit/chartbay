@@ -124,8 +124,11 @@ describe('calculateMemoryBudget', () => {
   });
 
   it('8 GB device gets the second tier', () => {
+    // Raised from 512 MB to 1 GB: the old figure advised against a 500 MB file
+    // that measurably works (727 MB of real WASM heap). Still ~12 % of the
+    // machine, so the posture stays conservative.
     const budget = calculateMemoryBudget(profileWith({ estimatedDeviceMemoryGB: 8 }));
-    expect(budget.targetMemoryBytes).toBe(512 * MB);
+    expect(budget.targetMemoryBytes).toBe(1024 * MB);
     expect(budget.recommendedChunkBytes).toBe(16 * MB);
   });
 
@@ -174,7 +177,7 @@ describe('calculateMemoryBudget', () => {
     const budget = calculateMemoryBudget(
       profileWith({
         estimatedDeviceMemoryGB: 8,
-        // A 512 MB JS heap ceiling: half of it is below the 512 MB tier target.
+        // A 512 MB JS heap ceiling: half of it is well below the 1 GB tier target.
         jsHeapLimitBytes: 512 * MB,
       })
     );
