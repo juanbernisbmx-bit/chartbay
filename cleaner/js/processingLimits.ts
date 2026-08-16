@@ -54,9 +54,14 @@ export interface MemoryTier {
  * that can supply a real figure (`deviceMemoryOverrideGB`), which is what a
  * future desktop build would do.
  */
+// The 8 GB rung was 512 MB and got raised to 1 GB after measurement: a 516 MB
+// CSV of ordinary shape really uses 727 MB of WASM heap, so the old budget
+// advised against a file that demonstrably works. 1 GB is still only ~12 % of
+// an 8 GB machine, which keeps the posture conservative while no longer
+// crying wolf on the most common case this tool exists for.
 export const MEMORY_TIERS: MemoryTier[] = [
   { maxDeviceMemoryGB: 4, targetMemoryBytes: 256 * MB, chunkBytes: 8 * MB },
-  { maxDeviceMemoryGB: 8, targetMemoryBytes: 512 * MB, chunkBytes: 16 * MB },
+  { maxDeviceMemoryGB: 8, targetMemoryBytes: 1 * GB, chunkBytes: 16 * MB },
   { maxDeviceMemoryGB: 16, targetMemoryBytes: 1 * GB, chunkBytes: 32 * MB },
   { maxDeviceMemoryGB: Infinity, targetMemoryBytes: 1.5 * GB, chunkBytes: 64 * MB },
 ];

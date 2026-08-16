@@ -173,32 +173,27 @@ describe('mode recommendations', () => {
     expect(result.recommendedMode).toBe('full-analysis');
   });
 
-  it('500 MB is advised against on an 8 GB device — and says so without blocking', async () => {
-    // Worth being precise about, because it looks like a false alarm and is not.
-    // A real 516 MB file of this exact shape measured 727 MB of WASM heap. The
-    // 8 GB tier budgets 512 MB, which is ~6 % of the machine's RAM. So the
-    // advice is "not recommended" for something that does in fact run: that is
-    // the deliberate cost of a conservative budget, not a modelling error.
-    //
-    // What matters is that it stays a recommendation. Nothing is blocked, the
-    // estimate is in the right neighbourhood of the measurement, and the
-    // streaming mode remains available.
+  it('500 MB of ordinary rows is safe on an 8 GB device', async () => {
+    // The case the 8 GB tier was recalibrated for. A real 516 MB file of this
+    // exact shape measured 727 MB of WASM heap; against the old 512 MB budget
+    // the advice was "not recommended" for something that demonstrably runs.
+    // With the tier at 1 GB the estimate lands where the measurement did and
+    // the verdict matches reality.
     const result = await preflight(fakeFile(500 * MB, wideCsv(3000)), budget8GB);
     const clean = result.recommendations['standard-clean'];
 
-    expect(clean.status).toBe('not-recommended');
-    expect(clean.status).not.toBe('blocked');
+    expect(clean.status).toBe('safe');
     expect(clean.estimatedMemoryBytes).toBeGreaterThan(500 * MB);
     expect(clean.estimatedMemoryBytes).toBeLessThan(800 * MB);
-    expect(result.recommendations['basic-scan'].status).toBe('safe');
   });
 
-  it('the same file on a device with a real 32 GB budget is fine', async () => {
-    const roomy = calculateMemoryBudget(
-      profileWith({ estimatedDeviceMemoryGB: 32, memoryOverrideApplied: true })
-    );
-    const result = await preflight(fakeFile(500 * MB, wideCsv(3000)), roomy);
-    expect(result.recommendations['standard-clean'].status).toBe('safe');
+  it('the same file on a 4 GB device is still advised against', async () => {
+    // The tier below did not move, so a constrained machine still gets warned
+    // about the same file. Raising one rung must not flatten the ladder.
+    const modest = calculateMemoryBudget(profileWith({ estimatedDeviceMemoryGB: 4 }));
+    const result = await preflight(fakeFile(500 * MB, wideCsv(3000)), modest);
+    expect(result.recommendations['standard-clean'].status).toBe('not-recommended');
+    expect(result.recommendations['basic-scan'].status).toBe('safe');
   });
 
   it('the same 500 MB in very narrow rows costs much more', async () => {
