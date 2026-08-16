@@ -154,7 +154,7 @@ _CSP_QUANTBAY = (
 # creó. Sin esta línea, compilar WebAssembly dentro del worker queda bloqueado
 # aunque /econometria tenga el permiso, y el limpiador cae en silencio al
 # lector clásico.
-_QUANTBAY_PATHS = {"/econometria", "/agro", "/static/js/quantbay.worker.js"}
+_QUANTBAY_PATHS = {"/econometria", "/agro", "/limpiador", "/static/js/quantbay.worker.js"}
 
 
 @app.after_request
@@ -228,6 +228,7 @@ seed_starter_bots()
 # sección vuelven a funcionar tal cual estaban.
 SECCIONES = {
     "econometria": True,
+    "limpiador": True,
     "datos": True,
     "agro": False,
     "mercados": False,
@@ -767,6 +768,16 @@ def heatmap():
 @app.route("/guia")
 def guia():
     return render_template("guia.html")
+
+
+@app.route("/limpiador")
+def limpiador():
+    """Limpiador de CSV: sección propia, sin relación con econometría.
+
+    Sirve su propio bundle (quantbay.cleaner.js, ~21 kB) en vez del motor
+    econométrico completo, porque no usa nada de él.
+    """
+    return render_template("limpiador.html")
 
 
 @app.route("/econometria")

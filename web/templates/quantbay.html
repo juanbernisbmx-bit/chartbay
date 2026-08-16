@@ -39,6 +39,7 @@
         {% if secciones.agro %}{% if qb_module == 'agro' %}<strong>Agro</strong>{% else %}<a href="{{ url_for('agro') }}">Agro</a>{% endif %}<span class="sep">.</span>{% endif %}
         {% if secciones.mercados %}<a href="{{ url_for('finanzas') }}">Finanzas Quant</a><span class="sep">.</span>{% endif %}
         <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
+        <a href="{{ url_for('limpiador') }}">Limpiador</a><span class="sep">.</span>
         <a href="{{ url_for('guia') }}">Documentación</a><span class="sep">.</span>
         {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% endif %}
       </nav>
@@ -81,9 +82,8 @@
       </div>
       <label for="qb-version" class="qb-label">Versión actual</label>
       <select id="qb-version" style="width:100%;max-width:260px">
-        <option value="lite">Lite</option>
-        <option value="pro">Pro</option>
-        <option value="mega_pro">Mega Pro</option>
+        <option value="lite">Lite — TypeScript</option>
+        <option value="pro">Pro — Python (Pyodide)</option>
       </select>
       <div class="qb-runlog" style="margin-top:8px">
         <div>Motor: <strong id="qb-version-engine"></strong></div>

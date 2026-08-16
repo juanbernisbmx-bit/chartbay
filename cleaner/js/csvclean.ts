@@ -45,6 +45,8 @@ interface WasmModule {
   _cbc_text_blob(handle: number, j: number): number;
   _cbc_text_offsets(handle: number, j: number): number;
   _cbc_release_column(handle: number, j: number): void;
+  _cbc_csv(handle: number): number;
+  _cbc_csv_length(handle: number): number;
   _cbc_report_json(handle: number): number;
 }
 
@@ -122,6 +124,15 @@ export interface CleanOptions {
   copy?: boolean;
   /** Threshold for the automatic choice above. Default 64 MB. */
   borrowAboveBytes?: number;
+  /**
+   * Mantiene vivo el handle para poder pedir el CSV limpio después.
+   *
+   * Por defecto una tabla copiada libera el handle apenas termina de copiar,
+   * y ahí `toCsv()` estaría leyendo memoria ya liberada. Con esto el handle
+   * sobrevive hasta `dispose()`, que pasa a ser obligatorio también en el
+   * camino copiado. Solo lo necesita quien vaya a exportar.
+   */
+  retainForCsv?: boolean;
 }
 
 /** mask[i] === 1 when row i has a value; 0 when it is missing. */
@@ -203,6 +214,13 @@ export interface CleanReport {
 
 export interface CleanedTable {
   rows: number;
+  /**
+   * El CSV limpio, generado a pedido.
+   *
+   * Materializa el texto entero, así que se llama cuando el usuario pide la
+   * descarga y no antes. Devuelve null en una tabla ya liberada con dispose().
+   */
+  toCsv(): string | null;
   columns: CleanColumn[];
   report: CleanReport;
   column(name: string): CleanColumn | undefined;
@@ -407,9 +425,12 @@ export async function cleanCsv(file: Blob, rawOptions: CleanOptions = {}): Promi
     if (code !== 0) throw new Error(ERRORS[code] ?? ERRORS[3]);
     rowsProcessed = wasm._cbc_row_count(handle);
 
-    const table = readTable(wasm, handle, decideBorrow(wasm, handle, options));
+    const table = readTable(wasm, handle, decideBorrow(wasm, handle, options), options.retainForCsv);
     if (table.borrowed) liveBorrowed = table;
-    else wasm._cbc_destroy(handle);
+    // Con retainForCsv el handle queda vivo para que toCsv() pueda leerlo; lo
+    // libera dispose(). Sin él, una tabla copiada no necesita el handle para
+    // nada más y se destruye acá mismo.
+    else if (!options.retainForCsv) wasm._cbc_destroy(handle);
     return table;
   } catch (err) {
     wasm._cbc_destroy(handle);
@@ -451,7 +472,12 @@ function decideBorrow(wasm: WasmModule, handle: number, options: CleanOptions): 
   return bytes > (options.borrowAboveBytes ?? 64 * 1024 * 1024);
 }
 
-function readTable(wasm: WasmModule, handle: number, borrow: boolean): CleanedTable {
+function readTable(
+  wasm: WasmModule,
+  handle: number,
+  borrow: boolean,
+  retained = false
+): CleanedTable {
   const rows = wasm._cbc_row_count(handle);
   const count = wasm._cbc_column_count(handle);
   const columns: CleanColumn[] = [];
@@ -515,7 +541,11 @@ function readTable(wasm: WasmModule, handle: number, borrow: boolean): CleanedTa
 
     // Once copied out, the module can reuse the space. It does not shrink the
     // WASM heap — nothing does — but it keeps the next file from growing it.
-    if (!borrow) wasm._cbc_release_column(handle, j);
+    //
+    // Salvo que haga falta exportar: liberar la columna vacía sus vectores del
+    // lado C++, y to_csv escribiría un archivo con el encabezado correcto y
+    // todas las filas en blanco.
+    if (!borrow && !retained) wasm._cbc_release_column(handle, j);
   }
 
   const report = JSON.parse(reportJson) as CleanReport;
@@ -530,10 +560,28 @@ function readTable(wasm: WasmModule, handle: number, borrow: boolean): CleanedTa
     report,
     borrowed: borrow,
     column: name => byName.get(name),
+    toCsv() {
+      if (disposed) return null;
+      if (!borrow && !retained) {
+        throw new Error(
+          'El handle ya se liberó. Pedí la limpieza con retainForCsv: true para poder exportar.'
+        );
+      }
+      // El puntero apunta a un std::string vivo dentro del handle; UTF8ToString
+      // lo copia a JavaScript, que es lo que hay que hacer igual para poder
+      // descargarlo.
+      const ptr = wasm._cbc_csv(handle);
+      return ptr ? wasm.UTF8ToString(ptr) : null;
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
-      if (!borrow) return;
+      if (!borrow) {
+        // Copiada: no hay vistas que invalidar, pero el handle puede seguir
+        // vivo si se pidió retenerlo para exportar.
+        if (retained) wasm._cbc_destroy(handle);
+        return;
+      }
       if (liveBorrowed === table) liveBorrowed = null;
       // The views are dead from here on; blank them so a stale reader gets an
       // empty array rather than whatever the allocator reuses the bytes for.

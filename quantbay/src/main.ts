@@ -1,6 +1,7 @@
 import { materializeRows, parseCSVFile, parseCSVText, rowCountOf, type ParsedCSV } from './csvParser';
 import { type BridgedDataset } from './services/cleanerBridge';
 import { loadCsv, type LoadResult } from './services/cleanerLoader';
+import { takeHandoff } from './services/datasetHandoff';
 import { renderDeviceProfile } from '../../cleaner/js/deviceProfileView';
 import { detectDeviceProfile } from '../../cleaner/js/deviceProfiler';
 
@@ -519,9 +520,27 @@ async function proCsvText(): Promise<string> {
 
 // ── Upload ────────────────────────────────────────────────────────────────────
 
+/**
+ * Levanta el CSV que dejó la sección Limpiador, si hay uno.
+ *
+ * Pasa por exactamente el mismo camino que un archivo recién subido —
+ * loadFile — en vez de tener una segunda ruta de carga que después haya que
+ * mantener en paralelo. Limpiar algo ya limpio es rápido e idempotente.
+ */
+async function consumeHandoff(): Promise<void> {
+  const file = await takeHandoff();
+  if (!file) return;
+  await loadFile(file);
+  writeRunLog(['Dataset recibido desde el Limpiador.']);
+}
+
 async function onFileChange(e: Event): Promise<void> {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
+  await loadFile(file);
+}
+
+async function loadFile(file: File): Promise<void> {
 
   const sizeCheck = validateCsvFileSize(file.size, getVersionConfig(appState.activeVersion));
   if (!sizeCheck.ok) {
@@ -1224,7 +1243,7 @@ function init(): void {
   });
   $('qb-version')?.addEventListener('change', event => {
     const value = (event.target as HTMLSelectElement).value;
-    const version: ChartBayVersion = value === 'pro' || value === 'mega_pro' ? value : 'lite';
+    const version: ChartBayVersion = value === 'pro' ? 'pro' : 'lite';
     setActiveVersion(version);
   });
   $('qb-ts-date')?.addEventListener('change', onTimeSeriesDateChange);
@@ -1303,6 +1322,8 @@ function init(): void {
   applyInitialModuleLayout();
   // Vertical Agro: no-op si el flag está apagado o el panel no existe.
   initAgroVertical({ loadDataset: agroLoadDataset });
+  // Si el usuario llegó desde el Limpiador, el dataset ya está esperando.
+  void consumeHandoff();
 }
 
 if (document.readyState === 'loading') {

@@ -43,6 +43,7 @@ struct Handle {
   std::unique_ptr<Cleaner> cleaner;
   CleanResult result;
   std::string report;
+  std::string csv;
   std::vector<TextBlob> blobs;
   std::vector<std::string> name_cache;
   bool finished = false;
@@ -370,6 +371,27 @@ CBC_EXPORT void cbc_release_column(void* h, std::int32_t j) {
 }
 
 // ── Report ────────────────────────────────────────────────────────────────────
+
+// El CSV limpio, para descargar o para pasárselo a otra pantalla.
+//
+// Lo arma el mismo to_csv que usa el CLI: fechas en ISO, punto decimal,
+// comillas donde hacen falta y celda vacía para los faltantes. Se guarda en el
+// handle porque el puntero tiene que seguir vivo hasta que JavaScript lo lea.
+//
+// Ojo: materializa el CSV entero en memoria WASM. Para un archivo grande eso
+// vuelve a costar lo que pesa el texto, así que conviene llamarlo cuando el
+// usuario efectivamente pide la descarga, no de arranque.
+CBC_EXPORT const char* cbc_csv(void* h) {
+  Handle* handle = as_handle(h);
+  if (!handle || !handle->finished) return "";
+  if (handle->csv.empty()) handle->csv = to_csv(handle->result);
+  return handle->csv.c_str();
+}
+
+CBC_EXPORT std::size_t cbc_csv_length(void* h) {
+  Handle* handle = as_handle(h);
+  return (handle && handle->finished) ? handle->csv.size() : 0;
+}
 
 CBC_EXPORT const char* cbc_report_json(void* h) {
   Handle* handle = as_handle(h);
