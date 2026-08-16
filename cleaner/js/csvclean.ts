@@ -12,6 +12,10 @@
  * Build the module first:  cd cleaner && make wasm
  */
 
+import type { MemoryBudget } from './deviceProfiler';
+import type { ProcessingMode } from './preflight';
+import { MemoryMonitor, sessionTelemetry } from './telemetry';
+
 // ── Module surface ────────────────────────────────────────────────────────────
 
 interface WasmModule {
@@ -22,6 +26,8 @@ interface WasmModule {
   UTF8ToString(ptr: number): string;
   _cbc_alloc(n: number): number;
   _cbc_free(ptr: number): void;
+  _cbc_heap_bytes(): number;
+  _cbc_reserve_heap(bytes: number): number;
   _cbc_create(ints: number, nints: number, reals: number, nreals: number): number;
   _cbc_destroy(handle: number): void;
   _cbc_feed(handle: number, data: number, n: number): number;
@@ -70,7 +76,33 @@ export interface CleanOptions {
   dateThreshold?: number;
   categoricalRatio?: number;
   outlierK?: number;
-  /** Bytes handed to the core per call. Larger is marginally faster. */
+  /**
+   * Streaming profile only: row counts, missing cells, types and running
+   * moments, with nothing stored per row. Memory becomes O(columns), so the
+   * file can be far larger than available memory. Quantiles, outliers and every
+   * row-level policy are unavailable. Usually set via `mode` instead.
+   */
+  scanOnly?: boolean;
+  /**
+   * Preset that sets `scanOnly` and the duplicate flags together. Explicit
+   * options still win over whatever the mode implies.
+   */
+  mode?: ProcessingMode;
+  /**
+   * Device budget from `calculateMemoryBudget`. When present it supplies the
+   * chunk size and arms the memory monitor, which aborts cleanly rather than
+   * letting the tab be killed. Without it the old fixed defaults apply.
+   */
+  budget?: MemoryBudget;
+  /**
+   * Peak heap predicted by preflight. Used to grow WASM memory once up front
+   * instead of ~20 times, and recorded so the estimate can be scored against
+   * what actually happened.
+   */
+  estimatedMemoryBytes?: number;
+  /** Called when the monitor sees usage approaching the budget. */
+  onMemoryWarning?: (message: string, heapBytes: number) => void;
+  /** Bytes handed to the core per call. Overrides the budget's chunk size. */
   chunkBytes?: number;
   /** Called with a 0..1 fraction as the file is read. */
   onProgress?: (fraction: number) => void;
@@ -186,7 +218,7 @@ export interface CleanedTable {
 // ── Option encoding ───────────────────────────────────────────────────────────
 
 // Mirrors the Ints/Reals enums in wasm/bindings.cpp. Keep the two in step.
-const INT_SLOTS = 16;
+const INT_SLOTS = 17;
 const REAL_SLOTS = 5;
 
 const MISSING_CODES: Record<MissingPolicy, number> = {
@@ -197,6 +229,23 @@ const OUTLIER_CODES: Record<OutlierPolicy, number> = {
 };
 const RULE_CODES: Record<OutlierRule, number> = { iqr: 0, zscore: 1, mad: 2 };
 const ORDER_CODES: Record<string, number> = { unknown: 0, ymd: 1, dmy: 2, mdy: 3 };
+
+/**
+ * Expands `mode` into the individual flags. Anything the caller set explicitly
+ * survives, so a mode is a starting point rather than a straitjacket.
+ */
+export function applyMode(options: CleanOptions): CleanOptions {
+  if (!options.mode) return options;
+  const presets: Record<ProcessingMode, Partial<CleanOptions>> = {
+    // Nothing per row, and no duplicate table: this is the mode whose memory
+    // does not scale with the file at all.
+    'basic-scan': { scanOnly: true, dropDuplicateRows: false },
+    'standard-clean': { scanOnly: false, dropDuplicateRows: false },
+    'global-duplicates': { scanOnly: false, dropDuplicateRows: true },
+    'full-analysis': { scanOnly: false, dropDuplicateRows: true },
+  };
+  return { ...presets[options.mode], ...options };
+}
 
 function encodeOptions(
   options: CleanOptions,
@@ -223,6 +272,7 @@ function encodeOptions(
   ints[13] = MISSING_CODES[options.missing ?? 'keep'];
   ints[14] = OUTLIER_CODES[options.outliers ?? 'flag'];
   ints[15] = RULE_CODES[options.outlierRule ?? 'iqr'];
+  ints[16] = flag(options.scanOnly, 0);
 
   reals[0] = options.numericThreshold ?? 0.8;
   reals[1] = options.dateThreshold ?? 0.9;
@@ -262,13 +312,14 @@ let liveBorrowed: CleanedTable | null = null;
  * small results and borrows large ones, which is what makes a half-gigabyte
  * file fit in a browser tab.
  */
-export async function cleanCsv(file: Blob, options: CleanOptions = {}): Promise<CleanedTable> {
+export async function cleanCsv(file: Blob, rawOptions: CleanOptions = {}): Promise<CleanedTable> {
   if (liveBorrowed) {
     throw new Error(
       'Hay una tabla anterior tomada por referencia sobre la memoria WASM. ' +
         'Llamá a dispose() sobre ella antes de limpiar otro archivo.'
     );
   }
+  const options = applyMode(rawOptions);
   const wasm = await loadCleaner();
   const { ints, reals } = encodeOptions(options, file.size);
 
@@ -281,8 +332,29 @@ export async function cleanCsv(file: Blob, options: CleanOptions = {}): Promise<
   wasm._cbc_free(realPtr);
   if (!handle) throw new Error(ERRORS[2]);
 
-  const chunkBytes = options.chunkBytes ?? 4 * 1024 * 1024;
+  // Chunk size comes from the device budget when there is one. It cannot change
+  // the result — the parser's output is independent of where chunks fall, which
+  // the `chunk_boundaries_are_invisible` test pins down — so this is purely
+  // about memory and responsiveness.
+  const chunkBytes =
+    options.chunkBytes ?? options.budget?.recommendedChunkBytes ?? 4 * 1024 * 1024;
+
+  // One deliberate growth instead of twenty incremental ones. A refusal here is
+  // informative rather than fatal: it means the estimate does not fit, and the
+  // monitor below will catch the run before it takes the tab down.
+  if (options.estimatedMemoryBytes) {
+    wasm._cbc_reserve_heap(options.estimatedMemoryBytes);
+  }
+
+  const monitor = options.budget
+    ? new MemoryMonitor(options.budget.targetMemoryBytes, options.budget.maxMemoryBytes)
+    : null;
+
   let buffer = wasm._cbc_alloc(chunkBytes);
+  const startedAt = Date.now();
+  let rowsProcessed = 0;
+  let aborted = false;
+  let abortReason: string | undefined;
 
   try {
     for (let offset = 0; offset < file.size; offset += chunkBytes) {
@@ -293,6 +365,19 @@ export async function cleanCsv(file: Blob, options: CleanOptions = {}): Promise<
       wasm.HEAPU8.set(bytes, buffer);
       const code = wasm._cbc_feed(handle, buffer, bytes.length);
       if (code !== 0) throw new Error(ERRORS[code] ?? ERRORS[3]);
+
+      // Between chunks is the one safe place to stop: no borrowed pointers are
+      // live, the source file is untouched, and dropping the handle frees
+      // everything the core allocated.
+      if (monitor) {
+        const event = monitor.check(wasm._cbc_heap_bytes());
+        if (event.kind === 'warning') options.onMemoryWarning?.(event.message, event.heapBytes);
+        if (event.kind === 'abort') {
+          aborted = true;
+          abortReason = event.message;
+          throw new Error(event.message);
+        }
+      }
       options.onProgress?.(Math.min(1, (offset + bytes.length) / Math.max(1, file.size)));
     }
     wasm._cbc_free(buffer);
@@ -300,6 +385,7 @@ export async function cleanCsv(file: Blob, options: CleanOptions = {}): Promise<
 
     const code = wasm._cbc_finish(handle);
     if (code !== 0) throw new Error(ERRORS[code] ?? ERRORS[3]);
+    rowsProcessed = wasm._cbc_row_count(handle);
 
     const table = readTable(wasm, handle, decideBorrow(wasm, handle, options));
     if (table.borrowed) liveBorrowed = table;
@@ -310,6 +396,24 @@ export async function cleanCsv(file: Blob, options: CleanOptions = {}): Promise<
     throw err;
   } finally {
     if (buffer) wasm._cbc_free(buffer);
+    const elapsedMs = Math.max(1, Date.now() - startedAt);
+    const peak = Math.max(monitor?.peakBytes() ?? 0, wasm._cbc_heap_bytes());
+    sessionTelemetry.record({
+      mode: options.mode ?? 'standard-clean',
+      startedAt,
+      elapsedMs,
+      bytesProcessed: file.size,
+      bytesPerSecond: (file.size / elapsedMs) * 1000,
+      rowsProcessed,
+      finalHeapBytes: wasm._cbc_heap_bytes(),
+      peakHeapBytes: peak,
+      estimatedMemoryBytes: options.estimatedMemoryBytes,
+      estimateRatio: options.estimatedMemoryBytes
+        ? peak / options.estimatedMemoryBytes
+        : undefined,
+      aborted,
+      abortReason,
+    });
   }
 }
 

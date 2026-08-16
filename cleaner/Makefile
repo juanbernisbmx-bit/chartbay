@@ -47,11 +47,32 @@ EMCC     ?= em++
 WASM_DIR := ../web/static/wasm
 WASM_OUT := $(WASM_DIR)/csvclean.js
 
-EM_EXPORTS := _cbc_alloc,_cbc_free,_cbc_create,_cbc_destroy,_cbc_feed,_cbc_finish,_cbc_error,_cbc_row_count,_cbc_column_count,_cbc_column_name,_cbc_column_type,_cbc_column_values,_cbc_column_mask,_cbc_column_codes,_cbc_level_count,_cbc_level_name,_cbc_text_blob,_cbc_text_offsets,_cbc_release_column,_cbc_report_json
+EM_EXPORTS := _cbc_alloc,_cbc_free,_cbc_heap_bytes,_cbc_reserve_heap,_cbc_create,_cbc_destroy,_cbc_feed,_cbc_finish,_cbc_error,_cbc_row_count,_cbc_column_count,_cbc_column_name,_cbc_column_type,_cbc_column_values,_cbc_column_mask,_cbc_column_codes,_cbc_level_count,_cbc_level_name,_cbc_text_blob,_cbc_text_offsets,_cbc_release_column,_cbc_report_json
 
+# Memory settings, and why each one is what it is:
+#
+#   ALLOW_MEMORY_GROWTH=1  Required. The heap has to follow the file, and the
+#                          file size is not known at link time. Growth costs a
+#                          realloc-and-copy per step, which is why the module
+#                          exports cbc_reserve_heap: the caller's preflight
+#                          estimate collapses ~20 growth steps into one.
+#
+#   MAXIMUM_MEMORY=3 GB    Below the 4 GB wasm32 ceiling on purpose. The last
+#                          stretch before the architectural limit is where
+#                          allocation actually fails, and a failed growth
+#                          mid-file loses the whole run. 3 GB matches
+#                          WASM_PLANNING_LIMIT_BYTES in processingLimits.ts, so
+#                          the module cannot exceed what the planner allows.
+#
+#   INITIAL_MEMORY         Left at Emscripten's 16 MB default, deliberately.
+#                          Scan mode over a 516 MB file never grows past it, and
+#                          raising it would waste memory on every small file to
+#                          save a few growth steps on rare large ones. The
+#                          runtime reservation handles that case better than a
+#                          link-time constant can.
 EM_FLAGS := -std=c++17 -O3 -ffp-contract=off -Iinclude -fwasm-exceptions \
             -sMODULARIZE=1 -sEXPORT_NAME=CsvCleanModule \
-            -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4294967296 \
+            -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=3221225472 \
             -sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPU32,HEAPF64,HEAP32,UTF8ToString,lengthBytesUTF8,stringToUTF8 \
             -sEXPORTED_FUNCTIONS=$(EM_EXPORTS) \
             -sENVIRONMENT=web,worker,node -sFILESYSTEM=0 --no-entry

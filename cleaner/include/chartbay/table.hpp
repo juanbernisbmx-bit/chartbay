@@ -73,6 +73,14 @@ struct CleanOptions {
   bool drop_constant_columns = true;
   bool drop_duplicate_columns = true;
 
+  // Streaming profile only: count rows, missing cells and invalid cells, and
+  // track running moments, without ever materialising a column. Memory becomes
+  // O(columns) instead of O(rows), so the file may be arbitrarily larger than
+  // available memory. Quantiles, outliers, duplicate-row and duplicate-column
+  // detection and every row-level policy are unavailable in this mode, because
+  // all of them need the values kept.
+  bool scan_only = false;
+
   MissingPolicy missing = MissingPolicy::Keep;
   OutlierPolicy outlier = OutlierPolicy::Flag;
   OutlierRule outlier_rule = OutlierRule::IQR;
@@ -87,7 +95,8 @@ struct ColumnStats {
   bool unique_capped = false;
   std::size_t outliers = 0;
 
-  bool has_moments = false;
+  bool has_moments = false;   // min, max, mean and sd are valid
+  bool has_quantiles = false; // p25, p50 and p75 are valid (never in scan mode)
   double min = 0, max = 0, mean = 0, sd = 0, p25 = 0, p50 = 0, p75 = 0;
 
   bool saw_percent = false;

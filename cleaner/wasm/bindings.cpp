@@ -68,6 +68,7 @@ enum Ints {
   kMissingPolicy,
   kOutlierPolicy,
   kOutlierRule,
+  kScanOnly,
   kIntCount,
 };
 
@@ -112,6 +113,7 @@ CleanOptions decode_options(const std::int32_t* ints, std::int32_t nints, const 
     opts.max_categorical_levels = static_cast<std::size_t>(levels);
   }
   opts.percent_as_fraction = geti(kPercentAsFraction, 0) != 0;
+  opts.scan_only = geti(kScanOnly, 0) != 0;
   opts.drop_empty_rows = geti(kDropEmptyRows, 1) != 0;
   opts.drop_duplicate_rows = geti(kDropDuplicateRows, 1) != 0;
   opts.drop_empty_columns = geti(kDropEmptyColumns, 1) != 0;
@@ -169,6 +171,37 @@ void build_blob(Handle* handle, std::int32_t j) {
 }
 
 }  // namespace
+
+// ── Heap ──────────────────────────────────────────────────────────────────────
+
+// Current size of the WASM linear memory. Reported for telemetry: it is the
+// only memory figure here that is measured rather than estimated.
+CBC_EXPORT std::size_t cbc_heap_bytes() {
+#ifdef __EMSCRIPTEN__
+  return static_cast<std::size_t>(__builtin_wasm_memory_size(0)) * 65536u;
+#else
+  return 0;
+#endif
+}
+
+// Grows the heap once, up front, to a size the caller has estimated.
+//
+// WASM memory grows in steps and every step can reallocate and copy the whole
+// linear memory. Reaching 700 MB from the default 16 MB takes about twenty of
+// those. One deliberate allocation of the expected size collapses them into a
+// single growth; freeing it immediately hands the space back to the allocator
+// without shrinking the heap, because WASM memory never shrinks anyway.
+//
+// Returns 1 when the reservation succeeded, 0 when the browser refused it —
+// which is itself useful: it means the estimate does not fit and the caller
+// should fall back to a smaller mode rather than discover it mid-file.
+CBC_EXPORT std::int32_t cbc_reserve_heap(std::size_t bytes) {
+  if (bytes == 0) return 1;
+  void* block = std::malloc(bytes);
+  if (!block) return 0;
+  std::free(block);
+  return 1;
+}
 
 // ── Memory the caller can write into ──────────────────────────────────────────
 

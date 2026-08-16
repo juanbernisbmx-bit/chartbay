@@ -187,16 +187,24 @@ class Cleaner::Sink : public RowSink {
       sampling_ = false;
     }
 
-    compute_stats();
-    std::vector<std::uint8_t> keep(rows_kept_, 1);
-    apply_outliers(keep);
-    apply_missing(keep);
-    compact(keep);
-    // Profiling every numeric column means sorting it. On the default path
-    // (flag outliers, keep missing) nothing above touches a value, so the
-    // second pass would sort millions of doubles to reproduce what we have.
-    if (values_changed_) compute_stats();
-    drop_columns();
+    if (opts_.scan_only) {
+      // Nothing was materialised, so there is nothing to sort, compact,
+      // impute or compare. The moments were accumulated as the rows went by.
+      finalize_scan_stats();
+      rows_out_ = rows_kept_;
+      drop_columns();
+    } else {
+      compute_stats();
+      std::vector<std::uint8_t> keep(rows_kept_, 1);
+      apply_outliers(keep);
+      apply_missing(keep);
+      compact(keep);
+      // Profiling every numeric column means sorting it. On the default path
+      // (flag outliers, keep missing) nothing above touches a value, so the
+      // second pass would sort millions of doubles to reproduce what we have.
+      if (values_changed_) compute_stats();
+      drop_columns();
+    }
     emit_actions();
 
     CleanResult result;
@@ -294,6 +302,7 @@ class Cleaner::Sink : public RowSink {
     finalize_names();
     cols_.resize(ncols_);
     level_index_.resize(ncols_);
+    scan_m2_.assign(ncols_, 0.0);
 
     // Phase 1 — gather evidence, per column and for the file as a whole.
     std::vector<ColumnVotes> votes(ncols_);
@@ -355,6 +364,10 @@ class Cleaner::Sink : public RowSink {
     const std::size_t rows = static_cast<std::size_t>(std::min(estimate, 2e9));
 
     if (opts_.drop_duplicate_rows) row_hashes_.reserve(rows);
+    // Scan mode never fills a column, so reserving for one would allocate
+    // hundreds of megabytes that stay untouched — exactly the cost the mode
+    // exists to avoid.
+    if (opts_.scan_only) return;
     for (Column& col : cols_) {
       col.mask.reserve(rows);
       switch (col.type) {
@@ -518,9 +531,113 @@ class Cleaner::Sink : public RowSink {
     ++rows_kept_;
   }
 
+  // Records one value in scan mode: counters and Welford moments only, so a
+  // column costs a fixed number of bytes no matter how many rows go past.
+  void scan_value(std::size_t j, bool present, bool invalid, double value) {
+    ColumnStats& s = cols_[j].stats;
+    if (invalid) ++s.invalid;
+    if (!present) {
+      ++s.missing;
+      return;
+    }
+    ++s.present;
+    if (s.present == 1) {
+      s.min = s.max = s.mean = value;
+      scan_m2_[j] = 0.0;
+      return;
+    }
+    if (value < s.min) s.min = value;
+    if (value > s.max) s.max = value;
+    // Welford: one pass, and numerically stable where sum-of-squares is not.
+    const double delta = value - s.mean;
+    s.mean += delta / static_cast<double>(s.present);
+    scan_m2_[j] += delta * (value - s.mean);
+  }
+
+  void finalize_scan_stats() {
+    for (std::size_t j = 0; j < cols_.size(); ++j) {
+      ColumnStats& s = cols_[j].stats;
+      if (s.present == 0) continue;
+      const bool numeric = cols_[j].type == ColumnType::Numeric ||
+                           cols_[j].type == ColumnType::Date;
+      if (!numeric) continue;
+      s.has_moments = true;
+      s.sd = s.present > 1
+                 ? std::sqrt(scan_m2_[j] / static_cast<double>(s.present - 1))
+                 : 0.0;
+    }
+    for (Column& col : cols_) {
+      // The dictionary survives scan mode, so this count is exact. Text
+      // columns have no such structure and their unique count stays unknown.
+      if (col.type == ColumnType::Categorical) col.stats.unique = col.levels.size();
+      else if (col.type == ColumnType::Text) col.stats.unique_capped = true;
+    }
+  }
+
   void push_cell(std::size_t j, std::string_view cell) {
     Column& col = cols_[j];
     const bool missing = is_missing_token(cell);
+
+    if (opts_.scan_only) {
+      switch (col.type) {
+        case ColumnType::Empty:
+          scan_value(j, false, false, 0.0);
+          break;
+        case ColumnType::Numeric: {
+          if (missing) {
+            scan_value(j, false, false, 0.0);
+            break;
+          }
+          NumberParse p = parse_number(cell, col.number_format);
+          if (!p.ok) {
+            if (bool b; parse_bool(cell, &b)) {
+              p.ok = true;
+              p.value = b ? 1.0 : 0.0;
+            }
+          }
+          if (!p.ok) {
+            scan_value(j, false, true, 0.0);
+            break;
+          }
+          if (p.percent) {
+            col.stats.saw_percent = true;
+            if (opts_.percent_as_fraction) p.value /= 100.0;
+          }
+          if (p.currency) col.stats.saw_currency = true;
+          scan_value(j, true, false, p.value);
+          break;
+        }
+        case ColumnType::Date: {
+          if (missing) {
+            scan_value(j, false, false, 0.0);
+            break;
+          }
+          const DateParse d = parse_date(cell, col.date_order);
+          scan_value(j, d.ok, !d.ok, d.ok ? static_cast<double>(d.serial()) : 0.0);
+          break;
+        }
+        case ColumnType::Categorical: {
+          if (missing) {
+            scan_value(j, false, false, 0.0);
+            break;
+          }
+          // The dictionary is bounded by max_categorical_levels, so keeping it
+          // does not make memory grow with the row count.
+          auto& index = level_index_[j];
+          if (index.find(std::string(cell)) == index.end() &&
+              col.levels.size() < kMaxLevels) {
+            index.emplace(std::string(cell), static_cast<std::int32_t>(col.levels.size()));
+            col.levels.emplace_back(cell);
+          }
+          scan_value(j, true, false, 0.0);
+          break;
+        }
+        case ColumnType::Text:
+          scan_value(j, !missing, false, 0.0);
+          break;
+      }
+      return;
+    }
 
     switch (col.type) {
       case ColumnType::Empty:
@@ -675,6 +792,7 @@ class Cleaner::Sink : public RowSink {
       for (double v : all) sq += (v - mean) * (v - mean);
 
       s.has_moments = true;
+      s.has_quantiles = true;
       s.min = all.front();
       s.max = all.back();
       s.mean = mean;
@@ -912,10 +1030,12 @@ class Cleaner::Sink : public RowSink {
 
   bool is_constant(const Column& col) const {
     if (col.stats.present == 0) return false;
-    if (col.type == ColumnType::Text || col.type == ColumnType::Categorical) {
-      return col.stats.unique <= 1;
+    if (col.type == ColumnType::Text) {
+      // Scan mode never counted text uniques, so it cannot claim constancy.
+      return !col.stats.unique_capped && col.stats.unique <= 1;
     }
-    return col.stats.min == col.stats.max;
+    if (col.type == ColumnType::Categorical) return col.stats.unique <= 1;
+    return col.stats.has_moments && col.stats.min == col.stats.max;
   }
 
   void drop_columns() {
@@ -942,7 +1062,9 @@ class Cleaner::Sink : public RowSink {
                 "matriz X'X singular.");
         continue;
       }
-      if (opts_.drop_duplicate_columns) {
+      // Comparing two columns cell by cell needs the cells. In scan mode they
+      // were deliberately never stored, so this check simply does not apply.
+      if (opts_.drop_duplicate_columns && !opts_.scan_only) {
         const std::uint64_t h = column_hash(col);
         const auto it = seen.find(h);
         if (it != seen.end()) {
@@ -1091,6 +1213,7 @@ class Cleaner::Sink : public RowSink {
 
   std::vector<Column> cols_;
   std::vector<std::unordered_map<std::string, std::int32_t>> level_index_;
+  std::vector<double> scan_m2_;  // Welford accumulator, scan mode only
 
   bool values_changed_ = false;
   std::size_t rows_in_ = 0;
