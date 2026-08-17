@@ -408,8 +408,11 @@ class Cleaner::Sink : public RowSink {
     Column& col = cols_[j];
     const std::size_t non_missing = v.non_missing;
 
-    col.number_format = v.numbers.resolve(file_decimal_);
-    col.date_order = v.dates.resolve(file_date_order_);
+    col.number_format = opts_.force_decimal != '\0' ? NumberFormat{opts_.force_decimal}
+                                                     : v.numbers.resolve(file_decimal_);
+    col.date_order = opts_.force_date_order != DateOrder::Unknown
+                         ? opts_.force_date_order
+                         : v.dates.resolve(file_date_order_);
     col.stats.ambiguous_decimal = v.numbers.undecided() && v.numbers.ambiguous > 0;
     col.stats.ambiguous_date_order = v.dates.undecided() && v.dates.parseable > 0;
 

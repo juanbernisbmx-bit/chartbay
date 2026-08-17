@@ -393,3 +393,40 @@ CB_TEST(table, header_only_file) {
   const CleanResult r = clean_buffer("a,b,c\n");
   CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(0));
 }
+
+CB_TEST(table, forcing_the_decimal_separator_overrides_the_vote) {
+  // El caso que motivó la opción: una columna ambigua hereda lo que votó el
+  // resto del archivo, y si esa herencia está mal el usuario no tenía forma de
+  // corregirla. fallback_decimal no alcanza — solo entra cuando el archivo
+  // entero quedó indeciso, y acá "claro" vota coma decisivamente.
+  const char* csv = "claro;ambiguo\n1.234,56;100.000\n2.500,10;200.000\n3.000,25;300.000\n";
+
+  const CleanResult heredado = clean_buffer(csv);
+  const Column* a = col_by_name(heredado, "ambiguo");
+  CB_CHECK(a != nullptr);
+  CB_CHECK_NEAR(a->values[0], 100000.0, 1e-6);  // coma decimal ⇒ el punto agrupa
+
+  CleanOptions forzado;
+  forzado.force_decimal = '.';
+  const CleanResult b = clean_buffer(csv, forzado);
+  const Column* amb = col_by_name(b, "ambiguo");
+  CB_CHECK(amb != nullptr);
+  CB_CHECK_NEAR(amb->values[0], 100.0, 1e-9);  // ahora el punto es decimal
+  // Y fuerza toda la tabla, no solo la columna ambigua.
+  const Column* claro = col_by_name(b, "claro");
+  CB_CHECK(claro != nullptr);
+  CB_CHECK_EQ(claro->number_format.decimal, '.');
+}
+
+CB_TEST(table, forcing_the_date_order_overrides_the_vote) {
+  // 05/03 es ambigua, pero 13/01 fija DD/MM para toda la columna. Forzar MM/DD
+  // tiene que ganarle a esa evidencia.
+  const char* csv = "fecha,valor\n13/01/2024,1\n05/03/2024,2\n06/04/2024,3\n";
+  const CleanResult votado = clean_buffer(csv);
+  CB_CHECK_EQ(static_cast<int>(votado.columns[0].date_order), static_cast<int>(DateOrder::DMY));
+
+  CleanOptions forzado;
+  forzado.force_date_order = DateOrder::MDY;
+  const CleanResult b = clean_buffer(csv, forzado);
+  CB_CHECK_EQ(static_cast<int>(b.columns[0].date_order), static_cast<int>(DateOrder::MDY));
+}

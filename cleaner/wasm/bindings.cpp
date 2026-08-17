@@ -70,6 +70,8 @@ enum Ints {
   kOutlierPolicy,
   kOutlierRule,
   kScanOnly,
+  kForceDecimal,
+  kForceDateOrder,
   kIntCount,
 };
 
@@ -115,6 +117,15 @@ CleanOptions decode_options(const std::int32_t* ints, std::int32_t nints, const 
   }
   opts.percent_as_fraction = geti(kPercentAsFraction, 0) != 0;
   opts.scan_only = geti(kScanOnly, 0) != 0;
+  if (const std::int32_t forced = geti(kForceDecimal, 0); forced > 0) {
+    opts.force_decimal = static_cast<char>(forced);
+  }
+  switch (geti(kForceDateOrder, 0)) {
+    case 1: opts.force_date_order = DateOrder::YMD; break;
+    case 2: opts.force_date_order = DateOrder::DMY; break;
+    case 3: opts.force_date_order = DateOrder::MDY; break;
+    default: break;
+  }
   opts.drop_empty_rows = geti(kDropEmptyRows, 1) != 0;
   opts.drop_duplicate_rows = geti(kDropDuplicateRows, 1) != 0;
   opts.drop_empty_columns = geti(kDropEmptyColumns, 1) != 0;
