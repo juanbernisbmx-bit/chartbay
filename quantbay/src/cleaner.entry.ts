@@ -7,7 +7,13 @@
  * pagar por algo que no se usa.
  */
 
-import { cleanCsv, loadCleaner, setCleanerBaseUrl, type CleanedTable } from '../../cleaner/js/csvclean';
+import {
+  cleanCsv,
+  loadCleaner,
+  setCleanerBaseUrl,
+  type CleanedTable,
+  type MissingPolicy,
+} from '../../cleaner/js/csvclean';
 import { calculateMemoryBudget, detectDeviceProfile } from '../../cleaner/js/deviceProfiler';
 import { preflight } from '../../cleaner/js/preflight';
 import { renderDeviceProfile } from '../../cleaner/js/deviceProfileView';
@@ -19,6 +25,36 @@ const $ = (id: string) => document.getElementById(id);
 
 let current: CleanedTable | null = null;
 let currentName = 'limpio.csv';
+/** Se guarda para poder re-limpiar cuando cambia la política de faltantes. */
+let currentFile: File | null = null;
+
+/**
+ * Qué le pasa a los datos con cada política, en una línea.
+ *
+ * Ninguna de estas opciones es gratis y el texto lo dice. Completar con una
+ * constante achica la varianza de la variable y con eso sus errores estándar;
+ * eliminar filas es honesto pero descarta información y sesga si lo que falta
+ * no falta al azar. Que la interfaz elija el default silencioso y no lo
+ * explique es cómo se terminan publicando modelos que nadie puede auditar.
+ */
+const MISSING_HELP: Record<MissingPolicy, string> = {
+  keep: 'Los faltantes quedan marcados y no se inventa nada. Es el default. Ojo: Econometría se niega a estimar si las columnas elegidas tienen huecos, así que para calcular vas a tener que elegir otra opción o filtrar a mano.',
+  drop: 'Se elimina toda fila con al menos un dato faltante (casos completos). Es el criterio más transparente y el que usa la mayoría del software estadístico, pero descarta información y sesga los resultados si lo que falta no falta al azar.',
+  mean: 'Cada hueco se rellena con la media de su columna. Conserva el n, pero reduce artificialmente la varianza de la variable y con eso achica sus errores estándar: los coeficientes van a parecer más precisos de lo que son.',
+  median: 'Igual que la media, pero con la mediana. Más resistente a valores extremos, con el mismo costo sobre la varianza.',
+  zero: 'Los huecos pasan a valer cero. Solo tiene sentido cuando la ausencia significa realmente cero — una venta que no ocurrió, por ejemplo. Si no, distorsiona la escala de la variable.',
+  ffill: 'Cada hueco toma el último valor observado. Es lo habitual en series de tiempo con lagunas, pero achata la varianza: los tramos rellenados no aportan información nueva.',
+};
+
+function missingPolicy(): MissingPolicy {
+  const value = ($('cl-missing') as HTMLSelectElement | null)?.value;
+  return (value as MissingPolicy) || 'keep';
+}
+
+function updateMissingHelp(): void {
+  const node = $('cl-missing-help');
+  if (node) node.textContent = MISSING_HELP[missingPolicy()];
+}
 
 function show(id: string, visible: boolean): void {
   const node = $(id);
@@ -40,6 +76,12 @@ function renderReport(table: CleanedTable): void {
       ['Filas leídas', report.rowsIn.toLocaleString('es-AR')],
       ['Filas resultantes', report.rowsOut.toLocaleString('es-AR')],
       ['Columnas', String(report.columnsOut)],
+      // Lo que hace visible el efecto de la política: con "dejarlos como
+      // están" este número queda, con cualquier imputación se va a cero.
+      [
+        'Celdas faltantes',
+        report.columns.reduce((sum, c) => sum + c.missing, 0).toLocaleString('es-AR'),
+      ],
       ['Separador', report.dialect.delimiter === '\t' ? 'tabulación' : report.dialect.delimiter],
     ];
     for (const [k, v] of filas) {
@@ -99,7 +141,17 @@ function renderReport(table: CleanedTable): void {
 async function onFile(event: Event): Promise<void> {
   const file = (event.target as HTMLInputElement).files?.[0];
   if (!file) return;
+  currentFile = file;
+  await run(file);
+}
 
+/** Re-limpia el mismo archivo cuando cambia la política. */
+async function onMissingChange(): Promise<void> {
+  updateMissingHelp();
+  if (currentFile) await run(currentFile);
+}
+
+async function run(file: File): Promise<void> {
   current?.dispose();
   current = null;
   show('cl-results', false);
@@ -124,6 +176,7 @@ async function onFile(event: Event): Promise<void> {
       budget,
       estimatedMemoryBytes: plan.recommendations['standard-clean'].estimatedMemoryBytes,
       copy: true,
+      missing: missingPolicy(),
       // Esta página exporta sí o sí — descarga o traspaso —, así que el handle
       // tiene que sobrevivir a la copia. Lo libera el dispose() del próximo
       // archivo.
@@ -169,7 +222,9 @@ async function sendToEconometria(): Promise<void> {
 }
 
 function init(): void {
+  updateMissingHelp();
   $('cl-file')?.addEventListener('change', event => void onFile(event));
+  $('cl-missing')?.addEventListener('change', () => void onMissingChange());
   $('cl-download')?.addEventListener('click', download);
   $('cl-to-econometria')?.addEventListener('click', () => void sendToEconometria());
 }
