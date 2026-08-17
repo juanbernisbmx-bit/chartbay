@@ -63,6 +63,14 @@ export interface CleanOptions {
   hasHeader?: boolean;
   fallbackDecimal?: '.' | ',';
   fallbackDateOrder?: 'ymd' | 'dmy' | 'mdy';
+  /**
+   * Fuerza el separador decimal, ignorando la votación por columna y por
+   * archivo. `fallbackDecimal` solo entra cuando el archivo entero quedó
+   * indeciso; esto gana siempre.
+   */
+  forceDecimal?: '.' | ',';
+  /** Igual, para el orden de las fechas. */
+  forceDateOrder?: 'ymd' | 'dmy' | 'mdy';
   sampleRows?: number;
   maxCategoricalLevels?: number;
   percentAsFraction?: boolean; // "12,5%" → 0.125 instead of 12.5
@@ -236,7 +244,7 @@ export interface CleanedTable {
 // ── Option encoding ───────────────────────────────────────────────────────────
 
 // Mirrors the Ints/Reals enums in wasm/bindings.cpp. Keep the two in step.
-const INT_SLOTS = 17;
+const INT_SLOTS = 19;
 const REAL_SLOTS = 5;
 
 const MISSING_CODES: Record<MissingPolicy, number> = {
@@ -291,6 +299,8 @@ function encodeOptions(
   ints[14] = OUTLIER_CODES[options.outliers ?? 'flag'];
   ints[15] = RULE_CODES[options.outlierRule ?? 'iqr'];
   ints[16] = flag(options.scanOnly, 0);
+  ints[17] = options.forceDecimal ? options.forceDecimal.charCodeAt(0) : 0;
+  ints[18] = options.forceDateOrder ? ORDER_CODES[options.forceDateOrder] : 0;
 
   reals[0] = options.numericThreshold ?? 0.8;
   reals[1] = options.dateThreshold ?? 0.9;

@@ -17,6 +17,7 @@ import {
 import { calculateMemoryBudget, detectDeviceProfile } from '../../cleaner/js/deviceProfiler';
 import { preflight } from '../../cleaner/js/preflight';
 import { renderDeviceProfile } from '../../cleaner/js/deviceProfileView';
+import { diagnose, type Issue } from '../../cleaner/js/diagnostics';
 import { putHandoff } from './services/datasetHandoff';
 
 setCleanerBaseUrl('/static/wasm/');
@@ -27,6 +28,8 @@ let current: CleanedTable | null = null;
 let currentName = 'limpio.csv';
 /** Se guarda para poder re-limpiar cuando cambia la política de faltantes. */
 let currentFile: File | null = null;
+/** Correcciones aplicadas desde el diagnóstico, sobre la política elegida. */
+let overrides: Partial<Parameters<typeof cleanCsv>[1]> = {};
 
 /**
  * Qué le pasa a los datos con cada política, en una línea.
@@ -142,13 +145,93 @@ async function onFile(event: Event): Promise<void> {
   const file = (event.target as HTMLInputElement).files?.[0];
   if (!file) return;
   currentFile = file;
+  overrides = {};  // las correcciones eran para el archivo anterior
   await run(file);
 }
 
 /** Re-limpia el mismo archivo cuando cambia la política. */
 async function onMissingChange(): Promise<void> {
   updateMissingHelp();
+  // Elegir la política a mano pisa lo que hubiera sugerido el diagnóstico.
+  delete (overrides as { missing?: unknown }).missing;
   if (currentFile) await run(currentFile);
+}
+
+const SEVERITY_LABEL: Record<Issue['severity'], string> = {
+  alta: 'REVISAR',
+  media: 'DECIDIR',
+  baja: 'AVISO',
+};
+
+/**
+ * El diagnóstico: qué salió mal y qué hacer.
+ *
+ * Ordenado por cuán silencioso es el error, no por cuántas celdas afecta. Un
+ * separador decimal ambiguo va primero aunque no rompa nada, porque el archivo
+ * se lee igual y los números quedan mil veces mal sin que nada avise.
+ */
+function renderDiagnostics(report: CleanedTable['report']): void {
+  const cont = $('cl-issues');
+  if (!cont) return;
+  cont.innerHTML = '';
+
+  const issues = diagnose(report);
+  if (issues.length === 0) {
+    const ok = document.createElement('p');
+    ok.className = 'muted qb-help';
+    ok.textContent = 'No se detectó nada que revisar. El archivo está limpio.';
+    cont.append(ok);
+    return;
+  }
+
+  for (const issue of issues) {
+    const card = document.createElement('div');
+    card.className = 'cl-issue';
+    card.dataset.severity = issue.severity;
+
+    const head = document.createElement('div');
+    head.className = 'cl-issue__head';
+    const badge = document.createElement('span');
+    badge.className = `cl-issue__badge cl-issue__badge--${issue.severity}`;
+    badge.textContent = SEVERITY_LABEL[issue.severity];
+    const title = document.createElement('strong');
+    title.textContent = issue.title;
+    head.append(badge, title);
+    card.append(head);
+
+    if (issue.columns?.length) {
+      const cols = document.createElement('p');
+      cols.className = 'cl-issue__cols';
+      cols.textContent = issue.columns.join(' · ');
+      card.append(cols);
+    }
+
+    const detail = document.createElement('p');
+    detail.className = 'cl-issue__detail';
+    detail.textContent = issue.detail;
+    card.append(detail);
+
+    if (issue.fix) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn-ink cl-issue__fix';
+      button.textContent = issue.fix.label;
+      button.addEventListener('click', () => {
+        overrides = { ...overrides, ...issue.fix!.options };
+        // Si la corrección es una política de faltantes, el desplegable tiene
+        // que reflejarlo: si no, la pantalla diría una cosa y el archivo otra.
+        const missing = (issue.fix!.options as { missing?: string }).missing;
+        const select = $('cl-missing') as HTMLSelectElement | null;
+        if (missing && select) {
+          select.value = missing;
+          updateMissingHelp();
+        }
+        if (currentFile) void run(currentFile);
+      });
+      card.append(button);
+    }
+    cont.append(card);
+  }
 }
 
 async function run(file: File): Promise<void> {
@@ -177,6 +260,7 @@ async function run(file: File): Promise<void> {
       estimatedMemoryBytes: plan.recommendations['standard-clean'].estimatedMemoryBytes,
       copy: true,
       missing: missingPolicy(),
+      ...overrides,
       // Esta página exporta sí o sí — descarga o traspaso —, así que el handle
       // tiene que sobrevivir a la copia. Lo libera el dispose() del próximo
       // archivo.
@@ -186,6 +270,7 @@ async function run(file: File): Promise<void> {
 
     current = table;
     renderReport(table);
+    renderDiagnostics(table.report);
     show('cl-results', true);
     setStatus(`Listo: ${table.report.rowsOut.toLocaleString('es-AR')} filas.`);
   } catch (err) {

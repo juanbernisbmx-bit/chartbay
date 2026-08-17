@@ -2951,3 +2951,60 @@ body:has(.terminal-finance){
   line-height: 1.45;
   opacity: .65;
 }
+
+
+/* ── Diagnóstico del Limpiador ───────────────────────────────────────────────
+   Una tarjeta por problema, ordenadas por cuán silencioso es el error. */
+
+.cl-issue {
+  border-left: 3px solid rgba(128, 128, 128, .4);
+  padding: .6rem 0 .6rem .8rem;
+  margin-bottom: .9rem;
+}
+
+.cl-issue[data-severity="alta"] { border-left-color: #b3261e; }
+.cl-issue[data-severity="media"] { border-left-color: #a86b00; }
+.cl-issue[data-severity="baja"] { border-left-color: rgba(128, 128, 128, .5); }
+
+.cl-issue__head {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  margin-bottom: .3rem;
+}
+
+.cl-issue__badge {
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  padding: .1rem .4rem;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+}
+
+.cl-issue__badge--alta { color: #b3261e; }
+.cl-issue__badge--media { color: #a86b00; }
+.cl-issue__badge--baja { color: #666; }
+
+.cl-issue__cols {
+  margin: 0 0 .3rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .78rem;
+  opacity: .75;
+}
+
+.cl-issue__detail {
+  margin: 0;
+  font-size: .85rem;
+  line-height: 1.5;
+  opacity: .85;
+}
+
+.cl-issue__fix { margin-top: .5rem; }
+
+.cl-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .15rem 0;
+}

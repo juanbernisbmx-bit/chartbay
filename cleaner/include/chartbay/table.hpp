@@ -47,6 +47,17 @@ struct CleanOptions {
   Dialect dialect;
   char fallback_decimal = '.';
   DateOrder fallback_date_order = DateOrder::DMY;
+  /**
+   * Fuerza el separador decimal, ignorando la votación.
+   *
+   * `fallback_decimal` solo entra cuando el archivo entero quedó indeciso: una
+   * columna ambigua hereda lo que votó el resto. Eso es lo correcto por
+   * defecto, pero deja al usuario sin forma de decir "leelo al revés" cuando la
+   * votación acertó para unas columnas y no para otras. '\0' = sin forzar.
+   */
+  char force_decimal = '\0';
+  /** Igual que force_decimal, para el orden de las fechas. */
+  DateOrder force_date_order = DateOrder::Unknown;
   // Rows held in memory to vote on formats. Also capped by sample_cells so a
   // 400-column file cannot blow up the sample.
   std::size_t sample_rows = 5000;
