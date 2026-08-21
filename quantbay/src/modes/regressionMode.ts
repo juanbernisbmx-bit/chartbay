@@ -1,4 +1,4 @@
-import { runQuantAnalysis, type LeakageSignal, type LogisticResult } from '../services/analysisService';
+import { runQuantAnalysis, type AnalysisOptions, type LeakageSignal, type LogisticResult } from '../services/analysisService';
 import { runRLS, validateRLSConstraint, type RLSConstraint } from '../rls';
 import { getValidRowsFrom, materializeRows, type ParsedCSV } from '../csvParser';
 import { autoRepairAndAnalyze, type AutoRepairResult } from '../services/autoRepair';
@@ -79,6 +79,7 @@ export function runRegressionMode(
   xNames: string[],
   rlsConstraint: RLSConstraint | undefined,
   functionalForm: FunctionalForm = 'lin-lin',
+  options: AnalysisOptions = {},
 ): RegressionModeOutput {
   assertNumericY(csvData.rows, yName);
 
@@ -89,7 +90,7 @@ export function runRegressionMode(
   const dummyNames = new Set(encoding.categoricalInfo.flatMap(c => c.createdDummies));
 
   // Run full analysis on original scale — provides validation, diagnostics, VIF, correlation.
-  const analysis = runQuantAnalysis(effectiveCsvData, yName, effectiveXNames);
+  const analysis = runQuantAnalysis(effectiveCsvData, yName, effectiveXNames, options);
 
   // Get valid rows and apply the functional transform (identity for lin-lin).
   // applyFunctionalTransform throws clearly if log-domain values are invalid (<=0).

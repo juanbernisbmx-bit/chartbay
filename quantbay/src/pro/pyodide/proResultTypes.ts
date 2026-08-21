@@ -1,11 +1,13 @@
 import type { FunctionalForm } from '../../functionalForms';
 import type { CategoricalVariableInfo } from '../../categoricalEncoding';
 
-// Tipo de errores estándar del OLS Pro: clásicos (nonrobust) o robustos a
-// heterocedasticidad (HC1/HC3 de statsmodels). Los betas no cambian entre modos.
-export type ProStandardErrorType = 'classic' | 'HC1' | 'HC3';
+// Tipo de errores estándar del OLS Pro: clásicos (nonrobust), robustos a
+// heterocedasticidad (HC1/HC3) o robustos a heterocedasticidad Y autocorrelación
+// (HAC / Newey-West), todos vía cov_type de statsmodels. Los betas no cambian
+// entre modos: lo único que cambia es la matriz de covarianza.
+export type ProStandardErrorType = 'classic' | 'HC1' | 'HC3' | 'HAC';
 
-export const PRO_STANDARD_ERROR_TYPES: readonly ProStandardErrorType[] = ['classic', 'HC1', 'HC3'];
+export const PRO_STANDARD_ERROR_TYPES: readonly ProStandardErrorType[] = ['classic', 'HC1', 'HC3', 'HAC'];
 
 export const DEFAULT_PRO_STANDARD_ERROR_TYPE: ProStandardErrorType = 'classic';
 
@@ -13,10 +15,11 @@ export const PRO_STANDARD_ERROR_LABELS: Record<ProStandardErrorType, string> = {
   classic: 'errores estándar clásicos',
   HC1: 'errores estándar robustos HC1',
   HC3: 'errores estándar robustos HC3',
+  HAC: 'errores estándar robustos HAC (Newey-West)',
 };
 
 export function isProStandardErrorType(value: unknown): value is ProStandardErrorType {
-  return value === 'classic' || value === 'HC1' || value === 'HC3';
+  return value === 'classic' || value === 'HC1' || value === 'HC3' || value === 'HAC';
 }
 
 const PRO_STANDARD_ERROR_DESCRIPTIONS: Record<ProStandardErrorType, string> = {
@@ -29,6 +32,11 @@ const PRO_STANDARD_ERROR_DESCRIPTIONS: Record<ProStandardErrorType, string> = {
   HC3:
     'Los t-stats, p-values, intervalos de confianza y el test de restricción (RLS) usan la matriz de ' +
     'covarianza robusta HC3 (corrige por heterocedasticidad; más conservadora en muestras chicas).',
+  HAC:
+    'Los t-stats, p-values, intervalos de confianza y el test de restricción (RLS) usan la matriz de ' +
+    'covarianza robusta HAC de Newey-West (corrige por heterocedasticidad Y autocorrelación de los ' +
+    'residuos). Es la inferencia habitual en series de tiempo, donde los residuos suelen estar ' +
+    'correlacionados entre períodos.',
 };
 
 // Consolidates "qué matriz de covarianza se usó, y qué implica" en un solo
@@ -40,11 +48,20 @@ export type ProCovarianceInfo = {
   description: string;
 };
 
-export function getProCovarianceInfo(seType: ProStandardErrorType): ProCovarianceInfo {
+export function getProCovarianceInfo(
+  seType: ProStandardErrorType,
+  hacMaxLags?: number | null
+): ProCovarianceInfo {
+  // El rezago no es un detalle: dos HAC con distinto maxlags dan errores
+  // estándar distintos, así que el informe tiene que decir cuál se usó.
+  const lagNote =
+    seType === 'HAC' && typeof hacMaxLags === 'number'
+      ? ` Rezagos usados: ${hacMaxLags}.`
+      : '';
   return {
     type: seType,
     label: PRO_STANDARD_ERROR_LABELS[seType],
-    description: PRO_STANDARD_ERROR_DESCRIPTIONS[seType],
+    description: PRO_STANDARD_ERROR_DESCRIPTIONS[seType] + lagNote,
   };
 }
 
@@ -95,6 +112,8 @@ export type PyodideOlsResult = {
   xNames?: string[];
   // Ausente en payloads previos a HC1/HC3; el runner siempre lo pide explícito.
   standardErrorType?: ProStandardErrorType;
+  // Rezagos efectivamente usados por Newey-West. Sólo con standardErrorType 'HAC'.
+  hacMaxLags?: number;
   nobs?: number;
   coefficients?: PyodideOlsCoefficient[];
   rSquared?: number;
@@ -265,7 +284,7 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
   }
 
   // seType ausente = payload previo a HC1/HC3 (retrocompatible → undefined);
-  // presente pero fuera de {classic, HC1, HC3} = payload corrupto → rechazo.
+  // presente pero fuera de {classic, HC1, HC3, HAC} = payload corrupto → rechazo.
   let standardErrorType: ProStandardErrorType | undefined;
   if (obj.seType !== undefined && obj.seType !== null) {
     if (!isProStandardErrorType(obj.seType)) {
@@ -273,6 +292,11 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
     }
     standardErrorType = obj.seType;
   }
+
+  const hacMaxLags =
+    typeof obj.hacMaxLags === 'number' && Number.isFinite(obj.hacMaxLags)
+      ? obj.hacMaxLags
+      : undefined;
 
   const coefficients = parseCoefficients(obj.coefficients);
   if (!coefficients) {
@@ -339,6 +363,7 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
     yName: obj.yName,
     xNames: obj.xNames,
     standardErrorType,
+    hacMaxLags,
     nobs: obj.nobs,
     coefficients,
     rSquared: rSquared ?? undefined,

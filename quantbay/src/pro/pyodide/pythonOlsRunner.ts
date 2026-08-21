@@ -13,7 +13,7 @@ import type { RLSConstraint } from '../../rls';
 export type PyodideOlsPhase = 'loading-pyodide' | 'loading-packages' | 'running';
 
 // OLS con statsmodels.api.OLS — con las 4 formas funcionales (lin-lin,
-// log-lin, lin-log, log-log), errores estándar clásicos o robustos HC1/HC3
+// log-lin, lin-log, log-log), errores estándar clásicos o robustos HC1/HC3/HAC
 // (cov_type de statsmodels), diagnóstico de heterocedasticidad Breusch-Pagan
 // y test de restricciones lineales (Rβ = q) vía statsmodels' f_test.
 // IMPORTANTE: el modelo estimado y devuelto (coeficientes,
@@ -66,11 +66,15 @@ def _chartbay_pro_ols():
     log_y = form in ("log-lin", "log-log")
     log_x = form in ("lin-log", "log-log")
     se_type = chartbay_se_type
+    hac_max_lags = chartbay_hac_max_lags
+    drop_incomplete = bool(chartbay_drop_incomplete)
 
     # El lado TS ya valida esto antes de ejecutar Python; se repite acá para que
     # un valor corrupto nunca llegue a statsmodels como cov_type arbitrario.
-    if se_type not in ("classic", "HC1", "HC3"):
-        return fail('Tipo de errores estándar no soportado: "' + str(se_type) + '". Usá classic, HC1 o HC3.')
+    if se_type not in ("classic", "HC1", "HC3", "HAC"):
+        return fail(
+            'Tipo de errores estándar no soportado: "' + str(se_type) + '". Usá classic, HC1, HC3 o HAC.'
+        )
 
     try:
         df = pd.read_csv(io.StringIO(chartbay_csv_text))
@@ -86,20 +90,47 @@ def _chartbay_pro_ols():
 
     warnings = []
     numeric = {}
+    blank = {}
+    unparsed = {}
     for col in [y_name] + x_names:
-        converted = pd.to_numeric(df[col], errors="coerce")
+        raw_col = df[col]
+        converted = pd.to_numeric(raw_col, errors="coerce")
         if converted.notna().sum() == 0:
             kind = "Y" if col == y_name else "X"
             return fail("La columna " + kind + ' "' + col + '" no contiene valores numéricos.')
+        # Celda vacía y celda con texto son dos problemas distintos, y Lite los
+        # trata distinto (missing_values vs invalid_numeric). Antes Pro los
+        # mezclaba en un solo descarte silencioso.
+        is_blank = raw_col.isna() | raw_col.astype(str).str.strip().eq("")
+        blank[col] = is_blank
+        unparsed[col] = converted.isna() & ~is_blank
         numeric[col] = converted
 
+    # Texto no numérico frena siempre, tildado o no el listwise: es un error de
+    # lectura del archivo, no una decisión sobre datos que faltan.
+    unparsed_cols = [col for col in numeric if bool(unparsed[col].any())]
+    if unparsed_cols:
+        return fail(
+            "Hay valores con texto o formato no numérico en: "
+            + ", ".join('"' + c + '"' for c in unparsed_cols)
+            + ". Revisá separadores decimales, símbolos y celdas mezcladas con palabras."
+        )
+
     # ±inf cuenta como valor inválido igual que NaN: se descarta la fila entera.
-    data = pd.DataFrame(numeric).replace([np.inf, -np.inf], np.nan).dropna().reset_index(drop=True)
-    n_dropped = len(df) - len(data)
+    frame = pd.DataFrame(numeric).replace([np.inf, -np.inf], np.nan)
+    n_dropped = int(frame.isna().any(axis=1).sum())
+    if n_dropped > 0 and not drop_incomplete:
+        return fail(
+            "Hay " + str(n_dropped) + " fila(s) con celdas vacías o valores infinitos en las columnas "
+            "del modelo. Completá esos datos, o tildá \\"Excluir las filas con datos faltantes "
+            "(listwise)\\" para estimar sin esas filas."
+        )
+    data = frame.dropna().reset_index(drop=True)
     if n_dropped > 0:
         warnings.append(
-            "Se descartaron " + str(n_dropped)
-            + " filas con valores faltantes, no numéricos o infinitos."
+            "Listwise: se excluyó 1 fila con celdas vacías o valores infinitos."
+            if n_dropped == 1
+            else "Listwise: se excluyeron " + str(n_dropped) + " filas con celdas vacías o valores infinitos."
         )
 
     n_params = len(x_names) + 1
@@ -159,9 +190,21 @@ def _chartbay_pro_ols():
             "hay variables X constantes o perfectamente colineales."
         )
 
+    hac_lags_used = None
     try:
         if se_type == "classic":
             results = sm.OLS(y, X).fit()
+        elif se_type == "HAC":
+            # Newey-West. statsmodels NO tiene default para maxlags: sin la clave
+            # en cov_kwds tira KeyError. Cuando no se eligió un rezago usamos la
+            # regla de dedo habitual L = floor(4·(n/100)^(2/9)), acotada a n-1
+            # para no pedir más rezagos que observaciones.
+            n_obs = int(X.shape[0])
+            lags = hac_max_lags if hac_max_lags is not None else math.floor(4 * (n_obs / 100.0) ** (2.0 / 9.0))
+            hac_lags_used = int(max(0, min(int(lags), n_obs - 1)))
+            # Sin use_correction, que es el default de statsmodels: lo que
+            # muestra ChartBay tiene que ser lo que devuelve statsmodels.
+            results = sm.OLS(y, X).fit(cov_type="HAC", cov_kwds={"maxlags": hac_lags_used})
         else:
             # HC1/HC3: mismos betas, covarianza robusta a heterocedasticidad.
             results = sm.OLS(y, X).fit(cov_type=se_type)
@@ -298,6 +341,7 @@ def _chartbay_pro_ols():
         "yName": y_label,
         "xNames": x_labels,
         "seType": se_type,
+        "hacMaxLags": hac_lags_used,
         "nobs": int(results.nobs),
         "coefficients": coefficients,
         "rSquared": r_squared,
@@ -358,6 +402,9 @@ export async function runPyodideOls(
     form: FunctionalForm;
     rlsConstraint?: RLSConstraint;
     standardErrorType?: string;
+    // Rezagos de Newey-West. undefined/null = automático (regla de dedo en Python).
+    hacMaxLags?: number | null;
+    dropIncompleteRows?: boolean;
   },
   onPhase?: (phase: PyodideOlsPhase) => void
 ): Promise<PyodideOlsResult> {
@@ -374,6 +421,14 @@ export async function runPyodideOls(
   if (!isProStandardErrorType(seType)) {
     return proError(
       `Tipo de errores estándar inválido: "${seType}". Valores permitidos: ${PRO_STANDARD_ERROR_TYPES.join(', ')}.`
+    );
+  }
+  // Se valida acá y no en Python porque el <input> es del lado TS: así el error
+  // vuelve al instante en vez de después de arrancar Pyodide.
+  const hacMaxLags = args.hacMaxLags ?? null;
+  if (hacMaxLags !== null && (!Number.isInteger(hacMaxLags) || hacMaxLags < 0)) {
+    return proError(
+      `Rezagos HAC inválidos: "${hacMaxLags}". Tiene que ser un entero >= 0, o vacío para el cálculo automático.`
     );
   }
 
@@ -404,6 +459,8 @@ export async function runPyodideOls(
       args.rlsConstraint ? JSON.stringify(args.rlsConstraint) : ''
     );
     pyodide.globals.set('chartbay_se_type', seType);
+    pyodide.globals.set('chartbay_hac_max_lags', hacMaxLags);
+    pyodide.globals.set('chartbay_drop_incomplete', args.dropIncompleteRows ?? false);
     const raw = await pyodide.runPythonAsync(PYTHON_OLS_SCRIPT);
     return normalizePyodideOlsResult(raw);
   } catch (err) {

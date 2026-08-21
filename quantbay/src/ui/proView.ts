@@ -71,6 +71,20 @@ export function getSelectedProStandardErrorType(): string {
   return select?.value ?? DEFAULT_PRO_STANDARD_ERROR_TYPE;
 }
 
+/**
+ * Rezagos de Newey-West. Vacío = automático: Python aplica la regla de dedo
+ * L = floor(4·(n/100)^(2/9)), que necesita el n y por eso no se resuelve acá.
+ * Un valor no numérico devuelve NaN a propósito, para que lo rechace la
+ * validación del runner con un mensaje, en vez de colarse como automático.
+ */
+export function getSelectedProHacMaxLags(): number | null {
+  const input = $('qb-pro-hac-lags') as HTMLInputElement | null;
+  const raw = input?.value.trim() ?? '';
+  if (raw === '') return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : Number.NaN;
+}
+
 export function hideProPanel(): void {
   const panel = $('qb-pro-results');
   if (panel) panel.style.display = 'none';
@@ -175,7 +189,7 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
 
   const inferenceEl = $('qb-pro-inference');
   if (inferenceEl) {
-    inferenceEl.innerHTML = buildInferenceHtml(seType);
+    inferenceEl.innerHTML = buildInferenceHtml(seType, result.hacMaxLags);
   }
 
   const rlsTestEl = $('qb-pro-rls-test');
@@ -286,15 +300,15 @@ function buildCategoricalHtml(info: CategoricalVariableInfo[]): string {
     </p>`;
 }
 
-function buildInferenceHtml(seType: ProStandardErrorType): string {
-  const info = getProCovarianceInfo(seType);
+function buildInferenceHtml(seType: ProStandardErrorType, hacMaxLags?: number | null): string {
+  const info = getProCovarianceInfo(seType, hacMaxLags);
   return `
     <p class="qb-label" style="margin-top:10px">Inferencia: ${escapeHtml(info.label)}</p>
     <div class="qb-interp">${escapeHtml(info.description)}</div>`;
 }
 
 // Rβ = q se evalúa con la MISMA covarianza que el resto de la inferencia
-// (classic/HC1/HC3): statsmodels' f_test usa results.cov_params() por debajo,
+// (classic/HC1/HC3/HAC): statsmodels' f_test usa results.cov_params() por debajo,
 // que ya respeta cov_type. Por eso el caveat contra Lite (que siempre usa el
 // F clásico de rls.ts) depende de qué covarianza esté activa en Pro.
 function buildRlsTestHtml(rlsTest: PyodideRlsTest, seType: ProStandardErrorType, comparison?: ProRlsComparison | null): string {

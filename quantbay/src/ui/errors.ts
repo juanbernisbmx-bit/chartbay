@@ -25,7 +25,8 @@ export function formatRegressionError(err: unknown): string {
       const cols = issue.columns.map(col => `"${col}"`).join(', ');
       switch (issue.type) {
         case 'missing_values':
-          return `Hay celdas vacias en ${cols}. Completa esos datos o filtra esas filas antes de calcular.`;
+          return `Hay celdas vacias en ${cols}. Completa esos datos, o tilda "Excluir las filas con `
+            + `datos faltantes (listwise)" para estimar sin esas filas.`;
         case 'invalid_numeric':
           return `Hay valores no numericos en ${cols}. Revisa texto, simbolos, separadores decimales o celdas mezcladas con palabras.`;
         case 'constant_column':

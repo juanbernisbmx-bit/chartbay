@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 
 import { PREVIEW_ROWS, rowCountOf, type ColumnStore, type ParsedCSV } from '../../src/csvParser';
 import { runAutoRegressionMode, runRegressionMode } from '../../src/modes/regressionMode';
-import { runQuantAnalysis } from '../../src/services/analysisService';
+import { AnalysisValidationError, runQuantAnalysis } from '../../src/services/analysisService';
 
 const TOTAL_ROWS = 4000;
 
@@ -125,17 +125,49 @@ describe('regresión sobre un dataset columnar', () => {
     expect(output.result.featureNames.length).toBe(3);
   });
 
-  it('los faltantes se cuentan sobre el total, no sobre la vista previa', () => {
+  /** El mismo dataset, con un hueco fuera de las primeras 50 filas. */
+  function csvConHuecoTardio(): ParsedCSV {
     const csv = columnarCsv();
-    // Un hueco fuera de las primeras 50 filas: invisible para el camino viejo.
     const y = csv.columns!.numeric.get('y')!;
     const conHueco = new Uint8Array(y.mask);
     conHueco[TOTAL_ROWS - 1] = 0;
     csv.columns!.numeric.set('y', { values: y.values, mask: conHueco });
+    return csv;
+  }
 
-    const output = runRegressionMode(csv, 'y', ['x'], undefined);
+  it('un hueco fuera de la vista previa frena la estimación, igual que uno adentro', () => {
+    // Antes esto estimaba sin decir nada: la validación contaba faltantes sobre
+    // `rows`, así que el hueco de la fila 3999 era invisible y la política de
+    // "no saco filas sin que me lo pidan" dependía de DÓNDE cayera el hueco.
+    expect(() => runRegressionMode(csvConHuecoTardio(), 'y', ['x'], undefined)).toThrow(
+      AnalysisValidationError
+    );
+  });
+
+  it('con listwise declarado, el hueco tardío se excluye y se informa', () => {
+    const output = runRegressionMode(csvConHuecoTardio(), 'y', ['x'], undefined, 'lin-lin', {
+      dropIncompleteRows: true,
+    });
     expect(output.result.nObs).toBe(TOTAL_ROWS - 1);
     expect(output.dropped).toBe(1);
+  });
+
+  it('una columna de fecha es una regresora numérica, no un valor no numérico', () => {
+    // Las fechas viven en el store numérico como días desde la época, pero en
+    // la vista previa son strings ISO. Validar sobre `rows` las rechazaba como
+    // "no numéricas" y hacía imposible una regresión con tendencia.
+    const csv = columnarCsv();
+    const dias = new Float64Array(TOTAL_ROWS);
+    for (let i = 0; i < TOTAL_ROWS; i++) dias[i] = 19000 + i;
+    csv.columns!.numeric.set('fecha', { values: dias, mask: new Uint8Array(TOTAL_ROWS).fill(1) });
+    csv.headers.push('fecha');
+    csv.numericColumns.push('fecha');
+    for (let i = 0; i < csv.rows.length; i++) {
+      csv.rows[i].fecha = new Date((19000 + i) * 86_400_000).toISOString().slice(0, 10);
+    }
+
+    const output = runRegressionMode(csv, 'y', ['fecha'], undefined);
+    expect(output.result.nObs).toBe(TOTAL_ROWS);
   });
 
   it('el camino por filas sigue funcionando igual', () => {

@@ -16,10 +16,16 @@
 // Any Lite failure just skips the comparison.
 
 import { runRegressionMode } from '../modes/regressionMode';
+import type { AnalysisOptions } from '../services/analysisService';
 import type { ParsedCSV } from '../csvParser';
 import type { FunctionalForm } from '../functionalForms';
 import type { RLSConstraint } from '../rls';
 import type { ProComparison, ProRlsComparison } from '../ui/proView';
+
+// El runner Pro hace pandas .dropna() sin preguntar, así que Lite tiene que
+// estimar sobre la misma submuestra o la comparación deja de ser válida (y con
+// faltantes en el CSV, Lite tiraba y la comparación se saltaba en silencio).
+const LITE_COMPARISON_OPTIONS: AnalysisOptions = { dropIncompleteRows: true };
 
 function buildRlsTestComparison(
   csvData: ParsedCSV,
@@ -30,7 +36,7 @@ function buildRlsTestComparison(
   proRlsTest: { label: string; fStat: number | null; fPValue: number | null }
 ): ProRlsComparison | null {
   try {
-    const liteRestricted = runRegressionMode(csvData, yName, xNames, rlsConstraint, form);
+    const liteRestricted = runRegressionMode(csvData, yName, xNames, rlsConstraint, form, LITE_COMPARISON_OPTIONS);
     const { fStatConstraint, fPValueConstraint } = liteRestricted.result;
     return {
       label: proRlsTest.label,
@@ -55,7 +61,7 @@ export function buildLiteComparison(
 ): ProComparison | null {
   if (!proResult.coefficients) return null;
   try {
-    const lite = runRegressionMode(csvData, yName, xNames, undefined, form);
+    const lite = runRegressionMode(csvData, yName, xNames, undefined, form, LITE_COMPARISON_OPTIONS);
     const liteByName = new Map<string, number>([
       ['Intercept', lite.result.intercept],
       ...lite.result.featureNames.map((name, i) => [name, lite.result.coefficients[i]] as [string, number]),
