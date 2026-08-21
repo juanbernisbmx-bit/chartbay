@@ -229,12 +229,31 @@
               <option value="classic" selected>Clásicos</option>
               <option value="HC1">Robustos HC1</option>
               <option value="HC3">Robustos HC3</option>
+              <option value="HAC">Robustos HAC (Newey-West)</option>
             </select>
             <p class="muted" style="font-size:11px;margin:4px 0 0">
               Solo aplica al motor Pro (statsmodels). Los coeficientes no cambian; solo la inferencia (errores estándar, t, p-values).
+              HC1/HC3 corrigen heterocedasticidad; HAC corrige además autocorrelación (series de tiempo).
             </p>
+            <div id="qb-pro-hac-wrap" style="display:none;margin-top:8px">
+              <label for="qb-pro-hac-lags" class="qb-label">Rezagos HAC</label>
+              <input type="number" id="qb-pro-hac-lags" min="0" step="1" placeholder="automático"
+                     style="width:100%;max-width:260px;margin-top:4px;display:block">
+              <p class="muted" style="font-size:11px;margin:4px 0 0">
+                Vacío usa la regla de Newey-West: <code>L = 4·(n/100)^(2/9)</code>. El resultado informa el rezago aplicado.
+              </p>
+            </div>
           </div>
           <div style="margin-top:10px">
+            <label for="qb-drop-incomplete" style="display:flex;gap:6px;align-items:flex-start;font-size:12px;cursor:pointer">
+              <input type="checkbox" id="qb-drop-incomplete" style="margin-top:2px">
+              <span>Excluir las filas con datos faltantes (<em>listwise</em>)</span>
+            </label>
+            <p class="muted" style="font-size:11px;margin:4px 0 8px">
+              Es lo que hacen Stata, R y statsmodels por defecto. ChartBay no lo aplica solo: sin tildar,
+              un hueco en las columnas del modelo frena la estimación. El resultado informa cuántas filas se excluyeron.
+              No corrige el sesgo si los datos no faltan al azar.
+            </p>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
               <button class="btn-ink" id="qb-run" style="font-weight:700">Calcular regresión</button>
               <button class="btn-ink qb-btn-repair" id="qb-auto-run" title="Detecta y corrige multicolinealidad, matriz singular y otros problemas automáticamente">⚙ Arreglar y calcular</button>
@@ -536,7 +555,7 @@
             <p class="qb-subtitle">Resultado ChartBay Pro v1</p>
             <span>PYODIDE · PYTHON EN NAVEGADOR</span>
           </div>
-          <p class="muted qb-help">ChartBay Pro v1 ejecuta OLS con statsmodels (Python/Pyodide) en el navegador, con las 4 formas funcionales (lin-lin, log-lin, lin-log, log-log), intercepto automático, errores estándar clásicos o robustos (HC1/HC3) y test de restricciones lineales (Rβ = q) vía statsmodels.</p>
+          <p class="muted qb-help">ChartBay Pro v1 ejecuta OLS con statsmodels (Python/Pyodide) en el navegador, con las 4 formas funcionales (lin-lin, log-lin, lin-log, log-log), intercepto automático, errores estándar clásicos o robustos (HC1/HC3 para heterocedasticidad, HAC/Newey-West para heterocedasticidad y autocorrelación) y test de restricciones lineales (Rβ = q) vía statsmodels.</p>
           <p class="muted qb-help">El test de restricción evalúa si Rβ = q es compatible con los datos (Wald/F), pero los coeficientes que se muestran son siempre del OLS no restringido: Pro no re-estima β bajo la restricción como sí lo hace Lite. Las variables X categóricas se codifican como dummies (categoría base omitida) con la misma lógica que Lite. Cualquier selección ambigua o no soportada se bloquea con un aviso — no se ignora en silencio.</p>
           <div id="qb-pro-status" class="qb-interp" style="display:none"></div>
           <div id="qb-pro-error" style="display:none;color:#e55"></div>

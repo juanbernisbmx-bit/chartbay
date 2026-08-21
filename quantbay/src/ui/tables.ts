@@ -1,10 +1,11 @@
-import type { ParsedCSV } from '../csvParser';
+import { rowCountOf, type ParsedCSV } from '../csvParser';
 import type { RegressionResult } from '../regression';
 import type { LogisticResult } from '../services/analysisService';
 import { $ } from '../app/dom';
 import { escapeHtml, significanceBadge } from '../utils/format';
 
-export function renderPreview({ headers, rows, numericColumns }: ParsedCSV): void {
+export function renderPreview(data: ParsedCSV): void {
+  const { headers, rows, numericColumns } = data;
   const preview = rows.slice(0, 6);
   const thead = `<tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
   const tbody = preview
@@ -17,7 +18,7 @@ export function renderPreview({ headers, rows, numericColumns }: ParsedCSV): voi
       <table class="ledger"><thead>${thead}</thead><tbody>${tbody}</tbody></table>
     </div>
     <p class="muted" style="font-size:11px;margin:4px 0 0">
-      ${preview.length} de ${rows.length} filas · ${headers.length} columnas ·
+      ${preview.length} de ${rowCountOf(data)} filas · ${headers.length} columnas ·
       <strong>${numericColumns.length} numéricas</strong>
     </p>`;
 }

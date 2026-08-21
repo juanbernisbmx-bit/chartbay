@@ -54,7 +54,13 @@ function formLabel(result: PyodideOlsResult): string {
 }
 
 function inferenceLabel(result: PyodideOlsResult): string {
-  return PRO_STANDARD_ERROR_LABELS[result.standardErrorType ?? DEFAULT_PRO_STANDARD_ERROR_TYPE];
+  const seType = result.standardErrorType ?? DEFAULT_PRO_STANDARD_ERROR_TYPE;
+  const label = PRO_STANDARD_ERROR_LABELS[seType];
+  // El maxlags cambia el resultado, así que un informe HAC sin el rezago no es
+  // reproducible.
+  return seType === 'HAC' && typeof result.hacMaxLags === 'number'
+    ? `${label}, ${result.hacMaxLags} rezagos`
+    : label;
 }
 
 const PRO_ENGINE_LABEL = 'Pyodide + Python + statsmodels';

@@ -1,4 +1,4 @@
-import { getValidRows, getValidRowsFrom, type ParsedCSV } from '../csvParser';
+import { forEachCellOf, getValidRows, getValidRowsFrom, type ParsedCSV } from '../csvParser';
 import { computeVIF, runOLS, type RegressionResult } from '../regression';
 import { pearsonMatrix } from '../statistics';
 
@@ -47,6 +47,27 @@ export interface AnalysisValidationIssue {
   count?: number;
   correlation?: number;
 }
+
+/**
+ * Decisiones que quien corre el modelo toma sobre los datos, y que la
+ * validación no puede tomar por su cuenta.
+ */
+export interface AnalysisOptions {
+  /**
+   * Estimar excluyendo las filas con celdas vacías en las columnas del modelo
+   * (listwise deletion, el default de Stata, R y statsmodels).
+   *
+   * El estimador SIEMPRE descartó esas filas —`getValidRowsFrom` las cuenta en
+   * `dropped` y la UI las muestra como "Filas omitidas (NA)"—; lo único que
+   * decide esta opción es si el hueco frena la estimación con un error o si es
+   * una exclusión declarada. Por eso el default es `false`: que ChartBay no
+   * saque filas sin que se lo pidan sigue siendo la política.
+   */
+  dropIncompleteRows?: boolean;
+}
+
+/** Casos completos de un modelo, tal como los devuelve `getValidRowsFrom`. */
+export type CompleteCaseSample = { X: number[][]; y: number[]; dropped: number };
 
 export class AnalysisValidationError extends Error {
   issues: AnalysisValidationIssue[];
@@ -195,24 +216,42 @@ function hasRankDeficiency(matrix: number[][]): boolean {
 export function validateAnalysisInput(
   csvData: ParsedCSV,
   yName: string,
-  xNames: string[]
+  xNames: string[],
+  options: AnalysisOptions = {},
+  // Reutiliza la submuestra cuando quien llama ya la calculó. getValidRowsFrom
+  // arma la matriz de diseño entera (O(n·k) y una fila de JS por observación),
+  // que es justo el costo que el camino columnar existe para pagar una sola vez.
+  precomputedSample?: CompleteCaseSample
 ): AnalysisValidationIssue[] {
   const selected = [yName, ...xNames];
   const issues: AnalysisValidationIssue[] = [];
 
+  const sample = precomputedSample ?? getValidRowsFrom(csvData, yName, xNames);
+  // Listwise sólo puede "declarar" la exclusión si queda algo que estimar. Si
+  // no sobrevive ninguna fila completa, el hueco vuelve a ser el problema a
+  // reportar; si no, el mensaje que saldría es que la columna es constante.
+  const listwise = options.dropIncompleteRows === true && sample.y.length > 0;
+
   for (const col of selected) {
     let missing = 0;
     let invalid = 0;
-    for (const row of csvData.rows) {
-      const raw = row[col];
+    // forEachCellOf y no `csvData.rows`: en el camino columnar `rows` es la
+    // vista previa, así que contar ahí decidía si el modelo se podía estimar
+    // mirando 50 filas. Un hueco en la fila 80 de un archivo de 150 pasaba
+    // desapercibido, y una columna de fecha —número en el store, string ISO en
+    // la previa— se rechazaba como no numérica.
+    forEachCellOf(csvData, col, raw => {
       if (isMissing(raw)) {
         missing++;
       } else if (!isFiniteNumeric(raw)) {
         invalid++;
       }
-    }
+    });
 
-    if (missing > 0) {
+    // Con listwise declarado, un hueco deja de ser un error: el estimador ya
+    // descarta esas filas y las cuenta en `dropped`, así que frenar acá sólo
+    // obligaría a limpiar el archivo para llegar al mismo modelo.
+    if (missing > 0 && !listwise) {
       issues.push({
         type: 'missing_values',
         columns: [col],
@@ -233,9 +272,15 @@ export function validateAnalysisInput(
 
   if (issues.length > 0) return issues;
 
-  const columns = new Map<string, number[]>(
-    selected.map(col => [col, csvData.rows.map(row => Number(row[col]))])
-  );
+  // Constancia, duplicados y colinealidad se miran sobre la MISMA submuestra de
+  // casos completos que va a estimar el modelo, y sobre el dataset entero.
+  // Antes esto leía `csvData.rows`: además de quedarse con la vista previa,
+  // una celda vacía entraba como Number('') === 0 y ensuciaba la correlación
+  // con ceros que no existen.
+  const columns = new Map<string, number[]>([
+    [yName, sample.y],
+    ...xNames.map((name, j) => [name, sample.X.map(row => row[j])] as [string, number[]]),
+  ]);
 
   for (const col of selected) {
     const values = columns.get(col) ?? [];
@@ -284,7 +329,7 @@ export function validateAnalysisInput(
   }
 
   if (issues.length === 0 && xNames.length > 1) {
-    const design = csvData.rows.map(row => [1, ...xNames.map(col => Number(row[col]))]);
+    const design = sample.X.map(row => [1, ...row]);
     if (hasRankDeficiency(design)) {
       issues.push({
         type: 'collinearity',
@@ -389,20 +434,25 @@ export function runLogistic({
 export function runQuantAnalysis(
   csvData: ParsedCSV,
   yName: string,
-  xNames: string[]
+  xNames: string[],
+  options: AnalysisOptions = {}
 ): AnalysisResult {
-  const validationIssues = validateAnalysisInput(csvData, yName, xNames);
+  const sample = getValidRowsFrom(csvData, yName, xNames);
+  const validationIssues = validateAnalysisInput(csvData, yName, xNames, options, sample);
   if (validationIssues.length > 0) {
     throw new AnalysisValidationError(validationIssues);
   }
 
-  const { X, y, dropped } = getValidRowsFrom(csvData, yName, xNames);
+  const { X, y, dropped } = sample;
   if (y.length < xNames.length + 2) {
     throw new Error(`Observaciones insuficientes (${y.length}) para ${xNames.length} variable(s). Necesitas mas filas validas que parametros a estimar; agrega datos o usa menos variables X.`);
   }
 
   const result = runOLS({ X, y, featureNames: xNames, yName });
-  const allColData = getCompleteNumericColumns(csvData.rows, csvData.numericColumns);
+  // Versión columnar: la de filas resumía el dataset entero con las 50 de la
+  // vista previa. autoRepair.ts ya usaba esta; este sitio quedó sin migrar, así
+  // que "Calcular" y "Arreglar y calcular" mostraban correlaciones distintas.
+  const allColData = getCompleteNumericColumnsFrom(csvData);
   const binary = isBinaryTarget(y);
   const leaks = detectLeakage(X, y, xNames);
   let logitResult: LogisticResult | null = null;

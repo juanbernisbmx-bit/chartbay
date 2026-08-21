@@ -174,6 +174,61 @@ describe('runQuantAnalysis — missing data', () => {
     expect(error.message).toContain('"x" tiene 1 valor(es) faltante(s)');
     expect(error.message).toContain('Chart Bay no elimino ni modifico datos automaticamente.');
   });
+
+  it('con dropIncompleteRows estima excluyendo las filas incompletas', () => {
+    const rowsWithNull: Row[] = [...linearRows, { x: null, y: 30 }];
+    const csvWithNull: ParsedCSV = {
+      headers: ['x', 'y'],
+      rows: rowsWithNull,
+      numericColumns: ['x', 'y'],
+    };
+    expect(validateAnalysisInput(csvWithNull, 'y', ['x'], { dropIncompleteRows: true })).toEqual([]);
+
+    const { result, dropped } = runQuantAnalysis(csvWithNull, 'y', ['x'], { dropIncompleteRows: true });
+    expect(dropped).toBe(1);
+    expect(result.nObs).toBe(linearRows.length);
+
+    // La fila excluida no puede mover ni un decimal respecto de estimar sin ella.
+    const baseline = runQuantAnalysis(
+      { headers: ['x', 'y'], rows: linearRows, numericColumns: ['x', 'y'] },
+      'y',
+      ['x']
+    );
+    expect(result.intercept).toBeCloseTo(baseline.result.intercept, 12);
+    expect(result.coefficients[0]).toBeCloseTo(baseline.result.coefficients[0], 12);
+  });
+
+  it('dropIncompleteRows no ablanda los demas chequeos', () => {
+    // Texto en una columna numerica sigue frenando: es un error de lectura del
+    // archivo, no una decision sobre datos que faltan.
+    const rowsWithText: Row[] = [...linearRows, { x: 'dos', y: 30 }];
+    const csvWithText: ParsedCSV = {
+      headers: ['x', 'y'],
+      rows: rowsWithText,
+      numericColumns: ['x', 'y'],
+    };
+    expect(validateAnalysisInput(csvWithText, 'y', ['x'], { dropIncompleteRows: true })).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'invalid_numeric', columns: ['x'] })])
+    );
+  });
+
+  it('los chequeos estructurales corren sobre la submuestra, no sobre huecos leidos como cero', () => {
+    // z = 2*x en todas las filas completas. Si la celda vacia entrara como
+    // Number('') === 0 en una sola de las dos columnas, la correlacion dejaria
+    // de ser exactamente 1 y la colinealidad pasaria desapercibida.
+    const rows: Row[] = [
+      ...linearRows.map(row => ({ ...row, z: Number(row.x) * 2 })),
+      { x: null, y: 30, z: null },
+    ];
+    const csvWithNull: ParsedCSV = {
+      headers: ['x', 'y', 'z'],
+      rows,
+      numericColumns: ['x', 'y', 'z'],
+    };
+    expect(validateAnalysisInput(csvWithNull, 'y', ['x', 'z'], { dropIncompleteRows: true })).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'collinearity' })])
+    );
+  });
 });
 
 describe('runQuantAnalysis — error cases', () => {

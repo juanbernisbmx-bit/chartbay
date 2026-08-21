@@ -134,6 +134,56 @@ export function materializeRows(data: ParsedCSV): Record<string, unknown>[] {
   return out;
 }
 
+/**
+ * Recorre TODAS las celdas de una columna, en el dataset entero.
+ *
+ * Es la versión barata de `materializeRows` cuando sólo hace falta mirar una
+ * columna: lee los arrays tipados sin construir un objeto por fila. Existe
+ * porque contar faltantes sobre `data.rows` en el camino columnar cuenta sobre
+ * la vista previa —50 filas— y no sobre el archivo.
+ *
+ * Entrega el mismo valor que vería la vía por filas: el número, la etiqueta de
+ * la categórica, el texto, o `null` cuando la celda está vacía. Las columnas de
+ * fecha viven en el store numérico como días desde la época, así que salen como
+ * números: son regresoras válidas, igual que las trata `getValidRowsFrom`.
+ */
+export function forEachCellOf(
+  data: ParsedCSV,
+  column: string,
+  visit: (value: unknown) => void
+): void {
+  const store = data.columns;
+  if (!store) {
+    for (const row of data.rows) visit(row[column]);
+    return;
+  }
+
+  const numeric = store.numeric.get(column);
+  if (numeric) {
+    for (let i = 0; i < store.rowCount; i++) visit(numeric.mask[i] ? numeric.values[i] : null);
+    return;
+  }
+
+  const factor = store.categorical.get(column);
+  if (factor) {
+    for (let i = 0; i < store.rowCount; i++) {
+      const code = factor.codes[i];
+      visit(code >= 0 ? factor.levels[code] : null);
+    }
+    return;
+  }
+
+  const strings = store.text.get(column);
+  if (strings) {
+    for (let i = 0; i < store.rowCount; i++) visit(strings[i] ?? null);
+    return;
+  }
+
+  // Nombre que no está en el store (una dummy recién creada, por ejemplo):
+  // mismo comportamiento que la vía por filas.
+  for (const row of data.rows) visit(row[column]);
+}
+
 export function extractMatrix(
   rows: Record<string, unknown>[],
   columns: string[]

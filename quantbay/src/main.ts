@@ -65,6 +65,7 @@ import { runPyodideOls, buildEncodedCsvText } from './pro/pyodide/pythonOlsRunne
 import { DEFAULT_PRO_STANDARD_ERROR_TYPE, PRO_STANDARD_ERROR_LABELS, proError } from './pro/pyodide/proResultTypes';
 import {
   clearProResult,
+  getSelectedProHacMaxLags,
   getSelectedProStandardErrorType,
   hideProPanel,
   renderProResult,
@@ -677,7 +678,10 @@ async function onRun(): Promise<void> {
 
   try {
     await technicalLoadSequence();
-    const output = runRegressionMode(appState.csvData, yName, xNames, rlsConstraint, appState.activeFunctionalForm);
+    const output = runRegressionMode(
+      appState.csvData, yName, xNames, rlsConstraint, appState.activeFunctionalForm,
+      { dropIncompleteRows: dropIncompleteRowsSelected() }
+    );
 
     appState.lastResult = output.result;
     appState.lastCorr = output.corrMatrix;
@@ -806,6 +810,8 @@ async function onRunPro(
         form,
         rlsConstraint,
         standardErrorType: getSelectedProStandardErrorType(),
+        hacMaxLags: getSelectedProHacMaxLags(),
+        dropIncompleteRows: dropIncompleteRowsSelected(),
       },
       phase => {
         if (phase === 'loading-pyodide') showProStatus('Cargando Python en navegador…');
@@ -1208,6 +1214,22 @@ function agroLoadDataset(params: {
   }
 }
 
+/**
+ * Lee el checkbox de listwise. Vale para los dos motores: Lite se niega a
+ * estimar con huecos y Pro los descartaba siempre, así que sin un único control
+ * el mismo CSV daba error en uno y resultado en el otro.
+ */
+/** El campo de rezagos sólo aplica a HAC; con el resto no significa nada. */
+function syncProHacVisibility(): void {
+  const wrap = $('qb-pro-hac-wrap');
+  if (!wrap) return;
+  wrap.style.display = getSelectedProStandardErrorType() === 'HAC' ? '' : 'none';
+}
+
+function dropIncompleteRowsSelected(): boolean {
+  return ($('qb-drop-incomplete') as HTMLInputElement | null)?.checked ?? false;
+}
+
 function runFormRecommendation(): void {
   if (!appState.csvData || isTimeSeriesMode()) {
     renderFormRecommendation(null);
@@ -1265,6 +1287,9 @@ function init(): void {
   $('qb-pro-ts-export-md')?.addEventListener('click', exportProTimeSeriesMarkdown);
   $('qb-pro-ts-export-txt')?.addEventListener('click', exportProTimeSeriesTXT);
   $('qb-pro-ts-export-csv')?.addEventListener('click', exportProTimeSeriesCSV);
+
+  $('qb-pro-se')?.addEventListener('change', syncProHacVisibility);
+  syncProHacVisibility();
 
   $('qb-y')?.addEventListener('change', () => {
     applyYIndicators(($('qb-y') as HTMLSelectElement)?.value ?? '');

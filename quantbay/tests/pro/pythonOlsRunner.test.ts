@@ -366,8 +366,43 @@ describe('runPyodideOls (statsmodels)', () => {
     await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin' });
 
     const script = (fake.runPythonAsync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(script).toContain('se_type not in ("classic", "HC1", "HC3")');
+    expect(script).toContain('se_type not in ("classic", "HC1", "HC3", "HAC")');
     expect(script).toContain('Tipo de errores estándar no soportado');
+  });
+
+  it('pasa a Python los rezagos HAC y la decisión de listwise', async () => {
+    const fake = makeFakePyodide();
+    mocks.getPyodide.mockResolvedValue(fake);
+
+    await runPyodideOls({
+      csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin',
+      standardErrorType: 'HAC', hacMaxLags: 3, dropIncompleteRows: true,
+    });
+
+    expect(fake.globals.set).toHaveBeenCalledWith('chartbay_se_type', 'HAC');
+    expect(fake.globals.set).toHaveBeenCalledWith('chartbay_hac_max_lags', 3);
+    expect(fake.globals.set).toHaveBeenCalledWith('chartbay_drop_incomplete', true);
+  });
+
+  it('sin rezagos elegidos manda null y Python aplica la regla de Newey-West', async () => {
+    const fake = makeFakePyodide();
+    mocks.getPyodide.mockResolvedValue(fake);
+
+    await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin', standardErrorType: 'HAC' });
+
+    expect(fake.globals.set).toHaveBeenCalledWith('chartbay_hac_max_lags', null);
+    expect(fake.globals.set).toHaveBeenCalledWith('chartbay_drop_incomplete', false);
+  });
+
+  it('rechaza rezagos HAC inválidos antes de arrancar Pyodide', async () => {
+    const result = await runPyodideOls({
+      csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin',
+      standardErrorType: 'HAC', hacMaxLags: -1,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('Rezagos HAC inválidos');
+    expect(mocks.getPyodide).not.toHaveBeenCalled();
   });
 
   it('passes Python-side empty-CSV errors through', async () => {
