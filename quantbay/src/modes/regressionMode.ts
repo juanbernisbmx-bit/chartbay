@@ -4,42 +4,8 @@ import { getValidRowsFrom, materializeRows, type ParsedCSV } from '../csvParser'
 import { autoRepairAndAnalyze, type AutoRepairResult } from '../services/autoRepair';
 import { runOLS, type RegressionResult } from '../regression';
 import { applyFunctionalTransform, type FunctionalForm } from '../functionalForms';
-import { assertNumericY, encodeCategoricalX, type CategoricalVariableInfo } from '../categoricalEncoding';
+import { assertNumericY, encodeForRegression, type CategoricalVariableInfo } from '../categoricalEncoding';
 import { breuschPaganTest, type BreuschPaganResult } from '../heteroskedasticity';
-
-/**
- * Prepara el dataset para la codificación de dummies.
- *
- * En el camino columnar `csvData.rows` es solo la vista previa, así que
- * codificar contra él estimaría el modelo sobre 50 filas en silencio. Cuando no
- * hay categóricas —el caso común— no hace falta tocar nada y el store columnar
- * sigue entero. Cuando sí las hay, se materializan las filas (O(n), deliberado)
- * y se descarta `columns`: las dummies nuevas viven solo en `encoding.rows`, y
- * dejar el store viejo haría que getValidRowsFrom leyera los datos previos a la
- * codificación e ignorara cada dummy.
- */
-function encodeForRegression(
-  csvData: ParsedCSV,
-  xNames: string[]
-): { encoding: ReturnType<typeof encodeCategoricalX>; effectiveCsvData: ParsedCSV } {
-  const sourceRows = csvData.columns ? materializeRows(csvData) : csvData.rows;
-  const encoding = encodeCategoricalX(sourceRows, xNames);
-
-  if (encoding.categoricalInfo.length === 0 && csvData.columns) {
-    // Sin dummies no cambió ninguna columna: se conserva el store columnar y la
-    // regresión sigue leyendo arrays tipados.
-    return { encoding, effectiveCsvData: csvData };
-  }
-  return {
-    encoding,
-    effectiveCsvData: {
-      ...csvData,
-      rows: encoding.rows,
-      rowCount: encoding.rows.length,
-      columns: undefined,
-    },
-  };
-}
 
 export interface RegressionModeOutput {
   result: RegressionResult;

@@ -1,7 +1,7 @@
-import { getValidRows, type ParsedCSV } from '../csvParser';
+import { getValidRowsFrom, type ParsedCSV } from '../csvParser';
 import { runOLS } from '../regression';
 import { applyFunctionalTransform, type FunctionalForm } from '../functionalForms';
-import { assertNumericY, encodeCategoricalX } from '../categoricalEncoding';
+import { assertNumericY, encodeForRegression } from '../categoricalEncoding';
 
 export interface FunctionalFormCandidate {
   form: FunctionalForm;
@@ -67,13 +67,16 @@ export function recommendFunctionalForm(
 ): FunctionalFormRecommendation {
   assertNumericY(csvData.rows, yName);
 
-  // Expand categorical X into k-1 dummies so the recommender can compare
-  // forms even when the selection mixes numeric and categorical variables.
-  const encoding = encodeCategoricalX(csvData.rows, xNames);
+  // La MISMA preparación que usa runRegressionMode, no una propia: el
+  // recomendador compara formas para que después estimes con la que ganó, así
+  // que tiene que mirar exactamente la matriz de diseño que va a estimarse. Con
+  // `csvData.rows` miraba la vista previa —50 filas— y elegía la forma
+  // funcional de un archivo de 5 000 con el 1% de los datos, sin avisar.
+  const { encoding, effectiveCsvData } = encodeForRegression(csvData, xNames);
   const effectiveXNames = encoding.expandedXNames;
   const dummyNames = new Set(encoding.categoricalInfo.flatMap(c => c.createdDummies));
 
-  const { X: rawX, y: rawY } = getValidRows(encoding.rows, yName, effectiveXNames);
+  const { X: rawX, y: rawY } = getValidRowsFrom(effectiveCsvData, yName, effectiveXNames);
   const n = rawY.length;
   const k = effectiveXNames.length;
   const notEnoughObs = n < k + 2;

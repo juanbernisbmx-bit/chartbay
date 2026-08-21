@@ -45,7 +45,7 @@ import { renderPreview, renderVarSelectors } from './ui/tables';
 import { renderRepairLog } from './ui/diagnosticsView';
 import { renderRegressionResults } from './ui/regressionView';
 import { recommendFunctionalForm } from './services/formRecommender';
-import { renderFormRecommendation } from './ui/formRecommendView';
+import { renderFormRecommendation, showFormRecommendationPending } from './ui/formRecommendView';
 import { detectCategoricalColumns, encodeCategoricalX, dummyBaseName, type CategoricalVariableInfo } from './categoricalEncoding';
 import { runTimeSeriesAnalysis } from './timeseries/service';
 import {
@@ -1230,6 +1230,26 @@ function dropIncompleteRowsSelected(): boolean {
   return ($('qb-drop-incomplete') as HTMLInputElement | null)?.checked ?? false;
 }
 
+/**
+ * Agrupa los recálculos de la recomendación.
+ *
+ * Estima cuatro OLS sobre el dataset entero — medido: ~1 s con 200 000 filas,
+ * en el hilo principal — y se dispara con cada click en una casilla X. Sin
+ * agrupar, tildar tres variables congela la página tres veces seguidas. El
+ * panel pasa a "recalculando" en el acto para no dejar a la vista los números
+ * de la selección anterior.
+ */
+let formRecommendationTimer: ReturnType<typeof setTimeout> | undefined;
+
+function scheduleFormRecommendation(): void {
+  if (formRecommendationTimer !== undefined) clearTimeout(formRecommendationTimer);
+  showFormRecommendationPending();
+  formRecommendationTimer = setTimeout(() => {
+    formRecommendationTimer = undefined;
+    runFormRecommendation();
+  }, 250);
+}
+
 function runFormRecommendation(): void {
   if (!appState.csvData || isTimeSeriesMode()) {
     renderFormRecommendation(null);
@@ -1293,10 +1313,10 @@ function init(): void {
 
   $('qb-y')?.addEventListener('change', () => {
     applyYIndicators(($('qb-y') as HTMLSelectElement)?.value ?? '');
-    runFormRecommendation();
+    scheduleFormRecommendation();
   });
 
-  $('qb-x-checks')?.addEventListener('change', runFormRecommendation);
+  $('qb-x-checks')?.addEventListener('change', scheduleFormRecommendation);
 
   $('qb-form-apply')?.addEventListener('click', () => {
     const form = ($('qb-form-apply') as HTMLButtonElement | null)?.dataset.form ?? '';

@@ -10,6 +10,26 @@ export const FORM_LABELS: Record<FunctionalForm, string> = {
   'log-log': 'Log-Log',
 };
 
+const NO_SELECTION_MESSAGE = 'Seleccioná una variable Y y al menos una X para recibir una sugerencia.';
+
+/**
+ * Estado intermedio mientras se recalcula.
+ *
+ * La recomendación estima cuatro OLS sobre el dataset entero, así que con un
+ * archivo grande tarda. Sin este estado el panel deja a la vista los números de
+ * la selección anterior, que es exactamente lo que hace confiar en una
+ * recomendación que ya no corresponde a lo que está seleccionado.
+ */
+export function showFormRecommendationPending(): void {
+  const empty = $('qb-form-rec-empty');
+  const panel = $('qb-form-rec-result');
+  if (empty) {
+    empty.style.display = '';
+    empty.textContent = 'Recalculando la recomendación…';
+  }
+  if (panel) panel.style.display = 'none';
+}
+
 export function renderFormRecommendation(rec: FunctionalFormRecommendation | null): void {
   const empty = $('qb-form-rec-empty');
   const panel = $('qb-form-rec-result');
@@ -17,7 +37,10 @@ export function renderFormRecommendation(rec: FunctionalFormRecommendation | nul
   const applyBtn = $('qb-form-apply') as HTMLButtonElement | null;
 
   if (!rec) {
-    if (empty) empty.style.display = '';
+    if (empty) {
+      empty.style.display = '';
+      empty.textContent = NO_SELECTION_MESSAGE;
+    }
     if (panel) panel.style.display = 'none';
     return;
   }
