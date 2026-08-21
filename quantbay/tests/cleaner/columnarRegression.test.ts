@@ -20,6 +20,7 @@ import { describe, expect, it } from 'vitest';
 import { PREVIEW_ROWS, rowCountOf, type ColumnStore, type ParsedCSV } from '../../src/csvParser';
 import { runAutoRegressionMode, runRegressionMode } from '../../src/modes/regressionMode';
 import { AnalysisValidationError, runQuantAnalysis } from '../../src/services/analysisService';
+import { recommendFunctionalForm } from '../../src/services/formRecommender';
 
 const TOTAL_ROWS = 4000;
 
@@ -168,6 +169,39 @@ describe('regresión sobre un dataset columnar', () => {
 
     const output = runRegressionMode(csv, 'y', ['fecha'], undefined);
     expect(output.result.nObs).toBe(TOTAL_ROWS);
+  });
+
+  it('la recomendación de forma funcional mira el dataset, no la vista previa', () => {
+    // y = 3x + 50 es exacto en toda la previa, así que una recomendación
+    // calculada con 50 filas da un ajuste perfecto y RMSE 0. Basta mover un
+    // punto fuera de la previa para delatarlo.
+    const csv = columnarCsv();
+    const y = csv.columns!.numeric.get('y')!;
+    const valores = Float64Array.from(y.values);
+    valores[TOTAL_ROWS - 1] += 5000;
+    csv.columns!.numeric.set('y', { values: valores, mask: y.mask });
+
+    const linLin = recommendFunctionalForm(csv, 'y', ['x']).candidates
+      .find(c => c.form === 'lin-lin')!;
+
+    expect(linLin.valid).toBe(true);
+    expect(linLin.metrics!.rmseOriginalScale).toBeGreaterThan(1);
+  });
+
+  it('el dominio del logaritmo se valida sobre la columna entera', () => {
+    // Con la previa, un Y no positivo escondido en la fila 3999 era invisible:
+    // el recomendador ofrecía Log-Lin y el estimador después lo rechazaba.
+    const csv = columnarCsv();
+    const y = csv.columns!.numeric.get('y')!;
+    const valores = Float64Array.from(y.values);
+    valores[TOTAL_ROWS - 1] = -1;
+    csv.columns!.numeric.set('y', { values: valores, mask: y.mask });
+
+    const logLin = recommendFunctionalForm(csv, 'y', ['x']).candidates
+      .find(c => c.form === 'log-lin')!;
+
+    expect(logLin.valid).toBe(false);
+    expect(logLin.reasonIfInvalid).toContain('menores o iguales a cero');
   });
 
   it('el camino por filas sigue funcionando igual', () => {
