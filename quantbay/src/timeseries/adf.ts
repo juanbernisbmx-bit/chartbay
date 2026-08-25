@@ -1,4 +1,5 @@
 import { fitOlsQr } from '../qrLeastSquares';
+import { normalCdf } from '../statistics';
 
 export interface ADFCriticalValues {
   onePercent: number;
@@ -14,7 +15,8 @@ export type ADFResult =
       regressionObservations: number;
       lag: number;
       statistic: number;
-      pValue: null;
+      /** MacKinnon (1994). null sólo si el estadístico no es finito. */
+      pValue: number | null;
       criticalValues: ADFCriticalValues;
       verdict: string;
       interpretation: string;
@@ -71,6 +73,38 @@ export function adfCriticalValues(regressionObservations: number): ADFCriticalVa
     fivePercent: evaluate(MACKINNON_C.fivePercent),
     tenPercent: evaluate(MACKINNON_C.tenPercent),
   };
+}
+
+/**
+ * p-valor aproximado de MacKinnon (1994) para la regresión con constante.
+ *
+ * El estadístico ADF no se distribuye como una t, así que su p-valor no sale
+ * de ninguna tabla usual: MacKinnon ajustó un polinomio que, pasado por la
+ * normal estándar, aproxima la cola de la distribución de Dickey-Fuller. Fuera
+ * del rango ajustado la respuesta se satura en 0 o 1, que es lo que hace
+ * statsmodels y es honesto: ahí la aproximación ya no dice nada útil.
+ *
+ * Réplica de statsmodels.tsa.adfvalues.mackinnonp con regression="c", N=1.
+ */
+const TAU_MAX = 2.74;
+const TAU_MIN = -18.83;
+const TAU_STAR = -1.61;
+const TAU_SMALL_P: readonly number[] = [2.1659, 1.4412, 0.038269];
+const TAU_LARGE_P: readonly number[] = [1.7339, 0.93202, -0.12745, -0.010368];
+
+export function adfPValue(statistic: number): number | null {
+  if (!Number.isFinite(statistic)) return null;
+  if (statistic > TAU_MAX) return 1;
+  if (statistic < TAU_MIN) return 0;
+
+  const coefficients = statistic <= TAU_STAR ? TAU_SMALL_P : TAU_LARGE_P;
+  let power = 1;
+  let value = 0;
+  for (const c of coefficients) {
+    value += c * power;
+    power *= statistic;
+  }
+  return normalCdf(value);
 }
 
 /** Límite asintótico: lo único razonable cuando no hay regresión que contar. */
@@ -169,20 +203,35 @@ export function computeADF(values: number[], requestedLag?: number): ADFResult {
       // El n que gobierna los valores críticos es el de esta regresión.
       const criticalValues = adfCriticalValues(y.length);
       const verdict = verdictForStatistic(statistic, criticalValues);
+      const pValue = adfPValue(statistic);
+
+      // Los valores críticos ajustan por tamaño de muestra (MacKinnon 2010) y
+      // el p-valor no (MacKinnon 1994, asintótico), así que cerca del umbral
+      // pueden decir cosas distintas: con n = 60 hay una franja de casi 0.05
+      // de ancho donde el p-valor rechaza y el valor crítico no. statsmodels
+      // arrastra la misma asimetría; lo que no se puede es mostrar los dos
+      // números juntos sin decir cuál manda.
+      const disagreeAt5 = pValue !== null && (statistic <= criticalValues.fivePercent) !== (pValue < 0.05);
+      const disagreementNote = disagreeAt5
+        ? ' Ojo: el p-valor y los valores críticos no coinciden al 5%. El p-valor es una aproximación ' +
+          'asintótica y no ajusta por el tamaño de la muestra; los valores críticos sí. Con una muestra ' +
+          'de este tamaño, el veredicto de los valores críticos es el que manda.'
+        : '';
       return {
         available: true,
         observations,
         regressionObservations: y.length,
         lag,
         statistic,
-        pValue: null,
+        pValue,
         criticalValues,
         verdict,
         interpretation:
           `${verdict} Critical values (MacKinnon 2010, n = ${y.length}): ` +
           `1% ${criticalValues.onePercent.toFixed(2)}, ` +
           `5% ${criticalValues.fivePercent.toFixed(2)}, ` +
-          `10% ${criticalValues.tenPercent.toFixed(2)}.`,
+          `10% ${criticalValues.tenPercent.toFixed(2)}. ` +
+          `p-valor: aproximación de MacKinnon (1994).${disagreementNote}`,
       };
     }
   }

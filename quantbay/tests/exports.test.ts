@@ -134,7 +134,10 @@ describe('csvCell', () => {
     expect(appState.lastTimeSeriesResult.adf.available).toBe(true);
     expect(text).toContain('adf,statistic,,');
     expect(text).toContain('adf,lag,,');
-    expect(text).toContain('adf,p_value,,N/D');
+    // Antes esto era siempre 'N/D': el ADF no calculaba p-valor. Ahora sale el
+    // de MacKinnon, así que el export tiene que llevar el número.
+    expect(text).not.toContain('adf,p_value,,N/D');
+    expect(text).toMatch(/adf,p_value,,[\d.eE+-]+/);
     expect(text).toContain('adf,verdict,,');
     expect(text).toContain('Critical values');
   });

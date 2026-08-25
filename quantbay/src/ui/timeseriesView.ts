@@ -344,7 +344,7 @@ function renderADFDiagnostics(result: TimeSeriesAnalysisResult | null): void {
         <tr><td>ADF statistic</td><td>${formatNumber(adf.statistic)}</td></tr>
         <tr><td>Lag/order used</td><td>${adf.lag}</td></tr>
         <tr><td>Observaciones de la regresión</td><td>${adf.regressionObservations}</td></tr>
-        <tr><td>p-value</td><td>N/D</td></tr>
+        <tr><td>p-value</td><td>${adf.pValue === null ? 'N/D' : formatNumber(adf.pValue)}</td></tr>
         <tr><td>Verdict</td><td>${escapeHtml(adf.verdict)}</td></tr>
         <tr><td>Critical values</td><td>1% ${adf.criticalValues.onePercent.toFixed(2)}, 5% ${adf.criticalValues.fivePercent.toFixed(2)}, 10% ${adf.criticalValues.tenPercent.toFixed(2)}</td></tr>
       </tbody>
