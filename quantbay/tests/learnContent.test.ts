@@ -74,6 +74,40 @@ describe('Área Aprender (guia.html)', () => {
     expect(APRENDER).toContain('Wooldridge');
   });
 
+  it('develops the empirical workflow instead of defining econometrics in one sentence', () => {
+    expect(APRENDER).toContain('De la pregunta al resultado');
+    expect(APRENDER).toContain('Descripcion, prediccion y causalidad');
+    expect(APRENDER).toContain('Construir un modelo economico');
+    expect(APRENDER).toContain('Evaluar el modelo');
+  });
+
+  it('distinguishes population parameters, estimates, errors and residuals', () => {
+    expect(APRENDER).toContain('Poblacion, muestra y estimacion');
+    expect(APRENDER).toContain('Los &beta; pertenecen a la poblacion');
+    expect(APRENDER).toContain('Residuo no es error');
+    expect(APRENDER).toContain('Que los residuos sumen cero no demuestra');
+  });
+
+  it('explains the OLS objective, normal-equation identities and partial effects', () => {
+    expect(APRENDER).toContain('min<sub>b0,...,bk</sub> SSR');
+    expect(APRENDER).toContain('&Sigma;e<sub>i</sub> = 0');
+    expect(APRENDER).toContain('residualizar');
+    expect(APRENDER).toContain('es BLUE');
+  });
+
+  it('covers effective samples and cautions against comparing different listwise samples', () => {
+    expect(APRENDER).toContain('eliminacion listwise');
+    expect(APRENDER).toContain('misma muestra efectiva');
+    expect(APRENDER).toContain('composicion de la muestra');
+  });
+
+  it('derives fit statistics and explains their limits', () => {
+    expect(APRENDER).toContain('R<sup>2</sup> = 1 - SSR / SST');
+    expect(APRENDER).toContain('R2 nunca baja al agregar una X');
+    expect(APRENDER).toContain('regresion espuria');
+    expect(APRENDER).toContain('SSR<sub>R</sub> - SSR<sub>UR</sub>');
+  });
+
   it('states frequentist inference correctly and separates statistical from economic significance', () => {
     expect(APRENDER).toContain('suponiendo H0 y el modelo de contraste');
     expect(APRENDER).toContain('no se rechaza. Esto ultimo no demuestra que H0 sea verdadera');
@@ -82,10 +116,27 @@ describe('Área Aprender (guia.html)', () => {
     expect(APRENDER).not.toContain('rango probable del coeficiente');
   });
 
+  it('adds one/two-sided tests, decision errors, power and a study procedure', () => {
+    expect(APRENDER).toContain('Una o dos colas');
+    expect(APRENDER).toContain('Error tipo I');
+    expect(APRENDER).toContain('Error tipo II');
+    expect(APRENDER).toContain('La potencia');
+    expect(APRENDER).toContain('fija &alpha; antes de mirar');
+  });
+
   it('explains dummies with base category and the dummy trap', () => {
     expect(APRENDER).toContain('trampa de dummies');
     expect(APRENDER).toContain('region_Norte');
     expect(APRENDER).toContain('region_Centro');
+    expect(APRENDER).toContain('100&middot;[exp(&delta;)-1]');
+    expect(APRENDER).toContain('D&middot;X');
+  });
+
+  it('connects assumptions to consequences and develops omitted-variable bias', () => {
+    expect(APRENDER).toContain('Supuestos OLS y consecuencias');
+    expect(APRENDER).toContain('Sesgo por variable omitida');
+    expect(APRENDER).toContain('Causalidad simultanea');
+    expect(APRENDER).toContain('menor varianza entre estimadores lineales insesgados');
   });
 
   it('explains robust errors (classic/HC1/HC3) without claiming they change the betas', () => {
@@ -111,12 +162,16 @@ describe('Área Aprender (guia.html)', () => {
   it('explains ARIMA p/d/q with the ARIMA(1,1,1) example and the honesty note', () => {
     expect(APRENDER).toContain('ARIMA(1,1,1)');
     expect(APRENDER).toContain('ARIMA no adivina el futuro');
+    expect(APRENDER).toContain('Estabilidad e invertibilidad');
+    expect(APRENDER).toContain('AIC y BIC comparan ajuste penalizando complejidad');
   });
 
   it('explains forecast with horizon, intervals and why they widen', () => {
     expect(APRENDER).toContain('pronostico puntual');
     expect(APRENDER).toContain('abrirse a medida que crece el horizonte');
     expect(APRENDER).toContain('no es una promesa');
+    expect(APRENDER).toContain('conjunto de prueba');
+    expect(APRENDER).toContain('MAE o RMSE');
   });
 
   it('explains real dates, frequency inference and generic forecast fallback', () => {
