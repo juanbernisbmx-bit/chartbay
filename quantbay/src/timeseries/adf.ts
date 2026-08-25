@@ -10,6 +10,8 @@ export type ADFResult =
   | {
       available: true;
       observations: number;
+      /** n de la regresión ADF: menor que `observations` por diferenciar y rezagar. */
+      regressionObservations: number;
       lag: number;
       statistic: number;
       pValue: null;
@@ -31,11 +33,48 @@ export type ADFResult =
 
 const EPSILON = 1e-12;
 const MIN_OBSERVATIONS = 8;
-const CRITICAL_VALUES: ADFCriticalValues = {
-  onePercent: -3.43,
-  fivePercent: -2.86,
-  tenPercent: -2.57,
+
+/**
+ * Valores críticos de MacKinnon (2010) para la regresión con constante
+ * (N = 1, reg = "c"), que es la única forma que estima computeADF.
+ *
+ * Cada nivel es un polinomio en 1/n:  crit(n) = b0 + b1/n + b2/n² + b3/n³.
+ * El término b0 es el valor asintótico, y es lo que la app usaba fijo: -3.43,
+ * -2.86 y -2.57. Con muestras chicas eso es demasiado permisivo, porque la
+ * distribución de Dickey-Fuller tiene la cola más pesada cuanto menor es n.
+ * Con las 60 observaciones que deja un IPC de 72 meses con lag 11, el crítico
+ * al 5% es -2.91 y no -2.86: un estadístico entre esos dos valores se leía
+ * como rechazo de la raíz unitaria cuando no lo es.
+ *
+ * Es la misma superficie que statsmodels.tsa.adfvalues.mackinnoncrit,
+ * verificada dígito por dígito contra ella.
+ */
+const MACKINNON_C: Record<keyof ADFCriticalValues, readonly [number, number, number, number]> = {
+  onePercent: [-3.43035, -6.5393, -16.786, -79.433],
+  fivePercent: [-2.86154, -2.8903, -4.234, -40.04],
+  tenPercent: [-2.56677, -1.5384, -2.809, 0],
 };
+
+/**
+ * `regressionObservations` es el n de la REGRESIÓN ADF, no el largo de la
+ * serie: después de diferenciar y de descartar las filas que se comen los
+ * rezagos quedan menos. Es el mismo n que le pasa statsmodels.
+ */
+export function adfCriticalValues(regressionObservations: number): ADFCriticalValues {
+  const evaluate = (c: readonly [number, number, number, number]): number => {
+    if (!Number.isFinite(regressionObservations) || regressionObservations <= 0) return c[0];
+    const inv = 1 / regressionObservations;
+    return c[0] + c[1] * inv + c[2] * inv * inv + c[3] * inv * inv * inv;
+  };
+  return {
+    onePercent: evaluate(MACKINNON_C.onePercent),
+    fivePercent: evaluate(MACKINNON_C.fivePercent),
+    tenPercent: evaluate(MACKINNON_C.tenPercent),
+  };
+}
+
+/** Límite asintótico: lo único razonable cuando no hay regresión que contar. */
+const ASYMPTOTIC_CRITICAL_VALUES = adfCriticalValues(Number.POSITIVE_INFINITY);
 
 function automaticLag(observations: number): number {
   const schwertLag = Math.floor(12 * (observations / 100) ** 0.25);
@@ -65,7 +104,7 @@ function unavailable(observations: number, reason: string, lag: number | null = 
     lag,
     statistic: null,
     pValue: null,
-    criticalValues: CRITICAL_VALUES,
+    criticalValues: ASYMPTOTIC_CRITICAL_VALUES,
     verdict: 'ADF unavailable.',
     interpretation: reason,
     reason,
@@ -127,16 +166,23 @@ export function computeADF(values: number[], requestedLag?: number): ADFResult {
         continue;
       }
 
-      const verdict = verdictForStatistic(statistic, CRITICAL_VALUES);
+      // El n que gobierna los valores críticos es el de esta regresión.
+      const criticalValues = adfCriticalValues(y.length);
+      const verdict = verdictForStatistic(statistic, criticalValues);
       return {
         available: true,
         observations,
+        regressionObservations: y.length,
         lag,
         statistic,
         pValue: null,
-        criticalValues: CRITICAL_VALUES,
+        criticalValues,
         verdict,
-        interpretation: `${verdict} Critical values: 1% ${CRITICAL_VALUES.onePercent}, 5% ${CRITICAL_VALUES.fivePercent}, 10% ${CRITICAL_VALUES.tenPercent}.`,
+        interpretation:
+          `${verdict} Critical values (MacKinnon 2010, n = ${y.length}): ` +
+          `1% ${criticalValues.onePercent.toFixed(2)}, ` +
+          `5% ${criticalValues.fivePercent.toFixed(2)}, ` +
+          `10% ${criticalValues.tenPercent.toFixed(2)}.`,
       };
     }
   }

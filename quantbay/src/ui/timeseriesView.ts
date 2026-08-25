@@ -343,9 +343,10 @@ function renderADFDiagnostics(result: TimeSeriesAnalysisResult | null): void {
       <tbody>
         <tr><td>ADF statistic</td><td>${formatNumber(adf.statistic)}</td></tr>
         <tr><td>Lag/order used</td><td>${adf.lag}</td></tr>
+        <tr><td>Observaciones de la regresión</td><td>${adf.regressionObservations}</td></tr>
         <tr><td>p-value</td><td>N/D</td></tr>
         <tr><td>Verdict</td><td>${escapeHtml(adf.verdict)}</td></tr>
-        <tr><td>Critical values</td><td>1% ${adf.criticalValues.onePercent}, 5% ${adf.criticalValues.fivePercent}, 10% ${adf.criticalValues.tenPercent}</td></tr>
+        <tr><td>Critical values</td><td>1% ${adf.criticalValues.onePercent.toFixed(2)}, 5% ${adf.criticalValues.fivePercent.toFixed(2)}, 10% ${adf.criticalValues.tenPercent.toFixed(2)}</td></tr>
       </tbody>
     </table>
     <div class="qb-interp" style="margin-top:8px">${escapeHtml(adf.interpretation)}</div>`;
