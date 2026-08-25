@@ -1763,6 +1763,22 @@ input,select,textarea,.search input,.compare-input,.filterbar input[type=text],.
 .guia-formula p{margin:7px 0 0!important;color:#444!important;font-size:12px!important}
 .guia-related{padding-top:7px;border-top:1px dotted #c9c0b3}
 .guia-reference{color:#666!important;font-size:11px!important}
+.guia-topic-title{
+  margin:14px 0 6px;
+  color:#33251a;
+  font-family:Georgia,"Times New Roman",serif;
+  font-size:14px;
+  line-height:1.35;
+}
+.guia-steps,.guia-checklist{
+  margin:7px 0 11px;
+  padding-left:22px;
+  color:#222;
+  font-size:13px;
+  line-height:1.55;
+}
+.guia-steps li,.guia-checklist li{margin:0 0 5px}
+.guia-steps li:last-child,.guia-checklist li:last-child{margin-bottom:0}
 .guia-table-wrap{margin:10px 0;overflow-x:auto;border:1px solid var(--pb-line)}
 .guia-study-table{width:100%;min-width:720px;border-collapse:collapse;font-size:12px;line-height:1.45;color:#222}
 .guia-study-table th,.guia-study-table td{padding:8px 9px;border-right:1px solid #ded8ce;border-bottom:1px solid #ded8ce;text-align:left;vertical-align:top}
