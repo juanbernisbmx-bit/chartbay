@@ -1721,6 +1721,56 @@ input,select,textarea,.search input,.compare-input,.filterbar input[type=text],.
   line-height:1.6;
   color:#333;
 }
+.guia-route{
+  margin:0 0 16px;
+  padding:11px 14px;
+  border:1px solid var(--pb-line);
+  border-left:3px solid var(--pb-brown);
+  background:#fbfaf6;
+  color:#222;
+  font-size:12px;
+  line-height:1.6;
+}
+.guia-route strong{font-family:Georgia,"Times New Roman",serif;font-size:14px}
+.guia-route p{margin:3px 0 0}
+.guia-route span{font-weight:700}
+.guia-route a,.guia-related a{color:#684326;text-decoration:underline;text-underline-offset:2px}
+.guia-summary,.guia-example,.guia-mistake{
+  margin:0 0 10px!important;
+  padding:9px 11px;
+  border-left:3px solid #89715d;
+  background:#f5f2eb;
+}
+.guia-example{border-left-color:#56705a;background:#f1f5ef}
+.guia-mistake{border-left-color:#9a5a4f;background:#faf1ef}
+.guia-formula{
+  margin:10px 0;
+  padding:12px 14px;
+  border-top:1px solid #d8d1c5;
+  border-bottom:1px solid #d8d1c5;
+  background:#fdfcf9;
+}
+.guia-formula code{
+  display:block;
+  padding:0;
+  background:transparent;
+  color:#16120f;
+  font-family:Georgia,"Times New Roman",serif;
+  font-size:16px;
+  line-height:1.5;
+  overflow-wrap:anywhere;
+}
+.guia-formula p{margin:7px 0 0!important;color:#444!important;font-size:12px!important}
+.guia-related{padding-top:7px;border-top:1px dotted #c9c0b3}
+.guia-reference{color:#666!important;font-size:11px!important}
+.guia-table-wrap{margin:10px 0;overflow-x:auto;border:1px solid var(--pb-line)}
+.guia-study-table{width:100%;min-width:720px;border-collapse:collapse;font-size:12px;line-height:1.45;color:#222}
+.guia-study-table th,.guia-study-table td{padding:8px 9px;border-right:1px solid #ded8ce;border-bottom:1px solid #ded8ce;text-align:left;vertical-align:top}
+.guia-study-table th:last-child,.guia-study-table td:last-child{border-right:0}
+.guia-study-table tr:last-child th,.guia-study-table tr:last-child td{border-bottom:0}
+.guia-study-table thead th{background:#eee9df;font-family:Arial,Helvetica,sans-serif;font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+.guia-study-table tbody th{white-space:nowrap;background:#faf8f3}
+.guia-sub:target{scroll-margin-top:12px;outline:2px solid #bda98e;outline-offset:2px}
 .guia-note{
   margin:14px 0 0;
   font-size:11px;
@@ -1747,6 +1797,14 @@ input,select,textarea,.search input,.compare-input,.filterbar input[type=text],.
 .guia-st.ok{color:#0a5d2e;background:#e2f3e8;border-color:#bfe3cd}
 .guia-st.soon{color:#7a5a12;background:#fbf1d6;border-color:#ecd9a6}
 .guia-st.road{color:#5a4632;background:#efe7da;border-color:#d8cab2}
+
+@media(max-width:600px){
+  .guia-route{padding:10px 11px}
+  .guia-route p{margin-top:7px}
+  .guia-formula{padding:10px}
+  .guia-formula code{font-size:15px}
+  .guia-summary,.guia-example,.guia-mistake{padding:8px 9px}
+}
 
 /* ===========================================================
    ChartBay hub (/chartbay)

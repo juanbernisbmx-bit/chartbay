@@ -39,7 +39,7 @@ describe('Área Aprender (guia.html)', () => {
     ['ADF', 'ADF (raiz unitaria)'],
     ['ACF/PACF', 'ACF y PACF'],
     ['Ljung-Box', 'Ljung-Box'],
-    ['ARIMA', '<summary>ARIMA</summary>'],
+    ['ARIMA', '<summary>AR, MA y ARIMA</summary>'],
     ['forecast', '<summary>Forecast</summary>'],
     ['fechas reales', 'Fechas reales'],
   ])('covers %s', (_topic, marker) => {
@@ -60,6 +60,26 @@ describe('Área Aprender (guia.html)', () => {
     expect(APRENDER).toContain('Log-Log');
     expect(APRENDER).toContain('elasticidad');
     expect(APRENDER).toContain('requieren valores positivos');
+    expect(APRENDER).toContain('&beta;<sub>1</sub>/100 unidades de Y');
+    expect(APRENDER).toContain('exp(&beta;<sub>1</sub>&Delta;X)-1');
+    expect(APRENDER).toContain('8,33%');
+  });
+
+  it('uses quick summaries, formulas, examples, mistakes and references without adding a parallel theory system', () => {
+    expect(APRENDER).toContain('class="guia-summary"');
+    expect(APRENDER).toContain('class="guia-formula"');
+    expect(APRENDER).toContain('class="guia-example"');
+    expect(APRENDER).toContain('class="guia-mistake"');
+    expect(APRENDER).toContain('class="guia-reference"');
+    expect(APRENDER).toContain('Wooldridge');
+  });
+
+  it('states frequentist inference correctly and separates statistical from economic significance', () => {
+    expect(APRENDER).toContain('suponiendo H0 y el modelo de contraste');
+    expect(APRENDER).toContain('no se rechaza. Esto ultimo no demuestra que H0 sea verdadera');
+    expect(APRENDER).toContain('La economica pregunta si su magnitud importa');
+    expect(APRENDER).toContain('no es correcto decir que hay 95% de probabilidad');
+    expect(APRENDER).not.toContain('rango probable del coeficiente');
   });
 
   it('explains dummies with base category and the dummy trap', () => {
@@ -72,11 +92,20 @@ describe('Área Aprender (guia.html)', () => {
     expect(APRENDER).toContain('HC1');
     expect(APRENDER).toContain('HC3');
     expect(APRENDER).toContain('No cambian los coeficientes OLS');
+    expect(APRENDER).toContain('HAC/Newey-West');
   });
 
   it('explains Breusch-Pagan with H0 and the 5% reading', () => {
     expect(APRENDER).toContain('H0: homocedasticidad');
     expect(APRENDER).toContain('p &lt; 0.05');
+    expect(APRENDER).toContain('no demuestra homocedasticidad');
+  });
+
+  it('explains ADF specification and finite-sample critical-value reading', () => {
+    expect(APRENDER).toContain('H0: &gamma; = 0');
+    expect(APRENDER).toContain('Constante, tendencia y cantidad de rezagos');
+    expect(APRENDER).toContain('valores criticos MacKinnon ajustados por el n efectivo');
+    expect(APRENDER).toContain('no confirma una raiz unitaria');
   });
 
   it('explains ARIMA p/d/q with the ARIMA(1,1,1) example and the honesty note', () => {
@@ -120,5 +149,23 @@ describe('Área Aprender (guia.html)', () => {
     expect(APRENDER).toContain('<strong>Forecast.</strong>');
     expect(APRENDER).toContain('<strong>Indice temporal.</strong>');
     expect(APRENDER).toContain('<strong>Frecuencia temporal.</strong>');
+  });
+
+  it('keeps every internal theory link resolvable to one unique concept id', () => {
+    const links = [...GUIA_HTML.matchAll(/href="#(teoria-[^"]+)"/g)].map(match => match[1]);
+    expect(links.length).toBeGreaterThan(10);
+
+    for (const id of new Set(links)) {
+      const targets = GUIA_HTML.match(new RegExp(`id="${id}"`, 'g')) ?? [];
+      expect(targets, `broken or duplicate target #${id}`).toHaveLength(1);
+    }
+  });
+
+  it('routes concept hashes into the Aprender panel and opens ancestor details', () => {
+    expect(GUIA_HTML).toContain("target.closest('#area-aprender')");
+    expect(GUIA_HTML).toContain("showDocumentationArea('aprender')");
+    expect(GUIA_HTML).toContain("if (current.tagName === 'DETAILS') current.open = true");
+    expect(GUIA_HTML).toContain("target.scrollIntoView({ block: 'start' })");
+    expect(GUIA_HTML).toContain("window.addEventListener('hashchange', showHashTarget)");
   });
 });

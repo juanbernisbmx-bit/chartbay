@@ -41,6 +41,7 @@
           <details class="guia-acc"><summary>OLS</summary><div class="guia-acc-body">
             <p><strong>Que es.</strong> Ajusta la recta que minimiza los errores al cuadrado.</p>
             <p><strong>En ChartBay.</strong> Da coeficientes, error estandar, t, p-valor y R2. No prueba causalidad.</p>
+            <p><a href="#teoria-ols">Ver explicacion completa de OLS</a></p>
           </div></details>
 
           <details class="guia-acc"><summary>RLS</summary><div class="guia-acc-body">
@@ -59,30 +60,35 @@
           </div></details>
 
           <details class="guia-acc"><summary>p-valor</summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Evidencia contra que el efecto sea cero.</p>
-            <p><strong>En ChartBay.</strong> Menor a 0.05 = significativo. No mide tamaño ni causalidad.</p>
+            <p><strong>Que es.</strong> Bajo H0, probabilidad de observar un estadistico al menos tan extremo como el calculado.</p>
+            <p><strong>En ChartBay.</strong> Si p &lt; &alpha;, se rechaza H0. No mide tamaño, importancia economica ni causalidad.</p>
+            <p><a href="#teoria-inferencia">Ver explicacion completa de inferencia</a></p>
           </div></details>
 
           <h3 class="guia-group">Series de tiempo</h3>
 
           <details class="guia-acc"><summary>ADF</summary><div class="guia-acc-body">
-            <p><strong>Que es.</strong> Prueba si la serie es estacionaria.</p>
-            <p><strong>En ChartBay.</strong> p bajo = estacionaria. Incluye p-valor de MacKinnon.</p>
+            <p><strong>Que es.</strong> Contrasta H0: la serie tiene una raiz unitaria.</p>
+            <p><strong>En ChartBay.</strong> Un estadistico suficientemente negativo permite rechazar H0. No rechazar no confirma una raiz unitaria.</p>
+            <p><a href="#teoria-adf">Ver explicacion completa de ADF</a></p>
           </div></details>
 
           <details class="guia-acc"><summary>ACF</summary><div class="guia-acc-body">
             <p><strong>Que es.</strong> Correlacion de la serie con sus rezagos.</p>
             <p><strong>En ChartBay.</strong> Muestra memoria y estacionalidad.</p>
+            <p><a href="#teoria-acf-pacf">Ver ACF y PACF en detalle</a></p>
           </div></details>
 
           <details class="guia-acc"><summary>PACF</summary><div class="guia-acc-body">
             <p><strong>Que es.</strong> Correlacion por rezago, descontando los mas cortos.</p>
             <p><strong>En ChartBay.</strong> Ayuda a elegir el orden AR.</p>
+            <p><a href="#teoria-acf-pacf">Ver ACF y PACF en detalle</a></p>
           </div></details>
 
           <details class="guia-acc"><summary>Ljung-Box</summary><div class="guia-acc-body">
             <p><strong>Que es.</strong> Prueba conjunta de autocorrelacion.</p>
             <p><strong>En ChartBay.</strong> p bajo = queda autocorrelacion (no es ruido blanco).</p>
+            <p><a href="#teoria-ljung-box">Ver explicacion completa de Ljung-Box</a></p>
           </div></details>
 
           <h3 class="guia-group">Diagnosticos</h3>
@@ -94,7 +100,8 @@
 
           <details class="guia-acc"><summary>Multicolinealidad / VIF</summary><div class="guia-acc-body">
             <p><strong>Que es.</strong> Variables X que se explican entre si.</p>
-            <p><strong>En ChartBay.</strong> VIF menor a 5 ok, 5-10 cuidado, mayor a 10 problema.</p>
+            <p><strong>En ChartBay.</strong> 5 y 10 funcionan como alertas practicas, no como reglas universales.</p>
+            <p><a href="#teoria-vif">Ver explicacion completa de VIF</a></p>
           </div></details>
 
           <details class="guia-acc"><summary>Matriz singular</summary><div class="guia-acc-body">
@@ -105,12 +112,19 @@
           <details class="guia-acc"><summary>Supuestos de OLS</summary><div class="guia-acc-body">
             <p><strong>Que es.</strong> Condiciones para confiar en las pruebas.</p>
             <p><strong>En ChartBay.</strong> Linealidad, errores independientes, varianza constante, sin multicolinealidad severa.</p>
+            <p><a href="#teoria-ols">Empezar por OLS y sus limites</a></p>
           </div></details>
         </section>
 
         <!-- ===================== APRENDER ===================== -->
         <section class="guia-panel" id="area-aprender" data-area="aprender" role="tabpanel" aria-labelledby="tab-aprender" hidden>
           <p class="guia-lead">Curso gratuito. De los fundamentos a series de tiempo y finanzas. Cada tema dice que es, para que sirve, como se lee y donde aparece en ChartBay.</p>
+
+          <nav class="guia-route" aria-label="Recorridos de estudio">
+            <strong>Recorridos sugeridos</strong>
+            <p><span>Regresion:</span> <a href="#teoria-ols">OLS</a> &rarr; <a href="#teoria-inferencia">inferencia</a> &rarr; <a href="#teoria-vif">VIF</a> &rarr; <a href="#teoria-bp">Breusch-Pagan</a></p>
+            <p><span>Series:</span> <a href="#teoria-estacionariedad">estacionariedad</a> &rarr; <a href="#teoria-adf">ADF</a> &rarr; <a href="#teoria-acf-pacf">ACF/PACF</a> &rarr; <a href="#teoria-arima">ARIMA</a></p>
+          </nav>
 
           <!-- Modulo: Empezar -->
           <details class="guia-acc"><summary>Empezar: como usar ChartBay</summary><div class="guia-acc-body">
@@ -174,11 +188,16 @@
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
-            <details class="guia-sub"><summary>Regresion lineal (OLS)</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Ajusta la recta que minimiza los errores al cuadrado.</p>
-              <p><strong>Para que.</strong> Medir cuanto y como las X mueven a la Y.</p>
-              <p><strong>Como se interpreta.</strong> Y = intercepto + coeficientes por X.</p>
-              <p><strong>En ChartBay.</strong> Boton "Calcular regresion". No prueba causalidad.</p>
+            <details class="guia-sub" id="teoria-ols"><summary>Regresion lineal (OLS)</summary><div class="guia-sub-body">
+              <p class="guia-summary"><strong>Resumen rapido.</strong> OLS elige los coeficientes que hacen minima la suma de residuos al cuadrado. Describe asociaciones condicionales; por si solo no identifica causalidad.</p>
+              <p><strong>Intuicion.</strong> La recta o superficie estimada busca quedar lo mas cerca posible de las observaciones. Elevar los residuos al cuadrado evita que los signos se cancelen y penaliza mas los errores grandes.</p>
+              <div class="guia-formula" aria-label="Formula del modelo OLS"><code>Y<sub>i</sub> = &beta;<sub>0</sub> + &beta;<sub>1</sub>X<sub>1i</sub> + ... + &beta;<sub>k</sub>X<sub>ki</sub> + u<sub>i</sub></code><p><strong>Y</strong> es lo explicado; <strong>X</strong>, los regresores; <strong>&beta;<sub>0</sub></strong>, el intercepto; <strong>&beta;<sub>j</sub></strong>, un efecto parcial; y <strong>u</strong>, factores no observados.</p></div>
+              <p><strong>Interpretacion.</strong> &beta;<sub>j</sub> mide cuanto cambia Y ante una unidad adicional de X<sub>j</sub>, manteniendo las demas X fijas. "Mantener fijas" es una comparacion condicional del modelo, no una intervencion experimental.</p>
+              <p class="guia-example"><strong>Ejemplo ilustrativo.</strong> Si salario = 4 + 0,8&middot;educacion + 0,2&middot;experiencia, el coeficiente 0,8 compara personas con igual experiencia y un año distinto de educacion. No demuestra que sumar un año cause exactamente ese aumento.</p>
+              <p><strong>En ChartBay.</strong> En Econometria elegis Y, las X y la forma funcional; "Calcular regresion" devuelve coeficientes, residuos, ajuste e inferencia.</p>
+              <p class="guia-mistake"><strong>Error comun.</strong> R2 alto no implica modelo causal correcto, ausencia de sesgo ni buena prediccion fuera de muestra.</p>
+              <p class="guia-related"><strong>Segui con:</strong> <a href="#teoria-inferencia">inferencia</a>, <a href="#teoria-formas">formas funcionales</a>, <a href="#teoria-vif">VIF</a> y <a href="#teoria-bp">Breusch-Pagan</a>.</p>
+              <p class="guia-reference"><strong>Fuente principal.</strong> Wooldridge, <cite>Introductory Econometrics: A Modern Approach</cite>, caps. 2 y 3.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
@@ -203,17 +222,25 @@
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
-            <details class="guia-sub"><summary>Inferencia: error estandar, t, p-valor</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Mide cuanta confianza dan los coeficientes.</p>
-              <p><strong>Como se interpreta.</strong> Error estandar bajo = mas preciso. |t| grande y p &lt; 0.05 = significativo.</p>
-              <p><strong>En ChartBay.</strong> Columnas de la tabla, con marcas de significancia. OLS ademas reporta F-stat global y R2 / R2 ajustado.</p>
-              <p class="guia-note">Un p-value bajo no convierte automaticamente una relacion en causal.</p>
+            <details class="guia-sub" id="teoria-inferencia"><summary>Inferencia: error estandar, t, p-valor</summary><div class="guia-sub-body">
+              <p class="guia-summary"><strong>Resumen rapido.</strong> La estimacion dice cuanto vale un efecto en la muestra; la inferencia cuantifica cuanta incertidumbre tiene esa estimacion.</p>
+              <p><strong>Hipotesis.</strong> Para un coeficiente suele probarse H0: &beta;<sub>j</sub> = 0 frente a H1: &beta;<sub>j</sub> &ne; 0. El nivel &alpha; fija, antes de mirar el resultado, la probabilidad de rechazar H0 por error cuando H0 es verdadera; 0,05 es habitual, no obligatorio.</p>
+              <div class="guia-formula" aria-label="Formula del estadistico t"><code>t = (&beta;&#770;<sub>j</sub> - &beta;<sub>j,0</sub>) / SE(&beta;&#770;<sub>j</sub>)</code><p>El numerador es la distancia entre el estimador y el valor propuesto por H0. El error estandar del denominador mide la variabilidad muestral estimada.</p></div>
+              <p><strong>p-value.</strong> Es la probabilidad, suponiendo H0 y el modelo de contraste, de obtener un estadistico al menos tan extremo como el observado. Si p &lt; &alpha;, se rechaza H0; si p &ge; &alpha;, no se rechaza. Esto ultimo no demuestra que H0 sea verdadera.</p>
+              <p><strong>Significancia.</strong> La estadistica pregunta si el efecto se distingue de un valor de referencia. La economica pregunta si su magnitud importa en el problema real. Un efecto diminuto puede ser estadisticamente significativo con una muestra grande.</p>
+              <p><strong>En ChartBay.</strong> La tabla OLS muestra error estandar, t y p-value por coeficiente. El resultado global agrega F-stat para la hipotesis conjunta de que todas las pendientes son cero.</p>
+              <p class="guia-mistake"><strong>Error comun.</strong> p = 0,03 no significa que H0 tenga 3% de probabilidad. Un p-value bajo no convierte automaticamente una relacion en causal.</p>
+              <p class="guia-related"><strong>Segui con:</strong> <a href="#teoria-intervalos">intervalos de confianza</a>, <a href="#teoria-robustos">errores robustos</a> y <a href="#teoria-bp">Breusch-Pagan</a>.</p>
+              <p class="guia-reference"><strong>Fuente principal.</strong> Wooldridge, <cite>Introductory Econometrics: A Modern Approach</cite>, cap. 4, secs. 4.2 a 4.5.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
-            <details class="guia-sub"><summary>Intervalo de confianza y F global</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> IC95: rango probable del coeficiente. F global: prueba si el modelo entero explica algo.</p>
-              <p><strong>Como se interpreta.</strong> Si el IC incluye 0, el efecto no es claro. p(F) bajo = el conjunto de X sirve.</p>
+            <details class="guia-sub" id="teoria-intervalos"><summary>Intervalo de confianza y F global</summary><div class="guia-sub-body">
+              <p><strong>Intervalo de confianza.</strong> Un IC95% se construye como estimacion &plusmn; valor critico &middot; error estandar. En muestreos repetidos bajo los supuestos, el 95% de los intervalos construidos asi contendria al parametro verdadero.</p>
+              <p class="guia-mistake"><strong>No significa.</strong> Una vez calculado el intervalo frecuentista, no es correcto decir que hay 95% de probabilidad de que el parametro fijo este dentro.</p>
+              <p><strong>F global.</strong> Contrasta H0: &beta;<sub>1</sub> = ... = &beta;<sub>k</sub> = 0 frente a que al menos una pendiente no sea cero. Un p-value bajo rechaza esa hipotesis conjunta, pero no valida la especificacion ni la causalidad.</p>
+              <p><strong>En ChartBay.</strong> Pro muestra intervalos por coeficiente; Lite y Pro reportan F y su p-value para el modelo. Las restricciones RLS permiten otros contrastes conjuntos.</p>
+              <p class="guia-reference"><strong>Fuente principal.</strong> Wooldridge, <cite>Introductory Econometrics: A Modern Approach</cite>, cap. 4, secs. 4.3 y 4.5.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
           </div></details>
@@ -229,11 +256,26 @@
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Lite y Pro)</p>
             </div></details>
 
-            <details class="guia-sub"><summary>Formas funcionales</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Como entra cada variable al modelo: en niveles o en logaritmos.</p>
-              <p><strong>Las cuatro.</strong> Lin-Lin: Y = &beta;0 + &beta;1&middot;X + u &middot; Log-Lin: ln(Y) = &beta;0 + &beta;1&middot;X + u &middot; Lin-Log: Y = &beta;0 + &beta;1&middot;ln(X) + u &middot; Log-Log: ln(Y) = &beta;0 + &beta;1&middot;ln(X) + u</p>
-              <p><strong>Como se interpreta.</strong> Lin-lin: cambio en unidades. Log-lin: cambio porcentual aproximado en Y por unidad de X. Lin-log: cambio en Y ante cambios porcentuales en X. Log-log: elasticidad (% de Y por % de X).</p>
-              <p><strong>Dominio.</strong> Los modelos con logaritmos requieren valores positivos en las variables transformadas. ChartBay valida esto antes de estimar.</p>
+            <details class="guia-sub" id="teoria-formas"><summary>Formas funcionales</summary><div class="guia-sub-body">
+              <p class="guia-summary"><strong>Resumen rapido.</strong> Mirá que variable lleva logaritmo: log en Y convierte el efecto en porcentaje; log en X hace que el cambio de X se lea en porcentaje.</p>
+              <div class="guia-table-wrap" role="region" aria-label="Interpretacion de formas funcionales" tabindex="0">
+                <table class="guia-study-table">
+                  <thead><tr><th>Forma</th><th>Modelo</th><th>Como leer &beta;<sub>1</sub></th><th>Unidades</th></tr></thead>
+                  <tbody>
+                    <tr><th>Lin-Lin</th><td>Y = &beta;<sub>0</sub> + &beta;<sub>1</sub>X + u</td><td>Una unidad mas de X se asocia con &beta;<sub>1</sub> unidades de Y.</td><td>unidades de Y / unidad de X</td></tr>
+                    <tr><th>Log-Lin</th><td>ln(Y) = &beta;<sub>0</sub> + &beta;<sub>1</sub>X + u</td><td>Una unidad mas de X se asocia aproximadamente con 100&middot;&beta;<sub>1</sub>% de cambio en Y.</td><td>% de Y / unidad de X</td></tr>
+                    <tr><th>Lin-Log</th><td>Y = &beta;<sub>0</sub> + &beta;<sub>1</sub>ln(X) + u</td><td>1% mas de X se asocia aproximadamente con &beta;<sub>1</sub>/100 unidades de Y.</td><td>unidades de Y / 1% de X</td></tr>
+                    <tr><th>Log-Log</th><td>ln(Y) = &beta;<sub>0</sub> + &beta;<sub>1</sub>ln(X) + u</td><td>1% mas de X se asocia con aproximadamente &beta;<sub>1</sub>% de Y: es una elasticidad.</td><td>% de Y / % de X</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p><strong>Aproximacion y cambio exacto.</strong> En Log-Lin, para un aumento de &Delta;X unidades, el cambio porcentual exacto en Y es <code>100&middot;[exp(&beta;<sub>1</sub>&Delta;X)-1]</code>. La regla 100&middot;&beta;<sub>1</sub>&middot;&Delta;X es una aproximacion util cuando el cambio es pequeño.</p>
+              <p class="guia-example"><strong>Ejemplo ilustrativo.</strong> Si ln(salario) = 1,5 + 0,08&middot;educacion, un año adicional se asocia con aproximadamente 8% mas de salario; exactamente, con 100&middot;[exp(0,08)-1] &asymp; 8,33%, manteniendo lo demas fijo.</p>
+              <p><strong>Dominio.</strong> Los modelos con logaritmos requieren valores positivos en toda variable transformada. Las dummies 0/1 se mantienen sin transformar. ChartBay valida ese dominio antes de estimar.</p>
+              <p><strong>En ChartBay.</strong> El selector de forma funcional ofrece Lin-Lin, Log-Lin, Lin-Log y Log-Log en Lite y Pro. La sugerencia automatica orienta, pero la forma debe justificarse con teoria, escala y diagnosticos.</p>
+              <p class="guia-mistake"><strong>Error comun.</strong> En Lin-Log, &beta;<sub>1</sub> no es el efecto de 1% de X: el efecto aproximado es &beta;<sub>1</sub>/100 unidades de Y.</p>
+              <p class="guia-related"><strong>Segui con:</strong> <a href="#teoria-ols">OLS</a>, <a href="#teoria-inferencia">inferencia</a> y residuos.</p>
+              <p class="guia-reference"><strong>Fuente principal.</strong> Wooldridge, <cite>Introductory Econometrics: A Modern Approach</cite>, cap. 2, sec. 2.4, y cap. 6, sec. 6.2.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Lite y Pro, con recomendacion automatica)</p>
             </div></details>
 
@@ -252,11 +294,14 @@
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
-            <details class="guia-sub"><summary>Multicolinealidad y VIF</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Variables X que se explican entre si.</p>
-              <p><strong>Para que.</strong> Detectar por que los coeficientes se vuelven inestables.</p>
-              <p><strong>Como se interpreta.</strong> VIF menor a 5 ok, 5-10 cuidado, mayor a 10 problema.</p>
-              <p><strong>En ChartBay.</strong> En diagnosticos; "Arreglar y calcular" ayuda.</p>
+            <details class="guia-sub" id="teoria-vif"><summary>Multicolinealidad y VIF</summary><div class="guia-sub-body">
+              <p class="guia-summary"><strong>Resumen rapido.</strong> Hay multicolinealidad cuando una X contiene poca informacion independiente de las otras. No sesga OLS por si sola, pero vuelve imprecisos e inestables algunos coeficientes.</p>
+              <div class="guia-formula" aria-label="Formula del VIF"><code>VIF<sub>j</sub> = 1 / (1 - R<sub>j</sub><sup>2</sup>)</code><p>R<sub>j</sub><sup>2</sup> surge de regresar X<sub>j</sub> contra las demas X. Cuanto mejor la expliquen, menos variacion propia queda para estimar &beta;<sub>j</sub>.</p></div>
+              <p><strong>Como se interpreta.</strong> Valores cercanos a 1 indican poca inflacion. Umbrales como 5 o 10 son alertas practicas, no leyes universales: importan el diseño, la precision requerida y la pregunta.</p>
+              <p><strong>En ChartBay.</strong> Diagnosticos muestra un VIF por regresor. "Arreglar y calcular" puede quitar variables con VIF muy alto, pero esa decision automatica debe revisarse con criterio economico.</p>
+              <p class="guia-mistake"><strong>No significa.</strong> VIF alto no prueba sesgo, causalidad inversa ni que la variable deba borrarse siempre. Si dos controles son esenciales, puede ser preferible conservarlos y reconocer menor precision.</p>
+              <p class="guia-related"><strong>Segui con:</strong> <a href="#teoria-ols">OLS</a>, supuestos de OLS y matriz singular.</p>
+              <p class="guia-reference"><strong>Fuente principal.</strong> Wooldridge, <cite>Introductory Econometrics: A Modern Approach</cite>, cap. 3, sec. 3.4.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
@@ -268,8 +313,11 @@
             </div></details>
 
             <details class="guia-sub"><summary>Supuestos de OLS</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Condiciones para confiar en las pruebas: linealidad, errores independientes, varianza constante, sin multicolinealidad severa.</p>
-              <p><strong>Como se interpreta.</strong> Si fallan, los p-valores valen menos.</p>
+              <p><strong>Para estimar e interpretar.</strong> El modelo debe ser lineal en los parametros, la muestra debe representar el esquema estudiado y no puede haber colinealidad perfecta. Para una lectura causal, la condicion central es media condicional cero: E(u|X) = 0.</p>
+              <p><strong>Para la inferencia clasica.</strong> La homocedasticidad permite usar los errores estandar OLS clasicos; la dependencia temporal exige tratar la autocorrelacion. La normalidad exacta es una condicion de muestra finita, no una licencia para ignorar las anteriores.</p>
+              <p><strong>Si fallan.</strong> Las consecuencias no son todas iguales. Heterocedasticidad afecta la inferencia clasica; omitir una variable correlacionada con X puede sesgar los coeficientes; colinealidad alta eleva su varianza.</p>
+              <p class="guia-mistake"><strong>Error comun.</strong> Una lista de checks no demuestra que E(u|X)=0. Esa condicion depende del diseño, de la teoria y de como se obtuvieron los datos.</p>
+              <p class="guia-reference"><strong>Fuente principal.</strong> Wooldridge, <cite>Introductory Econometrics: A Modern Approach</cite>, caps. 3 y 4.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (chequeos parciales)</p>
             </div></details>
 
@@ -289,25 +337,36 @@
           <!-- Modulo: Inferencia y diagnostico -->
           <details class="guia-acc"><summary>Inferencia y diagnostico</summary><div class="guia-acc-body">
 
-            <details class="guia-sub"><summary>Errores estandar y errores robustos</summary><div class="guia-sub-body">
+            <details class="guia-sub" id="teoria-robustos"><summary>Errores estandar y errores robustos</summary><div class="guia-sub-body">
               <p><strong>Que es.</strong> Los errores robustos ajustan la inferencia cuando la varianza de los errores no parece constante. No cambian los coeficientes OLS, pero pueden cambiar errores estandar, t-stats, p-values e intervalos.</p>
-              <p><strong>Variantes.</strong> Classic: asume varianza constante (homocedasticidad). HC1: correccion robusta estandar. HC3: mas conservadora, recomendada en muestras chicas o cuando Breusch-Pagan rechaza.</p>
+              <p><strong>Variantes.</strong> Classic asume varianza constante. HC1 corrige heterocedasticidad; HC3 ajusta mas la influencia de observaciones con alto leverage y suele ser prudente en muestras chicas. HAC/Newey-West permite heterocedasticidad y autocorrelacion hasta el numero de rezagos elegido.</p>
               <p><strong>Por que no cambia el beta.</strong> El estimador OLS es el mismo; lo que cambia es la matriz de covarianza con la que se mide su incertidumbre.</p>
               <p class="guia-note">Los errores robustos no arreglan el modelo; ajustan la inferencia.</p>
-              <p><strong>En ChartBay.</strong> Selector de errores estandar en Pro (classic / HC1 / HC3).</p>
+              <p><strong>En ChartBay.</strong> El selector de Pro ofrece classic, HC1, HC3 y HAC. Para HAC tambien elegis rezagos; mas rezagos no siempre es mejor.</p>
+              <p class="guia-mistake"><strong>No significa.</strong> Usar robustos no corrige variables omitidas, mala forma funcional, endogeneidad ni dependencia que el estimador de covarianza no contempla.</p>
+              <p class="guia-reference"><strong>Fuente principal.</strong> Wooldridge, <cite>Introductory Econometrics: A Modern Approach</cite>, cap. 8, sec. 8.2, y cap. 12, sec. 12.5.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Pro)</p>
             </div></details>
 
-            <details class="guia-sub"><summary>Heterocedasticidad</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Hay heterocedasticidad cuando la variabilidad de los errores cambia sistematicamente con las variables explicativas.</p>
-              <p><strong>Como se interpreta.</strong> Residuos en abanico = aviso. Los p-valores clasicos valen menos; conviene mirar errores robustos.</p>
+            <details class="guia-sub" id="teoria-heterocedasticidad"><summary>Heterocedasticidad</summary><div class="guia-sub-body">
+              <p class="guia-summary"><strong>Resumen rapido.</strong> Existe cuando Var(u|X) no es constante: algunas observaciones tienen errores tipicamente mas dispersos que otras.</p>
+              <p><strong>Por que importa.</strong> Bajo exogeneidad, OLS puede seguir insesgado, pero deja de ser el estimador lineal mas eficiente y los errores estandar clasicos pueden ser incorrectos.</p>
+              <p><strong>Como se analiza.</strong> Un patron de abanico en residuos es una señal visual, no una prueba definitiva. Breusch-Pagan formaliza un contraste y los errores HC ajustan la inferencia.</p>
+              <p><strong>En ChartBay.</strong> Los resultados muestran residuos y el test Breusch-Pagan. En Pro podes reestimar la inferencia con HC1 o HC3 sin cambiar los betas.</p>
+              <p class="guia-related"><strong>Segui con:</strong> <a href="#teoria-bp">Breusch-Pagan</a> y <a href="#teoria-robustos">errores robustos</a>.</p>
+              <p class="guia-reference"><strong>Fuente principal.</strong> Wooldridge, <cite>Introductory Econometrics: A Modern Approach</cite>, cap. 8, secs. 8.1 a 8.3.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (test Breusch-Pagan en Lite y Pro)</p>
             </div></details>
 
-            <details class="guia-sub"><summary>Breusch-Pagan</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Breusch-Pagan contrasta si la varianza de los residuos parece depender de las X. Si rechaza homocedasticidad, los errores estandar clasicos pueden ser poco confiables.</p>
-              <p><strong>Como se lee.</strong> H0: homocedasticidad (varianza constante). p &lt; 0.05 = se rechaza H0 al 5%: hay evidencia de heterocedasticidad y conviene pasar a errores robustos (HC3).</p>
-              <p><strong>En ChartBay.</strong> Se reporta con el OLS; Pro ademas sugiere HC3 cuando rechaza.</p>
+            <details class="guia-sub" id="teoria-bp"><summary>Breusch-Pagan</summary><div class="guia-sub-body">
+              <p class="guia-summary"><strong>Resumen rapido.</strong> Evalua si la magnitud de los residuos cuadrados se relaciona sistematicamente con las X.</p>
+              <p><strong>Hipotesis.</strong> H0: homocedasticidad (varianza constante). H1: la varianza condicional cambia con al menos una variable de la regresion auxiliar.</p>
+              <p><strong>Procedimiento.</strong> Usa los residuos OLS, estima una regresion auxiliar de sus cuadrados sobre las X y obtiene un estadistico LM o F y su p-value.</p>
+              <p><strong>Como se lee.</strong> Si p &lt; &alpha;, se rechaza H0 y hay evidencia de heterocedasticidad. Con &alpha; = 0,05, esto equivale a p &lt; 0.05. Si p &ge; &alpha;, el test no encontro evidencia suficiente; no demuestra homocedasticidad.</p>
+              <p><strong>En ChartBay.</strong> Lite y Pro lo reportan junto al OLS. Compará el p-value con tu &alpha;; en Pro podes elegir HC3 cuando el contraste rechaza.</p>
+              <p class="guia-mistake"><strong>No significa.</strong> Rechazar H0 no identifica por si solo la causa del problema ni obliga a eliminar observaciones. Conviene revisar residuos, escala y especificacion.</p>
+              <p class="guia-related"><strong>Segui con:</strong> <a href="#teoria-heterocedasticidad">heterocedasticidad</a>, <a href="#teoria-robustos">HC1/HC3</a> y formas funcionales.</p>
+              <p class="guia-reference"><strong>Fuente principal.</strong> Wooldridge, <cite>Introductory Econometrics: A Modern Approach</cite>, cap. 8, sec. 8.3.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Lite y Pro)</p>
             </div></details>
           </div></details>
@@ -330,17 +389,24 @@
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Pro)</p>
             </div></details>
 
-            <details class="guia-sub"><summary>Estacionariedad</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Que las propiedades de la serie no cambien con el tiempo.</p>
-              <p><strong>Para que.</strong> Muchos modelos la necesitan.</p>
-              <p><strong>Como se interpreta.</strong> Serie sin tendencia ni varianza creciente.</p>
+            <details class="guia-sub" id="teoria-estacionariedad"><summary>Estacionariedad</summary><div class="guia-sub-body">
+              <p class="guia-summary"><strong>Resumen rapido.</strong> Una serie debilmente estacionaria mantiene media y varianza constantes, y su covarianza depende del rezago, no de la fecha exacta.</p>
+              <p><strong>Intuicion.</strong> El proceso puede fluctuar, pero vuelve a un comportamiento estable. Una tendencia persistente o una raiz unitaria hace que shocks lejanos sigan afectando el nivel.</p>
+              <p><strong>Por que importa.</strong> ACF, PACF y modelos ARMA tienen interpretaciones estables cuando la serie es estacionaria. Regresar niveles no estacionarios no relacionados puede producir asociaciones espurias.</p>
+              <p class="guia-mistake"><strong>Error comun.</strong> Una serie estacionaria no tiene que ser plana ni ruido blanco; puede tener autocorrelacion y oscilaciones, siempre que sus propiedades sean estables.</p>
+              <p class="guia-related"><strong>Segui con:</strong> <a href="#teoria-adf">ADF</a>, transformaciones y <a href="#teoria-acf-pacf">ACF/PACF</a>.</p>
+              <p class="guia-reference"><strong>Fuente principal.</strong> Wooldridge, <cite>Introductory Econometrics: A Modern Approach</cite>, cap. 11, sec. 11.1.</p>
             </div></details>
 
-            <details class="guia-sub"><summary>ADF (raiz unitaria)</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> ADF ayuda a evaluar si una serie tiene raiz unitaria. En terminos simples, sirve para analizar si la serie parece estacionaria o si necesita diferenciacion antes de modelarse.</p>
-              <p><strong>Como se interpreta.</strong> H0: la serie tiene raiz unitaria (no es estacionaria). p &lt; 0.05 = se rechaza H0: evidencia de estacionariedad. p alto = la serie podria necesitar diferenciarse.</p>
-              <p><strong>Relacion con ARIMA.</strong> Si ADF sugiere no estacionariedad, un d &gt; 0 en ARIMA(p,d,q) diferencia la serie antes de modelarla.</p>
-              <p><strong>En ChartBay.</strong> Panel de series (Lite) y Pro con statsmodels (p-valor de MacKinnon).</p>
+            <details class="guia-sub" id="teoria-adf"><summary>ADF (raiz unitaria)</summary><div class="guia-sub-body">
+              <p class="guia-summary"><strong>Resumen rapido.</strong> H0: la serie tiene raiz unitaria. Un estadistico ADF suficientemente negativo permite rechazar H0; no rechazarla no prueba que exista una raiz unitaria.</p>
+              <div class="guia-formula" aria-label="Regresion del test ADF"><code>&Delta;y<sub>t</sub> = a + &gamma;y<sub>t-1</sub> + &Sigma;&delta;<sub>j</sub>&Delta;y<sub>t-j</sub> + e<sub>t</sub></code><p>&Delta;y<sub>t</sub> es el cambio de la serie; y<sub>t-1</sub>, su nivel rezagado; y los cambios rezagados absorben autocorrelacion. El test se concentra en H0: &gamma; = 0.</p></div>
+              <p><strong>Como se interpreta.</strong> Compará el estadistico con los valores criticos Dickey-Fuller/MacKinnon correspondientes al termino deterministico y al tamaño muestral. Tambien puede usarse el p-value aproximado con &alpha; predefinido.</p>
+              <p><strong>Especificacion.</strong> Constante, tendencia y cantidad de rezagos cambian el contraste. Una tendencia omitida o demasiados/pocos rezagos puede alterar la conclusion; ADF ademas puede tener poca potencia en muestras chicas.</p>
+              <p><strong>En ChartBay.</strong> Lite usa constante, rezago automatico y valores criticos MacKinnon ajustados por el n efectivo; si p-value y criticos discrepan cerca del 5%, el resultado indica que mandan los criticos finitos. Pro permite elegir constante/tendencia y usa statsmodels.</p>
+              <p class="guia-mistake"><strong>No significa.</strong> p &ge; 0,05 no confirma una raiz unitaria; solo dice que esta muestra y especificacion no permiten rechazarla.</p>
+              <p class="guia-related"><strong>Segui con:</strong> <a href="#teoria-estacionariedad">estacionariedad</a>, diferenciacion y <a href="#teoria-arima">ARIMA</a>.</p>
+              <p class="guia-reference"><strong>Fuente principal.</strong> Wooldridge, <cite>Introductory Econometrics: A Modern Approach</cite>, cap. 18, sec. 18.2.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
@@ -351,36 +417,48 @@
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
-            <details class="guia-sub"><summary>ACF y PACF</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> ACF mide la correlacion de la serie con sus propios rezagos. PACF mide la relacion con un rezago especifico descontando los rezagos intermedios.</p>
-              <p><strong>Como se interpreta.</strong> Caida lenta de la ACF = probable no estacionariedad. Cortes claros en ACF/PACF sugieren candidatos para q y p en ARIMA — son una guia, no una regla mecanica perfecta.</p>
+            <details class="guia-sub" id="teoria-acf-pacf"><summary>Autocorrelacion, ACF y PACF</summary><div class="guia-sub-body">
+              <p class="guia-summary"><strong>Resumen rapido.</strong> ACF mide la relacion total con cada rezago; PACF aisla la relacion directa con un rezago, controlando los intermedios.</p>
+              <p><strong>Intuicion.</strong> Si inflacion de hoy se parece a la de meses anteriores, hay memoria temporal. La ACF muestra cuanto persiste; la PACF ayuda a distinguir si un rezago agrega informacion propia.</p>
+              <div class="guia-formula" aria-label="Formula de autocorrelacion"><code>&rho;<sub>k</sub> = Corr(y<sub>t</sub>, y<sub>t-k</sub>)</code><p>&rho;<sub>k</sub> va de -1 a 1 y resume la asociacion lineal a distancia k. No implica causalidad temporal.</p></div>
+              <p><strong>Como se interpreta.</strong> Una ACF que cae muy lentamente puede alertar sobre no estacionariedad. En una serie estacionaria, un corte de PACF sugiere candidatos AR(p) y un corte de ACF, candidatos MA(q); son heuristicas, no reglas mecanicas.</p>
               <p><strong>En ChartBay.</strong> Tablas en el panel de series (Lite) y en Pro con statsmodels.</p>
+              <p class="guia-mistake"><strong>Error comun.</strong> Elegir p y q solo por una barra aislada. Mirá el conjunto, la estacionariedad, AIC/BIC y los residuos.</p>
+              <p class="guia-related"><strong>Segui con:</strong> <a href="#teoria-ljung-box">Ljung-Box</a> y <a href="#teoria-arima">ARIMA</a>.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span></p>
             </div></details>
 
-            <details class="guia-sub"><summary>Ljung-Box</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> Ljung-Box evalua si existe autocorrelacion conjunta hasta ciertos rezagos.</p>
-              <p><strong>Como se interpreta.</strong> H0: no hay autocorrelacion conjunta. p &lt; 0.05 = se rechaza H0: queda estructura (no es ruido blanco).</p>
+            <details class="guia-sub" id="teoria-ljung-box"><summary>Ljung-Box</summary><div class="guia-sub-body">
+              <p class="guia-summary"><strong>Resumen rapido.</strong> Contrasta en conjunto si las autocorrelaciones desde 1 hasta h son cero.</p>
+              <p><strong>Hipotesis.</strong> H0: no hay autocorrelacion conjunta hasta el rezago h. H1: al menos una de esas autocorrelaciones es distinta de cero.</p>
+              <p><strong>Como se interpreta.</strong> Si p &lt; &alpha;, se rechaza H0 y queda estructura temporal. Si no se rechaza, no se demuestra independencia: el test puede no detectar otras dependencias o tener poca potencia.</p>
               <p><strong>Dos usos.</strong> Sobre la serie original, detecta dependencia temporal. Sobre los residuos de un ARIMA, chequea si el modelo capturo esa dependencia: si no rechaza, buena señal.</p>
+              <p><strong>En ChartBay.</strong> Lite y Pro muestran estadistico Q y p-value para varios rezagos; Pro tambien lo calcula sobre residuos ARIMA.</p>
+              <p class="guia-related"><strong>Segui con:</strong> <a href="#teoria-acf-pacf">ACF/PACF</a> y diagnostico de residuos de <a href="#teoria-arima">ARIMA</a>.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (serie y residuos ARIMA en Pro)</p>
             </div></details>
 
-            <details class="guia-sub"><summary>ARIMA</summary><div class="guia-sub-body">
-              <p><strong>Que es.</strong> ARIMA combina terminos autorregresivos, diferenciacion y errores de pronostico para modelar series de tiempo.</p>
-              <p><strong>Las piezas.</strong> p: componente AR (rezagos de la propia serie). d: cuantas veces se diferencia la serie. q: componente MA (rezagos de errores de pronostico).</p>
+            <details class="guia-sub" id="teoria-arima"><summary>AR, MA y ARIMA</summary><div class="guia-sub-body">
+              <p class="guia-summary"><strong>Resumen rapido.</strong> AR usa valores pasados; MA usa innovaciones pasadas; ARIMA agrega diferenciacion para trabajar con series integradas.</p>
+              <p><strong>AR(p).</strong> Explica y<sub>t</sub> con p rezagos de la propia serie. <strong>MA(q).</strong> Explica y<sub>t</sub> con el shock actual y q shocks anteriores. En MA, "media movil" nombra un modelo de errores, no el promedio movil descriptivo.</p>
+              <p><strong>ARIMA(p,d,q).</strong> Primero diferencia d veces; sobre esa serie combina p terminos AR y q terminos MA.</p>
               <p><strong>Ejemplo.</strong> ARIMA(1,1,1): p = 1 usa un rezago autorregresivo; d = 1 diferencia la serie una vez; q = 1 usa un rezago de media movil.</p>
               <p><strong>Honestidad.</strong> ARIMA no adivina el futuro. Construye un pronostico condicionado al patron historico y al modelo elegido.</p>
-              <p class="guia-note">Antes de usar ARIMA, conviene mirar estacionariedad (ADF), ACF, PACF y residuos.</p>
+              <p class="guia-note">Antes de usar ARIMA, conviene mirar estacionariedad (ADF), ACF, PACF y, despues de estimar, Ljung-Box sobre residuos.</p>
               <p><strong>En ChartBay.</strong> Pro estima ARIMA manual: elegis p, d, q y ves coeficientes, AIC/BIC y diagnostico de residuos. Auto-ARIMA: <span class="guia-st road">Roadmap</span></p>
+              <p class="guia-mistake"><strong>Error comun.</strong> Aumentar p y q hasta mejorar el ajuste dentro de muestra puede sobreajustar. Preferí ordenes parsimoniosos y residuos sin estructura clara.</p>
+              <p class="guia-related"><strong>Segui con:</strong> <a href="#teoria-forecast">forecast</a>, <a href="#teoria-ljung-box">Ljung-Box</a> y AIC/BIC.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Pro, manual)</p>
             </div></details>
 
-            <details class="guia-sub"><summary>Forecast</summary><div class="guia-sub-body">
+            <details class="guia-sub" id="teoria-forecast"><summary>Forecast</summary><div class="guia-sub-body">
               <p><strong>Que es.</strong> El forecast proyecta valores futuros usando el modelo estimado. El pronostico puntual es una estimacion central; los intervalos muestran incertidumbre.</p>
               <p><strong>Como se lee.</strong> Elegis un horizonte (cuantos periodos hacia adelante). Cada paso tiene un pronostico puntual y un limite inferior/superior. Los intervalos suelen abrirse a medida que crece el horizonte, porque la incertidumbre se acumula.</p>
               <p><strong>Fechas o pasos.</strong> Si Pro pudo inferir una frecuencia temporal estable, muestra periodos futuros reales. Si la frecuencia no es clara, no inventa fechas: muestra t+1, t+2 y avisa.</p>
               <p><strong>Honestidad.</strong> El forecast no es una promesa: es una proyeccion condicionada al modelo y a que el patron historico se mantenga.</p>
               <p><strong>En ChartBay.</strong> Pro genera forecast del ARIMA estimado con intervalos al 95%.</p>
+              <p class="guia-mistake"><strong>Error comun.</strong> El intervalo de forecast contempla innovaciones futuras y por eso no es lo mismo que un intervalo para la media estimada.</p>
+              <p class="guia-reference"><strong>Fuente principal.</strong> Wooldridge, <cite>Introductory Econometrics: A Modern Approach</cite>, cap. 18, sec. 18.5.</p>
               <p><strong>Estado.</strong> <span class="guia-st ok">Disponible</span> (Pro)</p>
             </div></details>
           </div></details>
@@ -435,7 +513,7 @@
             <p><strong>Error estandar.</strong> Incertidumbre de un coeficiente.</p>
             <p><strong>t-stat.</strong> Coeficiente sobre su error estandar.</p>
             <p><strong>p-valor.</strong> Evidencia contra que el efecto sea 0.</p>
-            <p><strong>IC95.</strong> Rango probable del coeficiente.</p>
+            <p><strong>IC95.</strong> Procedimiento que, bajo los supuestos, cubre al parametro en 95% de muestreos repetidos.</p>
             <p><strong>F.</strong> Prueba el modelo o una restriccion.</p>
             <p><strong>RSS.</strong> Suma de errores al cuadrado.</p>
             <p><strong>RLS.</strong> OLS con restricciones lineales.</p>
@@ -534,6 +612,25 @@
         return found;
       }
 
+      function showHashTarget() {
+        var hash = decodeURIComponent(location.hash.slice(1));
+        if (showDocumentationArea(hash)) return;
+
+        var target = hash ? document.getElementById(hash) : null;
+        if (!target || !target.closest('#area-aprender')) {
+          showDocumentationArea('econometria');
+          return;
+        }
+
+        showDocumentationArea('aprender');
+        var current = target;
+        while (current && current !== areas) {
+          if (current.tagName === 'DETAILS') current.open = true;
+          current = current.parentElement;
+        }
+        target.scrollIntoView({ block: 'start' });
+      }
+
       tabs.forEach(function (t) {
         t.addEventListener('click', function () {
           showDocumentationArea(t.dataset.area);
@@ -541,8 +638,8 @@
         });
       });
 
-      var start = decodeURIComponent(location.hash.slice(1));
-      if (!showDocumentationArea(start)) showDocumentationArea('econometria');
+      window.addEventListener('hashchange', showHashTarget);
+      showHashTarget();
     })();
   </script>
 </body>
