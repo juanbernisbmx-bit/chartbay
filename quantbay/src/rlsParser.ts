@@ -1,4 +1,5 @@
 import type { RLSConstraint } from './rls';
+import { dummyBaseName, type CategoricalVariableInfo } from './categoricalEncoding';
 
 interface Term {
   coefficient: number;
@@ -162,4 +163,36 @@ export function parseRLSRestriction(
   }
 
   return { R: [Rrow], q: [q], label: trimmed };
+}
+
+// Gives a pedagogical reason when a typed RLS restriction (parsed against the
+// EXPANDED post-dummy coefficient names — see the Pro branch of onRun)
+// references either the omitted base category or the original categorical
+// column name. Falls back to rlsParser's own generic message for anything
+// else (e.g. a genuine typo or an unrelated missing variable).
+export function refineCategoricalRlsError(message: string, categoricalInfo: CategoricalVariableInfo[]): string {
+  // rlsParser cita el token tal como se escribió, y el panel propone la forma
+  // con prefijo primero ("Ej: beta_x1 = beta_x2"). Sin reconocer las dos, esta
+  // explicación solo aparecía escribiendo sin prefijo — la variante que casi
+  // nadie usa, porque no es la que está de ejemplo.
+  const mentions = (token: string): boolean =>
+    message.includes(`"${token}"`) || message.includes(`"beta_${token}"`);
+
+  for (const c of categoricalInfo) {
+    const baseToken = dummyBaseName(c.originalName, c.baseCategory);
+    if (mentions(baseToken)) {
+      return (
+        `La categoría "${c.baseCategory}" es la categoría base de "${c.originalName}" y no tiene coeficiente ` +
+        `propio en el modelo (se omitió para evitar la trampa de dummies). Restricciones válidas usan las ` +
+        `dummies creadas: ${c.createdDummies.join(', ')}.`
+      );
+    }
+    if (mentions(c.originalName)) {
+      return (
+        `La variable "${c.originalName}" fue reemplazada por sus dummies (${c.createdDummies.join(', ')}). ` +
+        `Escribí la restricción usando el nombre de una dummy específica, por ejemplo "${c.createdDummies[0]} = 0".`
+      );
+    }
+  }
+  return message;
 }
