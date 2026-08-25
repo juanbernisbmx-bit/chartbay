@@ -25,7 +25,7 @@ function showDeviceProfile(loaded: LoadResult): void {
   });
 }
 import type { RLSConstraint } from './rls';
-import { parseRLSRestriction } from './rlsParser';
+import { parseRLSRestriction, refineCategoricalRlsError } from './rlsParser';
 import { runRegressionMode, runAutoRegressionMode } from './modes/regressionMode';
 import { escapeHtml } from './utils/format';
 import { $, setEngineStatus, setMethodStatus, setText, showError, updateSidebarStep, writeRunLog } from './app/dom';
@@ -46,7 +46,7 @@ import { renderRepairLog } from './ui/diagnosticsView';
 import { renderRegressionResults } from './ui/regressionView';
 import { recommendFunctionalForm } from './services/formRecommender';
 import { renderFormRecommendation, showFormRecommendationPending } from './ui/formRecommendView';
-import { detectCategoricalColumns, encodeCategoricalX, dummyBaseName, type CategoricalVariableInfo } from './categoricalEncoding';
+import { detectCategoricalColumns, encodeCategoricalX, encodeForRegression, dummyBaseName, type CategoricalVariableInfo } from './categoricalEncoding';
 import { runTimeSeriesAnalysis } from './timeseries/service';
 import {
   getACFMaxLag,
@@ -295,6 +295,55 @@ function showRLSValidation(msg: string, type: 'ok' | 'error' | ''): void {
  * regressors" message into something more specific before it's shown (used by
  * the Pro path to explain a base-category or renamed-by-dummies reference).
  */
+/**
+ * Nombres de los coeficientes contra los que se parsea una restricción RLS.
+ *
+ * NO son las X seleccionadas. Con una X categórica el modelo estima
+ * `sector_privado` y `sector_publico`, no `sector`, así que parsear contra la
+ * selección cruda armaba una R con una columna de menos por cada dummy extra:
+ * la restricción se mostraba en verde y después la estimación moría con
+ * "la restricción RLS fila 1 tiene 5 columnas pero el modelo tiene 6
+ * parámetros". El camino Pro ya lo hacía bien; Lite y "Arreglar y calcular" no.
+ *
+ * Usa la codificación de verdad y no una réplica de cómo se nombran las
+ * dummies, para que no puedan divergir.
+ */
+let rlsNamesMemo: {
+  data: ParsedCSV;
+  key: string;
+  names: string[];
+  refine: (message: string) => string;
+} | null = null;
+
+function rlsCoefficientNames(xNames: string[]): {
+  names: string[];
+  refine?: (message: string) => string;
+} {
+  const data = appState.csvData;
+  if (!data) return { names: xNames };
+
+  // Sin categóricas entre las X, los nombres finales son los seleccionados.
+  // El atajo importa porque el validador corre con cada tecla y codificar
+  // reconstruye el dataset entero.
+  const categorical = categoricalColumnsFor(data);
+  if (!xNames.some(name => categorical.includes(name))) return { names: xNames };
+
+  // Memo por selección: la codificación cambia cuando cambian las X, no cuando
+  // cambia el texto de la restricción. La identidad de `data` invalida sola al
+  // cargar otro CSV.
+  const key = xNames.join('\u0000');
+  if (rlsNamesMemo && rlsNamesMemo.data === data && rlsNamesMemo.key === key) return rlsNamesMemo;
+
+  const { encoding } = encodeForRegression(data, xNames);
+  rlsNamesMemo = {
+    data,
+    key,
+    names: encoding.expandedXNames,
+    refine: (message: string) => refineCategoricalRlsError(message, encoding.categoricalInfo),
+  };
+  return rlsNamesMemo;
+}
+
 function getEffectiveRLSConstraint(
   xNames: string[],
   refineError?: (message: string) => string
@@ -319,31 +368,6 @@ function getEffectiveRLSConstraint(
 
   showRLSValidation('', '');
   return appState.activeDemoId ? DEMO_CASES[appState.activeDemoId]?.rlsConstraint : undefined;
-}
-
-// Gives a pedagogical reason when a typed RLS restriction (parsed against the
-// EXPANDED post-dummy coefficient names — see the Pro branch of onRun)
-// references either the omitted base category or the original categorical
-// column name. Falls back to rlsParser's own generic message for anything
-// else (e.g. a genuine typo or an unrelated missing variable).
-function refineCategoricalRlsError(message: string, categoricalInfo: CategoricalVariableInfo[]): string {
-  for (const c of categoricalInfo) {
-    const baseToken = dummyBaseName(c.originalName, c.baseCategory);
-    if (message.includes(`"${baseToken}"`)) {
-      return (
-        `La categoría "${c.baseCategory}" es la categoría base de "${c.originalName}" y no tiene coeficiente ` +
-        `propio en el modelo (se omitió para evitar la trampa de dummies). Restricciones válidas usan las ` +
-        `dummies creadas: ${c.createdDummies.join(', ')}.`
-      );
-    }
-    if (message.includes(`"${c.originalName}"`)) {
-      return (
-        `La variable "${c.originalName}" fue reemplazada por sus dummies (${c.createdDummies.join(', ')}). ` +
-        `Escribí la restricción usando el nombre de una dummy específica, por ejemplo "${c.createdDummies[0]} = 0".`
-      );
-    }
-  }
-  return message;
 }
 
 function isTimeSeriesMode(): boolean {
@@ -670,7 +694,8 @@ async function onRun(): Promise<void> {
     return;
   }
 
-  const rlsConstraint = getEffectiveRLSConstraint(xNames);
+  const liteRls = rlsCoefficientNames(xNames);
+  const rlsConstraint = getEffectiveRLSConstraint(liteRls.names, liteRls.refine);
   if (rlsConstraint === null) {
     showError('Corregí la restricción RLS antes de calcular.');
     return;
@@ -873,7 +898,8 @@ function onAutoRun(): void {
     return;
   }
 
-  const rlsConstraint = getEffectiveRLSConstraint(xNames);
+  const autoRls = rlsCoefficientNames(xNames);
+  const rlsConstraint = getEffectiveRLSConstraint(autoRls.names, autoRls.refine);
   if (rlsConstraint === null) {
     showError('Corregí la restricción RLS antes de calcular.');
     return;
@@ -1350,11 +1376,12 @@ function init(): void {
       return;
     }
 
-    const result = parseRLSRestriction(input.trim(), xNames);
+    const { names, refine } = rlsCoefficientNames(xNames);
+    const result = parseRLSRestriction(input.trim(), names);
     if (result === '') {
       showRLSValidation('', '');
     } else if (typeof result === 'string') {
-      showRLSValidation(result, 'error');
+      showRLSValidation(refine ? refine(result) : result, 'error');
     } else {
       showRLSValidation(`✓ Restricción: ${result.label}`, 'ok');
     }

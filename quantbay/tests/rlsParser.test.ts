@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseRLSRestriction } from '../src/rlsParser';
+import type { CategoricalVariableInfo } from '../src/categoricalEncoding';
+import { parseRLSRestriction, refineCategoricalRlsError} from '../src/rlsParser';
 import { runRegressionMode } from '../src/modes/regressionMode';
 import { runRLS } from '../src/rls';
 import type { ParsedCSV } from '../src/csvParser';
@@ -258,5 +259,62 @@ describe('existing demo constraints still valid via parser', () => {
     const parsed = parseRLSRestriction('x1 + x2 = 1', X2) as RLSConstraint;
     expect(parsed.R).toEqual([[0, 1, 1]]);
     expect(parsed.q).toEqual([1]);
+  });
+});
+
+describe('restricciones RLS sobre variables categóricas', () => {
+  const info: CategoricalVariableInfo[] = [{
+    originalName: 'sector',
+    baseCategory: 'informal',
+    createdDummies: ['sector_privado', 'sector_publico'],
+    categories: ['informal', 'privado', 'publico'],
+  }];
+  const expandidos = ['educacion', 'experiencia', 'sector_privado', 'sector_publico'];
+
+  it('se parsea contra los nombres post-dummy, no contra la selección cruda', () => {
+    // El modelo estima sector_privado y sector_publico, no "sector". Parsear
+    // contra la selección cruda armaba una R con una columna de menos por cada
+    // dummy extra, y la estimación moría con un error de dimensiones.
+    const crudos = ['educacion', 'experiencia', 'sector'];
+    const conCrudos = parseRLSRestriction('beta_educacion = beta_experiencia', crudos);
+    const conExpandidos = parseRLSRestriction('beta_educacion = beta_experiencia', expandidos);
+
+    expect(typeof conCrudos).not.toBe('string');
+    expect(typeof conExpandidos).not.toBe('string');
+    // Una columna por parámetro: [intercepto] + regresoras.
+    expect((conCrudos as RLSConstraint).R[0].length).toBe(crudos.length + 1);
+    expect((conExpandidos as RLSConstraint).R[0].length).toBe(expandidos.length + 1);
+    expect((conCrudos as RLSConstraint).R[0].length).not.toBe(
+      (conExpandidos as RLSConstraint).R[0].length
+    );
+  });
+
+  it('acepta una dummy que existe', () => {
+    expect(typeof parseRLSRestriction('beta_sector_publico = 0', expandidos)).not.toBe('string');
+  });
+
+  it('explica la categoría base, con y sin el prefijo beta_', () => {
+    // El panel propone la forma con prefijo primero, así que reconocer sólo la
+    // forma sin prefijo dejaba esta explicación fuera del alcance de casi todos.
+    for (const texto of ['sector_informal = 0', 'beta_sector_informal = 0']) {
+      const error = parseRLSRestriction(texto, expandidos) as string;
+      expect(typeof error).toBe('string');
+      const refinado = refineCategoricalRlsError(error, info);
+      expect(refinado).toContain('categoría base');
+      expect(refinado).toContain('sector_privado, sector_publico');
+    }
+  });
+
+  it('explica que la categórica se reemplazó por sus dummies, con y sin prefijo', () => {
+    for (const texto of ['sector = 0', 'beta_sector = 0']) {
+      const error = parseRLSRestriction(texto, expandidos) as string;
+      const refinado = refineCategoricalRlsError(error, info);
+      expect(refinado).toContain('fue reemplazada por sus dummies');
+    }
+  });
+
+  it('no toca los mensajes que no son de categóricas', () => {
+    const error = parseRLSRestriction('beta_inexistente = 0', expandidos) as string;
+    expect(refineCategoricalRlsError(error, info)).toBe(error);
   });
 });
