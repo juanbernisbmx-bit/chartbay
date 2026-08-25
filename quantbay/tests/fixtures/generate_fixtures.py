@@ -268,6 +268,16 @@ def make_time_series():
     rw = np.cumsum(shocks_rw)
     rw_list = [float(v) for v in rw]
 
+    # 5) Price-index level: the pathological ADF design. Levels run 100..450
+    #    while their differences run 1..10, and the Schwert lag (11) adds eleven
+    #    lagged differences that are nearly collinear with each other. Solving
+    #    this through the normal equations returned 0.08 where the statistic is
+    #    4.37, which is why src/qrLeastSquares.ts exists. The other series here
+    #    all sit on a unit-ish scale with adf_lag=1, so they never caught it.
+    index_level = [
+        float(round(100 * float(np.exp(0.021 * i + 0.01 * np.sin(i))), 4)) for i in range(72)
+    ]
+
     payload = {
         "description": "ACF (biased), PACF (Levinson-Durbin biased, method=ldb), Ljung-Box and ADF references",
         "source": "Python statsmodels.tsa.stattools / statsmodels.stats.diagnostic",
@@ -288,6 +298,10 @@ def make_time_series():
             "random_walk": {
                 "data": rw_list,
                 "expected": series_reference(rw_list, max_lag=10, ljung_lags=[5, 10, 20], adf_lag=1),
+            },
+            "price_index_level": {
+                "data": index_level,
+                "expected": series_reference(index_level, max_lag=10, ljung_lags=[5, 10, 20], adf_lag=11),
             },
         },
     }

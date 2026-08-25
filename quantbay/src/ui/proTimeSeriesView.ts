@@ -177,7 +177,7 @@ export function renderProTimeSeriesSelectors(
   const dateSelect = $('qb-pro-ts-date') as HTMLSelectElement | null;
   const runButton = $('qb-pro-ts-run') as HTMLButtonElement | null;
 
-  const valueColumns = getProTimeSeriesValueColumns(materializeRows(data), data.headers);
+  const valueColumns = getProTimeSeriesValueColumns(materializeRows(data, { dates: 'iso' }), data.headers);
   if (valueColumns.length === 0) {
     renderProTimeSeriesNoData('No se detectó una columna numérica para analizar como serie de tiempo.');
     return;

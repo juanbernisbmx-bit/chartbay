@@ -14,6 +14,7 @@
  */
 
 import {
+  daySerialToIso,
   PREVIEW_ROWS,
   type ColumnStore,
   type ParsedCSV,
@@ -45,7 +46,7 @@ function previewValue(column: CleanColumn, i: number): unknown {
       return column.values[i];
     case 'date':
       // Row objects carry the ISO string; the typed path keeps the day serial.
-      return new Date(column.days[i] * 86_400_000).toISOString().slice(0, 10);
+      return daySerialToIso(column.days[i]);
     case 'categorical':
       return column.levels[column.codes[i]] ?? null;
     case 'text':
@@ -62,6 +63,7 @@ export function bridgeCleanedTable(table: BridgeableTable): BridgedDataset {
     numeric: new Map(),
     categorical: new Map(),
     text: new Map(),
+    dateColumns: new Set(),
     rowCount: table.rows,
   };
 
@@ -73,9 +75,13 @@ export function bridgeCleanedTable(table: BridgeableTable): BridgedDataset {
         break;
       case 'date':
         // Days since the epoch are a perfectly good regressor, and the engine
-        // only ever asks for numbers. The report keeps the calendar meaning.
+        // only ever asks for numbers. `dateColumns` conserva cuáles lo son,
+        // para que reconstruir las filas pueda devolver el calendario a quien
+        // lo necesite (series de tiempo) sin quitárselo a quien necesita el
+        // número (la regresión).
         numericColumns.push(column.name);
         store.numeric.set(column.name, { values: column.days, mask: column.mask });
+        store.dateColumns!.add(column.name);
         break;
       case 'categorical':
         categoricalColumns.push(column.name);
