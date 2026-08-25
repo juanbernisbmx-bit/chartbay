@@ -948,7 +948,7 @@ function onTimeSeriesRun(): void {
   }
 
   showError('');
-  const result = runTimeSeriesAnalysis(materializeRows(appState.csvData), {
+  const result = runTimeSeriesAnalysis(materializeRows(appState.csvData, { dates: 'iso' }), {
     dateColumn,
     valueColumn,
     transformation: getSelectedTimeSeriesTransformation(),

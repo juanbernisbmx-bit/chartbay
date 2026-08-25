@@ -1,4 +1,4 @@
-import { runOLS } from '../regression';
+import { fitOlsQr } from '../qrLeastSquares';
 
 export interface ADFCriticalValues {
   onePercent: number;
@@ -107,14 +107,21 @@ export function computeADF(values: number[], requestedLag?: number): ADFResult {
       continue;
     }
 
-    try {
-      const result = runOLS({
-        X: x,
-        y,
-        featureNames: ['lagged_level', ...Array.from({ length: lag }, (_, index) => `diff_lag_${index + 1}`)],
-        yName: 'delta',
-      });
-      const statistic = result.tStats[1];
+    // QR y no runOLS: este diseño mezcla una columna de niveles con `lag`
+    // columnas de diferencias de la misma serie, y las ecuaciones normales
+    // pierden la precisión al elevar al cuadrado el condicionamiento. Con un
+    // IPC de 72 meses eso daba 0.08 donde el estadístico real es 4.37.
+    // Ver quantbay/src/qrLeastSquares.ts.
+    const fit = fitOlsQr(x, y);
+    if (fit === null) {
+      lastFailure = `ADF design matrix is rank deficient at lag ${lag}.`;
+      continue;
+    }
+
+    {
+      // tStats[0] es el intercepto; el estadístico ADF es el t del nivel
+      // rezagado, que es la primera regresora.
+      const statistic = fit.tStats[1];
       if (!Number.isFinite(statistic)) {
         lastFailure = 'ADF regression produced a non-finite statistic.';
         continue;
@@ -131,8 +138,6 @@ export function computeADF(values: number[], requestedLag?: number): ADFResult {
         verdict,
         interpretation: `${verdict} Critical values: 1% ${CRITICAL_VALUES.onePercent}, 5% ${CRITICAL_VALUES.fivePercent}, 10% ${CRITICAL_VALUES.tenPercent}.`,
       };
-    } catch (error) {
-      lastFailure = error instanceof Error ? error.message : 'ADF regression failed.';
     }
   }
 

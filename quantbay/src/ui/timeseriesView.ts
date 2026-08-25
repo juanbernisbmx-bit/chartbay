@@ -51,12 +51,16 @@ export function getTimeSeriesColumnDefaults(
   selectedDateColumn?: string,
   selectedValueColumn?: string
 ): { dateColumn: string; valueColumn: string; valueColumns: string[]; detectedDateColumn: string | null } {
-  const detectedDateColumn = detectDateColumn(materializeRows(data), data.headers);
+  // Con { dates: 'iso' } la columna de fecha vuelve a parecer una fecha. Sin
+  // esto llegaba como número de días y no la detectaba ni el heurístico ni el
+  // validador, aunque se llamara "fecha" y trajera ISO en el archivo.
+  const rows = materializeRows(data, { dates: 'iso' });
+  const detectedDateColumn = detectDateColumn(rows, data.headers);
   const dateColumn =
     (selectedDateColumn && data.headers.includes(selectedDateColumn))
       ? selectedDateColumn
       : detectedDateColumn ?? data.headers[0] ?? '';
-  const valueColumns = getTimeSeriesValueColumns(materializeRows(data), data.headers, dateColumn);
+  const valueColumns = getTimeSeriesValueColumns(rows, data.headers, dateColumn);
   const valueColumn =
     (selectedValueColumn && valueColumns.includes(selectedValueColumn))
       ? selectedValueColumn

@@ -19,6 +19,19 @@ export interface ColumnStore {
   categorical: Map<string, { codes: Int32Array; levels: string[] }>;
   /** Free text. The one column kind that genuinely costs a string per row. */
   text: Map<string, string[]>;
+  /**
+   * Cuáles de las columnas de `numeric` son fechas.
+   *
+   * El limpiador las guarda como días desde la época porque así son regresoras
+   * usables sin convertir nada, pero esa decisión borraba el significado de
+   * calendario: sin esta lista, reconstruir las filas devolvía 19723 donde la
+   * vista previa mostraba "2024-01-01", y series de tiempo rechazaba el
+   * dataset entero por fechas inválidas.
+   *
+   * Opcional porque hay fixtures que arman un ColumnStore a mano; ausente
+   * significa "ninguna columna es fecha".
+   */
+  dateColumns?: Set<string>;
   rowCount: number;
 }
 
@@ -47,6 +60,11 @@ export interface ParsedCSV {
 
 /** Rows kept for the preview table on the columnar path. */
 export const PREVIEW_ROWS = 50;
+
+/** Días desde 1970-01-01 a la fecha ISO que ve el usuario. */
+export function daySerialToIso(serial: number): string {
+  return new Date(serial * 86_400_000).toISOString().slice(0, 10);
+}
 
 /** The row count, whichever representation the dataset happens to use. */
 export function rowCountOf(data: ParsedCSV): number {
@@ -107,9 +125,25 @@ export function extractColumn(
  * it allocates one object per row, which is exactly the representation the
  * columnar path avoids. Call it deliberately, never in a loop.
  */
-export function materializeRows(data: ParsedCSV): Record<string, unknown>[] {
+/**
+ * Cómo devolver las columnas de fecha al reconstruir filas.
+ *
+ * Las dos lecturas son válidas y cada consumidor necesita una: la regresión
+ * quiere el número (una fecha es una tendencia perfectamente usable como X) y
+ * series de tiempo quiere el calendario. Es un parámetro y no un default
+ * global justamente porque elegir mal rompe al otro en silencio: con ISO, la
+ * codificación de dummies toma la fecha por categórica y arma una dummy por
+ * día; con serial, el validador de series rechaza todas las filas.
+ */
+export type DateCellFormat = 'serial' | 'iso';
+
+export function materializeRows(
+  data: ParsedCSV,
+  options: { dates?: DateCellFormat } = {}
+): Record<string, unknown>[] {
   if (!data.columns) return data.rows;
-  const { numeric, text, rowCount } = data.columns;
+  const { numeric, text, rowCount, dateColumns } = data.columns;
+  const isoDates = options.dates === 'iso' && dateColumns !== undefined && dateColumns.size > 0;
 
   const out: Record<string, unknown>[] = new Array(rowCount);
   for (let i = 0; i < rowCount; i++) {
@@ -117,7 +151,13 @@ export function materializeRows(data: ParsedCSV): Record<string, unknown>[] {
     for (const header of data.headers) {
       const column = numeric.get(header);
       if (column) {
-        row[header] = column.mask[i] ? column.values[i] : null;
+        if (!column.mask[i]) {
+          row[header] = null;
+        } else {
+          row[header] = isoDates && dateColumns!.has(header)
+            ? daySerialToIso(column.values[i])
+            : column.values[i];
+        }
         continue;
       }
       const factor = data.columns.categorical.get(header);
