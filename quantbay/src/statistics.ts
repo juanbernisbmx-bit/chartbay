@@ -123,6 +123,21 @@ export function chi2PValue(x: number, df: number): number {
   return half < a + 1 ? 1 - gammaSeries(a, half) : gammaContinuedFraction(a, half);
 }
 
+/**
+ * Función de distribución acumulada de la normal estándar: P(Z <= z).
+ *
+ * Sale de la chi-cuadrado que ya está acá: para una normal estándar,
+ * P(|Z| > z) = P(chi2_1 > z²), así que la cola de una es media cola de la
+ * otra. Reusar `chi2PValue` evita sumar una aproximación de erf con su propio
+ * error, y hereda la precisión de la gamma incompleta que ya se usa.
+ */
+export function normalCdf(z: number): number {
+  if (!isFinite(z)) return z > 0 ? 1 : 0;
+  if (z === 0) return 0.5;
+  const tailBothSides = chi2PValue(z * z, 1);
+  return z > 0 ? 1 - tailBothSides / 2 : tailBothSides / 2;
+}
+
 // Pearson correlation matrix; columns[i] is the i-th variable's observations
 export function pearsonMatrix(columns: number[][]): number[][] {
   const k = columns.length;

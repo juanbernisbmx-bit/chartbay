@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adfCriticalValues, computeADF } from '../../src/timeseries/adf';
+import { adfCriticalValues, adfPValue, computeADF } from '../../src/timeseries/adf';
 import { loadFixture } from '../fixtures/loadFixture';
 
 // Referencias sacadas de statsmodels.tsa.adfvalues.mackinnoncrit(N=1,
@@ -61,5 +61,74 @@ describe('computeADF usa el n de la regresión, no el largo de la serie', () => 
     expect(result.observations).toBe(serie.data.length);
     expect(result.regressionObservations).toBe(serie.data.length - lag - 1);
     expect(result.criticalValues).toEqual(adfCriticalValues(result.regressionObservations));
+  });
+});
+
+// Referencias de statsmodels.tsa.adfvalues.mackinnonp(t, regression='c', N=1).
+const P_REFERENCIA: Array<[number, number]> = [
+  [-20.0, 0.0],
+  [-18.83, 2.0221237233452862e-30],
+  [-6.0, 1.666120483405439e-07],
+  [-3.5443688564814813, 0.006918098467289275],
+  [-2.9110731481481484, 0.04407541048188462],
+  [-2.0, 0.28657309916843154],
+  [-1.61, 0.4779756525941893],
+  [-1.0, 0.7532643012005655],
+  [0.0, 0.958532086060056],
+  [2.0, 0.9986729511999243],
+  [2.74, 0.9990880801041981],
+  [4.372519, 1.0],
+  [10.0, 1.0],
+];
+
+describe('p-valor del ADF contra MacKinnon (1994)', () => {
+  for (const [t, esperado] of P_REFERENCIA) {
+    it(`coincide con statsmodels en t = ${t}`, () => {
+      const p = adfPValue(t)!;
+      // Tolerancia absoluta: en las colas los valores son del orden de 1e-30 y
+      // una relativa no significaría nada ahí.
+      expect(Math.abs(p - esperado)).toBeLessThan(1e-12);
+    });
+  }
+
+  it('se satura fuera del rango ajustado, sin inventar precisión', () => {
+    expect(adfPValue(-25)).toBe(0);
+    expect(adfPValue(5)).toBe(1);
+  });
+
+  it('crece con el estadístico: menos negativo es menos evidencia contra la raíz unitaria', () => {
+    const orden = [-6, -4, -3, -2, -1, 0, 2].map(t => adfPValue(t)!);
+    for (let i = 1; i < orden.length; i++) expect(orden[i]).toBeGreaterThan(orden[i - 1]);
+  });
+
+  it('devuelve null si el estadístico no es finito', () => {
+    expect(adfPValue(Number.NaN)).toBeNull();
+    expect(adfPValue(Number.POSITIVE_INFINITY)).toBeNull();
+  });
+
+  it('no coincide exactamente con los valores críticos, y por eso hay aviso', () => {
+    // Los críticos son MacKinnon 2010 y ajustan por n; el p-valor es MacKinnon
+    // 1994 y es asintótico. En el crítico al 5% de una muestra chica el
+    // p-valor da 0.044, no 0.050, y la brecha se cierra al crecer n. Es la
+    // misma asimetría que arrastra statsmodels; queda fijada acá para que no
+    // se lea como un error de cálculo.
+    expect(adfPValue(adfCriticalValues(60).fivePercent)!).toBeCloseTo(0.0441, 4);
+    expect(adfPValue(adfCriticalValues(500).fivePercent)!).toBeCloseTo(0.0493, 4);
+    expect(adfPValue(adfCriticalValues(Number.POSITIVE_INFINITY).fivePercent)!).toBeCloseTo(0.05, 3);
+  });
+
+  it('no avisa de contradicción cuando no la hay', () => {
+    // El índice de precios da un estadístico muy lejos de la franja de
+    // conflicto, así que el aviso no tiene que aparecer.
+    const fixture = loadFixture<{ series: Record<string, { data: number[]; expected: { adfLag: number | null } }> }>(
+      'time_series_statsmodels.json'
+    );
+    const serie = fixture.series.price_index_level;
+    const result = computeADF(serie.data, serie.expected.adfLag!);
+    expect(result.available).toBe(true);
+    if (result.available) {
+      expect(result.interpretation).not.toContain('no coinciden al 5%');
+      expect(result.interpretation).toContain('MacKinnon (1994)');
+    }
   });
 });
