@@ -5,10 +5,12 @@ import {
   getSession, resetForNewDataset, resetSessionForTests, restoreGuidedPreferences, setMode,
 } from '../../src/guided/session';
 import { clearStoredMode } from '../../src/guided/persistence';
+import { useMemoryStorage } from './memoryStorage';
 
 const panel = () => document.getElementById('qb-guided')?.innerHTML ?? '';
 
 beforeEach(() => {
+  useMemoryStorage();
   document.body.innerHTML = '<section id="qb-guided" style="display:none"></section>';
   appState.csvData = null;
   appState.lastResult = null;
