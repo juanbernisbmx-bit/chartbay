@@ -298,6 +298,7 @@ def _chartbay_pro_ols():
 
     names = ["Intercept"] + x_labels
     coefficients = []
+    confidence_intervals = results.conf_int(alpha=0.05)
     for i in range(len(names)):
         estimate = finite_or_none(results.params[i])
         if estimate is None:
@@ -311,6 +312,10 @@ def _chartbay_pro_ols():
             "stdError": finite_or_none(results.bse[i]),
             "tStat": finite_or_none(results.tvalues[i]),
             "pValue": finite_or_none(results.pvalues[i]),
+            "confidenceInterval": [
+                finite_or_none(confidence_intervals[i][0]),
+                finite_or_none(confidence_intervals[i][1]),
+            ],
         })
 
     residuals = [finite_or_none(v) for v in results.resid]
@@ -348,6 +353,8 @@ def _chartbay_pro_ols():
         "rSquaredAdj": finite_or_none(results.rsquared_adj),
         "fStat": f_stat,
         "fPValue": f_pvalue,
+        "aic": finite_or_none(results.aic),
+        "bic": finite_or_none(results.bic),
         "dfResid": int(results.df_resid),
         "residualStdError": residual_std_error,
         "residuals": residuals,

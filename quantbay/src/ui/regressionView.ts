@@ -12,6 +12,8 @@ import { renderInterpretationResults } from './interpretationView';
 import { buildModelDoctor, engineFindingFromInterpretation } from '../modelDoctor';
 import { renderModelDoctor } from './modelDoctorView';
 import { chartTheme, renderBinaryWarn, renderCorrMatrix, renderLeakageWarn, renderResidDiag, renderVIF } from './diagnosticsView';
+import { createLiteModelSnapshot } from '../modelComparison/snapshots';
+import { captureCurrentModel } from './modelComparisonView';
 
 declare const Chart: any;
 
@@ -79,8 +81,7 @@ export function renderRegressionResults(
       nObs: heteroskedasticity.n,
     }));
   }
-  const doctor = $('qb-model-doctor');
-  if (doctor) doctor.innerHTML = renderModelDoctor(buildModelDoctor(
+  const doctorReport = buildModelDoctor(
     interpretations.map(engineFindingFromInterpretation),
     {
       mode: 'regression',
@@ -101,9 +102,20 @@ export function renderRegressionResults(
       rSquared: result.rSquared,
       converged: true,
     }
-  ));
+  );
+  const doctor = $('qb-model-doctor');
+  if (doctor) doctor.innerHTML = renderModelDoctor(doctorReport);
   const interp = $('qb-interpretation');
   if (interp) interp.innerHTML = renderInterpretationResults(interpretations);
+
+  captureCurrentModel(createLiteModelSnapshot({
+    result,
+    functionalForm,
+    categoricalInfo,
+    interpretations,
+    doctor: doctorReport,
+    warnings: categoricalWarnings,
+  }));
 
   const actual = result.predictions.map((p, i) => p + result.residuals[i]);
   const predTable = $('qb-pred-table');
