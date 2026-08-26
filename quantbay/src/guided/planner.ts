@@ -6,6 +6,7 @@
 
 import { GUIDED_RULES, type GuidedRule } from './rules';
 import { STEP_DEFINITIONS, isStale, type StepDefinition } from './steps';
+import { changedFields, invalidatedSteps } from './invalidation';
 import type {
   AnalysisContext,
   GuidedPlan,
@@ -111,13 +112,20 @@ export function buildGuidedPlan(ctx: AnalysisContext): GuidedPlan {
 
   // Desactualizado: el paso se hizo, pero un cambio río arriba lo dejó viejo.
   // No se re-estima solo; se marca y se espera al estudiante.
-  if (isStale(ctx)) {
-    for (const step of steps) {
-      if (step.key === 'estimate' && step.state !== 'blocked') {
-        step.state = 'review';
-        step.reviewReason = 'stale';
-      }
-    }
+  //
+  // La invalidación es por paso, no global: con solo el tipo de errores
+  // estándar cambiado, lo que el estudiante leyó de signo y magnitud sigue
+  // valiendo, y sería falso pedirle que lo revise de nuevo.
+  const stale = isStale(ctx)
+    ? invalidatedSteps(changedFields(ctx.spec!.signature, ctx.estimatedSignature!))
+    : new Set<StepKey>();
+
+  for (const step of steps) {
+    if (!stale.has(step.key) || step.state === 'blocked') continue;
+    // Un paso invalidado deja de contar como hecho aunque el estudiante lo
+    // haya marcado: lo que revisó era de otro modelo.
+    step.state = 'review';
+    step.reviewReason = 'stale';
   }
 
   // Un paso cuyo hallazgo de Doctor pide atención pasa a "requiere revisión".

@@ -9,6 +9,7 @@ import { appState } from '../app/state';
 import { forEachCellOf, rowCountOf, type ParsedCSV } from '../csvParser';
 import type { FunctionalForm } from '../functionalForms';
 import { getDoctorReport, getEstimatedSignature, getSession } from './session';
+import { changedFields } from './invalidation';
 import type { AnalysisContext, AnalysisType, CurrentSpec, DatasetProfile, DatasetProfileWarning, SpecSignature } from './types';
 
 function selectedY(): string {
@@ -123,26 +124,40 @@ function currentSpec(data: ParsedCSV | null, datasetName: string): CurrentSpec |
   return { yName, xNames, form, seType, dropIncomplete, restriction, signature };
 }
 
+/** El informe describe la especificación que sigue seleccionada. */
+function reportStillApplies(
+  spec: CurrentSpec | null,
+  estimated: ReturnType<typeof getEstimatedSignature>
+): boolean {
+  if (!spec || !estimated) return true;
+  return changedFields(spec.signature, estimated).length === 0;
+}
+
 export function buildAnalysisContext(): AnalysisContext {
   const data = appState.csvData;
   const datasetName = ($('qb-filename')?.textContent ?? '').trim() || 'dataset';
   const profile = data ? buildDatasetProfile(data, datasetName) : null;
+  const spec = currentSpec(data, datasetName);
+  const estimatedSignature = getEstimatedSignature();
 
   return {
     mode: appState.activeMode,
     engine: appState.activeVersion === 'pro' ? 'pro' : 'lite',
     dataset: profile,
     raw: data,
-    spec: currentSpec(data, datasetName),
-    estimatedSignature: getEstimatedSignature(),
+    spec,
+    estimatedSignature,
     // Hay modelo si estimó cualquiera de los dos motores. No se puede mirar
     // el resultado de Pro directamente —Lite no importa nada de Pro, y hay un
     // test que lo verifica—, así que se usa la firma: la deposita main.ts al
     // terminar una corrida, venga del motor que venga. Sin esto, una corrida
     // Pro dejaba el recorrido trabado en "falta estimar".
     hasResult: appState.lastResult !== null || getEstimatedSignature() !== null,
-    // El DoctorReport tal como lo emite buildModelDoctor, sin transformar.
-    doctor: getDoctorReport(),
+    // El DoctorReport tal como lo emite buildModelDoctor, sin transformar —
+    // salvo que la especificación haya cambiado desde que se produjo: un
+    // diagnóstico de un modelo superado no puede seguir dictando el próximo
+    // paso. Se descarta hasta que se vuelva a estimar.
+    doctor: reportStillApplies(spec, estimatedSignature) ? getDoctorReport() : null,
     session: getSession(),
   };
 }
