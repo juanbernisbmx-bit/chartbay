@@ -50,6 +50,25 @@ let lastLoggedSignature: SpecSignature | null = null;
  */
 let lastDoctorReport: DoctorReport | null = null;
 
+/**
+ * Respuestas del modo práctica, por id de pregunta.
+ *
+ * Fuera de GuidedSession a propósito, igual que el último informe de Doctor:
+ * el planificador no las mira. Práctica no cambia el plan, cambia el orden en
+ * que se lo muestra, así que meterlas en el contexto le daría al motor un
+ * dato que no tiene por qué conocer.
+ */
+let practiceAnswers = new Map<string, StepKey>();
+
+export function answerPractice(questionId: string, step: StepKey, label: string): void {
+  if (practiceAnswers.has(questionId)) return;
+  practiceAnswers.set(questionId, step);
+  logDecision('practice_answer', `Respondiste ${label}`, questionId);
+}
+
+export function getPracticeAnswer(questionId: string): StepKey | null {
+  return practiceAnswers.get(questionId) ?? null;
+}
 
 export function noteDoctorReport(report: DoctorReport): void {
   lastDoctorReport = report;
@@ -152,10 +171,14 @@ export function setMode(mode: GuidedMode): void {
   // Apagar la guía es en sí una decisión del recorrido, y de las que más
   // explican después por qué nadie avisó de algo. Queda anotada como cualquier
   // otra.
-  logDecision('set_mode', mode === 'free'
-    ? 'Pasaste a modo libre: la guía solo avisa lo que invalidaría el análisis'
-    : 'Volviste al modo guiado');
+  logDecision('set_mode', MODE_DECISION[mode]);
 }
+
+const MODE_DECISION: Record<GuidedMode, string> = {
+  free: 'Pasaste a modo libre: la guía solo avisa lo que invalidaría el análisis',
+  practice: 'Pasaste a modo práctica: la guía pregunta antes de recomendar',
+  guided: 'Volviste al modo guiado',
+};
 
 /**
  * Restaura las preferencias guardadas. La llama la vista al iniciar.
@@ -189,6 +212,10 @@ export function resetForNewDataset(name: string): void {
   estimatedSignature = null;
   lastLoggedSignature = null;
   lastDoctorReport = null;
+  // El recorrido arranca de nuevo, así que las preguntas también: una
+  // respuesta vieja pegada a un id que vuelve a aparecer mostraría la
+  // devolución sin que el estudiante haya contestado nada.
+  practiceAnswers = new Map();
   logDecision('load', `Cargaste ${name}`);
 }
 
@@ -198,6 +225,7 @@ export function resetSessionForTests(): void {
   estimatedSignature = null;
   lastLoggedSignature = null;
   lastDoctorReport = null;
+  practiceAnswers = new Map();
 }
 
 function labelOf(type: AnalysisType): string {

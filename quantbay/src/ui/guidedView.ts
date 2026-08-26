@@ -8,10 +8,12 @@ import { escapeHtml } from '../utils/format';
 import { buildAnalysisContext, suggestAnalysisType } from '../guided/context';
 import { buildGuidedPlan } from '../guided/planner';
 import {
-  acknowledgeStep, confirmAnalysisType, dismissRecommendation, getSession,
-  logDecision, noteSpecChange, recordEstimation, restoreGuidedPreferences,
-  seedSpecBaseline, setMode,
+  acknowledgeStep, answerPractice, confirmAnalysisType, dismissRecommendation,
+  getPracticeAnswer, getSession, logDecision, noteSpecChange, recordEstimation,
+  restoreGuidedPreferences, seedSpecBaseline, setMode,
 } from '../guided/session';
+import { buildPracticeQuestion, buildPracticeReveal } from '../guided/practice';
+import type { GuidedMode, PracticeQuestion } from '../guided/types';
 import { subscribeComparisonStore } from '../modelComparison/store';
 import { buildDecisionLogText, clockOf } from '../guided/decisionLog';
 import { downloadTextFile } from './exports';
@@ -63,7 +65,15 @@ const DECISION_LABEL: Record<DecisionKind, string> = {
   dismiss_recommendation: 'omisión',
   set_mode: 'modo',
   compare_models: 'contraste',
+  practice_answer: 'práctica',
 };
+
+const MODE_LABEL: Record<GuidedMode, string> = {
+  guided: 'guiado',
+  free: 'libre',
+  practice: 'práctica',
+};
+const MODES: GuidedMode[] = ['guided', 'free', 'practice'];
 
 /**
  * Modelos guardados que la guía ya anotó, para registrar altas y bajas.
@@ -193,6 +203,55 @@ function downloadDecisionLog(): void {
   downloadTextFile('chartbay_registro_decisiones.md', text, 'text/markdown');
 }
 
+/**
+ * La pregunta, mientras el estudiante no se haya comprometido con nada.
+ *
+ * No se dibuja el porqué ni el título de la recomendación: eso es justamente
+ * lo que se está reteniendo.
+ */
+function practiceQuestionBlock(question: PracticeQuestion): string {
+  const options = question.options
+    .map(option => `<li><button type="button" class="qb-g-opt" data-practice-q="${escapeHtml(question.id)}" data-practice-step="${option.step}">${escapeHtml(option.title)}</button></li>`)
+    .join('');
+  return `
+    <div class="qb-g-rec qb-g-rec--practice">
+      <p class="qb-g-kind">Modo práctica</p>
+      <p class="qb-g-title">${escapeHtml(question.prompt)}</p>
+      <ul class="qb-g-opts">${options}</ul>
+    </div>`;
+}
+
+/**
+ * La devolución. Contrasta, no corrige.
+ *
+ * Coincidir no valida nada y no coincidir no es un error: la guía ordena
+ * pasos, no dictamina econometría. Por eso el texto dice qué habría sugerido
+ * y para qué sirve lo elegido, y deja el juicio del lado del estudiante.
+ */
+function practiceRevealBlock(plan: GuidedPlan, question: PracticeQuestion, chosen: string): string {
+  const reveal = buildPracticeReveal(plan, question, chosen as never);
+  if (!reveal) return '';
+  const blocked = reveal.chosenBlocked
+    ? `<p class="qb-g-unmet qb-g-unmet--block">Ahora mismo ese paso no se puede: falta ${escapeHtml(reveal.chosenBlocked)}.</p>`
+    : '';
+  const yours = reveal.matched
+    ? '<p class="qb-g-body">Elegiste lo mismo que iba a sugerir la guía. Coincidir no valida el análisis: la guía ordena pasos, no dictamina econometría.</p>'
+    : `<p class="qb-g-body"><strong>Elegiste ${escapeHtml(reveal.chosenLabel)}.</strong> ${escapeHtml(reveal.chosenWhy)}</p>${blocked}
+       <p class="qb-g-body">No es un error: puede haber razones para ese orden. Lo que sigue es lo que la guía iba a proponer y por qué.</p>`;
+  return `
+    <div class="qb-g-rec qb-g-rec--practice">
+      <p class="qb-g-kind">${reveal.matched ? 'Coincidieron' : 'Lo tuyo y lo de la guía'}</p>
+      ${yours}
+      <p class="qb-g-title">${escapeHtml(reveal.recommendedTitle)}</p>
+      <p class="qb-g-body">${escapeHtml(reveal.recommendedBody)}</p>
+      <details class="qb-g-why" open>
+        <summary>¿Por qué?</summary>
+        <p>${escapeHtml(reveal.recommendedWhy)}</p>
+        ${theoryLinks(plan.primary?.theory ?? [])}
+      </details>
+    </div>`;
+}
+
 function typePrompt(): string {
   const ctx = buildAnalysisContext();
   const suggestion = suggestAnalysisType(ctx.dataset);
@@ -223,12 +282,21 @@ export function renderGuided(): void {
   seedSpecBaseline(ctx.spec);
   const plan: GuidedPlan = buildGuidedPlan(ctx);
   const free = session.mode === 'free';
+  const prompt = typePrompt();
 
-  const rail = plan.steps.length > 0 && !free
+  // Práctica: el tipo de análisis ya es una pregunta con la decisión del lado
+  // del estudiante, así que ese prompt se deja pasar tal cual y la retención
+  // empieza recién con las recomendaciones.
+  const question = session.mode === 'practice' && !prompt ? buildPracticeQuestion(plan) : null;
+  const answered = question ? getPracticeAnswer(question.id) : null;
+  const pending = question !== null && answered === null;
+
+  // Mientras la pregunta esté abierta el riel no se dibuja: el chip
+  // "siguiente" contestaría solo. Vuelve apenas el estudiante se compromete.
+  const rail = plan.steps.length > 0 && !free && !pending
     ? `<ol class="qb-g-steps">${plan.steps.map(stepRow).join('')}</ol>`
     : '';
 
-  const prompt = typePrompt();
   const body = prompt
     || (plan.cannotAdvise
       ? `<div class="qb-g-rec qb-g-rec--informational">
@@ -240,19 +308,28 @@ export function renderGuided(): void {
 
   // En modo libre solo emergen las bloqueantes: lo que invalidaría el trabajo.
   const visibleBody = free && plan.primary?.kind !== 'blocking' && !prompt ? '' : body;
-  const more = plan.secondary.length > 0 && !free
+  const practiceBody = question
+    ? (answered
+        ? practiceRevealBlock(plan, question, answered)
+        : practiceQuestionBlock(question))
+    : null;
+
+  // El contador de secundarias también adelanta cuánto falta: se guarda hasta
+  // que la pregunta esté contestada.
+  const more = plan.secondary.length > 0 && !free && !pending
     ? `<p class="qb-g-more">${plan.secondary.length} sugerencia(s) más</p>`
     : '';
 
   host.innerHTML = `
     <div class="qb-g-head">
       <p class="qb-subtitle">Análisis guiado</p>
-      <button type="button" class="qb-g-mode" data-guided-mode="${free ? 'guided' : 'free'}">
-        modo ${free ? 'libre' : 'guiado'} · cambiar
-      </button>
+      <span class="qb-g-modes">${MODES.map(mode => mode === session.mode
+        ? `<span class="qb-g-mode is-active" aria-current="true">${MODE_LABEL[mode]}</span>`
+        : `<button type="button" class="qb-g-mode" data-guided-mode="${mode}">${MODE_LABEL[mode]}</button>`
+      ).join('')}</span>
     </div>
     ${rail}
-    ${visibleBody}
+    ${practiceBody ?? visibleBody}
     ${more}
     ${decisionLog(session)}`;
   host.style.display = '';
@@ -318,10 +395,12 @@ export function initGuided(onAction?: (focus: string) => void): void {
   }
 
   host.addEventListener('click', event => {
-    const el = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-guided-type],[data-guided-skip],[data-guided-act],[data-guided-mode],[data-guided-log],[data-guided-export]');
+    const el = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-guided-type],[data-guided-skip],[data-guided-act],[data-guided-mode],[data-guided-log],[data-guided-export],[data-practice-q]');
     if (!el) return;
 
-    if (el.dataset.guidedLog !== undefined) {
+    if (el.dataset.practiceQ !== undefined) {
+      answerPractice(el.dataset.practiceQ, el.dataset.practiceStep as never, el.textContent?.trim() ?? '');
+    } else if (el.dataset.guidedLog !== undefined) {
       // El <details> se abre solo por el click nativo, pero el redibujo de
       // abajo reemplaza el nodo entero: hay que recordarlo acá o se cierra.
       logOpen = !logOpen;
@@ -334,7 +413,8 @@ export function initGuided(onAction?: (focus: string) => void): void {
     } else if (el.dataset.guidedSkip) {
       dismissRecommendation(el.dataset.guidedSkip, el.dataset.guidedTitle ?? '');
     } else if (el.dataset.guidedMode) {
-      setMode(el.dataset.guidedMode === 'free' ? 'free' : 'guided');
+      const mode = el.dataset.guidedMode as GuidedMode;
+      if (MODES.includes(mode)) setMode(mode);
     } else if (el.dataset.guidedAct !== undefined) {
       const step = el.dataset.guidedStep;
       if (step) acknowledgeStep(step as never, el.textContent?.trim() ?? step, el.dataset.guidedRec);

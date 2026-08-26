@@ -69,6 +69,8 @@ describe('modo libre restaurado', () => {
     renderGuided();
 
     expect(getSession().mode).toBe('free');
-    expect(panel()).toContain('modo libre');
+    // El selector marca el modo activo; los otros dos quedan como botones.
+    expect(panel()).toContain('class="qb-g-mode is-active" aria-current="true">libre<');
+    expect(panel()).toContain('data-guided-mode="practice"');
   });
 });

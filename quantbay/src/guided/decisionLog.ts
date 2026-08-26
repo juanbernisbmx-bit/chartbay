@@ -83,6 +83,7 @@ const TYPE_LABEL: Record<AnalysisType, string> = {
 const MODE_LABEL: Record<GuidedMode, string> = {
   guided: 'guiado',
   free: 'libre',
+  practice: 'práctica',
 };
 
 export interface DecisionLogMeta {

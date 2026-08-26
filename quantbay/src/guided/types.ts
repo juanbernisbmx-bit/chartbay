@@ -12,7 +12,16 @@ import type { DoctorCategoryKey, DoctorImpact, DoctorReport } from '../modelDoct
 import type { ComparisonLevel } from '../modelComparison/types';
 
 export type AnalysisType = 'cross_section' | 'time_series' | 'descriptive';
-export type GuidedMode = 'guided' | 'free';
+/**
+ * Cuánto habla la guía.
+ *
+ * guided  — dice el próximo paso y por qué.
+ * free    — se calla salvo que algo invalide el trabajo.
+ * practice — retiene la recomendación y pregunta primero. Es el mismo plan:
+ *            lo único que cambia es que el estudiante se compromete con una
+ *            respuesta antes de ver la de la guía.
+ */
+export type GuidedMode = 'guided' | 'free' | 'practice';
 
 export type StepKey =
   // Comunes a los dos flujos
@@ -127,7 +136,9 @@ export type DecisionKind =
   /** Cambiar entre guiado y libre. Apagar la guía también es una decisión. */
   | 'set_mode'
   /** Guardar o quitar una estimación del contraste de especificaciones. */
-  | 'compare_models';
+  | 'compare_models'
+  /** Responder una pregunta del modo práctica. */
+  | 'practice_answer';
 
 export interface UserDecision {
   id: string;
@@ -221,6 +232,46 @@ export interface CurrentSpec {
   dropIncomplete: boolean;
   restriction: string;
   signature: SpecSignature;
+}
+
+/**
+ * Una opción de la pregunta de práctica: un paso del recorrido, ofrecido con
+ * el mismo texto con el que la guía lo propondría si lo recomendara.
+ */
+export interface PracticeOption {
+  step: StepKey;
+  /** El prompt del paso, tal como está escrito en el catálogo. */
+  title: string;
+}
+
+/**
+ * Pregunta de práctica: la recomendación retenida, convertida en elección.
+ *
+ * `id` es el id de la recomendación que se está reteniendo. Sirve de identidad:
+ * mientras la guía siga recomendando lo mismo, es la misma pregunta y la
+ * respuesta del estudiante se sostiene; cuando el plan cambia, hay pregunta
+ * nueva.
+ */
+export interface PracticeQuestion {
+  id: string;
+  prompt: string;
+  options: PracticeOption[];
+  /** El paso que la guía habría recomendado. */
+  recommended: StepKey;
+}
+
+/** Lo que se muestra una vez que el estudiante se comprometió con una opción. */
+export interface PracticeReveal {
+  matched: boolean;
+  /** Título y porqué de la recomendación retenida, tal como los emitió la regla. */
+  recommendedTitle: string;
+  recommendedBody: string;
+  recommendedWhy: string;
+  /** Para qué sirve el paso que eligió el estudiante, del catálogo. */
+  chosenLabel: string;
+  chosenWhy: string;
+  /** Presente si el paso elegido hoy no se puede hacer todavía. */
+  chosenBlocked: string | null;
 }
 
 /**
