@@ -21,7 +21,7 @@ const MODE_KEY = 'chartbay.guided.mode';
 export function loadStoredMode(): GuidedMode | null {
   try {
     const raw = window.localStorage.getItem(MODE_KEY);
-    return raw === 'free' || raw === 'guided' ? raw : null;
+    return raw === 'free' || raw === 'guided' || raw === 'practice' ? raw : null;
   } catch {
     return null;
   }

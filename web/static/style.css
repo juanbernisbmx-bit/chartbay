@@ -3179,8 +3179,15 @@ body:has(.terminal-finance){
 /* Econometría Guiada */
 #qb-guided{padding:14px 16px}
 .qb-g-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+.qb-g-modes{display:inline-flex;align-items:center;gap:2px;font-family:var(--mono);font-size:10.5px}
+.qb-g-modes>*+*::before{content:"·";color:var(--faint);margin-right:4px}
 .qb-g-mode{background:none;border:none;color:var(--muted);font-family:var(--mono);font-size:10.5px;cursor:pointer;padding:2px 4px}
 .qb-g-mode:hover{color:var(--text)}
+.qb-g-mode.is-active{color:var(--accent);cursor:default}
+.qb-g-rec--practice{border-left-color:var(--accent)}
+.qb-g-opts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.qb-g-opt{width:100%;text-align:left;background:none;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:13px;line-height:1.45;padding:8px 11px;cursor:pointer}
+.qb-g-opt:hover{border-color:var(--accent);color:var(--accent)}
 .qb-g-steps{list-style:none;margin:0 0 12px;padding:0;border-top:1px solid var(--line-soft)}
 .qb-g-step{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
 .qb-g-n{font-family:var(--mono);font-size:11px;color:var(--faint);width:14px}
@@ -3195,6 +3202,8 @@ body:has(.terminal-finance){
 .qb-g-chip--blocked{color:var(--error)}
 .qb-g-chip--pending,.qb-g-chip--optional,.qb-g-chip--not_applicable{color:var(--muted)}
 .qb-g-unmet{flex-basis:100%;margin:2px 0 0 24px;font-size:11.5px;color:var(--muted)}
+/* Fuera del riel no hay número al que alinearse: va sin sangría. */
+.qb-g-unmet--block{margin:6px 0 0;color:var(--warn)}
 .qb-g-rec{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:var(--r);padding:12px 14px;background:var(--bg-grid)}
 .qb-g-rec--blocking{border-left-color:var(--error)}
 .qb-g-rec--advisory{border-left-color:var(--warn)}
