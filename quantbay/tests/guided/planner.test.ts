@@ -7,6 +7,7 @@ function signature(over: Partial<SpecSignature> = {}): SpecSignature {
   return {
     dataset: 'datos.csv', yName: 'salario', xNames: 'educacion|experiencia',
     form: 'lin-lin', seType: 'classic', dropIncomplete: false, restriction: '',
+    transformation: '', arimaOrders: '',
     ...over,
   };
 }
@@ -34,7 +35,7 @@ function ctx(over: Partial<AnalysisContext> = {}): AnalysisContext {
   return {
     mode: 'regression', engine: 'lite',
     dataset: dataset(), raw: null, spec: spec(),
-    estimatedSignature: null, hasResult: false, doctor: null,
+    estimatedSignature: null, hasResult: false, timeSeries: null, doctor: null,
     session: { mode: 'guided', confirmedType: 'cross_section', acknowledged: [], dismissed: [], decisions: [] },
     ...over,
   };
@@ -102,14 +103,13 @@ describe('planificador · flujos separados', () => {
     expect(claves).not.toContain('diagnostics');
   });
 
-  it('series de tiempo declara que la guía todavía no existe, en vez de improvisar', () => {
+  it('series de tiempo arranca por el índice temporal, no por elegir variables', () => {
     const plan = buildGuidedPlan(ctx({
       mode: 'timeseries',
       session: { mode: 'guided', confirmedType: 'time_series', acknowledged: [], dismissed: [], decisions: [] },
     }));
-    expect(plan.primary).toBeNull();
-    expect(plan.cannotAdvise).toBeDefined();
-    expect(plan.cannotAdvise!.whatIsMissing).toBeTruthy();
+    expect(plan.cannotAdvise).toBeUndefined();
+    expect(plan.primary!.targetStep).toBe('timeIndex');
   });
 });
 

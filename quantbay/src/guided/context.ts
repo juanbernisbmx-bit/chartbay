@@ -6,6 +6,7 @@
 
 import { $ } from '../app/dom';
 import { appState } from '../app/state';
+import type { TimeSeriesFacts } from './types';
 import { forEachCellOf, rowCountOf, type ParsedCSV } from '../csvParser';
 import type { FunctionalForm } from '../functionalForms';
 import { getDoctorReport, getEstimatedSignature, getSession } from './session';
@@ -97,6 +98,40 @@ export function suggestAnalysisType(profile: DatasetProfile | null): { type: Ana
   };
 }
 
+function intOf(id: string): number | null {
+  const raw = ($(id) as HTMLInputElement | null)?.value ?? '';
+  const n = Number(raw);
+  return raw.trim() !== '' && Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
+/**
+ * Hechos de la serie, leídos del panel y del último análisis corrido.
+ *
+ * Nada de esto evalúa: si la serie es estacionaria o no lo dice Model Doctor.
+ * Acá solo se registra qué serie se está mirando y con qué transformación.
+ */
+function timeSeriesFacts(): TimeSeriesFacts | null {
+  if (appState.activeMode !== 'timeseries') return null;
+
+  const result = appState.lastTimeSeriesResult;
+  const arimaEnabled = ($('qb-pro-ts-arima-enable') as HTMLInputElement | null)?.checked ?? false;
+  const p = intOf('qb-pro-ts-arima-p');
+  const d = intOf('qb-pro-ts-arima-d');
+  const q = intOf('qb-pro-ts-arima-q');
+
+  return {
+    dateColumn: ($('qb-ts-date') as HTMLSelectElement | null)?.value ?? '',
+    valueColumn: ($('qb-ts-value') as HTMLSelectElement | null)?.value ?? '',
+    transformation: ($('qb-ts-transform') as HTMLSelectElement | null)?.value ?? 'original',
+    hasResult: result !== null,
+    observations: result?.summary.observations ?? 0,
+    frequency: String(result?.summary.frequency ?? 'desconocida'),
+    duplicateDates: result?.validation.duplicateDates.length ?? 0,
+    invalidDates: result?.validation.invalidDateRows.length ?? 0,
+    arimaOrders: arimaEnabled && p !== null && d !== null && q !== null ? { p, d, q } : null,
+  };
+}
+
 function currentSpec(data: ParsedCSV | null, datasetName: string): CurrentSpec | null {
   if (!data) return null;
   const yName = selectedY();
@@ -112,6 +147,7 @@ function currentSpec(data: ParsedCSV | null, datasetName: string): CurrentSpec |
   const dropIncomplete = ($('qb-drop-incomplete') as HTMLInputElement | null)?.checked ?? false;
   const restriction = (($('qb-rls-input') as HTMLInputElement | null)?.value ?? '').trim();
 
+  const ts = timeSeriesFacts();
   const signature: SpecSignature = {
     dataset: datasetName,
     yName,
@@ -120,6 +156,10 @@ function currentSpec(data: ParsedCSV | null, datasetName: string): CurrentSpec |
     seType,
     dropIncomplete,
     restriction,
+    // En series, lo que define "qué modelo es este" es la serie analizada:
+    // cambiar la transformación abre de nuevo la pregunta de estacionariedad.
+    transformation: ts?.transformation ?? '',
+    arimaOrders: ts?.arimaOrders ? `${ts.arimaOrders.p},${ts.arimaOrders.d},${ts.arimaOrders.q}` : '',
   };
   return { yName, xNames, form, seType, dropIncomplete, restriction, signature };
 }
@@ -153,6 +193,7 @@ export function buildAnalysisContext(): AnalysisContext {
     // terminar una corrida, venga del motor que venga. Sin esto, una corrida
     // Pro dejaba el recorrido trabado en "falta estimar".
     hasResult: appState.lastResult !== null || getEstimatedSignature() !== null,
+    timeSeries: timeSeriesFacts(),
     // El DoctorReport tal como lo emite buildModelDoctor, sin transformar —
     // salvo que la especificación haya cambiado desde que se produjo: un
     // diagnóstico de un modelo superado no puede seguir dictando el próximo

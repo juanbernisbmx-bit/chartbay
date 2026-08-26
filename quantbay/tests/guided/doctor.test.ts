@@ -6,7 +6,8 @@ import type { DoctorFinding, DoctorReport, DoctorCategoryKey, DoctorState, Docto
 function signature(over: Partial<SpecSignature> = {}): SpecSignature {
   return {
     dataset: 'datos.csv', yName: 'salario', xNames: 'educacion|experiencia',
-    form: 'lin-lin', seType: 'classic', dropIncomplete: false, restriction: '', ...over,
+    form: 'lin-lin', seType: 'classic', dropIncomplete: false, restriction: '',
+    transformation: '', arimaOrders: '', ...over,
   };
 }
 function spec(): CurrentSpec {
@@ -55,7 +56,7 @@ function report(findings: DoctorFinding[]): DoctorReport {
 function ctx(doctor: DoctorReport | null, over: Partial<AnalysisContext> = {}): AnalysisContext {
   return {
     mode: 'regression', engine: 'lite', dataset: dataset(), raw: null, spec: spec(),
-    estimatedSignature: signature(), hasResult: true, doctor,
+    estimatedSignature: signature(), hasResult: true, timeSeries: null, doctor,
     session: {
       mode: 'guided', confirmedType: 'cross_section',
       acknowledged: ['readCoefficients'], dismissed: [], decisions: [],

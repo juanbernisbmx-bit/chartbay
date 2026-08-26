@@ -7,6 +7,7 @@ function signature(over: Partial<SpecSignature> = {}): SpecSignature {
   return {
     dataset: 'datos.csv', yName: 'salario', xNames: 'educacion|experiencia',
     form: 'lin-lin', seType: 'classic', dropIncomplete: false, restriction: '',
+    transformation: '', arimaOrders: '',
     ...over,
   };
 }
@@ -30,7 +31,7 @@ function spec(over: Partial<CurrentSpec> = {}): CurrentSpec {
 function ctx(over: Partial<AnalysisContext> = {}): AnalysisContext {
   return {
     mode: 'regression', engine: 'lite', dataset: dataset(), raw: null, spec: spec(),
-    estimatedSignature: null, hasResult: false, doctor: null,
+    estimatedSignature: null, hasResult: false, timeSeries: null, doctor: null,
     session: { mode: 'guided', confirmedType: 'cross_section', acknowledged: [], dismissed: [], decisions: [] },
     ...over,
   };

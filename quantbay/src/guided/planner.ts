@@ -30,6 +30,12 @@ const DOCTOR_STEP: Partial<Record<string, StepKey>> = {
   specification: 'diagnostics',
   sample: 'diagnostics',
   stability: 'diagnostics',
+  // Series
+  stationarity: 'stationarity',
+  serialCorrelation: 'identify',
+  modelIdentification: 'identify',
+  arimaResiduals: 'arimaResiduals',
+  forecast: 'forecast',
 };
 
 function flowOf(ctx: AnalysisContext): 'cross_section' | 'time_series' {
@@ -82,26 +88,6 @@ const KIND_RANK: Record<Recommendation['kind'], number> = {
 
 export function buildGuidedPlan(ctx: AnalysisContext): GuidedPlan {
   const flow = flowOf(ctx);
-
-  // El flujo de series todavía no tiene sus pasos (etapa 5 del roadmap). En
-  // vez de mostrar medio recorrido de corte transversal —que sería
-  // directamente incorrecto para una serie— se dice que no hay guía todavía.
-  if (flow === 'time_series') {
-    return {
-      steps: STEP_DEFINITIONS.filter(d => appliesToFlow(d, 'time_series')).map(def => {
-        const { state, unmet } = baseState(def, ctx);
-        return { key: def.key, label: def.label, kind: def.kind, state, unmet, theory: def.theory };
-      }),
-      primary: null,
-      secondary: [],
-      nextStep: null,
-      blocked: false,
-      cannotAdvise: {
-        reason: 'El recorrido guiado para series de tiempo todavía no está disponible.',
-        whatIsMissing: 'Las herramientas de series funcionan igual desde el panel de Time Series; lo que falta es la guía paso a paso.',
-      },
-    };
-  }
 
   const steps: GuidedStep[] = STEP_DEFINITIONS
     .filter(def => appliesToFlow(def, flow))

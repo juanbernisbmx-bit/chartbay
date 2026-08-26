@@ -14,16 +14,28 @@ export type AnalysisType = 'cross_section' | 'time_series' | 'descriptive';
 export type GuidedMode = 'guided' | 'free';
 
 export type StepKey =
+  // Comunes a los dos flujos
   | 'load'
   | 'profile'
   | 'analysisType'
+  | 'conclude'
+  // Corte transversal
   | 'variables'
   | 'specification'
   | 'estimate'
   | 'readCoefficients'
   | 'inference'
   | 'diagnostics'
-  | 'conclude';
+  // Series de tiempo
+  | 'timeIndex'
+  | 'timeOrder'
+  | 'plotSeries'
+  | 'stationarity'
+  | 'transform'
+  | 'identify'
+  | 'arima'
+  | 'arimaResiduals'
+  | 'forecast';
 
 export type StepKind = 'required' | 'recommended' | 'conditional' | 'optional';
 
@@ -145,6 +157,10 @@ export interface SpecSignature {
   seType: string;
   dropIncomplete: boolean;
   restriction: string;
+  /** Series: qué transformación se está analizando. Vacío en corte transversal. */
+  transformation: string;
+  /** Series: órdenes del ARIMA, como "p,d,q". Vacío si no hay. */
+  arimaOrders: string;
 }
 
 export interface DatasetProfileWarning {
@@ -165,6 +181,21 @@ export interface DatasetProfile {
   missingByColumn: Record<string, number>;
   constantColumns: string[];
   warnings: DatasetProfileWarning[];
+}
+
+/** Hechos de la serie que está sobre la mesa. */
+export interface TimeSeriesFacts {
+  dateColumn: string;
+  valueColumn: string;
+  /** 'original' | 'difference' | 'logReturn' | … tal como lo nombra el panel. */
+  transformation: string;
+  hasResult: boolean;
+  observations: number;
+  frequency: string;
+  duplicateDates: number;
+  invalidDates: number;
+  /** Órdenes elegidos si el ARIMA está habilitado (solo Pro). */
+  arimaOrders: { p: number; d: number; q: number } | null;
 }
 
 export interface CurrentSpec {
@@ -188,6 +219,8 @@ export interface AnalysisContext {
   /** Firma con la que se produjo el resultado que está en pantalla. */
   estimatedSignature: SpecSignature | null;
   hasResult: boolean;
+  /** Presente solo en el flujo de series. */
+  timeSeries: TimeSeriesFacts | null;
   doctor: DoctorReport | null;
   session: GuidedSession;
 }
