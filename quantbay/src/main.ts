@@ -26,6 +26,9 @@ function showDeviceProfile(loaded: LoadResult): void {
 }
 import type { RLSConstraint } from './rls';
 import { parseRLSRestriction, refineCategoricalRlsError } from './rlsParser';
+import { initGuided, renderGuided } from './ui/guidedView';
+import { buildAnalysisContext } from './guided/context';
+import { recordEstimation, resetForNewDataset } from './guided/session';
 import { runRegressionMode, runAutoRegressionMode } from './modes/regressionMode';
 import { escapeHtml } from './utils/format';
 import { $, setEngineStatus, setMethodStatus, setText, showError, updateSidebarStep, writeRunLog } from './app/dom';
@@ -628,6 +631,9 @@ async function loadFile(file: File): Promise<void> {
     if (vars) vars.style.display = isTimeSeriesMode() ? 'none' : '';
     if (results) results.style.display = 'none';
     updateSidebarStep(2);
+    // Un dataset nuevo invalida el recorrido entero; el historial se conserva.
+    resetForNewDataset(file.name);
+    renderGuided();
   } catch (err) {
     setEngineStatus('ERROR');
     showError(`Error al leer el archivo: ${(err as Error).message}`);
@@ -745,6 +751,11 @@ async function onRun(): Promise<void> {
     if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
     updateSidebarStep(3);
     updateExportButtonState();
+    // La firma es lo que después delata que la especificación cambió y que lo
+    // que está en pantalla quedó viejo (regla G02).
+    const signature = buildAnalysisContext().spec?.signature;
+    if (signature) recordEstimation(signature);
+    renderGuided();
   } catch (err) {
     setEngineStatus('ERROR');
     hideAgroInterpretationPanels();
@@ -1303,6 +1314,19 @@ function runFormRecommendation(): void {
 }
 
 function init(): void {
+  initGuided(focus => {
+    const el = document.getElementById(focus);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    (el as HTMLElement | null)?.focus?.();
+  });
+  renderGuided();
+  // Listeners propios y aditivos: el plan se recalcula ante cualquier cambio
+  // que altere la especificación. El planificador es puro y barato, así que
+  // redibujar de más no cuesta nada.
+  for (const id of ['qb-y', 'qb-x-checks', 'qb-form', 'qb-mode', 'qb-drop-incomplete', 'qb-pro-se']) {
+    $(id)?.addEventListener('change', () => renderGuided());
+  }
+  $('qb-rls-input')?.addEventListener('input', () => renderGuided());
   $('qb-file')?.addEventListener('change', onFileChange as EventListener);
   document.querySelectorAll<HTMLButtonElement>('.qb-demo-btn').forEach(btn => {
     btn.addEventListener('click', () => loadDemoCase(btn.dataset.demo ?? ''));
