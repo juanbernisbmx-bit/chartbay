@@ -10,6 +10,7 @@
 // estados en acciones y las ordena.
 
 import type { DoctorCategoryKey, DoctorFinding } from '../modelDoctor/types';
+import { changedFields, describeChanges, onlyInferenceChanged } from './invalidation';
 import type { AnalysisContext, Recommendation, RecommendationKind, StepKey } from './types';
 
 export interface GuidedRule {
@@ -80,25 +81,12 @@ export const GUIDED_RULES: GuidedRule[] = [
     priority: 95,
     when: ctx => {
       if (!ctx.hasResult || !ctx.spec || !ctx.estimatedSignature) return false;
-      const a = ctx.spec.signature, b = ctx.estimatedSignature;
-      return a.dataset !== b.dataset || a.yName !== b.yName || a.xNames !== b.xNames
-          || a.form !== b.form || a.seType !== b.seType
-          || a.dropIncomplete !== b.dropIncomplete || a.restriction !== b.restriction;
+      return changedFields(ctx.spec.signature, ctx.estimatedSignature).length > 0;
     },
     build: ctx => {
-      const a = ctx.spec!.signature, b = ctx.estimatedSignature!;
-      const changed: string[] = [];
-      if (a.dataset !== b.dataset) changed.push('el dataset');
-      if (a.yName !== b.yName) changed.push('la variable Y');
-      if (a.xNames !== b.xNames) changed.push('las variables X');
-      if (a.form !== b.form) changed.push('la forma funcional');
-      if (a.seType !== b.seType) changed.push('el tipo de errores estándar');
-      if (a.dropIncomplete !== b.dropIncomplete) changed.push('la política de faltantes');
-      if (a.restriction !== b.restriction) changed.push('la restricción');
-      const what = changed.length === 1
-        ? changed[0]
-        : `${changed.slice(0, -1).join(', ')} y ${changed[changed.length - 1]}`;
-      const onlySe = changed.length === 1 && a.seType !== b.seType;
+      const changes = changedFields(ctx.spec!.signature, ctx.estimatedSignature!);
+      const what = describeChanges(changes);
+      const onlySe = onlyInferenceChanged(changes);
       return rec({ id: 'G02', kind: 'blocking', targetStep: 'estimate' }, {
         title: 'Los resultados en pantalla quedaron viejos',
         body: `Cambiaste ${what}. Lo que se está mostrando corresponde a la especificación anterior.`,

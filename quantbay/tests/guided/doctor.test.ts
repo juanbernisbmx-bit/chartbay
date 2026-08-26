@@ -153,11 +153,19 @@ describe('los hallazgos marcan el paso que les corresponde', () => {
   });
 
   it('el motivo distingue el hallazgo del desactualizado', () => {
+    const plan = buildGuidedPlan(ctx(report([finding('heteroskedasticity', 'problem', 'inference')])));
+    expect(plan.steps.find(s => s.key === 'diagnostics')!.reviewReason).toBe('doctor_finding');
+  });
+
+  it('si la especificación cambió, gana el desactualizado sobre el hallazgo', () => {
+    // Un diagnóstico de un modelo superado no puede pedir que lo atiendas:
+    // primero hay que volver a estimar. El motivo lo refleja.
     const plan = buildGuidedPlan(ctx(report([finding('heteroskedasticity', 'problem', 'inference')]), {
       estimatedSignature: signature({ form: 'log-lin' }),
     }));
     expect(plan.steps.find(s => s.key === 'estimate')!.reviewReason).toBe('stale');
-    expect(plan.steps.find(s => s.key === 'diagnostics')!.reviewReason).toBe('doctor_finding');
+    expect(plan.steps.find(s => s.key === 'diagnostics')!.reviewReason).toBe('stale');
+    expect(plan.primary!.ruleId).toBe('G02');
   });
 });
 
