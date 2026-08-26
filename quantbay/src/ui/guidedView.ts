@@ -32,20 +32,33 @@ const STATE_LABEL: Record<StepState, string> = {
 /** Los estados que no son de progreso llevan marca cuadrada, para leerse sin color. */
 const SQUARE_STATES: StepState[] = ['blocked', 'pending', 'optional', 'not_applicable'];
 
+/**
+ * Etiqueta linda para las siglas y los nombres propios. El resto se deriva.
+ *
+ * No es una lista que haya que mantener completa: lo que no esté acá cae en
+ * `theoryLabel`, que es la misma derivación que usan Model Doctor y la capa de
+ * interpretación. Un id nuevo se ve bien sin tocar este archivo.
+ */
 const THEORY_LABEL: Record<string, string> = {
-  'OLS': 'OLS',
-  'modelo y datos': 'modelo y datos',
-  'supuestos y sesgo': 'supuestos y sesgo',
-  't y p-value': 't y p-valor',
-  'IC y F': 'intervalos y F',
-  'errores robustos': 'errores robustos',
-  'Breusch-Pagan': 'Breusch-Pagan',
-  'estacionariedad': 'estacionariedad',
-  'ADF': 'ADF',
-  'ACF/PACF': 'ACF y PACF',
-  'ARIMA': 'ARIMA',
-  'pregunta econometrica': 'la pregunta econométrica',
+  'teoria-ols': 'OLS',
+  'teoria-adf': 'ADF',
+  'teoria-arima': 'ARIMA',
+  'teoria-vif': 'VIF',
+  'teoria-bp': 'Breusch-Pagan',
+  'teoria-acf-pacf': 'ACF y PACF',
+  'teoria-ljung-box': 'Ljung-Box',
+  'teoria-modelo': 'modelo y datos',
+  'teoria-inferencia': 't y p-valor',
+  'teoria-intervalos': 'intervalos y F',
+  'teoria-supuestos': 'supuestos y sesgo',
+  'teoria-econometria': 'la pregunta econométrica',
+  'teoria-robustos': 'errores robustos',
 };
+
+/** "teoria-acf-pacf" → "acf pacf". Igual que en Doctor e interpretación. */
+function theoryLabel(id: string): string {
+  return THEORY_LABEL[id] ?? id.replace(/^teoria-/, '').replace(/-/g, ' ');
+}
 
 /**
  * El registro se dibuja plegado y el panel se redibuja entero en cada cambio,
@@ -132,7 +145,7 @@ function stepRow(step: GuidedStep, index: number): string {
 function theoryLinks(keys: string[]): string {
   if (keys.length === 0) return '';
   const links = keys
-    .map(k => `<a href="/guia#${encodeURIComponent(k)}" target="_blank" rel="noopener">${escapeHtml(THEORY_LABEL[k] ?? k)}</a>`)
+    .map(k => `<a href="/guia#${encodeURIComponent(k)}" target="_blank" rel="noopener">${escapeHtml(theoryLabel(k))}</a>`)
     .join(' · ');
   return `<p class="qb-g-theory">Teoría: ${links}</p>`;
 }

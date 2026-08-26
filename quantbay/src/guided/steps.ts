@@ -87,7 +87,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'Revisá cuántas observaciones hay, qué tipo tiene cada columna y si aparecieron faltantes o valores atípicos.',
       why: 'Las decisiones que siguen —qué modelo corresponde, qué variables se pueden usar— dependen de lo que efectivamente contiene el dataset.',
     },
-    theory: ['modelo y datos'],
+    theory: ['teoria-modelo'],
   },
   {
     key: 'analysisType',
@@ -101,7 +101,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'ChartBay mira las columnas y sugiere uno, pero la decisión es tuya.',
       why: 'Corte transversal y series de tiempo no comparten diagnósticos: una serie necesita estacionariedad y autocorrelación, una regresión de corte transversal no.',
     },
-    theory: ['pregunta econometrica'],
+    theory: ['teoria-econometria'],
   },
   {
     key: 'variables',
@@ -115,7 +115,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'La Y es lo que querés explicar; las X, lo que usás para explicarlo. ChartBay marca qué columnas son compatibles, pero no decide cuál va de qué lado.',
       why: 'La dirección del modelo es una decisión teórica: los datos no dicen qué variable explica a cuál.',
     },
-    theory: ['modelo y datos'],
+    theory: ['teoria-modelo'],
   },
   {
     key: 'specification',
@@ -129,7 +129,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'Forma funcional, intercepto, categóricas y su categoría base. De esto depende cómo se leen los coeficientes.',
       why: 'La misma estimación se interpreta distinto según la forma funcional: en nivel-nivel un coeficiente son unidades, en log-nivel es una semi-elasticidad.',
     },
-    theory: ['OLS'],
+    theory: ['teoria-ols'],
   },
   {
     key: 'estimate',
@@ -143,7 +143,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'Con la especificación lista, corré la regresión.',
       why: 'Los diagnósticos se calculan sobre los residuos del modelo estimado: sin estimación no hay nada que diagnosticar.',
     },
-    theory: ['OLS'],
+    theory: ['teoria-ols'],
   },
   {
     key: 'readCoefficients',
@@ -157,7 +157,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'Fijate en el signo y en la magnitud: ¿van en la dirección que espera la teoría? ¿El tamaño es plausible para el contexto?',
       why: 'Un coeficiente con el signo equivocado o una magnitud imposible pasa igual todos los tests estadísticos. Mirar la significancia primero enseña a validar modelos que no tienen sentido económico.',
     },
-    theory: ['OLS', 'supuestos y sesgo'],
+    theory: ['teoria-ols', 'teoria-supuestos'],
   },
   {
     key: 'inference',
@@ -171,7 +171,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'Errores estándar, estadísticos t, p-valores e intervalos de confianza.',
       why: 'La significancia depende de que la fórmula de los errores estándar sea válida, y eso depende de supuestos que conviene revisar antes de concluir.',
     },
-    theory: ['t y p-value', 'IC y F'],
+    theory: ['teoria-inferencia', 'teoria-intervalos'],
   },
   {
     key: 'diagnostics',
@@ -185,7 +185,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'Residuos, multicolinealidad y heterocedasticidad. Model Doctor los ordena por consecuencia.',
       why: 'Los diagnósticos no dicen si el modelo es bueno: dicen qué parte de los resultados podés leer con confianza y cuál no.',
     },
-    theory: ['supuestos y sesgo'],
+    theory: ['teoria-supuestos'],
   },
   // ── Series de tiempo ──────────────────────────────────────────────────────
   {
@@ -200,7 +200,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'ChartBay detecta la columna de fechas cuando puede, pero conviene confirmarla.',
       why: 'Una serie de tiempo no es una columna más: el orden de las observaciones es información, y todo lo que sigue depende de que las fechas se lean bien.',
     },
-    theory: ['estacionariedad'],
+    theory: ['teoria-estacionariedad'],
   },
   {
     key: 'timeOrder',
@@ -214,7 +214,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'Corré el análisis para ver cuántas observaciones válidas quedan, con qué frecuencia y si hay fechas repetidas o huecos.',
       why: 'Fechas duplicadas o una frecuencia irregular cambian el significado de un rezago, y con eso el de la ACF y el del ADF.',
     },
-    theory: ['estacionariedad'],
+    theory: ['teoria-estacionariedad'],
   },
   {
     key: 'plotSeries',
@@ -228,7 +228,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: '¿Hay tendencia? ¿La media se mueve? ¿La varianza crece con el nivel? ¿Se ve un quiebre?',
       why: 'El gráfico contesta en dos segundos lo que después vas a contrastar con un test, y muestra cosas que ningún test reporta: quiebres, estacionalidad, valores imposibles.',
     },
-    theory: ['estacionariedad'],
+    theory: ['teoria-estacionariedad'],
   },
   {
     key: 'stationarity',
@@ -242,7 +242,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'El ADF contrasta la presencia de una raíz unitaria en la serie que estás analizando.',
       why: 'Modelar en niveles una serie no estacionaria produce regresiones espurias: R² altos y estadísticos grandes que no reflejan ninguna relación.',
     },
-    theory: ['ADF', 'estacionariedad'],
+    theory: ['teoria-adf', 'teoria-estacionariedad'],
   },
   {
     key: 'transform',
@@ -258,7 +258,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'Diferenciar o tomar retornos logarítmicos, y correr el ADF de nuevo sobre la serie transformada.',
       why: 'El test se aplica a la serie que vas a modelar, no a la original. Si transformás, la pregunta sobre estacionariedad se vuelve a abrir.',
     },
-    theory: ['estacionariedad', 'ADF'],
+    theory: ['teoria-estacionariedad', 'teoria-adf'],
   },
   {
     key: 'identify',
@@ -272,7 +272,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'Un corte en la PACF sugiere una parte autorregresiva; un corte en la ACF, una de medias móviles; un decaimiento lento, que falta diferenciar.',
       why: 'Los órdenes de un ARIMA no se adivinan ni se eligen por prueba y error: se leen del patrón de autocorrelación.',
     },
-    theory: ['ACF/PACF'],
+    theory: ['teoria-acf-pacf'],
   },
   {
     key: 'arima',
@@ -286,7 +286,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'Disponible en el motor Pro, que corre statsmodels en el navegador.',
       why: 'El ARIMA resume la dinámica de la serie en pocos parámetros; sin él no hay pronóstico ni residuos que diagnosticar.',
     },
-    theory: ['ARIMA'],
+    theory: ['teoria-arima'],
   },
   {
     key: 'arimaResiduals',
@@ -300,7 +300,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'Ljung-Box sobre los residuos contesta si quedó estructura temporal sin capturar.',
       why: 'Acá un Ljung-Box significativo sí es un problema, al revés que sobre la serie original: significa que los órdenes elegidos no describen toda la dinámica.',
     },
-    theory: ['ARIMA', 'ACF/PACF'],
+    theory: ['teoria-arima', 'teoria-acf-pacf'],
   },
   {
     key: 'forecast',
@@ -314,7 +314,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'El horizonte y los intervalos salen del modelo estimado.',
       why: 'Un pronóstico hereda todos los supuestos del modelo: si los residuos no están limpios, los intervalos van a estar mal calibrados.',
     },
-    theory: ['ARIMA'],
+    theory: ['teoria-arima'],
   },
   {
     // Opcional a propósito: contrastar una sola especificación contra nada no
@@ -336,7 +336,7 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
       body: 'Guardá la estimación actual, cambiá algo del modelo, estimá de nuevo y mirá las dos al lado.',
       why: 'Un resultado que solo aparece bajo una especificación no es un hallazgo: es una propiedad de esa especificación. Ver qué se mueve y qué se sostiene al cambiar el modelo es lo que separa un resultado robusto de uno que depende de cómo se lo miró.',
     },
-    theory: ['modelo y datos'],
+    theory: ['teoria-modelo'],
   },
   {
     key: 'conclude',
