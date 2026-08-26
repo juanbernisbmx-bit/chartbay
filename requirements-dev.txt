@@ -1,17 +1,19 @@
 # Dependencias SOLO para tests. No van en requirements.txt.
 #
 # La suite de quantbay valida OLS y RLS contra referencias independientes en
-# Python: quantbay/tests/statsmodelsValidation.test.ts levanta un intérprete con
-# execFileSync('python') y compara los resultados del motor TypeScript contra
-# statsmodels y scipy. Sin estos paquetes esos 18 tests fallan.
+# Python: quantbay/tests/statsmodelsValidation.test.ts levanta un intérprete y
+# compara los resultados del motor TypeScript contra statsmodels y scipy. Sin
+# estos paquetes esos 18 tests fallan.
 #
-# Ojo con el nombre del binario: el test invoca `python`, no `python3`, y macOS
-# solo trae `python3`. Un venv resuelve las dos cosas de una, porque instala las
-# dependencias y además expone `python` en su bin/:
+# El test busca solo el intérprete, no hace falta activar nada: prueba
+# CHARTBAY_PYTHON, después ./.venv/bin/python, después python3 y python, y se
+# queda con el primero que pueda importar los tres paquetes. Alcanza con:
 #
 #     python3 -m venv .venv
 #     ./.venv/bin/pip install -r requirements-dev.txt
-#     PATH="$PWD/.venv/bin:$PATH" npm --prefix quantbay run test
+#     npm --prefix quantbay run test
+#
+# Si el intérprete vive en otro lado, CHARTBAY_PYTHON apunta a él.
 #
 # Se mantienen fuera de requirements.txt a propósito: scipy y statsmodels pasan
 # los 150 MB instalados, y el plan gratuito de Render tiene 512 MB y disco

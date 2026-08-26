@@ -1,10 +1,71 @@
 /// <reference types="node" />
 
 import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { runOLS } from '../src/regression';
 import { runRLS, type RLSConstraint } from '../src/rls';
 import { validateAnalysisInput } from '../src/services/analysisService';
+
+// ── Intérprete de Python ─────────────────────────────────────────────────────
+//
+// Estos tests contrastan los motores de TypeScript contra numpy, scipy y
+// statsmodels, así que necesitan un Python con esos paquetes. Antes se invocaba
+// `python` a secas: en macOS moderno ese comando no existe —solo hay python3— y
+// los 18 tests fallaban con ENOENT aunque los paquetes estuvieran instalados.
+//
+// No alcanza con probar que el ejecutable exista: acá conviven un python3 del
+// sistema sin numpy y un venv que sí lo tiene, y elegir el primero que responde
+// falla igual. Por eso cada candidato se prueba importando lo que hace falta.
+
+const REPO_ROOT = join(__dirname, '..', '..');
+
+/** En orden de preferencia. El primero que pueda importar todo, gana. */
+const PYTHON_CANDIDATES = [
+  process.env.CHARTBAY_PYTHON,
+  join(REPO_ROOT, '.venv', 'bin', 'python'),
+  join(REPO_ROOT, '.venv', 'Scripts', 'python.exe'),
+  'python3',
+  'python',
+].filter((candidate): candidate is string => Boolean(candidate));
+
+const REQUIRED_MODULES = 'numpy, scipy, statsmodels';
+
+function canImportModules(command: string): boolean {
+  try {
+    execFileSync(command, ['-c', `import ${REQUIRED_MODULES}`], {
+      stdio: 'ignore',
+      timeout: 60_000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let resolvedPython: string | null | undefined;
+
+/**
+ * El intérprete a usar, o un error que dice exactamente cómo arreglarlo.
+ *
+ * Falla en vez de saltear los tests a propósito: son la validación numérica
+ * contra referencias estándar, y saltearlos en silencio dejaría pasar una
+ * regresión de cálculo sin que nadie se entere. requirements-dev.txt ya
+ * documenta que sin estos paquetes estos tests fallan.
+ */
+function pythonExecutable(): string {
+  if (resolvedPython === undefined) {
+    resolvedPython = PYTHON_CANDIDATES.find(canImportModules) ?? null;
+  }
+  if (!resolvedPython) {
+    throw new Error(
+      `No encontré un Python con ${REQUIRED_MODULES}. Instalalos con ` +
+      '`pip install -r requirements-dev.txt`, o apuntá CHARTBAY_PYTHON a un ' +
+      `intérprete que los tenga. Probé: ${PYTHON_CANDIDATES.join(', ')}.`
+    );
+  }
+  return resolvedPython;
+}
 
 interface StatsmodelsCase {
   params: number[];
@@ -113,7 +174,7 @@ for dataset in payload:
     })
 print(json.dumps(output))
 `;
-  const raw = execFileSync('python', ['-c', script], {
+  const raw = execFileSync(pythonExecutable(), ['-c', script], {
     input: JSON.stringify(datasets),
     encoding: 'utf8',
     maxBuffer: 1024 * 1024 * 8,
@@ -182,7 +243,7 @@ for case in payload:
     })
 print(json.dumps(output))
 `;
-  const raw = execFileSync('python', ['-c', script], {
+  const raw = execFileSync(pythonExecutable(), ['-c', script], {
     input: JSON.stringify(cases),
     encoding: 'utf8',
     maxBuffer: 1024 * 1024 * 16,
