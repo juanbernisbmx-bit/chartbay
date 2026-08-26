@@ -9,7 +9,8 @@ import { buildAnalysisContext, suggestAnalysisType } from '../guided/context';
 import { buildGuidedPlan } from '../guided/planner';
 import {
   acknowledgeStep, confirmAnalysisType, dismissRecommendation, getSession,
-  logDecision, noteSpecChange, recordEstimation, seedSpecBaseline, setMode,
+  logDecision, noteSpecChange, recordEstimation, restoreGuidedPreferences,
+  seedSpecBaseline, setMode,
 } from '../guided/session';
 import { buildDecisionLogText, clockOf } from '../guided/decisionLog';
 import { downloadTextFile } from './exports';
@@ -234,6 +235,10 @@ const REFRESH_ON_CLICK = ['qb-ts-run', 'qb-pro-ts-run'];
 export function initGuided(onAction?: (focus: string) => void): void {
   const host = $('qb-guided');
   if (!host) return;
+
+  // El modo elegido sobrevive a recargar la página. Se restaura antes del
+  // primer dibujo para que el panel no aparezca guiado y salte a libre.
+  restoreGuidedPreferences();
 
   // Un solo listener delegado y ninguna lista de controles que mantener: se
   // escucha `change` en el documento y se deja que noteSpecChange decida si
