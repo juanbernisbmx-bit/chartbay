@@ -122,6 +122,7 @@
         <a href="#qb-forecast-panel">3. Gráfico</a>
         <a href="#qb-correlation-panel">4. Correlación</a>
         <a href="#qb-diagnostics-panel">5. Diagnóstico</a>
+        <a href="#qb-repro-panel">6. Código</a>
       </aside>
 
       <main class="qb-main">
@@ -607,6 +608,47 @@
             </div>
           </div>
         </section>
+
+        <section class="qb-section qb-econometria-section qb-repro" id="qb-repro-panel">
+          <div class="qb-panel-head">
+            <div>
+              <p class="qb-subtitle">Código reproducible</p>
+              <p class="muted qb-repro-intro">Cada decisión analítica se traduce a sintaxis visible. La descarga queda vinculada a la última ejecución completada.</p>
+            </div>
+            <span id="qb-repro-status" data-state="draft">BORRADOR</span>
+          </div>
+
+          <div class="qb-repro-layout">
+            <div class="qb-repro-main">
+              <div class="qb-repro-toolbar">
+                <div class="qb-repro-tabs" role="tablist" aria-label="Lenguaje del código">
+                  <button type="button" class="qb-repro-tab" data-repro-language="r" role="tab">R</button>
+                  <button type="button" class="qb-repro-tab is-active" data-repro-language="python" role="tab" aria-selected="true">Python</button>
+                  <button type="button" class="qb-repro-tab" data-repro-language="stata" role="tab">Stata</button>
+                  <button type="button" class="qb-repro-tab" data-repro-language="notebook" role="tab">Notebook</button>
+                </div>
+                <button type="button" class="btn-ink qb-repro-copy" id="qb-repro-copy">Copiar código</button>
+              </div>
+              <pre class="qb-repro-code"><code id="qb-repro-code"></code></pre>
+              <div class="qb-repro-downloads" aria-label="Descargar receta ejecutable">
+                <button type="button" class="btn-ink" data-repro-download="r" disabled>Descargar .R</button>
+                <button type="button" class="btn-ink" data-repro-download="python" disabled>Descargar .py</button>
+                <button type="button" class="btn-ink" data-repro-download="stata" disabled>Descargar .do</button>
+                <button type="button" class="btn-ink" data-repro-download="notebook" disabled>Descargar .ipynb</button>
+              </div>
+              <p class="muted qb-repro-note">El CSV debe conservar el nombre indicado y estar en la misma carpeta que el script. Los encabezados, transformaciones, categorías base, restricciones y opciones del motor quedan fijados en el archivo.</p>
+            </div>
+
+            <aside class="qb-repro-trace" aria-label="Trazabilidad de acciones">
+              <div class="qb-repro-trace-head">
+                <strong>Trazabilidad</strong>
+                <span>últimas 20 acciones</span>
+              </div>
+              <div id="qb-repro-history" aria-live="polite"></div>
+            </aside>
+          </div>
+        </section>
+
         <section class="qb-section qb-econometria-section" id="qb-model-comparison" style="display:none">
           <div class="qb-panel-head">
             <p class="qb-subtitle">Comparación de modelos</p>

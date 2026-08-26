@@ -110,6 +110,12 @@ import {
   presentAgroInterpretationForRegression,
 } from './verticals/agro';
 import { beginModelComparisonDataset, initModelComparisonView } from './ui/modelComparisonView';
+import {
+  initReproducibilityView,
+  markReproducibilityExecuted,
+  recordReproducibilityAction,
+  resetReproducibilityForDataset,
+} from './ui/reproducibilityView';
 
 interface QuantDemoCase {
   id: string;
@@ -495,6 +501,11 @@ async function loadDemoCase(id: string): Promise<void> {
     const demoCsvText = await response.text();
     appState.csvText = demoCsvText;
     appState.csvData = parseDemoCsv(demoCsvText);
+    appState.datasetName = demo.file;
+    appState.lastResult = null;
+    appState.lastCategoricalInfo = [];
+    proExportState.lastProResult = null;
+    updateExportButtonState();
     if (appState.csvData.numericColumns.length < 2) {
       throw new Error('El CSV de ejemplo necesita al menos 2 columnas numéricas.');
     }
@@ -520,6 +531,7 @@ async function loadDemoCase(id: string): Promise<void> {
     setVariableSelection(demo.yName, demo.xNames);
     renderDemoInfo(demo);
     runFormRecommendation();
+    resetReproducibilityForDataset(demo.file);
 
     const preview = $('qb-preview'), vars = $('qb-vars'), results = $('qb-results'), repair = $('qb-repair-log');
     if (preview) preview.style.display = '';
@@ -582,6 +594,8 @@ async function loadFile(file: File): Promise<void> {
   hideProPanel();
   clearAgroContext();
   appState.activeDemoId = null;
+  appState.lastResult = null;
+  appState.lastCategoricalInfo = [];
   appState.lastTimeSeriesResult = null;
   proExportState.lastProResult = null;
   proExportState.lastProTimeSeriesResult = null;
@@ -603,6 +617,7 @@ async function loadFile(file: File): Promise<void> {
       onProgress: fraction => setText('qb-status-obs', `${Math.round(fraction * 100)} %`),
     });
     appState.csvData = loaded.data;
+    appState.datasetName = file.name;
     appState.loadNotes = loaded.notes;
     appState.loadEngine = loaded.engine;
     showDeviceProfile(loaded);
@@ -633,6 +648,7 @@ async function loadFile(file: File): Promise<void> {
     updateSidebarStep(2);
     // Un dataset nuevo invalida el recorrido entero; el historial se conserva.
     resetForNewDataset(file.name);
+    resetReproducibilityForDataset(file.name);
     renderGuided();
   } catch (err) {
     setEngineStatus('ERROR');
@@ -647,6 +663,7 @@ async function loadFile(file: File): Promise<void> {
 async function onRun(): Promise<void> {
   if (isTimeSeriesMode()) return;
   if (!appState.csvData) return;
+  recordReproducibilityAction('Calcular regresión');
   const engineAction = resolveEngineAction(appState.activeVersion);
   if (engineAction === 'blocked') {
     const config = getVersionConfig(appState.activeVersion);
@@ -751,6 +768,7 @@ async function onRun(): Promise<void> {
     if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
     updateSidebarStep(3);
     updateExportButtonState();
+    markReproducibilityExecuted(`Regresión ${output.method} ejecutada`, false, rlsConstraint);
     // La firma es lo que después delata que la especificación cambió y que lo
     // que está en pantalla quedó viejo (regla G02).
     const signature = buildAnalysisContext().spec?.signature;
@@ -862,6 +880,7 @@ async function onRunPro(
     // concern end to end — attached here for display, never round-tripped
     // through Python's JSON payload (see proResultTypes.ts).
     const result = rawResult.ok ? { ...rawResult, categoricalInfo: encoding.categoricalInfo } : rawResult;
+    if (result.ok) appState.lastCategoricalInfo = encoding.categoricalInfo;
 
     const comparison = result.ok
       ? buildLiteComparison(appState.csvData, yName, xNames, form, result, rlsConstraint)
@@ -872,6 +891,7 @@ async function onRunPro(
     // el estado en null y los botones de exportación deshabilitados.
     proExportState.lastProResult = result.ok ? result : null;
     updateExportButtonState();
+    if (result.ok) markReproducibilityExecuted('Regresión Pro ejecutada', false, rlsConstraint);
     setEngineStatus(result.ok ? 'COMPLETADO' : 'ERROR');
     writeRunLog(
       result.ok
@@ -905,6 +925,7 @@ async function onRunPro(
 function onAutoRun(): void {
   if (isTimeSeriesMode()) return;
   if (!appState.csvData) return;
+  recordReproducibilityAction('Arreglar y calcular', true);
   if (!checkActiveEngineReady()) return;
   appState.lastTimeSeriesResult = null;
   updateExportButtonState();
@@ -959,6 +980,7 @@ function onAutoRun(): void {
     const res = $('qb-results');
     if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
     updateExportButtonState();
+    markReproducibilityExecuted(`Regresión ${output.method} reparada y ejecutada`, true, rlsConstraint);
   } catch (err) {
     showError(formatRegressionError(err));
   }
@@ -977,6 +999,7 @@ function onTimeSeriesDateChange(): void {
 }
 
 function onTimeSeriesRun(): void {
+  recordReproducibilityAction('Ejecutar serie temporal');
   if (!checkActiveEngineReady()) return;
   if (!appState.csvData) {
     appState.lastTimeSeriesResult = null;
@@ -1016,6 +1039,7 @@ function onTimeSeriesRun(): void {
   if (panel) panel.scrollIntoView({ behavior: 'smooth' });
   updateSidebarStep(3);
   updateExportButtonState();
+  markReproducibilityExecuted('Serie temporal ejecutada');
 }
 
 // ── ChartBay Pro · Time Series (Pyodide) ─────────────────────────────────────
@@ -1053,6 +1077,7 @@ function withPreparedProTimeIndex(
 
 async function onRunProTimeSeries(): Promise<void> {
   if (proTsRunInFlight) return;
+  recordReproducibilityAction('Ejecutar diagnósticos Pro');
   if (!appState.csvData) {
     renderProTimeSeriesNoData();
     return;
@@ -1123,6 +1148,7 @@ async function onRunProTimeSeries(): Promise<void> {
     renderProTimeSeriesResult(result, prepared.value.observedValues);
     proExportState.lastProTimeSeriesResult = result.ok ? result : null;
     updateExportButtonState();
+    if (result.ok) markReproducibilityExecuted('Serie temporal Pro ejecutada');
     setEngineStatus(result.ok ? 'COMPLETADO' : 'ERROR');
     if (result.ok) setText('qb-status-obs', result.observations ?? 0);
     writeRunLog(
@@ -1205,6 +1231,8 @@ function agroLoadDataset(params: {
   showError('');
   hideProPanel();
   appState.activeDemoId = null;
+  appState.lastResult = null;
+  appState.lastCategoricalInfo = [];
   appState.lastTimeSeriesResult = null;
   proExportState.lastProResult = null;
   proExportState.lastProTimeSeriesResult = null;
@@ -1221,6 +1249,7 @@ function agroLoadDataset(params: {
   try {
     appState.csvText = params.csvText;
     appState.csvData = parseCSVText(params.csvText);
+    appState.datasetName = params.label;
     if (appState.csvData.numericColumns.length < 2) {
       throw new Error('El dataset necesita al menos 2 columnas numéricas.');
     }
@@ -1251,6 +1280,7 @@ function agroLoadDataset(params: {
       const safeX = (params.suggestedX ?? []).filter(x => selectable.has(x) && x !== params.suggestedY);
       setVariableSelection(params.suggestedY, safeX);
     }
+    resetReproducibilityForDataset(params.label);
     runFormRecommendation();
     updateSidebarStep(2);
 
@@ -1428,6 +1458,7 @@ function init(): void {
   updateModePanels();
   updateExportButtonState();
   initModelComparisonView();
+  initReproducibilityView();
   applyInitialModuleLayout();
   // Vertical Agro: no-op si el flag está apagado o el panel no existe.
   initAgroVertical({ loadDataset: agroLoadDataset });

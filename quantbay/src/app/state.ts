@@ -13,6 +13,8 @@ export interface QuantBayAppState {
   activeMode: QuantBayMode;
   activeVersion: ChartBayVersion;
   activeFunctionalForm: FunctionalForm;
+  /** Nombre del archivo usado por los exportadores de reproducibilidad. */
+  datasetName: string | null;
   csvData: ParsedCSV | null;
   /** Run-log lines produced while loading (cleaner actions, warnings). */
   loadNotes?: string[];
@@ -47,6 +49,7 @@ export const appState: QuantBayAppState = {
   activeMode: 'regression',
   activeVersion: 'lite',
   activeFunctionalForm: 'lin-lin',
+  datasetName: null,
   csvData: null,
   csvText: null,
   csvFile: null,
