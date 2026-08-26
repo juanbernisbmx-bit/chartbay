@@ -9,9 +9,11 @@ import { buildAnalysisContext, suggestAnalysisType } from '../guided/context';
 import { buildGuidedPlan } from '../guided/planner';
 import {
   acknowledgeStep, confirmAnalysisType, dismissRecommendation, getSession,
-  recordEstimation, setMode,
+  logDecision, noteSpecChange, recordEstimation, seedSpecBaseline, setMode,
 } from '../guided/session';
-import type { GuidedPlan, GuidedStep, Recommendation, StepState } from '../guided/types';
+import { buildDecisionLogText, clockOf } from '../guided/decisionLog';
+import { downloadTextFile } from './exports';
+import type { DecisionKind, GuidedPlan, GuidedSession, GuidedStep, Recommendation, StepState } from '../guided/types';
 
 const STATE_LABEL: Record<StepState, string> = {
   done: 'completado',
@@ -39,6 +41,25 @@ const THEORY_LABEL: Record<string, string> = {
   'ACF/PACF': 'ACF y PACF',
   'ARIMA': 'ARIMA',
   'pregunta econometrica': 'la pregunta econométrica',
+};
+
+/**
+ * El registro se dibuja plegado y el panel se redibuja entero en cada cambio,
+ * así que si el desplegado no se recordara acá, se cerraría solo cada vez que
+ * el estudiante toca cualquier control.
+ */
+let logOpen = false;
+
+/** Etiqueta de la clase de decisión, para poder leer el registro de un vistazo. */
+const DECISION_LABEL: Record<DecisionKind, string> = {
+  load: 'datos',
+  choose_type: 'tipo',
+  choose_variables: 'variables',
+  set_spec: 'especificación',
+  estimate: 'estimación',
+  acknowledge_step: 'revisión',
+  dismiss_recommendation: 'omisión',
+  set_mode: 'modo',
 };
 
 function stepRow(step: GuidedStep, index: number): string {
@@ -86,6 +107,50 @@ function recommendationBlock(rec: Recommendation): string {
     </div>`;
 }
 
+/**
+ * Registro de decisiones.
+ *
+ * Más reciente primero, al revés que en el archivo exportado: en pantalla lo
+ * que importa es qué acaba de pasar; leído de corrido fuera de la app, el
+ * orden cronológico es el que cuenta la sesión.
+ *
+ * Se muestra en los dos modos. En libre es lo único que queda: sin riel y sin
+ * consejos, es la única forma de que el estudiante pueda reconstruir después
+ * qué decidió.
+ */
+function decisionLog(session: GuidedSession): string {
+  if (session.decisions.length === 0) return '';
+  const items = session.decisions
+    .slice()
+    .reverse()
+    .map(d => `
+      <li class="qb-g-dec">
+        <time>${escapeHtml(clockOf(d.at))}</time>
+        <span class="qb-g-dec-kind">${escapeHtml(DECISION_LABEL[d.kind] ?? d.kind)}</span>
+        <span class="qb-g-dec-text">${escapeHtml(d.summary)}</span>
+      </li>`)
+    .join('');
+  return `
+    <details class="qb-g-log"${logOpen ? ' open' : ''}>
+      <summary data-guided-log="1">Registro de decisiones · ${session.decisions.length}</summary>
+      <ul class="qb-g-decs">${items}</ul>
+      <div class="qb-g-actions">
+        <button type="button" class="qb-g-skip" data-guided-export="1">Descargar registro</button>
+      </div>
+    </details>`;
+}
+
+function downloadDecisionLog(): void {
+  const ctx = buildAnalysisContext();
+  const text = buildDecisionLogText(ctx.session, {
+    dataset: ctx.dataset?.name ?? null,
+    analysisType: ctx.session.confirmedType,
+    mode: ctx.session.mode,
+    generatedAt: Date.now(),
+  });
+  downloadTextFile('chartbay_registro_decisiones.md', text, 'text/markdown');
+}
+
 function typePrompt(): string {
   const ctx = buildAnalysisContext();
   const suggestion = suggestAnalysisType(ctx.dataset);
@@ -110,7 +175,11 @@ export function renderGuided(): void {
   if (!host) return;
 
   const session = getSession();
-  const plan: GuidedPlan = buildGuidedPlan(buildAnalysisContext());
+  const ctx = buildAnalysisContext();
+  // Barato y idempotente: solo hace algo cuando todavía no hay línea de base,
+  // que es justo después de cargar un dataset.
+  seedSpecBaseline(ctx.spec);
+  const plan: GuidedPlan = buildGuidedPlan(ctx);
   const free = session.mode === 'free';
 
   const rail = plan.steps.length > 0 && !free
@@ -142,7 +211,8 @@ export function renderGuided(): void {
     </div>
     ${rail}
     ${visibleBody}
-    ${more}`;
+    ${more}
+    ${decisionLog(session)}`;
   host.style.display = '';
 }
 
@@ -165,6 +235,19 @@ export function initGuided(onAction?: (focus: string) => void): void {
   const host = $('qb-guided');
   if (!host) return;
 
+  // Un solo listener delegado y ninguna lista de controles que mantener: se
+  // escucha `change` en el documento y se deja que noteSpecChange decida si
+  // algo de la especificación se movió. Cambiar un control ajeno no anota
+  // nada porque la firma no cambia.
+  //
+  // `change` y no `input`: escribir una restricción letra por letra es una
+  // decisión, no veinte. Y diferido, porque los handlers de la app corren
+  // después y appState todavía tiene el valor anterior.
+  document.addEventListener('change', () => setTimeout(() => {
+    noteSpecChange(buildAnalysisContext().spec);
+    renderGuided();
+  }, 0));
+
   // Diferido: estos listeners se registran después que los de la app, pero el
   // resultado recién existe cuando el handler original terminó.
   const refreshLater = () => setTimeout(() => renderGuided(), 0);
@@ -181,10 +264,16 @@ export function initGuided(onAction?: (focus: string) => void): void {
   }
 
   host.addEventListener('click', event => {
-    const el = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-guided-type],[data-guided-skip],[data-guided-act],[data-guided-mode]');
+    const el = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-guided-type],[data-guided-skip],[data-guided-act],[data-guided-mode],[data-guided-log],[data-guided-export]');
     if (!el) return;
 
-    if (el.dataset.guidedType) {
+    if (el.dataset.guidedLog !== undefined) {
+      // El <details> se abre solo por el click nativo, pero el redibujo de
+      // abajo reemplaza el nodo entero: hay que recordarlo acá o se cierra.
+      logOpen = !logOpen;
+    } else if (el.dataset.guidedExport !== undefined) {
+      downloadDecisionLog();
+    } else if (el.dataset.guidedType) {
       const ctx = buildAnalysisContext();
       const suggested = suggestAnalysisType(ctx.dataset)?.type ?? null;
       confirmAnalysisType(el.dataset.guidedType as 'cross_section' | 'time_series', suggested);

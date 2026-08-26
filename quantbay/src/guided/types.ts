@@ -121,7 +121,9 @@ export type DecisionKind =
   | 'set_spec'
   | 'estimate'
   | 'acknowledge_step'
-  | 'dismiss_recommendation';
+  | 'dismiss_recommendation'
+  /** Cambiar entre guiado y libre. Apagar la guía también es una decisión. */
+  | 'set_mode';
 
 export interface UserDecision {
   id: string;
