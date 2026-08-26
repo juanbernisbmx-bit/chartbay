@@ -1,4 +1,5 @@
 import type { DoctorFinding, DoctorReport } from '../modelDoctor/types';
+import { noteDoctorReport } from '../guided/session';
 import { escapeHtml } from '../utils/format';
 
 const OVERALL_LABEL: Record<DoctorReport['overallState'], string> = {
@@ -72,6 +73,11 @@ function renderFinding(finding: DoctorFinding, open = false): string {
 }
 
 export function renderModelDoctor(report: DoctorReport): string {
+  // Econometría Guiada consume este mismo informe para traducir hallazgos en
+  // próximos pasos. Se deposita acá porque es el punto por donde pasan los
+  // cuatro caminos que construyen uno, y así la guía no lo reconstruye.
+  noteDoctorReport(report);
+
   const candidates = report.findings.filter(finding => finding.state !== 'ok' && finding.state !== 'not_applicable');
   const actionable = candidates.filter(finding => finding.state === 'problem' || finding.state === 'review' || finding.state === 'mitigated');
   const unavailable = candidates.filter(finding => finding.state === 'insufficient');

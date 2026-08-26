@@ -4,6 +4,7 @@
 // Vive acá y no en appState para que el planificador siga siendo puro y para
 // que agregar la guía no obligue a tocar el estado del resto de la app.
 
+import type { DoctorReport } from '../modelDoctor/types';
 import type { AnalysisType, GuidedMode, GuidedSession, SpecSignature, StepKey, UserDecision, DecisionKind } from './types';
 
 let session: GuidedSession = {
@@ -16,6 +17,23 @@ let session: GuidedSession = {
 
 /** Firma de la especificación con la que se produjo el resultado en pantalla. */
 let estimatedSignature: SpecSignature | null = null;
+
+/**
+ * Último diagnóstico que se le mostró al estudiante.
+ *
+ * Lo deposita renderModelDoctor, que es por donde pasan los cuatro caminos
+ * que construyen un informe (Lite, Pro, series y series Pro). La guía lo lee
+ * tal cual: no reconstruye el informe ni reimplementa nada de Model Doctor.
+ */
+let lastDoctorReport: DoctorReport | null = null;
+
+export function noteDoctorReport(report: DoctorReport): void {
+  lastDoctorReport = report;
+}
+
+export function getDoctorReport(): DoctorReport | null {
+  return lastDoctorReport;
+}
 
 export function getSession(): GuidedSession {
   return session;
@@ -75,6 +93,7 @@ export function resetForNewDataset(name: string): void {
     decisions: previous,
   };
   estimatedSignature = null;
+  lastDoctorReport = null;
   logDecision('load', `Cargaste ${name}`);
 }
 
@@ -82,6 +101,7 @@ export function resetForNewDataset(name: string): void {
 export function resetSessionForTests(): void {
   session = { mode: 'guided', confirmedType: null, acknowledged: [], dismissed: [], decisions: [] };
   estimatedSignature = null;
+  lastDoctorReport = null;
 }
 
 function labelOf(type: AnalysisType): string {

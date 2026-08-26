@@ -8,7 +8,7 @@
 
 import type { ParsedCSV } from '../csvParser';
 import type { FunctionalForm } from '../functionalForms';
-import type { DoctorReport } from '../modelDoctor/types';
+import type { DoctorCategoryKey, DoctorImpact, DoctorReport } from '../modelDoctor/types';
 
 export type AnalysisType = 'cross_section' | 'time_series' | 'descriptive';
 export type GuidedMode = 'guided' | 'free';
@@ -64,6 +64,14 @@ export interface Recommendation {
   ruleId: string;
   kind: RecommendationKind;
   targetStep: StepKey;
+  /**
+   * Categoría de Model Doctor que originó la recomendación, cuando viene de
+   * un hallazgo. Es lo que permite suprimir consejos sobre algo que el
+   * estudiante ya atendió (G05) sin tener que adivinar por el texto.
+   */
+  sourceCategory?: DoctorCategoryKey;
+  /** Consecuencia estadística del hallazgo, para ordenar. La define Doctor. */
+  impact?: DoctorImpact;
   title: string;
   body: string;
   /** Respuesta a "¿por qué me recomendás esto?". Razón econométrica, no posicional. */

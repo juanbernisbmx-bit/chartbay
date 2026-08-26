@@ -139,3 +139,15 @@ describe('planificador · toda recomendación se puede explicar', () => {
     }
   });
 });
+
+describe('los dos motores cuentan como estimación', () => {
+  it('con resultado, los pasos posteriores dejan de estar bloqueados', () => {
+    // El contexto abstrae de qué motor vino: la guía solo pregunta si hay
+    // modelo. Antes miraba únicamente el resultado de Lite y una corrida Pro
+    // dejaba el recorrido trabado.
+    const sinModelo = buildGuidedPlan(ctx({ hasResult: false }));
+    const conModelo = buildGuidedPlan(ctx({ hasResult: true, estimatedSignature: signature() }));
+    expect(sinModelo.steps.find(s => s.key === 'inference')!.state).toBe('blocked');
+    expect(conModelo.steps.find(s => s.key === 'inference')!.state).not.toBe('blocked');
+  });
+});
