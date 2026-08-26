@@ -6,6 +6,7 @@ import {
   answerPractice, getPracticeAnswer, getSession, resetForNewDataset, resetSessionForTests, setMode,
 } from '../../src/guided/session';
 import { clearStoredMode, loadStoredMode } from '../../src/guided/persistence';
+import { useMemoryStorage } from './memoryStorage';
 import type {
   AnalysisContext, CurrentSpec, DatasetProfile, GuidedPlan, SpecSignature, StepKey,
 } from '../../src/guided/types';
@@ -46,6 +47,7 @@ function ctx(over: Partial<AnalysisContext> = {}): AnalysisContext {
 const planOf = (over: Partial<AnalysisContext> = {}): GuidedPlan => buildGuidedPlan(ctx(over));
 
 beforeEach(() => {
+  useMemoryStorage();
   resetSessionForTests();
   clearStoredMode();
 });

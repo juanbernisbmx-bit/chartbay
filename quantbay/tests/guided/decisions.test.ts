@@ -19,6 +19,7 @@ import {
   describeSpecChanges,
 } from '../../src/guided/decisionLog';
 import { clearStoredMode, loadStoredMode } from '../../src/guided/persistence';
+import { useBrokenStorage, useMemoryStorage } from './memoryStorage';
 import type { CurrentSpec, SpecSignature } from '../../src/guided/types';
 
 function sig(over: Partial<SpecSignature> = {}): SpecSignature {
@@ -41,6 +42,7 @@ const kinds = () => getSession().decisions.map(d => d.kind);
 const summaries = () => getSession().decisions.map(d => d.summary);
 
 beforeEach(() => {
+  useMemoryStorage();
   resetSessionForTests();
   clearStoredMode();
 });
@@ -154,6 +156,16 @@ describe('modo libre', () => {
     setMode('free');
     resetForNewDataset('otro.csv');
     expect(getSession().mode).toBe('free');
+  });
+
+  it('sin almacenamiento la guía sigue andando: se pierde la preferencia, nada más', () => {
+    // Ventana privada, cookies bloqueadas, cuota llena: localStorage existe
+    // pero tira. Una preferencia no puede tumbar la app.
+    useBrokenStorage();
+    expect(() => setMode('free')).not.toThrow();
+    expect(getSession().mode).toBe('free');
+    expect(loadStoredMode()).toBeNull();
+    expect(() => restoreGuidedPreferences()).not.toThrow();
   });
 });
 
