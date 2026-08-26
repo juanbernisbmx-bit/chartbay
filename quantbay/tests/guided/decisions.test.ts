@@ -7,6 +7,7 @@ import {
   recordEstimation,
   resetForNewDataset,
   resetSessionForTests,
+  restoreGuidedPreferences,
   seedSpecBaseline,
   setMode,
 } from '../../src/guided/session';
@@ -17,6 +18,7 @@ import {
   describeEstimation,
   describeSpecChanges,
 } from '../../src/guided/decisionLog';
+import { clearStoredMode, loadStoredMode } from '../../src/guided/persistence';
 import type { CurrentSpec, SpecSignature } from '../../src/guided/types';
 
 function sig(over: Partial<SpecSignature> = {}): SpecSignature {
@@ -40,6 +42,7 @@ const summaries = () => getSession().decisions.map(d => d.summary);
 
 beforeEach(() => {
   resetSessionForTests();
+  clearStoredMode();
 });
 
 describe('redacción de las decisiones', () => {
@@ -121,6 +124,23 @@ describe('registro de cambios de especificación', () => {
 });
 
 describe('modo libre', () => {
+  it('persiste la elección y la restaura en la carga siguiente', () => {
+    setMode('free');
+    expect(loadStoredMode()).toBe('free');
+
+    resetSessionForTests();
+    expect(getSession().mode).toBe('guided');
+    restoreGuidedPreferences();
+    expect(getSession().mode).toBe('free');
+  });
+
+  it('restaurar no cuenta como una decisión nueva', () => {
+    setMode('free');
+    resetSessionForTests();
+    restoreGuidedPreferences();
+    expect(getSession().decisions).toHaveLength(0);
+  });
+
   it('anota apagar y volver a encender la guía, y no el ruido intermedio', () => {
     setMode('free');
     setMode('free');

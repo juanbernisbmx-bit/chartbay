@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { appState } from '../../src/app/state';
 import { renderGuided } from '../../src/ui/guidedView';
 import {
-  resetForNewDataset, resetSessionForTests, setMode,
+  getSession, resetForNewDataset, resetSessionForTests, restoreGuidedPreferences, setMode,
 } from '../../src/guided/session';
+import { clearStoredMode } from '../../src/guided/persistence';
 
 const panel = () => document.getElementById('qb-guided')?.innerHTML ?? '';
 
@@ -15,6 +16,7 @@ beforeEach(() => {
   appState.activeMode = 'regression';
   appState.activeVersion = 'lite';
   resetSessionForTests();
+  clearStoredMode();
 });
 
 describe('registro de decisiones en el panel', () => {
@@ -54,5 +56,19 @@ describe('registro de decisiones en el panel', () => {
     const html = panel();
     expect(html).not.toContain('<img src=x');
     expect(html).toContain('&lt;img src=x');
+  });
+});
+
+describe('modo libre restaurado', () => {
+  it('dibuja el modo guardado y no el de por defecto', () => {
+    setMode('free');
+    // Como si fuera una recarga: el estado en memoria se pierde, la
+    // preferencia no.
+    resetSessionForTests();
+    restoreGuidedPreferences();
+    renderGuided();
+
+    expect(getSession().mode).toBe('free');
+    expect(panel()).toContain('modo libre');
   });
 });

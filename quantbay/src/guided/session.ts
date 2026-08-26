@@ -7,6 +7,7 @@
 import type { DoctorReport } from '../modelDoctor/types';
 import { changedFields } from './invalidation';
 import { describeEstimation, describeSpecChanges } from './decisionLog';
+import { loadStoredMode, storeMode } from './persistence';
 import type { AnalysisType, CurrentSpec, GuidedMode, GuidedSession, SpecSignature, StepKey, UserDecision, DecisionKind } from './types';
 
 let session: GuidedSession = {
@@ -135,6 +136,7 @@ export function dismissRecommendation(id: string, title: string): void {
 export function setMode(mode: GuidedMode): void {
   if (session.mode === mode) return;
   session.mode = mode;
+  storeMode(mode);
   // Apagar la guía es en sí una decisión del recorrido, y de las que más
   // explican después por qué nadie avisó de algo. Queda anotada como cualquier
   // otra.
@@ -143,6 +145,16 @@ export function setMode(mode: GuidedMode): void {
     : 'Volviste al modo guiado');
 }
 
+/**
+ * Restaura las preferencias guardadas. La llama la vista al iniciar.
+ *
+ * No registra decisión: recuperar lo que el estudiante ya había elegido no es
+ * una elección nueva, y anotarla llenaría el registro de ruido en cada recarga.
+ */
+export function restoreGuidedPreferences(): void {
+  const stored = loadStoredMode();
+  if (stored) session.mode = stored;
+}
 
 export function logDecision(kind: DecisionKind, summary: string, fromRecommendation?: string): void {
   const entry: UserDecision = {
