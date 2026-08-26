@@ -10,13 +10,23 @@ import { describeEstimation, describeSpecChanges } from './decisionLog';
 import { loadStoredMode, storeMode } from './persistence';
 import type { AnalysisType, CurrentSpec, GuidedMode, GuidedSession, SpecSignature, StepKey, UserDecision, DecisionKind } from './types';
 
-let session: GuidedSession = {
-  mode: 'guided',
-  confirmedType: null,
-  acknowledged: [],
-  dismissed: [],
-  decisions: [],
-};
+function emptySession(mode: GuidedMode = 'guided'): GuidedSession {
+  return { mode, confirmedType: null, acknowledged: [], dismissed: [], decisions: [], estimatedSpecs: [] };
+}
+
+let session: GuidedSession = emptySession();
+
+/** Identidad de una especificación, para saber si ya se estimó esta sesión. */
+function specKey(signature: SpecSignature): string {
+  return [
+    signature.dataset, signature.yName, signature.xNames, signature.form,
+    signature.dropIncomplete, signature.restriction, signature.transformation,
+    signature.arimaOrders,
+    // El tipo de errores estándar queda afuera a propósito: no mueve los
+    // coeficientes, así que estimar lo mismo con HC3 no es haber probado otra
+    // especificación — es haber cambiado cómo se hace la inferencia.
+  ].join('|');
+}
 
 /** Firma de la especificación con la que se produjo el resultado en pantalla. */
 let estimatedSignature: SpecSignature | null = null;
@@ -59,6 +69,8 @@ export function getEstimatedSignature(): SpecSignature | null {
 
 export function recordEstimation(signature: SpecSignature): void {
   estimatedSignature = signature;
+  const key = specKey(signature);
+  if (!session.estimatedSpecs.includes(key)) session.estimatedSpecs.push(key);
   // Lo estimado pasa a ser la línea de base: los cambios que vengan después se
   // cuentan desde acá, no desde lo que hubiera seleccionado antes de correr.
   lastLoggedSignature = signature;
@@ -173,13 +185,7 @@ export function logDecision(kind: DecisionKind, summary: string, fromRecommendat
  */
 export function resetForNewDataset(name: string): void {
   const previous = session.decisions;
-  session = {
-    mode: session.mode,
-    confirmedType: null,
-    acknowledged: [],
-    dismissed: [],
-    decisions: previous,
-  };
+  session = { ...emptySession(session.mode), decisions: previous };
   estimatedSignature = null;
   lastLoggedSignature = null;
   lastDoctorReport = null;
@@ -188,7 +194,7 @@ export function resetForNewDataset(name: string): void {
 
 /** Solo para tests. */
 export function resetSessionForTests(): void {
-  session = { mode: 'guided', confirmedType: null, acknowledged: [], dismissed: [], decisions: [] };
+  session = emptySession();
   estimatedSignature = null;
   lastLoggedSignature = null;
   lastDoctorReport = null;

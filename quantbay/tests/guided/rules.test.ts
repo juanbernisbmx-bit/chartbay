@@ -31,8 +31,8 @@ function spec(over: Partial<CurrentSpec> = {}): CurrentSpec {
 function ctx(over: Partial<AnalysisContext> = {}): AnalysisContext {
   return {
     mode: 'regression', engine: 'lite', dataset: dataset(), raw: null, spec: spec(),
-    estimatedSignature: null, hasResult: false, timeSeries: null, doctor: null,
-    session: { mode: 'guided', confirmedType: 'cross_section', acknowledged: [], dismissed: [], decisions: [] },
+    estimatedSignature: null, hasResult: false, timeSeries: null, doctor: null, comparison: null,
+    session: { mode: 'guided', confirmedType: 'cross_section', acknowledged: [], dismissed: [], decisions: [], estimatedSpecs: [] },
     ...over,
   };
 }
@@ -113,7 +113,7 @@ describe('G03 · signo y magnitud antes que significancia', () => {
   it('deja de aparecer cuando el estudiante los revisó', () => {
     const plan = buildGuidedPlan(ctx({
       hasResult: true, estimatedSignature: signature(),
-      session: { mode: 'guided', confirmedType: 'cross_section', acknowledged: ['readCoefficients'], dismissed: [], decisions: [] },
+      session: { mode: 'guided', confirmedType: 'cross_section', acknowledged: ['readCoefficients'], dismissed: [], decisions: [], estimatedSpecs: [] },
     }));
     expect(ruleOf(plan)).not.toBe('G03');
   });
@@ -124,7 +124,7 @@ describe('G10 · cierre', () => {
     hasResult: true, estimatedSignature: signature(),
     session: {
       mode: 'guided', confirmedType: 'cross_section',
-      acknowledged: ['readCoefficients', 'inference', 'diagnostics'], dismissed: [], decisions: [],
+      acknowledged: ['readCoefficients', 'inference', 'diagnostics'], dismissed: [], decisions: [], estimatedSpecs: [],
     },
   });
 

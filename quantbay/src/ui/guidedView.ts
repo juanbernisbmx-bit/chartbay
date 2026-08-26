@@ -12,6 +12,7 @@ import {
   logDecision, noteSpecChange, recordEstimation, restoreGuidedPreferences,
   seedSpecBaseline, setMode,
 } from '../guided/session';
+import { subscribeComparisonStore } from '../modelComparison/store';
 import { buildDecisionLogText, clockOf } from '../guided/decisionLog';
 import { downloadTextFile } from './exports';
 import type { DecisionKind, GuidedPlan, GuidedSession, GuidedStep, Recommendation, StepState } from '../guided/types';
@@ -61,7 +62,47 @@ const DECISION_LABEL: Record<DecisionKind, string> = {
   acknowledge_step: 'revisión',
   dismiss_recommendation: 'omisión',
   set_mode: 'modo',
+  compare_models: 'contraste',
 };
+
+/**
+ * Modelos guardados que la guía ya anotó, para registrar altas y bajas.
+ *
+ * Se observa el store en vez de tocar el panel de comparación: así el módulo
+ * de contraste no tiene que saber que la guía existe, y el registro se entera
+ * igual de que el estudiante guardó o descartó una especificación.
+ */
+let knownSaved = new Map<string, string>();
+
+/**
+ * initGuided registra listeners en `document` y una suscripción al store de
+ * comparación: cosas que viven mientras viva la página. Llamarlo dos veces
+ * las duplicaría, así que se hace una sola vez, igual que el panel de
+ * comparación de al lado.
+ */
+let initialized = false;
+
+/**
+ * Solo para tests: la memoria de guardados es de la vista, no del store.
+ *
+ * No toca `initialized` a propósito: la suscripción ya registrada tiene que
+ * seguir viva, y volver a suscribirse es justamente lo que el flag evita.
+ */
+export function resetGuidedViewForTests(): void {
+  knownSaved = new Map();
+  logOpen = false;
+}
+
+function noteComparisonChanges(saved: Array<{ id: string; name?: string }>): void {
+  const next = new Map(saved.map(model => [model.id, model.name ?? 'una estimación']));
+  for (const [id, name] of next) {
+    if (!knownSaved.has(id)) logDecision('compare_models', `Guardaste ${name} para comparar`);
+  }
+  for (const [id, name] of knownSaved) {
+    if (!next.has(id)) logDecision('compare_models', `Quitaste ${name} de la comparación`);
+  }
+  knownSaved = next;
+}
 
 function stepRow(step: GuidedStep, index: number): string {
   const shape = SQUARE_STATES.includes(step.state) ? ' qb-g-chip--sq' : '';
@@ -234,7 +275,8 @@ const REFRESH_ON_CLICK = ['qb-ts-run', 'qb-pro-ts-run'];
 
 export function initGuided(onAction?: (focus: string) => void): void {
   const host = $('qb-guided');
-  if (!host) return;
+  if (!host || initialized) return;
+  initialized = true;
 
   // El modo elegido sobrevive a recargar la página. Se restaura antes del
   // primer dibujo para que el panel no aparezca guiado y salte a libre.
@@ -252,6 +294,13 @@ export function initGuided(onAction?: (focus: string) => void): void {
     noteSpecChange(buildAnalysisContext().spec);
     renderGuided();
   }, 0));
+
+  // Guardar o quitar una especificación cambia el plan (G11, G12, G13) y es
+  // una decisión que va al registro. Se escucha el store, no los botones.
+  subscribeComparisonStore(state => {
+    noteComparisonChanges(state.saved);
+    renderGuided();
+  });
 
   // Diferido: estos listeners se registran después que los de la app, pero el
   // resultado recién existe cuando el handler original terminó.

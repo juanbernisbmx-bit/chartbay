@@ -311,3 +311,94 @@ GUIDED_RULES.push(
     },
   }
 );
+
+// ── Etapa 8 · contraste de especificaciones ─────────────────────────────────
+//
+// Misma frontera que con Model Doctor: acá no se decide si dos modelos son
+// comparables ni se redactan los motivos. Eso lo dictamina assessComparability
+// y llega hecho en ctx.comparison. La guía elige el momento y traduce a acción.
+//
+// Y lo que NUNCA se hace acá: elegir un ganador. Ninguna de estas reglas dice
+// que un modelo sea mejor que otro. Un R² más alto no es evidencia de nada por
+// sí solo, y una guía que coronara modelos enseñaría exactamente el hábito que
+// el panel de comparación existe para desarmar.
+
+GUIDED_RULES.push(
+  {
+    // G11 — probó varias especificaciones y no guardó ninguna, así que las
+    // anteriores no existen en ningún lado. Es el hábito más caro del
+    // aprendizaje: estimar, no gustar el resultado, cambiar algo, estimar de
+    // nuevo, y quedarse con la última sin haber visto nunca las dos juntas.
+    id: 'G11',
+    kind: 'advisory',
+    targetStep: 'compare',
+    priority: 35,
+    when: ctx => ctx.session.estimatedSpecs.length >= 2
+      && (ctx.comparison?.saved ?? 0) < 2
+      && ctx.hasResult,
+    build: ctx => {
+      const probadas = ctx.session.estimatedSpecs.length;
+      const guardadas = ctx.comparison?.saved ?? 0;
+      return rec({ id: 'G11', kind: 'advisory', targetStep: 'compare' }, {
+        title: `Probaste ${probadas} especificaciones y solo queda la última`,
+        body: guardadas === 0
+          ? 'Cada corrida reemplaza a la anterior en pantalla. Guardá esta estimación para poder contrastarla con la próxima.'
+          : 'Tenés una guardada. Guardá también la que está en pantalla para verlas al lado.',
+        why: 'Cambiar el modelo hasta que el resultado guste, y reportar solo esa corrida, es el mecanismo por el que aparecen hallazgos que no se replican. Lo que vuelve honesto al ejercicio es mostrar qué se sostiene y qué se mueve entre especificaciones — y para eso hay que conservarlas.',
+        actions: [{ label: 'Guardar esta estimación', focus: 'qb-comparison-save' }],
+        theory: ['modelo y datos'],
+      });
+    },
+  },
+  {
+    // G12 — hay dos o más guardadas y el motor dice que la comparación no es
+    // directa. Se muestra antes que G13: si los modelos no están en la misma
+    // escala, leer un cambio de significancia entre ellos no significa nada.
+    id: 'G12',
+    kind: 'advisory',
+    targetStep: 'compare',
+    priority: 50,
+    when: ctx => (ctx.comparison?.saved ?? 0) >= 2
+      && ctx.comparison?.level !== null
+      && ctx.comparison?.level !== 'direct',
+    build: ctx => {
+      const bloqueado = ctx.comparison!.level === 'incompatible';
+      // Los motivos llegan redactados por el motor y se muestran tal cual.
+      const motivos = bloqueado ? ctx.comparison!.blocking : ctx.comparison!.cautions;
+      return rec({ id: 'G12', kind: 'advisory', targetStep: 'compare' }, {
+        title: bloqueado
+          ? 'Los modelos que guardaste no se pueden comparar de frente'
+          : 'La comparación se puede leer, pero con cautela',
+        body: motivos.join(' '),
+        why: bloqueado
+          ? 'Poner dos números uno al lado del otro no los vuelve comparables. Si la variable dependiente o su escala cambian, el R² y los coeficientes de un modelo no significan lo mismo que los del otro, y la tabla invitaría a una conclusión que los datos no soportan.'
+          : 'La comparación sigue siendo informativa, pero no todas las filas de la tabla se leen igual: el panel marca cuáles quedan fuera de comparación directa y por qué.',
+        actions: [{ label: 'Ver la comparación', focus: 'qb-model-comparison' }],
+        theory: ['modelo y datos'],
+      });
+    },
+  },
+  {
+    // G13 — un coeficiente cambia de significancia según la especificación.
+    // Es el momento pedagógico del panel: no es un menú para quedarse con la
+    // corrida que da significativo.
+    id: 'G13',
+    kind: 'advisory',
+    targetStep: 'compare',
+    priority: 45,
+    when: ctx => (ctx.comparison?.significanceFlips.length ?? 0) > 0,
+    build: ctx => {
+      const cuales = ctx.comparison!.significanceFlips;
+      const lista = cuales.slice(0, 3).join(', ');
+      return rec({ id: 'G13', kind: 'advisory', targetStep: 'compare' }, {
+        title: cuales.length === 1
+          ? 'Un coeficiente cambia de significancia entre especificaciones'
+          : 'Hay coeficientes que cambian de significancia entre especificaciones',
+        body: `Según qué modelo mires, ${lista} cruza${cuales.length === 1 ? '' : 'n'} el umbral de 5%.`,
+        why: 'Que un resultado aparezca y desaparezca al cambiar el modelo es información sobre lo frágil que es la conclusión, y hay que reportarlo. Quedarse con la especificación que da significativo, sin decir que las otras no, es p-hacking: el p-valor deja de significar lo que dice significar cuando se elige la corrida después de ver el resultado.',
+        actions: [{ label: 'Ver qué cambió', focus: 'qb-comparison-filter' }],
+        theory: ['t y p-value'],
+      });
+    },
+  }
+);

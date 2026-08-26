@@ -11,7 +11,9 @@ import { forEachCellOf, rowCountOf, type ParsedCSV } from '../csvParser';
 import type { FunctionalForm } from '../functionalForms';
 import { getDoctorReport, getEstimatedSignature, getSession } from './session';
 import { changedFields } from './invalidation';
-import type { AnalysisContext, AnalysisType, CurrentSpec, DatasetProfile, DatasetProfileWarning, SpecSignature } from './types';
+import { compareModels } from '../modelComparison/engine';
+import { getComparisonStoreState } from '../modelComparison/store';
+import type { AnalysisContext, AnalysisType, ComparisonFacts, CurrentSpec, DatasetProfile, DatasetProfileWarning, SpecSignature } from './types';
 
 function selectedY(): string {
   return ($('qb-y') as HTMLSelectElement | null)?.value ?? '';
@@ -173,6 +175,40 @@ function reportStillApplies(
   return changedFields(spec.signature, estimated).length === 0;
 }
 
+/**
+ * Hechos del contraste, leídos del módulo de comparación tal cual.
+ *
+ * La guía no vuelve a decidir si dos modelos son comparables ni reescribe los
+ * motivos: los toma de assessComparability, igual que toma los hallazgos de
+ * Model Doctor. Duplicar ese criterio acá sería tener dos veredictos distintos
+ * sobre lo mismo, y el que vería el estudiante dependería del panel que mire.
+ */
+function comparisonFacts(): ComparisonFacts | null {
+  const state = getComparisonStoreState();
+  if (state.saved.length === 0 && !state.current) return null;
+
+  const base: ComparisonFacts = {
+    saved: state.saved.length,
+    currentUnsaved: state.current !== null,
+    level: null,
+    blocking: [],
+    cautions: [],
+    significanceFlips: [],
+  };
+  if (state.saved.length < 2) return base;
+
+  const result = compareModels(state.saved);
+  return {
+    ...base,
+    level: result.comparability.level,
+    blocking: result.comparability.warnings.filter(w => w.level === 'block').map(w => w.message),
+    cautions: result.comparability.warnings.filter(w => w.level === 'warning').map(w => w.message),
+    significanceFlips: result.coefficientRows
+      .filter(row => row.significanceChanged)
+      .map(row => row.label),
+  };
+}
+
 export function buildAnalysisContext(): AnalysisContext {
   const data = appState.csvData;
   const datasetName = ($('qb-filename')?.textContent ?? '').trim() || 'dataset';
@@ -199,6 +235,7 @@ export function buildAnalysisContext(): AnalysisContext {
     // diagnóstico de un modelo superado no puede seguir dictando el próximo
     // paso. Se descarta hasta que se vuelva a estimar.
     doctor: reportStillApplies(spec, estimatedSignature) ? getDoctorReport() : null,
+    comparison: comparisonFacts(),
     session: getSession(),
   };
 }

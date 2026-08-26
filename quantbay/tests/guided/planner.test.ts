@@ -35,8 +35,8 @@ function ctx(over: Partial<AnalysisContext> = {}): AnalysisContext {
   return {
     mode: 'regression', engine: 'lite',
     dataset: dataset(), raw: null, spec: spec(),
-    estimatedSignature: null, hasResult: false, timeSeries: null, doctor: null,
-    session: { mode: 'guided', confirmedType: 'cross_section', acknowledged: [], dismissed: [], decisions: [] },
+    estimatedSignature: null, hasResult: false, timeSeries: null, doctor: null, comparison: null,
+    session: { mode: 'guided', confirmedType: 'cross_section', acknowledged: [], dismissed: [], decisions: [], estimatedSpecs: [] },
     ...over,
   };
 }
@@ -64,7 +64,7 @@ describe('planificador · estados de pasos', () => {
       ctx({ dataset: null, spec: null }),
       ctx(),
       ctx({ hasResult: true, estimatedSignature: signature() }),
-      ctx({ hasResult: true, estimatedSignature: signature(), session: { mode: 'guided', confirmedType: 'cross_section', acknowledged: ['readCoefficients'], dismissed: [], decisions: [] } }),
+      ctx({ hasResult: true, estimatedSignature: signature(), session: { mode: 'guided', confirmedType: 'cross_section', acknowledged: ['readCoefficients'], dismissed: [], decisions: [], estimatedSpecs: [] } }),
     ];
     for (const c of casos) {
       const n = buildGuidedPlan(c).steps.filter(s => s.state === 'next').length;
@@ -74,7 +74,7 @@ describe('planificador · estados de pasos', () => {
 
   it('sin confirmar el tipo de análisis, elegir variables queda bloqueado', () => {
     const plan = buildGuidedPlan(ctx({
-      session: { mode: 'guided', confirmedType: null, acknowledged: [], dismissed: [], decisions: [] },
+      session: { mode: 'guided', confirmedType: null, acknowledged: [], dismissed: [], decisions: [], estimatedSpecs: [] },
     }));
     expect(stateOf(plan, 'analysisType')).toBe('next');
     expect(stateOf(plan, 'variables')).toBe('blocked');
@@ -96,7 +96,7 @@ describe('planificador · flujos separados', () => {
   it('en series de tiempo no aparece ningún paso de corte transversal', () => {
     const plan = buildGuidedPlan(ctx({
       mode: 'timeseries',
-      session: { mode: 'guided', confirmedType: 'time_series', acknowledged: [], dismissed: [], decisions: [] },
+      session: { mode: 'guided', confirmedType: 'time_series', acknowledged: [], dismissed: [], decisions: [], estimatedSpecs: [] },
     }));
     const claves = plan.steps.map(s => s.key);
     expect(claves).not.toContain('variables');
@@ -106,7 +106,7 @@ describe('planificador · flujos separados', () => {
   it('series de tiempo arranca por el índice temporal, no por elegir variables', () => {
     const plan = buildGuidedPlan(ctx({
       mode: 'timeseries',
-      session: { mode: 'guided', confirmedType: 'time_series', acknowledged: [], dismissed: [], decisions: [] },
+      session: { mode: 'guided', confirmedType: 'time_series', acknowledged: [], dismissed: [], decisions: [], estimatedSpecs: [] },
     }));
     expect(plan.cannotAdvise).toBeUndefined();
     expect(plan.primary!.targetStep).toBe('timeIndex');

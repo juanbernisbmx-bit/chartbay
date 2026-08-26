@@ -56,10 +56,10 @@ function report(findings: DoctorFinding[]): DoctorReport {
 function ctx(doctor: DoctorReport | null, over: Partial<AnalysisContext> = {}): AnalysisContext {
   return {
     mode: 'regression', engine: 'lite', dataset: dataset(), raw: null, spec: spec(),
-    estimatedSignature: signature(), hasResult: true, timeSeries: null, doctor,
+    estimatedSignature: signature(), hasResult: true, timeSeries: null, doctor, comparison: null,
     session: {
       mode: 'guided', confirmedType: 'cross_section',
-      acknowledged: ['readCoefficients'], dismissed: [], decisions: [],
+      acknowledged: ['readCoefficients'], dismissed: [], decisions: [], estimatedSpecs: [],
     },
     ...over,
   };
