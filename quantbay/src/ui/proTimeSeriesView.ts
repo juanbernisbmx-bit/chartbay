@@ -21,6 +21,11 @@ import {
   type PyodideTimeSeriesResult,
 } from '../pro/pyodide/proTimeSeriesResultTypes';
 import { NO_TIME_COLUMN_VALUE, detectProTimeColumn } from '../pro/pyodide/proTimeIndex';
+import { interpretADF, interpretAcfPacf, interpretArima, interpretForecast, interpretLjungBox } from '../interpretation';
+import type { InterpretationResult } from '../interpretation';
+import { renderInterpretationResults } from './interpretationView';
+import { buildModelDoctor, engineFindingFromInterpretation } from '../modelDoctor';
+import { renderModelDoctor } from './modelDoctorView';
 
 // Chart.js se carga globalmente por CDN en quantbay.html (igual que en el motor
 // Lite, ver ui/timeseriesView.ts). No es un import npm — se accede por el global
@@ -218,6 +223,8 @@ export function clearProTimeSeriesResult(): void {
     const el = $(id);
     if (el) el.innerHTML = '';
   }
+  const doctor = $('qb-pro-ts-model-doctor');
+  if (doctor) doctor.innerHTML = '';
   const note = $('qb-pro-ts-note');
   if (note) note.textContent = '';
   const arima = $('qb-pro-ts-arima-note');
@@ -257,6 +264,18 @@ function buildAdfHtml(adf: ProAdfResult | undefined): string {
     ? critEntries.map(([k, v]) => `${escapeHtml(k)} ${fmt(v)}`).join(', ')
     : '—';
   const verdict = adf.rejectAt5 ? 'Se rechaza H0 al 5%' : 'No se rechaza H0 al 5%';
+  const interpretation = interpretADF({
+    statistic: adf.statistic,
+    pValue: adf.pValue,
+    criticalValues: {
+      onePercent: adf.criticalValues['1%'],
+      fivePercent: adf.criticalValues['5%'],
+      tenPercent: adf.criticalValues['10%'],
+    },
+    specification: 'la regresión ADF seleccionada',
+    alpha: 0.05,
+    nObs: adf.nobs,
+  });
   return `
     <table class="ledger">
       <thead><tr><th>ADF test</th><th>Valor</th></tr></thead>
@@ -270,7 +289,8 @@ function buildAdfHtml(adf: ProAdfResult | undefined): string {
         <tr><td>Conclusión</td><td>${escapeHtml(verdict)}</td></tr>
       </tbody>
     </table>
-    <div class="qb-interp" style="margin-top:8px">${escapeHtml(adf.interpretation)}</div>`;
+    <div class="qb-interp" style="margin-top:8px">${escapeHtml(adf.interpretation)}</div>
+    ${renderInterpretationResults([interpretation])}`;
 }
 
 function buildAcfPacfHtml(acf: ProAcfPoint[] | undefined, pacf: ProAcfPoint[] | undefined): string {
@@ -308,12 +328,20 @@ function buildLjungBoxHtml(rows: ProLjungBoxRow[] | undefined): string {
       return `<tr><td>${row.lag}</td><td>${fmt(row.statistic)}</td><td>${fmt(row.pValue)}</td><td>${escapeHtml(verdict)}</td></tr>`;
     })
     .join('');
+  const finalRow = rows[rows.length - 1];
+  const interpretation = interpretLjungBox({
+    lag: finalRow.lag,
+    statistic: finalRow.statistic,
+    pValue: finalRow.pValue,
+    alpha: 0.05,
+  });
   return `
     <table class="ledger">
       <thead><tr><th>Lag</th><th>Q-stat</th><th>p-value</th><th>Conclusión</th></tr></thead>
       <tbody>${body}</tbody>
     </table>
-    <div class="qb-interp" style="margin-top:8px">H0: no hay autocorrelación conjunta hasta ese rezago.</div>`;
+    <div class="qb-interp" style="margin-top:8px">H0: no hay autocorrelación conjunta hasta ese rezago.</div>
+    ${renderInterpretationResults([interpretation])}`;
 }
 
 function orderLabel(order: ProArimaOrder): string {
@@ -465,6 +493,22 @@ function buildArimaHtml(result: PyodideTimeSeriesResult): string {
     ? `<p class="qb-label" style="margin-top:10px">Advertencias del modelo</p>` +
       `<div class="qb-warn-yellow"><ul>${arima.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
     : '';
+  const structured = [interpretArima({
+    p: arima.order.p,
+    d: arima.order.d,
+    q: arima.order.q,
+    converged: arima.converged,
+    aic: arima.aic,
+    bic: arima.bic,
+  })];
+  if (arima.forecast && arima.forecast.items.length > 0) {
+    structured.push(interpretForecast({
+      steps: arima.forecast.steps,
+      confidenceLevel: arima.forecast.confidenceLevel,
+      hasIntervals: arima.forecast.items.every(item => item.lower !== null && item.upper !== null),
+      converged: arima.converged,
+    }));
+  }
 
   return (
     `<p class="qb-label" style="margin-top:10px">${escapeHtml(orderLabel(arima.order))}</p>` +
@@ -474,7 +518,8 @@ function buildArimaHtml(result: PyodideTimeSeriesResult): string {
     modelWarnings +
     buildArimaResidualHtml(result.arimaResidualDiagnostics) +
     buildForecastHtml(arima) +
-    `<div class="qb-interp" style="margin-top:8px">${escapeHtml(ARIMA_IC_NOTE)}</div>`
+    `<div class="qb-interp" style="margin-top:8px">${escapeHtml(ARIMA_IC_NOTE)}</div>` +
+    renderInterpretationResults(structured)
   );
 }
 
@@ -647,6 +692,15 @@ export function renderProTimeSeriesResult(result: PyodideTimeSeriesResult, obser
 
   if (!result.ok) {
     showProTimeSeriesError(result.error ?? 'Error desconocido en el motor Pro de series de tiempo.');
+    const doctor = $('qb-pro-ts-model-doctor');
+    if (doctor) doctor.innerHTML = renderModelDoctor(buildModelDoctor([], {
+      mode: 'timeseries', engine: 'pro', nObs: 0, droppedRows: 0, paramCount: 0,
+      hasIntercept: true, standardErrorType: 'classic', hacMaxLags: null,
+      functionalForm: 'lin-lin', hasCategorical: false, droppedFeatures: [],
+      hasRestriction: false, binaryTarget: false, datasetHasDates: false,
+      alpha: 0.05, converged: false,
+      timeSeries: { transformation: 'original', arimaOrders: null, forecastHorizon: null },
+    }));
     destroyProForecastChart();
     const chartSection = $('qb-pro-ts-forecast-chart-section');
     if (chartSection) chartSection.style.display = 'none';
@@ -659,6 +713,85 @@ export function renderProTimeSeriesResult(result: PyodideTimeSeriesResult, obser
 
   const error = $('qb-pro-ts-error');
   if (error) { error.textContent = ''; error.style.display = 'none'; }
+
+  const doctorInterpretations: InterpretationResult[] = [];
+  if (result.adf) doctorInterpretations.push(interpretADF({
+    statistic: result.adf.statistic,
+    pValue: result.adf.pValue,
+    criticalValues: {
+      onePercent: result.adf.criticalValues['1%'],
+      fivePercent: result.adf.criticalValues['5%'],
+      tenPercent: result.adf.criticalValues['10%'],
+    },
+    specification: result.adfRegression
+      ? PRO_ADF_REGRESSION_LABELS[result.adfRegression]
+      : 'la regresión ADF seleccionada',
+    alpha: 0.05,
+    nObs: result.adf.nobs,
+  }));
+  const threshold = result.observations && result.observations > 0 ? 1.96 / Math.sqrt(result.observations) : Number.POSITIVE_INFINITY;
+  doctorInterpretations.push(interpretAcfPacf({
+    significantAcfLags: (result.acf ?? []).filter(point => point.lag > 0 && Math.abs(point.value) > threshold).map(point => point.lag),
+    significantPacfLags: (result.pacf ?? []).filter(point => point.lag > 0 && Math.abs(point.value) > threshold).map(point => point.lag),
+    observations: result.observations,
+  }));
+  const lastSeriesLjungBox = result.ljungBox?.[result.ljungBox.length - 1];
+  if (lastSeriesLjungBox) doctorInterpretations.push(interpretLjungBox({
+    lag: lastSeriesLjungBox.lag,
+    statistic: lastSeriesLjungBox.statistic,
+    pValue: lastSeriesLjungBox.pValue,
+    alpha: 0.05,
+    residuals: false,
+  }));
+  if (result.arima) {
+    doctorInterpretations.push(interpretArima({
+      ...result.arima.order,
+      converged: result.arima.converged,
+      aic: result.arima.aic,
+      bic: result.arima.bic,
+    }));
+    const lastResidualLjungBox = result.arimaResidualDiagnostics?.ljungBox[result.arimaResidualDiagnostics.ljungBox.length - 1];
+    if (lastResidualLjungBox) doctorInterpretations.push(interpretLjungBox({
+      lag: lastResidualLjungBox.lag,
+      statistic: lastResidualLjungBox.statistic,
+      pValue: lastResidualLjungBox.pValue,
+      alpha: 0.05,
+      residuals: true,
+    }));
+    if (result.arima.forecast) doctorInterpretations.push(interpretForecast({
+      steps: result.arima.forecast.steps,
+      confidenceLevel: result.arima.forecast.confidenceLevel,
+      hasIntervals: result.arima.forecast.items.every(item => item.lower !== null && item.upper !== null),
+      converged: result.arima.converged,
+    }));
+  }
+  const doctor = $('qb-pro-ts-model-doctor');
+  if (doctor) doctor.innerHTML = renderModelDoctor(buildModelDoctor(
+    doctorInterpretations.map(engineFindingFromInterpretation),
+    {
+      mode: 'timeseries',
+      engine: 'pro',
+      nObs: result.observations ?? 0,
+      droppedRows: 0,
+      paramCount: result.arima?.coefficients.length ?? 1,
+      hasIntercept: true,
+      standardErrorType: 'classic',
+      hacMaxLags: null,
+      functionalForm: 'lin-lin',
+      hasCategorical: false,
+      droppedFeatures: [],
+      hasRestriction: false,
+      binaryTarget: false,
+      datasetHasDates: Boolean(result.timeIndex),
+      alpha: 0.05,
+      converged: result.arima ? result.arima.converged !== false : true,
+      timeSeries: {
+        transformation: 'original',
+        arimaOrders: result.arima?.order ?? null,
+        forecastHorizon: result.arima?.forecast?.steps ?? null,
+      },
+    }
+  ));
 
   const adfEl = $('qb-pro-ts-adf');
   if (adfEl) adfEl.innerHTML = buildAdfHtml(result.adf);

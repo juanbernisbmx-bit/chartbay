@@ -6,6 +6,7 @@ import {
   getTimeSeriesColumnDefaults,
   getTimeSeriesValueColumns,
   renderTimeSeriesAnalysis,
+  renderTimeSeriesSelectors,
   syncTimeSeriesTransformationControls,
 } from '../src/ui/timeseriesView';
 import type { ParsedCSV } from '../src/csvParser';
@@ -45,6 +46,7 @@ function installTimeSeriesDom(): void {
     <div id="qb-ts-acf-interpretation"></div>
     <canvas id="qb-ts-chart"></canvas>
     <div id="qb-ts-interpretation"></div>
+    <div id="qb-ts-model-doctor"></div>
   `;
   lastChartConfig = null;
   (globalThis as any).Chart = vi.fn().mockImplementation((_canvas, config) => {
@@ -76,12 +78,15 @@ describe('timeseriesView helpers', () => {
   });
 
   it('selects detected date and first numeric-like value column by default', () => {
+    document.getElementById('qb-ts-model-doctor')!.innerHTML = '<p>diagnóstico anterior</p>';
     expect(getTimeSeriesColumnDefaults(data)).toMatchObject({
       dateColumn: 'date',
       valueColumn: 'close',
       valueColumns: ['close'],
       detectedDateColumn: 'date',
     });
+    renderTimeSeriesSelectors(data);
+    expect(document.getElementById('qb-ts-model-doctor')?.innerHTML).toBe('');
   });
 
   it('reads transformation selector and toggles moving-average controls', () => {

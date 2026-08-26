@@ -22,6 +22,7 @@ function installRegressionDom(): void {
     <canvas id="qb-resid-fitted"></canvas>
     <canvas id="qb-resid-hist"></canvas>
     <div id="qb-resid-stats"></div>
+    <div id="qb-model-doctor"></div>
     <div id="qb-interpretation"></div>
     <div id="qb-pred-table"></div>
   `;
@@ -52,6 +53,12 @@ describe('renderRegressionResults RLS outputs', () => {
     const statsText = document.querySelector('#qb-stats-body')?.textContent ?? '';
     const rlsText = document.querySelector('#qb-rls-content')?.textContent ?? '';
     const interpretation = document.querySelector('#qb-interpretation')?.textContent ?? '';
+    const doctor = document.querySelector('#qb-model-doctor')?.textContent ?? '';
+    expect(interpretation).toContain('INTERPRETACIÓN DE CHARTBAY');
+    expect(interpretation).toContain('Reglas determinísticas');
+    expect(doctor).toContain('MODEL DOCTOR');
+    expect(doctor).toContain('evaluadas');
+    expect(doctor).toContain('Qué no puede decirte este diagnóstico');
 
     expect(coefText).toContain(result.intercept.toFixed(6));
     expect(coefText).toContain(result.coefficients[0].toFixed(6));

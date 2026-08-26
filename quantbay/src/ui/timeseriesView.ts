@@ -11,6 +11,11 @@ import type {
 import { detectDateColumn } from '../timeseries/validation';
 import { $ } from '../app/dom';
 import { escapeHtml } from '../utils/format';
+import { interpretAcfPacf, interpretADF, interpretLjungBox } from '../interpretation';
+import type { InterpretationResult } from '../interpretation/types';
+import { renderInterpretationResults } from './interpretationView';
+import { buildModelDoctor, engineFindingFromInterpretation } from '../modelDoctor';
+import { renderModelDoctor } from './modelDoctorView';
 
 declare const Chart: any;
 
@@ -132,6 +137,8 @@ export function renderTimeSeriesNoData(message = 'Subi un CSV para analizar una 
   renderADFDiagnostics(null);
   renderTimeSeriesRecommendation(null);
   renderTimeSeriesInterpretation([]);
+  const doctor = $('qb-ts-model-doctor');
+  if (doctor) doctor.innerHTML = '';
   destroyTimeSeriesChart();
 }
 
@@ -179,6 +186,8 @@ export function renderTimeSeriesSelectors(
   renderADFDiagnostics(null);
   renderTimeSeriesRecommendation(null);
   renderTimeSeriesInterpretation([]);
+  const doctor = $('qb-ts-model-doctor');
+  if (doctor) doctor.innerHTML = '';
   syncTimeSeriesTransformationControls();
   destroyTimeSeriesChart();
 }
@@ -386,10 +395,11 @@ function renderTimeSeriesSummary(summary: TimeSeriesSummary | null): void {
     </table>`;
 }
 
-function renderTimeSeriesInterpretation(lines: string[]): void {
+function renderTimeSeriesInterpretation(lines: string[], structured: InterpretationResult[] = []): void {
   const el = $('qb-ts-interpretation');
   if (!el) return;
-  el.textContent = lines.join('\n');
+  const summary = lines.length ? `<div class="qb-interp">${escapeHtml(lines.join('\n')).replace(/\n/g, '<br>')}</div>` : '';
+  el.innerHTML = summary + renderInterpretationResults(structured);
 }
 
 function scheduleTimeSeriesChartRender(callback: () => void): void {
@@ -474,11 +484,61 @@ export function renderTimeSeriesAnalysis(result: TimeSeriesAnalysisResult): void
   renderACFDiagnostics(result.acf);
   renderADFDiagnostics(result);
   renderTimeSeriesRecommendation(result);
+  const structured: InterpretationResult[] = [];
+  if (result.adf.available) {
+    structured.push(interpretADF({
+      statistic: result.adf.statistic,
+      pValue: result.adf.pValue,
+      criticalValues: result.adf.criticalValues,
+      specification: 'constante y rezagos seleccionados por ChartBay Lite',
+      alpha: 0.05,
+      nObs: result.adf.regressionObservations,
+    }));
+  }
+  structured.push(interpretAcfPacf({
+    significantAcfLags: result.acf.rows.filter(row => row.outsideThreshold).map(row => row.lag),
+    significantPacfLags: result.acf.pacf.filter(row => row.outsideThreshold).map(row => row.lag),
+    observations: result.acf.observations,
+  }));
+  const lastLjungBox = result.acf.ljungBox[result.acf.ljungBox.length - 1];
+  if (lastLjungBox) structured.push(interpretLjungBox({
+    lag: lastLjungBox.lag,
+    statistic: lastLjungBox.qStatistic,
+    pValue: lastLjungBox.pValue,
+    alpha: 0.05,
+  }));
+  const doctor = $('qb-ts-model-doctor');
+  if (doctor) doctor.innerHTML = renderModelDoctor(buildModelDoctor(
+    structured.map(engineFindingFromInterpretation),
+    {
+      mode: 'timeseries',
+      engine: 'lite',
+      nObs: result.selectedTransformation.summary.observations,
+      droppedRows: 0,
+      paramCount: 1,
+      hasIntercept: true,
+      standardErrorType: 'classic',
+      hacMaxLags: null,
+      functionalForm: 'lin-lin',
+      hasCategorical: false,
+      droppedFeatures: [],
+      hasRestriction: false,
+      binaryTarget: false,
+      datasetHasDates: result.dataset.dateColumn !== null,
+      alpha: 0.05,
+      converged: true,
+      timeSeries: {
+        transformation: result.selectedTransformation.key,
+        arimaOrders: null,
+        forecastHorizon: null,
+      },
+    }
+  ));
   renderTimeSeriesInterpretation([
     ...result.interpretation,
     '',
     result.selectedTransformation.interpretation,
-  ]);
+  ], structured);
   syncTimeSeriesTransformationControls(result.summary.observations, result.selectedTransformation.summary.observations);
   renderTimeSeriesChart(result);
 }
@@ -499,5 +559,7 @@ export function resetTimeSeriesView(): void {
   renderADFDiagnostics(null);
   renderTimeSeriesRecommendation(null);
   renderTimeSeriesInterpretation([]);
+  const doctor = $('qb-ts-model-doctor');
+  if (doctor) doctor.innerHTML = '';
   destroyTimeSeriesChart();
 }

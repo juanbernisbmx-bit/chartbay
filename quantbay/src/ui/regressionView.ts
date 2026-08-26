@@ -3,11 +3,14 @@ import type { LeakageSignal, LogisticResult } from '../services/analysisService'
 import type { FunctionalForm } from '../functionalForms';
 import type { CategoricalVariableInfo } from '../categoricalEncoding';
 import { BREUSCH_PAGAN_NOTE, type BreuschPaganResult } from '../heteroskedasticity';
-import { interpret } from '../interpretation';
+import { interpretBreuschPagan, interpretRegressionResult, interpretVIF } from '../interpretation';
 import { $ } from '../app/dom';
 import { appState } from '../app/state';
 import { escapeHtml } from '../utils/format';
 import { renderCoefTable, renderLogistic, renderStatsTable } from './tables';
+import { renderInterpretationResults } from './interpretationView';
+import { buildModelDoctor, engineFindingFromInterpretation } from '../modelDoctor';
+import { renderModelDoctor } from './modelDoctorView';
 import { chartTheme, renderBinaryWarn, renderCorrMatrix, renderLeakageWarn, renderResidDiag, renderVIF } from './diagnosticsView';
 
 declare const Chart: any;
@@ -55,8 +58,52 @@ export function renderRegressionResults(
   renderResidDiag(result);
   renderHeteroskedasticityPanel(heteroskedasticity);
 
+  const dummyNames = categoricalInfo.flatMap(info => info.createdDummies);
+  const baseCategories = Object.fromEntries(
+    categoricalInfo.flatMap(info => info.createdDummies.map(name => [name, info.baseCategory]))
+  );
+  const interpretations = interpretRegressionResult(result, {
+    alpha: 0.05,
+    functionalForm,
+    dummyNames,
+    baseCategories,
+  });
+  vifValues.forEach((value, index) => {
+    interpretations.push(interpretVIF({ variable: result.featureNames[index] ?? `X${index + 1}`, value }));
+  });
+  if (heteroskedasticity?.available) {
+    interpretations.push(interpretBreuschPagan({
+      statistic: heteroskedasticity.statistic,
+      pValue: heteroskedasticity.pValue,
+      alpha: 0.05,
+      nObs: heteroskedasticity.n,
+    }));
+  }
+  const doctor = $('qb-model-doctor');
+  if (doctor) doctor.innerHTML = renderModelDoctor(buildModelDoctor(
+    interpretations.map(engineFindingFromInterpretation),
+    {
+      mode: 'regression',
+      engine: 'lite',
+      nObs: result.nObs,
+      droppedRows: dropped,
+      paramCount: result.nFeatures + 1,
+      hasIntercept: true,
+      standardErrorType: 'classic',
+      hacMaxLags: null,
+      functionalForm,
+      hasCategorical: categoricalInfo.length > 0,
+      droppedFeatures: (result.droppedFeatures ?? []).map(item => item.name),
+      hasRestriction: result.method === 'RLS',
+      binaryTarget: binary,
+      datasetHasDates: (appState.csvData?.columns?.dateColumns?.size ?? 0) > 0,
+      alpha: 0.05,
+      rSquared: result.rSquared,
+      converged: true,
+    }
+  ));
   const interp = $('qb-interpretation');
-  if (interp) interp.textContent = interpret(result);
+  if (interp) interp.innerHTML = renderInterpretationResults(interpretations);
 
   const actual = result.predictions.map((p, i) => p + result.residuals[i]);
   const predTable = $('qb-pred-table');

@@ -284,6 +284,7 @@
               <button class="btn-ink" id="qb-ts-run" style="font-weight:700">Run Time Series</button>
             </div>
           </div>
+          <div id="qb-ts-model-doctor"></div>
           <div id="qb-ts-warnings" style="margin-top:10px"></div>
           <div id="qb-ts-summary" class="qb-table-scroll" style="margin-top:10px"></div>
           <div id="qb-ts-transform-panel" style="margin-top:12px">
@@ -404,7 +405,9 @@
           </div>
           <div id="qb-pro-ts-status" class="qb-interp" style="display:none;margin-top:10px"></div>
           <div id="qb-pro-ts-error" style="display:none;color:#e55;margin-top:10px"></div>
+          <div id="qb-pro-ts-model-doctor"></div>
           <div id="qb-pro-ts-content" style="display:none">
+            <p class="qb-result-kind">RESULTADO CALCULADO</p>
             <div id="qb-pro-ts-time-index"></div>
             <p class="qb-label" style="margin-top:10px">ADF (Augmented Dickey-Fuller)</p>
             <div id="qb-pro-ts-adf" class="qb-table-scroll" style="margin-top:6px"></div>
@@ -436,6 +439,8 @@
             <p class="qb-subtitle">4. Resultados</p>
             <span>OLS</span>
           </div>
+          <div id="qb-model-doctor"></div>
+          <p class="qb-result-kind">RESULTADO CALCULADO</p>
 
           <div id="qb-binary-warn"></div>
           <div id="qb-leak-warn"></div>
@@ -527,8 +532,7 @@
             <div id="qb-heterosk-content"></div>
           </div>
 
-          <p class="qb-label">Interpretación automática</p>
-          <div class="qb-interp" id="qb-interpretation"></div>
+          <div id="qb-interpretation"></div>
 
           <div id="qb-agro-interpretation-panel" style="display:none;margin-top:14px">
             <div class="qb-panel-head qb-subpanel">
@@ -559,7 +563,9 @@
           <p class="muted qb-help">El test de restricción evalúa si Rβ = q es compatible con los datos (Wald/F), pero los coeficientes que se muestran son siempre del OLS no restringido: Pro no re-estima β bajo la restricción como sí lo hace Lite. Las variables X categóricas se codifican como dummies (categoría base omitida) con la misma lógica que Lite. Cualquier selección ambigua o no soportada se bloquea con un aviso — no se ignora en silencio.</p>
           <div id="qb-pro-status" class="qb-interp" style="display:none"></div>
           <div id="qb-pro-error" style="display:none;color:#e55"></div>
+          <div id="qb-pro-model-doctor"></div>
           <div id="qb-pro-content" style="display:none">
+            <p class="qb-result-kind">RESULTADO CALCULADO</p>
             <div id="qb-pro-categorical"></div>
             <div class="qb-results-grid">
               <div>
