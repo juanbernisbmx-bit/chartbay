@@ -544,7 +544,7 @@ export function exportPDF(): void {
       body: appState.lastVIF.map((v, i) => [
         result.featureNames[i],
         !isFinite(v) ? '>999' : v.toFixed(2),
-        v >= 10 ? 'Severo' : v >= 5 ? 'Precaución' : 'Aceptable',
+        v >= 10 ? 'Elevado (heurística)' : v >= 5 ? 'Moderado (heurística)' : 'Bajo (orientativo)',
       ]),
       startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [27, 58, 107] }, margin: { left: 10, right: 10 },
     });

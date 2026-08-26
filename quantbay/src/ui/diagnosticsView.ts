@@ -146,12 +146,12 @@ export function renderVIF(vifValues: number[], xNames: string[]): void {
     const vStr = !isFinite(v) ? '&gt;999' : v.toFixed(2);
     let cls: string, label: string;
     if (v >= 10) {
-      cls = 'qb-vif-high'; label = '⚠ Severo';
-      warnings.push(`"${xNames[i]}" (VIF ${!isFinite(v) ? '>999' : v.toFixed(1)}): multicolinealidad severa — los coeficientes pueden ser inestables.`);
+      cls = 'qb-vif-high'; label = '⚠ Elevado (heurística)';
+      warnings.push(`"${xNames[i]}" (VIF ${!isFinite(v) ? '>999' : v.toFixed(1)}): posible multicolinealidad importante — puede aumentar la imprecisión del coeficiente. Los umbrales 5/10 son reglas prácticas, no tests formales.`);
     } else if (v >= 5) {
-      cls = 'qb-vif-med'; label = '△ Precaución';
+      cls = 'qb-vif-med'; label = '△ Moderado (heurística)';
     } else {
-      cls = 'qb-vif-ok'; label = '✓ Aceptable';
+      cls = 'qb-vif-ok'; label = '✓ Bajo (orientativo)';
     }
     html += `<tr><td>${escapeHtml(xNames[i])}</td><td>${vStr}</td><td class="${cls}">${label}</td></tr>`;
   });

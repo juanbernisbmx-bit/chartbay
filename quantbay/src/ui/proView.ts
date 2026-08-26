@@ -11,6 +11,11 @@ import {
 } from '../pro/pyodide/proResultTypes';
 import type { CategoricalVariableInfo } from '../categoricalEncoding';
 import { FORM_LABELS } from './formRecommendView';
+import { interpretProResult } from '../pro/proInterpretation';
+import { renderInterpretationResults } from './interpretationView';
+import { buildModelDoctor, engineFindingFromInterpretation } from '../modelDoctor';
+import { renderModelDoctor } from './modelDoctorView';
+import { appState } from '../app/state';
 
 export type ProComparisonRow = {
   name: string;
@@ -93,6 +98,8 @@ export function hideProPanel(): void {
   if (error) { error.textContent = ''; error.style.display = 'none'; }
   const content = $('qb-pro-content');
   if (content) content.style.display = 'none';
+  const doctor = $('qb-pro-model-doctor');
+  if (doctor) doctor.innerHTML = '';
 }
 
 export function showProStatus(text: string): void {
@@ -128,6 +135,8 @@ export function clearProResult(): void {
   if (warningsEl) warningsEl.innerHTML = '';
   const comparisonEl = $('qb-pro-comparison');
   if (comparisonEl) comparisonEl.innerHTML = '';
+  const doctorEl = $('qb-pro-model-doctor');
+  if (doctorEl) doctorEl.innerHTML = '';
 }
 
 function showProError(message: string): void {
@@ -146,6 +155,14 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
 
   if (!result.ok) {
     showProError(result.error ?? 'Error desconocido en el motor Pro.');
+    const doctor = $('qb-pro-model-doctor');
+    if (doctor) doctor.innerHTML = renderModelDoctor(buildModelDoctor([], {
+      mode: 'regression', engine: 'pro', nObs: 0, droppedRows: 0, paramCount: 0,
+      hasIntercept: true, standardErrorType: 'classic', hacMaxLags: null,
+      functionalForm: 'lin-lin', hasCategorical: false, droppedFeatures: [],
+      hasRestriction: false, binaryTarget: false, datasetHasDates: false,
+      alpha: 0.05, converged: false,
+    }));
     return;
   }
 
@@ -186,10 +203,36 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
   }
 
   const seType = result.standardErrorType ?? DEFAULT_PRO_STANDARD_ERROR_TYPE;
+  const interpretations = interpretProResult(result, 0.05);
+
+  const doctorEl = $('qb-pro-model-doctor');
+  if (doctorEl) doctorEl.innerHTML = renderModelDoctor(buildModelDoctor(
+    interpretations.map(engineFindingFromInterpretation),
+    {
+      mode: 'regression',
+      engine: 'pro',
+      nObs: result.nobs ?? 0,
+      droppedRows: 0,
+      paramCount: result.coefficients?.length ?? 0,
+      hasIntercept: result.coefficients?.some(coefficient => ['const', 'intercept'].includes(coefficient.name.toLowerCase())) ?? true,
+      standardErrorType: seType,
+      hacMaxLags: result.hacMaxLags ?? null,
+      functionalForm: result.functionalForm ?? 'lin-lin',
+      hasCategorical: (result.categoricalInfo?.length ?? 0) > 0,
+      droppedFeatures: [],
+      hasRestriction: Boolean(result.rlsTest),
+      binaryTarget: false,
+      datasetHasDates: (appState.csvData?.columns?.dateColumns?.size ?? 0) > 0,
+      alpha: 0.05,
+      rSquared: result.rSquared,
+      converged: result.ok,
+    }
+  ));
 
   const inferenceEl = $('qb-pro-inference');
   if (inferenceEl) {
-    inferenceEl.innerHTML = buildInferenceHtml(seType, result.hacMaxLags);
+    inferenceEl.innerHTML = buildInferenceHtml(seType, result.hacMaxLags) +
+      renderInterpretationResults(interpretations);
   }
 
   const rlsTestEl = $('qb-pro-rls-test');
