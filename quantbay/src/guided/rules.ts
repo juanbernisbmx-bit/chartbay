@@ -69,7 +69,7 @@ export const GUIDED_RULES: GuidedRule[] = [
           { label: 'Excluir las filas incompletas', focus: 'qb-drop-incomplete' },
           { label: 'Ir al Limpiador', focus: 'qb-nav-limpiador' },
         ],
-        theory: ['modelo y datos'],
+        theory: ['teoria-modelo'],
       });
     },
   },
@@ -111,7 +111,7 @@ export const GUIDED_RULES: GuidedRule[] = [
       body: 'Fijate primero en el signo y en la magnitud de cada coeficiente: ¿apuntan en la dirección que espera la teoría? ¿El tamaño es plausible?',
       why: 'Un coeficiente con el signo equivocado pasa igual todos los tests estadísticos. Empezar por el p-valor enseña a validar modelos que no tienen sentido económico.',
       actions: [{ label: 'Ya los revisé', focus: 'qb-coef-body' }],
-      theory: ['OLS', 'supuestos y sesgo'],
+      theory: ['teoria-ols', 'teoria-supuestos'],
     }),
   },
   {
@@ -279,7 +279,7 @@ GUIDED_RULES.push(
       body: 'Podés diferenciar o tomar retornos logarítmicos, y volver a correr el ADF sobre la serie transformada.',
       why: 'Modelar en niveles una serie con raíz unitaria produce regresiones espurias. Ojo con el costo: diferenciar borra la relación de largo plazo, así que si lo que te interesa es cómo se mueven juntas dos series con tendencia común, el camino es cointegración y no diferenciar. Y el ADF tiene poca potencia: no rechazar no prueba que haya raíz unitaria.',
       actions: [{ label: 'Elegir una transformación', focus: 'qb-ts-transform' }],
-      theory: ['estacionariedad', 'ADF'],
+      theory: ['teoria-estacionariedad', 'teoria-adf'],
     }),
   },
   {
@@ -306,7 +306,7 @@ GUIDED_RULES.push(
         body: `Podés proyectar igual, pero ${motivo}, así que los intervalos van a estar mal calibrados.`,
         why: 'Un pronóstico hereda todos los supuestos del modelo. La proyección central puede seguir siendo razonable; lo que deja de ser confiable es la banda de incertidumbre, que es justamente lo que un pronóstico aporta sobre una extrapolación a ojo.',
         actions: [{ label: 'Revisar los residuos', focus: 'qb-pro-ts-content' }],
-        theory: ['ARIMA'],
+        theory: ['teoria-arima'],
       });
     },
   }
@@ -346,7 +346,7 @@ GUIDED_RULES.push(
           : 'Tenés una guardada. Guardá también la que está en pantalla para verlas al lado.',
         why: 'Cambiar el modelo hasta que el resultado guste, y reportar solo esa corrida, es el mecanismo por el que aparecen hallazgos que no se replican. Lo que vuelve honesto al ejercicio es mostrar qué se sostiene y qué se mueve entre especificaciones — y para eso hay que conservarlas.',
         actions: [{ label: 'Guardar esta estimación', focus: 'qb-comparison-save' }],
-        theory: ['modelo y datos'],
+        theory: ['teoria-modelo'],
       });
     },
   },
@@ -374,7 +374,7 @@ GUIDED_RULES.push(
           ? 'Poner dos números uno al lado del otro no los vuelve comparables. Si la variable dependiente o su escala cambian, el R² y los coeficientes de un modelo no significan lo mismo que los del otro, y la tabla invitaría a una conclusión que los datos no soportan.'
           : 'La comparación sigue siendo informativa, pero no todas las filas de la tabla se leen igual: el panel marca cuáles quedan fuera de comparación directa y por qué.',
         actions: [{ label: 'Ver la comparación', focus: 'qb-model-comparison' }],
-        theory: ['modelo y datos'],
+        theory: ['teoria-modelo'],
       });
     },
   },
@@ -397,7 +397,7 @@ GUIDED_RULES.push(
         body: `Según qué modelo mires, ${lista} cruza${cuales.length === 1 ? '' : 'n'} el umbral de 5%.`,
         why: 'Que un resultado aparezca y desaparezca al cambiar el modelo es información sobre lo frágil que es la conclusión, y hay que reportarlo. Quedarse con la especificación que da significativo, sin decir que las otras no, es p-hacking: el p-valor deja de significar lo que dice significar cuando se elige la corrida después de ver el resultado.',
         actions: [{ label: 'Ver qué cambió', focus: 'qb-comparison-filter' }],
-        theory: ['t y p-value'],
+        theory: ['teoria-inferencia'],
       });
     },
   }
