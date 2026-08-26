@@ -606,6 +606,28 @@
             </div>
           </div>
         </section>
+        <section class="qb-section qb-econometria-section" id="qb-model-comparison" style="display:none">
+          <div class="qb-panel-head">
+            <p class="qb-subtitle">Comparación de modelos</p>
+            <span>ESTIMACIONES GUARDADAS · SESIÓN ACTUAL</span>
+          </div>
+          <p class="muted qb-help">Guardá distintas especificaciones para contrastar coeficientes, inferencia, ajuste y diagnósticos. ChartBay señala cuándo una comparación requiere cautela; no elige automáticamente un modelo.</p>
+          <div class="qb-comparison-toolbar">
+            <span id="qb-comparison-current" class="muted"></span>
+            <input id="qb-comparison-name" type="text" maxlength="60" placeholder="Nombre opcional">
+            <button type="button" class="btn-ink" id="qb-comparison-save" disabled>Guardar estimación</button>
+            <label for="qb-comparison-filter">Vista</label>
+            <select id="qb-comparison-filter">
+              <option value="all">Todo</option>
+              <option value="common">Coeficientes comunes</option>
+              <option value="changed">Cambios</option>
+              <option value="metrics">Métricas</option>
+              <option value="diagnostics">Diagnósticos</option>
+            </select>
+          </div>
+          <div id="qb-comparison-saved"></div>
+          <div id="qb-comparison-output"></div>
+        </section>
         {% if qb_module == 'agro' %}
         <section class="qb-section" id="qb-agro-panel" style="display:none">
           <div class="qb-panel-head">

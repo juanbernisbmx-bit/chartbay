@@ -72,6 +72,7 @@ export type PyodideOlsCoefficient = {
   stdError: number | null;
   tStat: number | null;
   pValue: number | null;
+  confidenceInterval?: [number, number] | null;
 };
 
 // Wald/F test of a linear restriction (Rβ = q) against the UNRESTRICTED OLS
@@ -120,6 +121,8 @@ export type PyodideOlsResult = {
   rSquaredAdj?: number;
   fStat?: number;
   fPValue?: number;
+  aic?: number;
+  bic?: number;
   dfResid?: number;
   residualStdError?: number;
   residuals?: number[];
@@ -164,7 +167,17 @@ function parseCoefficients(raw: unknown): PyodideOlsCoefficient[] | null {
     const tStat = finiteOrNull(record.tStat);
     const pValue = finiteOrNull(record.pValue);
     if (stdError === undefined || tStat === undefined || pValue === undefined) return null;
-    coefficients.push({ name, estimate, stdError, tStat, pValue });
+    let confidenceInterval: [number, number] | null | undefined;
+    if (record.confidenceInterval !== undefined) {
+      if (record.confidenceInterval === null) confidenceInterval = null;
+      else if (Array.isArray(record.confidenceInterval) && record.confidenceInterval.length === 2) {
+        const lower = finiteOrNull(record.confidenceInterval[0]);
+        const upper = finiteOrNull(record.confidenceInterval[1]);
+        if (lower === undefined || upper === undefined) return null;
+        confidenceInterval = lower === null || upper === null ? null : [lower, upper];
+      } else return null;
+    }
+    coefficients.push({ name, estimate, stdError, tStat, pValue, confidenceInterval });
   }
   return coefficients;
 }
@@ -334,6 +347,8 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
   // (Y constante o ajuste perfecto); null → undefined, cualquier otra cosa se rechaza.
   const rSquared = finiteOrNull(obj.rSquared);
   const rSquaredAdj = finiteOrNull(obj.rSquaredAdj);
+  const aic = finiteOrNull(obj.aic);
+  const bic = finiteOrNull(obj.bic);
   let fStat = finiteOrNull(obj.fStat);
   let fPValue = finiteOrNull(obj.fPValue);
   if (rSquared === undefined && obj.rSquared !== undefined) {
@@ -342,6 +357,8 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
   if (rSquaredAdj === undefined && obj.rSquaredAdj !== undefined) {
     return proError('El motor Python devolvió un R² ajustado inválido.');
   }
+  if (aic === undefined && obj.aic !== undefined) return proError('El motor Python devolvió un AIC inválido.');
+  if (bic === undefined && obj.bic !== undefined) return proError('El motor Python devolvió un BIC inválido.');
   if (fStat === undefined && obj.fStat !== undefined) {
     return proError('El motor Python devolvió un F-stat inválido.');
   }
@@ -370,6 +387,8 @@ export function normalizePyodideOlsResult(raw: unknown): PyodideOlsResult {
     rSquaredAdj: rSquaredAdj ?? undefined,
     fStat: fStat ?? undefined,
     fPValue: fPValue ?? undefined,
+    aic: aic ?? undefined,
+    bic: bic ?? undefined,
     dfResid: obj.dfResid,
     residualStdError: obj.residualStdError,
     residuals,

@@ -106,6 +106,7 @@ import {
   presentAgroInterpretationForPro,
   presentAgroInterpretationForRegression,
 } from './verticals/agro';
+import { beginModelComparisonDataset, initModelComparisonView } from './ui/modelComparisonView';
 
 interface QuantDemoCase {
   id: string;
@@ -494,6 +495,7 @@ async function loadDemoCase(id: string): Promise<void> {
     if (appState.csvData.numericColumns.length < 2) {
       throw new Error('El CSV de ejemplo necesita al menos 2 columnas numéricas.');
     }
+    beginModelComparisonDataset(demo.file);
 
     const fn = $('qb-filename');
     if (fn) fn.textContent = demo.file;
@@ -605,6 +607,7 @@ async function loadFile(file: File): Promise<void> {
       showError('El CSV necesita al menos 2 columnas numéricas.');
       return;
     }
+    beginModelComparisonDataset(file.name);
     setText('qb-status-obs', rowCountOf(appState.csvData));
     setText('qb-status-vars', appState.csvData.numericColumns.length);
     setEngineStatus('LISTO');
@@ -1202,6 +1205,7 @@ function agroLoadDataset(params: {
     if (appState.csvData.numericColumns.length < 2) {
       throw new Error('El dataset necesita al menos 2 columnas numéricas.');
     }
+    beginModelComparisonDataset(params.label);
     setText('qb-status-obs', rowCountOf(appState.csvData));
     setText('qb-status-vars', appState.csvData.numericColumns.length);
     setEngineStatus('LISTO');
@@ -1391,6 +1395,7 @@ function init(): void {
   setProSeSelectorVisible(resolveEngineAction(appState.activeVersion) === 'pro_pyodide');
   updateModePanels();
   updateExportButtonState();
+  initModelComparisonView();
   applyInitialModuleLayout();
   // Vertical Agro: no-op si el flag está apagado o el panel no existe.
   initAgroVertical({ loadDataset: agroLoadDataset });

@@ -16,6 +16,8 @@ import { renderInterpretationResults } from './interpretationView';
 import { buildModelDoctor, engineFindingFromInterpretation } from '../modelDoctor';
 import { renderModelDoctor } from './modelDoctorView';
 import { appState } from '../app/state';
+import { createProModelSnapshot } from '../pro/modelComparisonSnapshot';
+import { captureCurrentModel } from './modelComparisonView';
 
 export type ProComparisonRow = {
   name: string;
@@ -192,6 +194,8 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
       ['R² ajustado', fmtOpt(result.rSquaredAdj)],
       ['F-stat', fmtOpt(result.fStat)],
       ['p-value (F)', fmtOpt(result.fPValue)],
+      ['AIC', fmtOpt(result.aic)],
+      ['BIC', fmtOpt(result.bic)],
       ['Grados de libertad (residual)', result.dfResid === undefined ? '—' : String(result.dfResid)],
       ['Error estándar residual', fmtOpt(result.residualStdError)],
       ['Inferencia', PRO_STANDARD_ERROR_LABELS[result.standardErrorType ?? DEFAULT_PRO_STANDARD_ERROR_TYPE]],
@@ -205,8 +209,7 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
   const seType = result.standardErrorType ?? DEFAULT_PRO_STANDARD_ERROR_TYPE;
   const interpretations = interpretProResult(result, 0.05);
 
-  const doctorEl = $('qb-pro-model-doctor');
-  if (doctorEl) doctorEl.innerHTML = renderModelDoctor(buildModelDoctor(
+  const doctorReport = buildModelDoctor(
     interpretations.map(engineFindingFromInterpretation),
     {
       mode: 'regression',
@@ -227,7 +230,9 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
       rSquared: result.rSquared,
       converged: result.ok,
     }
-  ));
+  );
+  const doctorEl = $('qb-pro-model-doctor');
+  if (doctorEl) doctorEl.innerHTML = renderModelDoctor(doctorReport);
 
   const inferenceEl = $('qb-pro-inference');
   if (inferenceEl) {
@@ -260,6 +265,12 @@ export function renderProResult(result: PyodideOlsResult, comparison?: ProCompar
 
   const content = $('qb-pro-content');
   if (content) content.style.display = '';
+
+  captureCurrentModel(createProModelSnapshot({
+    result,
+    interpretations,
+    doctor: doctorReport,
+  }));
 }
 
 function buildComparisonHtml(result: PyodideOlsResult, comparison: ProComparison): string {
