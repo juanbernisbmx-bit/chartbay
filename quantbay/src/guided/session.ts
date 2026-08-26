@@ -5,7 +5,9 @@
 // que agregar la guía no obligue a tocar el estado del resto de la app.
 
 import type { DoctorReport } from '../modelDoctor/types';
-import type { AnalysisType, GuidedMode, GuidedSession, SpecSignature, StepKey, UserDecision, DecisionKind } from './types';
+import { changedFields } from './invalidation';
+import { describeEstimation, describeSpecChanges } from './decisionLog';
+import type { AnalysisType, CurrentSpec, GuidedMode, GuidedSession, SpecSignature, StepKey, UserDecision, DecisionKind } from './types';
 
 let session: GuidedSession = {
   mode: 'guided',
@@ -19,6 +21,16 @@ let session: GuidedSession = {
 let estimatedSignature: SpecSignature | null = null;
 
 /**
+ * Firma contra la que se mide el próximo cambio de especificación.
+ *
+ * No es la estimada: el estudiante puede tocar tres controles sin estimar
+ * ninguna vez, y cada uno de esos toques es una decisión. Sin esta línea de
+ * base aparte, el registro compararía siempre contra la última corrida y
+ * anotaría el mismo cambio una y otra vez.
+ */
+let lastLoggedSignature: SpecSignature | null = null;
+
+/**
  * Último diagnóstico que se le mostró al estudiante.
  *
  * Lo deposita renderModelDoctor, que es por donde pasan los cuatro caminos
@@ -26,6 +38,7 @@ let estimatedSignature: SpecSignature | null = null;
  * tal cual: no reconstruye el informe ni reimplementa nada de Model Doctor.
  */
 let lastDoctorReport: DoctorReport | null = null;
+
 
 export function noteDoctorReport(report: DoctorReport): void {
   lastDoctorReport = report;
@@ -45,6 +58,61 @@ export function getEstimatedSignature(): SpecSignature | null {
 
 export function recordEstimation(signature: SpecSignature): void {
   estimatedSignature = signature;
+  // Lo estimado pasa a ser la línea de base: los cambios que vengan después se
+  // cuentan desde acá, no desde lo que hubiera seleccionado antes de correr.
+  lastLoggedSignature = signature;
+  logDecision('estimate', describeEstimation(signature));
+}
+
+/**
+ * Anota los cambios de especificación que hizo el estudiante.
+ *
+ * Lo llama la vista ante eventos `change` —nunca `input`—: escribir una
+ * restricción letra por letra no son veinte decisiones, es una.
+ *
+ * Se separan variables y resto porque son decisiones de distinta naturaleza:
+ * elegir qué explica qué es una decisión de modelo; elegir errores robustos o
+ * una forma funcional es una decisión sobre cómo estimarlo.
+ */
+export function noteSpecChange(spec: CurrentSpec | null): void {
+  if (!spec) return;
+  const previous = lastLoggedSignature;
+  lastLoggedSignature = spec.signature;
+
+  // Sin línea de base no hubo cambio del estudiante: la primera firma es el
+  // punto de partida que dejó la carga del dataset, no algo que él eligió. Un
+  // dataset distinto tampoco se compara: ya lo anotó resetForNewDataset.
+  if (!previous || previous.dataset !== spec.signature.dataset) return;
+
+  // Cruzar entre corte transversal y series no es "cambiar la transformación":
+  // es cambiar de flujo, y los campos que la firma llena pasan a ser otros.
+  // Se re-basa la línea y no se anota nada del salto en sí.
+  if ((previous.transformation === '') !== (spec.signature.transformation === '')) return;
+
+  const changes = changedFields(spec.signature, previous);
+  if (changes.length === 0) return;
+
+  const variables = changes.filter(c => c === 'y' || c === 'x');
+  const rest = changes.filter(c => c !== 'y' && c !== 'x');
+  if (variables.length > 0) {
+    logDecision('choose_variables', `Cambiaste ${describeSpecChanges(variables, spec.signature)}`);
+  }
+  if (rest.length > 0) {
+    logDecision('set_spec', `Cambiaste ${describeSpecChanges(rest, spec.signature)}`);
+  }
+}
+
+/**
+ * Fija la línea de base sin registrar nada.
+ *
+ * La llama la vista al dibujar: después de cargar un dataset, la selección
+ * automática de Y y X no la decidió el estudiante, pero es contra ella que hay
+ * que medir su primer cambio. Sin esto, la primera decisión real se perdería
+ * por no tener contra qué compararla.
+ */
+export function seedSpecBaseline(spec: CurrentSpec | null): void {
+  if (!spec || lastLoggedSignature) return;
+  lastLoggedSignature = spec.signature;
 }
 
 export function confirmAnalysisType(type: AnalysisType, suggested: AnalysisType | null): void {
@@ -65,8 +133,16 @@ export function dismissRecommendation(id: string, title: string): void {
 }
 
 export function setMode(mode: GuidedMode): void {
+  if (session.mode === mode) return;
   session.mode = mode;
+  // Apagar la guía es en sí una decisión del recorrido, y de las que más
+  // explican después por qué nadie avisó de algo. Queda anotada como cualquier
+  // otra.
+  logDecision('set_mode', mode === 'free'
+    ? 'Pasaste a modo libre: la guía solo avisa lo que invalidaría el análisis'
+    : 'Volviste al modo guiado');
 }
+
 
 export function logDecision(kind: DecisionKind, summary: string, fromRecommendation?: string): void {
   const entry: UserDecision = {
@@ -93,6 +169,7 @@ export function resetForNewDataset(name: string): void {
     decisions: previous,
   };
   estimatedSignature = null;
+  lastLoggedSignature = null;
   lastDoctorReport = null;
   logDecision('load', `Cargaste ${name}`);
 }
@@ -101,6 +178,7 @@ export function resetForNewDataset(name: string): void {
 export function resetSessionForTests(): void {
   session = { mode: 'guided', confirmedType: null, acknowledged: [], dismissed: [], decisions: [] };
   estimatedSignature = null;
+  lastLoggedSignature = null;
   lastDoctorReport = null;
 }
 

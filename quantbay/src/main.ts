@@ -531,7 +531,11 @@ async function loadDemoCase(id: string): Promise<void> {
     setVariableSelection(demo.yName, demo.xNames);
     renderDemoInfo(demo);
     runFormRecommendation();
+    // Un demo es un dataset nuevo como cualquier otro: invalida el recorrido y
+    // queda anotado en el registro. Sin esto, media sesión no aparecía.
+    resetForNewDataset(demo.file);
     resetReproducibilityForDataset(demo.file);
+    renderGuided();
 
     const preview = $('qb-preview'), vars = $('qb-vars'), results = $('qb-results'), repair = $('qb-repair-log');
     if (preview) preview.style.display = '';
@@ -1280,9 +1284,11 @@ function agroLoadDataset(params: {
       const safeX = (params.suggestedX ?? []).filter(x => selectable.has(x) && x !== params.suggestedY);
       setVariableSelection(params.suggestedY, safeX);
     }
+    resetForNewDataset(params.label);
     resetReproducibilityForDataset(params.label);
     runFormRecommendation();
     updateSidebarStep(2);
+    renderGuided();
 
     return { ok: true, numericColumns: appState.csvData.numericColumns };
   } catch (err) {
