@@ -18,6 +18,19 @@ import type {
 /** Cuántas recomendaciones secundarias se muestran junto a la principal. */
 export const MAX_SECONDARY = 3;
 
+/** Mismo mapa que usan las reglas: qué paso atiende cada categoría. */
+const DOCTOR_STEP: Partial<Record<string, StepKey>> = {
+  inference: 'inference',
+  globalSignificance: 'inference',
+  restrictions: 'inference',
+  heteroskedasticity: 'diagnostics',
+  multicollinearity: 'diagnostics',
+  residuals: 'diagnostics',
+  specification: 'diagnostics',
+  sample: 'diagnostics',
+  stability: 'diagnostics',
+};
+
 function flowOf(ctx: AnalysisContext): 'cross_section' | 'time_series' {
   if (ctx.session.confirmedType === 'time_series') return 'time_series';
   if (ctx.session.confirmedType === 'cross_section') return 'cross_section';
@@ -107,7 +120,31 @@ export function buildGuidedPlan(ctx: AnalysisContext): GuidedPlan {
     }
   }
 
-  const recommendations = evaluateRules(ctx);
+  // Un paso cuyo hallazgo de Doctor pide atención pasa a "requiere revisión".
+  // El motivo lo distingue del desactualizado: acá el resultado sigue siendo
+  // válido, lo que cambió es que el diagnóstico encontró algo.
+  const attention = new Set(
+    (ctx.doctor?.findings ?? [])
+      .filter(f => f.state === 'problem' || f.state === 'review')
+      .map(f => DOCTOR_STEP[f.category])
+      .filter((k): k is StepKey => k !== undefined)
+  );
+  for (const step of steps) {
+    if (attention.has(step.key) && step.state !== 'blocked' && !step.reviewReason) {
+      step.state = 'review';
+      step.reviewReason = 'doctor_finding';
+    }
+  }
+
+  const recommendations = evaluateRules(ctx)
+    // G05: lo que Doctor marcó como atendido no vuelve a recomendarse. Se
+    // compara por categoría y no por texto, para que no dependa de cómo esté
+    // redactado el consejo.
+    .filter(rec => {
+      if (!rec.sourceCategory || rec.ruleId === 'G05') return true;
+      const finding = ctx.doctor?.findings.find(f => f.category === rec.sourceCategory);
+      return finding?.state !== 'mitigated';
+    });
   const blocking = recommendations.filter(r => r.kind === 'blocking');
 
   // Pasos sobre los que el estudiante ya dijo "continuar igualmente". Sin
@@ -130,7 +167,15 @@ export function buildGuidedPlan(ctx: AnalysisContext): GuidedPlan {
 
   // Prioridad: bloqueantes primero; después por tipo y por prioridad de regla,
   // que ya viene aplicada en el orden de `recommendations`.
-  const ordered = [...recommendations].sort((a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind]);
+  const IMPACT_RANK: Record<string, number> = { estimation: 4, inference: 3, efficiency: 2, reading: 1 };
+  const ordered = [...recommendations].sort((a, b) => {
+    const byKind = KIND_RANK[a.kind] - KIND_RANK[b.kind];
+    if (byKind !== 0) return byKind;
+    // Entre consejos, manda la consecuencia sobre la fuerza de la evidencia:
+    // un p chico con impacto sobre la eficiencia no le gana a uno moderado
+    // que compromete la estimación.
+    return (IMPACT_RANK[b.impact ?? ''] ?? 0) - (IMPACT_RANK[a.impact ?? ''] ?? 0);
+  });
 
   // Si no hay regla que hable, la recomendación es el prompt del próximo paso.
   let primary: Recommendation | null = ordered[0] ?? null;

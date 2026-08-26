@@ -9,6 +9,7 @@
 // y las conclusiones, de la capa de interpretación. Guiada solo traduce
 // estados en acciones y las ordena.
 
+import type { DoctorCategoryKey, DoctorFinding } from '../modelDoctor/types';
 import type { AnalysisContext, Recommendation, RecommendationKind, StepKey } from './types';
 
 export interface GuidedRule {
@@ -145,3 +146,108 @@ export const GUIDED_RULES: GuidedRule[] = [
     }),
   },
 ];
+
+// ── Etapa 3 · reglas que consumen Model Doctor ──────────────────────────────
+//
+// Acá no se evalúa nada: los estados, la consecuencia y los textos vienen del
+// informe. La guía agrega el paso al que apunta y el control con el que se
+// atiende. Los textos de Doctor NO se reescriben.
+
+/** A qué paso del recorrido le corresponde cada categoría del informe. */
+const CATEGORY_STEP: Partial<Record<DoctorCategoryKey, StepKey>> = {
+  inference: 'inference',
+  globalSignificance: 'inference',
+  restrictions: 'inference',
+  heteroskedasticity: 'diagnostics',
+  multicollinearity: 'diagnostics',
+  residuals: 'diagnostics',
+  specification: 'diagnostics',
+  sample: 'diagnostics',
+  stability: 'diagnostics',
+};
+
+function findingsOf(ctx: AnalysisContext) {
+  return ctx.doctor?.findings ?? [];
+}
+
+/** Traduce un hallazgo en recomendación, sin tocar los textos de Doctor. */
+function fromFinding(
+  ruleId: string,
+  kind: RecommendationKind,
+  finding: DoctorFinding
+): Recommendation {
+  const step = CATEGORY_STEP[finding.category] ?? 'diagnostics';
+  return {
+    id: `${ruleId}:${finding.category}`,
+    ruleId,
+    kind,
+    targetStep: step,
+    sourceCategory: finding.category,
+    impact: finding.impact,
+    title: finding.headlineText,
+    body: finding.detail.conclusion,
+    why: finding.detail.whyItMatters,
+    actions: finding.detail.whatToCheck.slice(0, 2).map(check => ({ label: check.text })),
+    theory: finding.detail.theory.map(link => link.id),
+    dismissible: kind !== 'blocking',
+  };
+}
+
+GUIDED_RULES.push(
+  {
+    // G04 — hallazgo con consecuencia sobre la inferencia todavía sin atender.
+    id: 'G04',
+    kind: 'advisory',
+    targetStep: 'inference',
+    priority: 80,
+    when: ctx => findingsOf(ctx).some(f => f.state === 'problem'),
+    build: ctx => {
+      // El de mayor consecuencia manda; el orden lo define Doctor, no la guía.
+      const rank: Record<string, number> = { estimation: 4, inference: 3, efficiency: 2, reading: 1 };
+      const worst = findingsOf(ctx)
+        .filter(f => f.state === 'problem')
+        .sort((a, b) => (rank[b.impact] ?? 0) - (rank[a.impact] ?? 0))[0];
+      return fromFinding('G04', 'advisory', worst);
+    },
+  },
+  {
+    // G05 — lo que el estudiante ya atendió no se vuelve a recomendar.
+    // Informativa: deja dicho que la consecuencia está cubierta y qué queda
+    // afuera de esa cobertura. La supresión real la hace el planificador.
+    id: 'G05',
+    kind: 'informational',
+    targetStep: 'diagnostics',
+    priority: 20,
+    when: ctx => findingsOf(ctx).some(f => f.state === 'mitigated'),
+    build: ctx => {
+      const mitigated = findingsOf(ctx).find(f => f.state === 'mitigated')!;
+      return fromFinding('G05', 'informational', mitigated);
+    },
+  },
+  {
+    // G06 — un diagnóstico que no se pudo evaluar. Se recomienda conseguirlo,
+    // citando el motivo que dio Doctor. Lo que es 'not_applicable' no genera
+    // nada: es la regla que evita enseñar que hay que correr todos los tests.
+    id: 'G06',
+    kind: 'advisory',
+    targetStep: 'diagnostics',
+    priority: 30,
+    when: ctx => findingsOf(ctx).some(f => f.state === 'insufficient'),
+    build: ctx => {
+      const missing = findingsOf(ctx).find(f => f.state === 'insufficient')!;
+      const base = fromFinding('G06', 'advisory', missing);
+      return {
+        ...base,
+        // Sin impacto: el `impact` de un hallazgo describe la consecuencia de
+        // un problema DETECTADO. Un diagnóstico que no se pudo correr no
+        // detectó nada, así que heredarlo lo hacía competir de igual a igual
+        // con problemas reales — y ganarles cuando la categoría faltante era
+        // de estimación. Conseguir un diagnóstico nunca es más urgente que
+        // atender uno que ya encontró algo.
+        impact: undefined,
+        title: `Falta un diagnóstico: ${missing.headlineText}`,
+        body: missing.detail.conclusion,
+      };
+    },
+  }
+);

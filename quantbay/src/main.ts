@@ -886,6 +886,14 @@ async function onRunPro(
     const panel = $('qb-pro-results');
     if (panel) panel.scrollIntoView({ behavior: 'smooth' });
     updateSidebarStep(3);
+    // Igual que en el camino Lite: sin registrar la firma, la guía seguiría
+    // creyendo que lo que está en pantalla corresponde a la estimación
+    // anterior y avisaría de un desactualizado que no existe.
+    if (result.ok) {
+      const proSignature = buildAnalysisContext().spec?.signature;
+      if (proSignature) recordEstimation(proSignature);
+    }
+    renderGuided();
   } finally {
     proRunInFlight = false;
     if (runButton) runButton.disabled = false;

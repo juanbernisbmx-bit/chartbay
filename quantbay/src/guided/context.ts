@@ -8,7 +8,7 @@ import { $ } from '../app/dom';
 import { appState } from '../app/state';
 import { forEachCellOf, rowCountOf, type ParsedCSV } from '../csvParser';
 import type { FunctionalForm } from '../functionalForms';
-import { getEstimatedSignature, getSession } from './session';
+import { getDoctorReport, getEstimatedSignature, getSession } from './session';
 import type { AnalysisContext, AnalysisType, CurrentSpec, DatasetProfile, DatasetProfileWarning, SpecSignature } from './types';
 
 function selectedY(): string {
@@ -135,10 +135,14 @@ export function buildAnalysisContext(): AnalysisContext {
     raw: data,
     spec: currentSpec(data, datasetName),
     estimatedSignature: getEstimatedSignature(),
-    hasResult: appState.lastResult !== null,
-    // Etapa 3 del roadmap: acá se enchufa el DoctorReport tal como lo emite
-    // buildModelDoctor, sin transformarlo.
-    doctor: null,
+    // Hay modelo si estimó cualquiera de los dos motores. No se puede mirar
+    // el resultado de Pro directamente —Lite no importa nada de Pro, y hay un
+    // test que lo verifica—, así que se usa la firma: la deposita main.ts al
+    // terminar una corrida, venga del motor que venga. Sin esto, una corrida
+    // Pro dejaba el recorrido trabado en "falta estimar".
+    hasResult: appState.lastResult !== null || getEstimatedSignature() !== null,
+    // El DoctorReport tal como lo emite buildModelDoctor, sin transformar.
+    doctor: getDoctorReport(),
     session: getSession(),
   };
 }
