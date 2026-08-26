@@ -9,6 +9,7 @@
 import type { ParsedCSV } from '../csvParser';
 import type { FunctionalForm } from '../functionalForms';
 import type { DoctorCategoryKey, DoctorImpact, DoctorReport } from '../modelDoctor/types';
+import type { ComparisonLevel } from '../modelComparison/types';
 
 export type AnalysisType = 'cross_section' | 'time_series' | 'descriptive';
 export type GuidedMode = 'guided' | 'free';
@@ -26,6 +27,7 @@ export type StepKey =
   | 'readCoefficients'
   | 'inference'
   | 'diagnostics'
+  | 'compare'
   // Series de tiempo
   | 'timeIndex'
   | 'timeOrder'
@@ -123,7 +125,9 @@ export type DecisionKind =
   | 'acknowledge_step'
   | 'dismiss_recommendation'
   /** Cambiar entre guiado y libre. Apagar la guía también es una decisión. */
-  | 'set_mode';
+  | 'set_mode'
+  /** Guardar o quitar una estimación del contraste de especificaciones. */
+  | 'compare_models';
 
 export interface UserDecision {
   id: string;
@@ -143,6 +147,15 @@ export interface GuidedSession {
   acknowledged: StepKey[];
   dismissed: string[];
   decisions: UserDecision[];
+  /**
+   * Firmas distintas que se estimaron en esta sesión.
+   *
+   * Distintas, no corridas: volver a estimar lo mismo después de arreglar los
+   * datos no es haber probado dos especificaciones. Es lo que permite
+   * detectar que el estudiante viene pisando modelos sin guardarlos —
+   * la pantalla solo muestra el último y los anteriores no dejan rastro.
+   */
+  estimatedSpecs: string[];
 }
 
 /**
@@ -210,6 +223,28 @@ export interface CurrentSpec {
   signature: SpecSignature;
 }
 
+/**
+ * Hechos del contraste de especificaciones.
+ *
+ * Los produce el motor de comparación, no la guía: acá no se decide si dos
+ * modelos son comparables ni se redactan los motivos. Mismo trato que
+ * DoctorReport — la guía traduce estados en próximos pasos y nada más.
+ */
+export interface ComparisonFacts {
+  /** Estimaciones guardadas para contrastar. */
+  saved: number;
+  /** Hay un resultado en pantalla que todavía no se guardó. */
+  currentUnsaved: boolean;
+  /** Dictamen del motor. null con menos de dos modelos guardados. */
+  level: ComparisonLevel | null;
+  /** Motivos que impiden comparar de frente, con el texto del motor. */
+  blocking: string[];
+  /** Motivos que piden cautela, con el texto del motor. */
+  cautions: string[];
+  /** Coeficientes que cruzan el umbral de significancia según el modelo. */
+  significanceFlips: string[];
+}
+
 /** Hechos de la sesión. El planificador solo lee de acá. */
 export interface AnalysisContext {
   mode: 'regression' | 'timeseries';
@@ -224,5 +259,7 @@ export interface AnalysisContext {
   /** Presente solo en el flujo de series. */
   timeSeries: TimeSeriesFacts | null;
   doctor: DoctorReport | null;
+  /** Presente cuando hay algo guardado o algo para guardar. */
+  comparison: ComparisonFacts | null;
   session: GuidedSession;
 }

@@ -49,8 +49,8 @@ function ctx(ts: TimeSeriesFacts | null, doctor: DoctorReport | null = null,
       yName: '', xNames: [], form: 'lin-lin', seType: 'classic', dropIncomplete: false,
       restriction: '', signature: sig({ transformation: ts?.transformation ?? 'original' }),
     },
-    estimatedSignature: null, hasResult: false, timeSeries: ts, doctor,
-    session: { mode: 'guided', confirmedType: 'time_series', acknowledged: [], dismissed: [], decisions: [] },
+    estimatedSignature: null, hasResult: false, timeSeries: ts, doctor, comparison: null,
+    session: { mode: 'guided', confirmedType: 'time_series', acknowledged: [], dismissed: [], decisions: [], estimatedSpecs: [] },
     ...over,
   };
 }
@@ -68,7 +68,7 @@ describe('series de tiempo no es OLS con una columna de fecha', () => {
   it('y el de corte transversal no muestra ninguno temporal', () => {
     const plan = buildGuidedPlan({
       ...ctx(null), mode: 'regression',
-      session: { mode: 'guided', confirmedType: 'cross_section', acknowledged: [], dismissed: [], decisions: [] },
+      session: { mode: 'guided', confirmedType: 'cross_section', acknowledged: [], dismissed: [], decisions: [], estimatedSpecs: [] },
     });
     const claves = plan.steps.map(s => s.key);
     for (const k of ['timeIndex', 'stationarity', 'identify', 'arima', 'forecast']) {

@@ -317,6 +317,28 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
     theory: ['ARIMA'],
   },
   {
+    // Opcional a propósito: contrastar una sola especificación contra nada no
+    // enseña nada, y marcarlo "pendiente" empujaría a todo el mundo a guardar
+    // modelos porque el riel lo pide. Se vuelve relevante por regla, cuando
+    // hay algo real que contrastar.
+    key: 'compare',
+    label: 'Comparar especificaciones',
+    kind: 'optional',
+    appliesTo: ['cross_section', 'time_series'],
+    requirements: [estimated],
+    // Hace falta evidencia, no solo haber tocado un botón: el click de la guía
+    // lleva el foco al panel pero no guarda nada. Sin las dos condiciones, el
+    // paso quedaba completo sin que existiera ninguna comparación.
+    isComplete: ctx => (ctx.comparison?.saved ?? 0) >= 2
+      && ctx.session.acknowledged.includes('compare'),
+    prompt: {
+      title: 'Contrastá esta especificación con otra',
+      body: 'Guardá la estimación actual, cambiá algo del modelo, estimá de nuevo y mirá las dos al lado.',
+      why: 'Un resultado que solo aparece bajo una especificación no es un hallazgo: es una propiedad de esa especificación. Ver qué se mueve y qué se sostiene al cambiar el modelo es lo que separa un resultado robusto de uno que depende de cómo se lo miró.',
+    },
+    theory: ['modelo y datos'],
+  },
+  {
     key: 'conclude',
     label: 'Revisión final',
     kind: 'recommended',

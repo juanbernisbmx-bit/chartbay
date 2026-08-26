@@ -28,10 +28,10 @@ function dataset(): DatasetProfile {
 function ctx(current: Partial<SpecSignature> = {}): AnalysisContext {
   return {
     mode: 'regression', engine: 'lite', dataset: dataset(), raw: null,
-    spec: spec(current), estimatedSignature: sig(), hasResult: true, timeSeries: null, doctor: null,
+    spec: spec(current), estimatedSignature: sig(), hasResult: true, timeSeries: null, doctor: null, comparison: null,
     session: {
       mode: 'guided', confirmedType: 'cross_section',
-      acknowledged: ['readCoefficients', 'inference', 'diagnostics'], dismissed: [], decisions: [],
+      acknowledged: ['readCoefficients', 'inference', 'diagnostics'], dismissed: [], decisions: [], estimatedSpecs: [],
     },
   };
 }
