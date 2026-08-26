@@ -5,6 +5,7 @@
 // teoría. Por eso los requisitos son predicados sobre el contexto y no
 // condiciones escritas dentro del motor.
 
+import { changedFields } from './invalidation';
 import type { AnalysisContext, Requirement, StepKey, StepKind } from './types';
 
 export interface StepDefinition {
@@ -42,6 +43,22 @@ const noBlockingWarnings = req('clean', 'decidir qué hacer con los datos faltan
 
 const estimated = req('estimated', 'estimar el modelo',
   ctx => ctx.hasResult);
+
+// ── Series de tiempo ────────────────────────────────────────────────────────
+const timeColumns = req('timecols', 'elegir la columna de fecha y la de valor',
+  ctx => !!ctx.timeSeries && ctx.timeSeries.dateColumn !== '' && ctx.timeSeries.valueColumn !== '');
+
+const seriesRun = req('seriesrun', 'correr el análisis de la serie',
+  ctx => !!ctx.timeSeries?.hasResult);
+
+const arimaEstimated = req('arima', 'estimar un ARIMA',
+  ctx => ctx.timeSeries?.arimaOrders !== null && ctx.timeSeries?.arimaOrders !== undefined);
+
+/** Doctor dice que la serie analizada todavía no parece estacionaria. */
+function stationarityUnresolved(ctx: AnalysisContext): boolean {
+  const finding = ctx.doctor?.findings.find(f => f.category === 'stationarity');
+  return finding?.state === 'problem' || finding?.state === 'review';
+}
 
 export const STEP_DEFINITIONS: StepDefinition[] = [
   {
@@ -170,12 +187,141 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
     },
     theory: ['supuestos y sesgo'],
   },
+  // ── Series de tiempo ──────────────────────────────────────────────────────
+  {
+    key: 'timeIndex',
+    label: 'Índice temporal',
+    kind: 'required',
+    appliesTo: ['time_series'],
+    requirements: [hasDataset, typeConfirmed],
+    isComplete: ctx => timeColumns.test(ctx),
+    prompt: {
+      title: 'Elegí qué columna es la fecha y cuál el valor',
+      body: 'ChartBay detecta la columna de fechas cuando puede, pero conviene confirmarla.',
+      why: 'Una serie de tiempo no es una columna más: el orden de las observaciones es información, y todo lo que sigue depende de que las fechas se lean bien.',
+    },
+    theory: ['estacionariedad'],
+  },
+  {
+    key: 'timeOrder',
+    label: 'Orden y frecuencia',
+    kind: 'required',
+    appliesTo: ['time_series'],
+    requirements: [hasDataset, typeConfirmed, timeColumns],
+    isComplete: ctx => seriesRun.test(ctx),
+    prompt: {
+      title: 'Verificá el orden y la frecuencia',
+      body: 'Corré el análisis para ver cuántas observaciones válidas quedan, con qué frecuencia y si hay fechas repetidas o huecos.',
+      why: 'Fechas duplicadas o una frecuencia irregular cambian el significado de un rezago, y con eso el de la ACF y el del ADF.',
+    },
+    theory: ['estacionariedad'],
+  },
+  {
+    key: 'plotSeries',
+    label: 'Gráfico de la serie',
+    kind: 'recommended',
+    appliesTo: ['time_series'],
+    requirements: [seriesRun],
+    isComplete: ctx => ctx.session.acknowledged.includes('plotSeries'),
+    prompt: {
+      title: 'Mirá la serie antes de testear',
+      body: '¿Hay tendencia? ¿La media se mueve? ¿La varianza crece con el nivel? ¿Se ve un quiebre?',
+      why: 'El gráfico contesta en dos segundos lo que después vas a contrastar con un test, y muestra cosas que ningún test reporta: quiebres, estacionalidad, valores imposibles.',
+    },
+    theory: ['estacionariedad'],
+  },
+  {
+    key: 'stationarity',
+    label: 'Estacionariedad',
+    kind: 'required',
+    appliesTo: ['time_series'],
+    requirements: [seriesRun],
+    isComplete: ctx => seriesRun.test(ctx) && !stationarityUnresolved(ctx),
+    prompt: {
+      title: 'Revisá si la serie es estacionaria',
+      body: 'El ADF contrasta la presencia de una raíz unitaria en la serie que estás analizando.',
+      why: 'Modelar en niveles una serie no estacionaria produce regresiones espurias: R² altos y estadísticos grandes que no reflejan ninguna relación.',
+    },
+    theory: ['ADF', 'estacionariedad'],
+  },
+  {
+    key: 'transform',
+    label: 'Transformación',
+    kind: 'conditional',
+    appliesTo: ['time_series'],
+    requirements: [seriesRun],
+    // Se completa cuando se dejó de analizar la serie original: ahí el lazo
+    // vuelve a estacionariedad para re-testear sobre la serie nueva.
+    isComplete: ctx => (ctx.timeSeries?.transformation ?? 'original') !== 'original',
+    prompt: {
+      title: 'Probá una transformación y volvé a testear',
+      body: 'Diferenciar o tomar retornos logarítmicos, y correr el ADF de nuevo sobre la serie transformada.',
+      why: 'El test se aplica a la serie que vas a modelar, no a la original. Si transformás, la pregunta sobre estacionariedad se vuelve a abrir.',
+    },
+    theory: ['estacionariedad', 'ADF'],
+  },
+  {
+    key: 'identify',
+    label: 'Identificación',
+    kind: 'recommended',
+    appliesTo: ['time_series'],
+    requirements: [seriesRun],
+    isComplete: ctx => ctx.session.acknowledged.includes('identify'),
+    prompt: {
+      title: 'Leé la ACF y la PACF',
+      body: 'Un corte en la PACF sugiere una parte autorregresiva; un corte en la ACF, una de medias móviles; un decaimiento lento, que falta diferenciar.',
+      why: 'Los órdenes de un ARIMA no se adivinan ni se eligen por prueba y error: se leen del patrón de autocorrelación.',
+    },
+    theory: ['ACF/PACF'],
+  },
+  {
+    key: 'arima',
+    label: 'ARIMA',
+    kind: 'conditional',
+    appliesTo: ['time_series'],
+    requirements: [seriesRun],
+    isComplete: ctx => arimaEstimated.test(ctx),
+    prompt: {
+      title: 'Estimá un ARIMA con los órdenes que sugiere el patrón',
+      body: 'Disponible en el motor Pro, que corre statsmodels en el navegador.',
+      why: 'El ARIMA resume la dinámica de la serie en pocos parámetros; sin él no hay pronóstico ni residuos que diagnosticar.',
+    },
+    theory: ['ARIMA'],
+  },
+  {
+    key: 'arimaResiduals',
+    label: 'Residuos del ARIMA',
+    kind: 'required',
+    appliesTo: ['time_series'],
+    requirements: [seriesRun, arimaEstimated],
+    isComplete: ctx => ctx.session.acknowledged.includes('arimaResiduals'),
+    prompt: {
+      title: 'Revisá los residuos del ARIMA',
+      body: 'Ljung-Box sobre los residuos contesta si quedó estructura temporal sin capturar.',
+      why: 'Acá un Ljung-Box significativo sí es un problema, al revés que sobre la serie original: significa que los órdenes elegidos no describen toda la dinámica.',
+    },
+    theory: ['ARIMA', 'ACF/PACF'],
+  },
+  {
+    key: 'forecast',
+    label: 'Pronóstico',
+    kind: 'optional',
+    appliesTo: ['time_series'],
+    requirements: [seriesRun, arimaEstimated],
+    isComplete: ctx => ctx.session.acknowledged.includes('forecast'),
+    prompt: {
+      title: 'Proyectá la serie si te interesa',
+      body: 'El horizonte y los intervalos salen del modelo estimado.',
+      why: 'Un pronóstico hereda todos los supuestos del modelo: si los residuos no están limpios, los intervalos van a estar mal calibrados.',
+    },
+    theory: ['ARIMA'],
+  },
   {
     key: 'conclude',
     label: 'Revisión final',
     kind: 'recommended',
-    appliesTo: ['cross_section'],
-    requirements: [estimated],
+    appliesTo: ['cross_section', 'time_series'],
+    requirements: [],
     isComplete: ctx => ctx.session.acknowledged.includes('conclude'),
     prompt: {
       title: 'Repasá el recorrido antes de concluir',
@@ -186,24 +332,17 @@ export const STEP_DEFINITIONS: StepDefinition[] = [
   },
 ];
 
-/** Los resultados en pantalla corresponden a una especificación anterior. */
+/**
+ * Los resultados en pantalla corresponden a una especificación anterior.
+ *
+ * Delega en changedFields en vez de comparar campo por campo acá. Tenerlo
+ * duplicado ya costó un error: al sumar la transformación de la serie a la
+ * firma, G02 la detectaba pero esta función no, así que avisaba del
+ * desactualizado y al mismo tiempo dejaba el paso en verde.
+ */
 export function isStale(ctx: AnalysisContext): boolean {
   if (!ctx.hasResult || !ctx.spec || !ctx.estimatedSignature) return false;
-  return !sameSignature(ctx.spec.signature, ctx.estimatedSignature);
-}
-
-export function sameSignature(
-  a: AnalysisContext['estimatedSignature'],
-  b: AnalysisContext['estimatedSignature']
-): boolean {
-  if (a === null || b === null) return a === b;
-  return a.dataset === b.dataset
-    && a.yName === b.yName
-    && a.xNames === b.xNames
-    && a.form === b.form
-    && a.seType === b.seType
-    && a.dropIncomplete === b.dropIncomplete
-    && a.restriction === b.restriction;
+  return changedFields(ctx.spec.signature, ctx.estimatedSignature).length > 0;
 }
 
 export function stepDefinition(key: StepKey): StepDefinition {

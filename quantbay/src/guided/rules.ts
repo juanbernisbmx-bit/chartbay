@@ -158,6 +158,20 @@ function findingsOf(ctx: AnalysisContext) {
   return ctx.doctor?.findings ?? [];
 }
 
+/**
+ * Categorías con regla propia. G04 no las toca.
+ *
+ * Una regla especializada sabe cosas que la genérica no puede saber: G07
+ * conoce el lazo de transformar y volver a testear, y el costo de diferenciar.
+ * Sin esta exclusión, G04 le ganaba por impacto y el consejo terminaba siendo
+ * el texto genérico de Doctor, perdiendo todo lo específico del dominio.
+ */
+const SPECIALISED: DoctorCategoryKey[] = ['stationarity', 'arimaResiduals', 'forecast'];
+
+function genericFindings(ctx: AnalysisContext) {
+  return findingsOf(ctx).filter(f => f.state === 'problem' && !SPECIALISED.includes(f.category));
+}
+
 /** Traduce un hallazgo en recomendación, sin tocar los textos de Doctor. */
 function fromFinding(
   ruleId: string,
@@ -188,12 +202,11 @@ GUIDED_RULES.push(
     kind: 'advisory',
     targetStep: 'inference',
     priority: 80,
-    when: ctx => findingsOf(ctx).some(f => f.state === 'problem'),
+    when: ctx => genericFindings(ctx).length > 0,
     build: ctx => {
       // El de mayor consecuencia manda; el orden lo define Doctor, no la guía.
       const rank: Record<string, number> = { estimation: 4, inference: 3, efficiency: 2, reading: 1 };
-      const worst = findingsOf(ctx)
-        .filter(f => f.state === 'problem')
+      const worst = [...genericFindings(ctx)]
         .sort((a, b) => (rank[b.impact] ?? 0) - (rank[a.impact] ?? 0))[0];
       return fromFinding('G04', 'advisory', worst);
     },
@@ -236,6 +249,65 @@ GUIDED_RULES.push(
         title: `Falta un diagnóstico: ${missing.headlineText}`,
         body: missing.detail.conclusion,
       };
+    },
+  }
+);
+
+// ── Etapa 5 · reglas del flujo temporal ─────────────────────────────────────
+
+/** Estado que Doctor le puso a una categoría, si la evaluó. */
+function doctorState(ctx: AnalysisContext, category: DoctorCategoryKey) {
+  return ctx.doctor?.findings.find(f => f.category === category)?.state;
+}
+
+GUIDED_RULES.push(
+  {
+    // G07 — el lazo de estacionariedad sigue abierto: el ADF no rechaza y la
+    // serie que se está mirando es todavía la original.
+    id: 'G07',
+    kind: 'advisory',
+    targetStep: 'transform',
+    priority: 85,
+    when: ctx => {
+      if (!ctx.timeSeries?.hasResult) return false;
+      if (ctx.timeSeries.transformation !== 'original') return false;
+      const state = doctorState(ctx, 'stationarity');
+      return state === 'problem' || state === 'review';
+    },
+    build: () => rec({ id: 'G07', kind: 'advisory', targetStep: 'transform' }, {
+      title: 'La serie todavía no parece estacionaria',
+      body: 'Podés diferenciar o tomar retornos logarítmicos, y volver a correr el ADF sobre la serie transformada.',
+      why: 'Modelar en niveles una serie con raíz unitaria produce regresiones espurias. Ojo con el costo: diferenciar borra la relación de largo plazo, así que si lo que te interesa es cómo se mueven juntas dos series con tendencia común, el camino es cointegración y no diferenciar. Y el ADF tiene poca potencia: no rechazar no prueba que haya raíz unitaria.',
+      actions: [{ label: 'Elegir una transformación', focus: 'qb-ts-transform' }],
+      theory: ['estacionariedad', 'ADF'],
+    }),
+  },
+  {
+    // G08 — hay pronóstico sobre una base dudosa. Acompaña, no bloquea:
+    // frenar acá sería paternalista y esconder la salvedad, negligente.
+    id: 'G08',
+    kind: 'advisory',
+    targetStep: 'forecast',
+    priority: 40,
+    when: ctx => {
+      if (!ctx.timeSeries?.arimaOrders) return false;
+      const residuals = doctorState(ctx, 'arimaResiduals');
+      const stationarity = doctorState(ctx, 'stationarity');
+      return residuals === 'problem' || residuals === 'review'
+          || stationarity === 'problem' || stationarity === 'review';
+    },
+    build: ctx => {
+      const residuals = doctorState(ctx, 'arimaResiduals');
+      const motivo = residuals === 'problem' || residuals === 'review'
+        ? 'los residuos del ARIMA todavía muestran estructura sin capturar'
+        : 'la estacionariedad de la serie quedó en duda';
+      return rec({ id: 'G08', kind: 'advisory', targetStep: 'forecast' }, {
+        title: 'El pronóstico se apoya en una base que conviene mirar',
+        body: `Podés proyectar igual, pero ${motivo}, así que los intervalos van a estar mal calibrados.`,
+        why: 'Un pronóstico hereda todos los supuestos del modelo. La proyección central puede seguir siendo razonable; lo que deja de ser confiable es la banda de incertidumbre, que es justamente lo que un pronóstico aporta sobre una extrapolación a ojo.',
+        actions: [{ label: 'Revisar los residuos', focus: 'qb-pro-ts-content' }],
+        theory: ['ARIMA'],
+      });
     },
   }
 );

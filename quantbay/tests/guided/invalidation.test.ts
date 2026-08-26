@@ -6,7 +6,8 @@ import type { AnalysisContext, CurrentSpec, DatasetProfile, SpecSignature, StepK
 function sig(over: Partial<SpecSignature> = {}): SpecSignature {
   return {
     dataset: 'datos.csv', yName: 'salario', xNames: 'educacion|experiencia',
-    form: 'lin-lin', seType: 'classic', dropIncomplete: false, restriction: '', ...over,
+    form: 'lin-lin', seType: 'classic', dropIncomplete: false, restriction: '',
+    transformation: '', arimaOrders: '', ...over,
   };
 }
 function spec(over: Partial<SpecSignature> = {}): CurrentSpec {
@@ -27,7 +28,7 @@ function dataset(): DatasetProfile {
 function ctx(current: Partial<SpecSignature> = {}): AnalysisContext {
   return {
     mode: 'regression', engine: 'lite', dataset: dataset(), raw: null,
-    spec: spec(current), estimatedSignature: sig(), hasResult: true, doctor: null,
+    spec: spec(current), estimatedSignature: sig(), hasResult: true, timeSeries: null, doctor: null,
     session: {
       mode: 'guided', confirmedType: 'cross_section',
       acknowledged: ['readCoefficients', 'inference', 'diagnostics'], dismissed: [], decisions: [],

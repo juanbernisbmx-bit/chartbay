@@ -18,7 +18,9 @@ export type ChangeKind =
   | 'x'
   | 'form'
   | 'seType'
-  | 'restriction';
+  | 'restriction'
+  | 'transformation'
+  | 'arimaOrders';
 
 /** Cómo se nombra cada cambio en los mensajes. */
 export const CHANGE_LABEL: Record<ChangeKind, string> = {
@@ -29,6 +31,8 @@ export const CHANGE_LABEL: Record<ChangeKind, string> = {
   form: 'la forma funcional',
   seType: 'el tipo de errores estándar',
   restriction: 'la restricción',
+  transformation: 'la transformación de la serie',
+  arimaOrders: 'los órdenes del ARIMA',
 };
 
 /**
@@ -51,6 +55,13 @@ const INVALIDATES: Record<ChangeKind, StepKey[]> = {
   seType: ['estimate', 'inference', 'diagnostics', 'conclude'],
   // La restricción se contrasta sobre el mismo modelo no restringido.
   restriction: ['estimate', 'inference', 'conclude'],
+  // Series: transformar cambia la serie que se analiza, así que la pregunta
+  // de estacionariedad se vuelve a abrir y todo lo que se apoya en ella cae.
+  // Lo que sobrevive es el índice temporal y el gráfico de la original.
+  transformation: ['stationarity', 'transform', 'identify', 'arima', 'arimaResiduals', 'forecast', 'conclude'],
+  // Cambiar los órdenes no toca la serie ni su estacionariedad: rehace el
+  // ajuste y todo lo que cuelga de él.
+  arimaOrders: ['arima', 'arimaResiduals', 'forecast', 'conclude'],
 };
 
 /** Qué campos difieren entre lo que está seleccionado y lo que se estimó. */
@@ -63,6 +74,8 @@ export function changedFields(current: SpecSignature, estimated: SpecSignature):
   if (current.seType !== estimated.seType) changes.push('seType');
   if (current.dropIncomplete !== estimated.dropIncomplete) changes.push('missingPolicy');
   if (current.restriction !== estimated.restriction) changes.push('restriction');
+  if (current.transformation !== estimated.transformation) changes.push('transformation');
+  if (current.arimaOrders !== estimated.arimaOrders) changes.push('arimaOrders');
   return changes;
 }
 

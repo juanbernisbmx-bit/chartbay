@@ -8,7 +8,8 @@ import { escapeHtml } from '../utils/format';
 import { buildAnalysisContext, suggestAnalysisType } from '../guided/context';
 import { buildGuidedPlan } from '../guided/planner';
 import {
-  acknowledgeStep, confirmAnalysisType, dismissRecommendation, getSession, setMode,
+  acknowledgeStep, confirmAnalysisType, dismissRecommendation, getSession,
+  recordEstimation, setMode,
 } from '../guided/session';
 import type { GuidedPlan, GuidedStep, Recommendation, StepState } from '../guided/types';
 
@@ -149,9 +150,35 @@ export function renderGuided(): void {
  * Un solo listener delegado en el contenedor: la vista se redibuja entera en
  * cada cambio, así que enganchar botón por botón dejaría listeners colgados.
  */
+/**
+ * Controles cuyo cambio puede alterar el plan. La guía engancha los suyos en
+ * vez de pedirle a main.ts que la avise: así sumar un control nuevo no obliga
+ * a tocar el punto de entrada.
+ */
+const REFRESH_ON_CHANGE = [
+  'qb-ts-date', 'qb-ts-value', 'qb-ts-transform',
+  'qb-pro-ts-arima-enable', 'qb-pro-ts-arima-p', 'qb-pro-ts-arima-d', 'qb-pro-ts-arima-q',
+];
+const REFRESH_ON_CLICK = ['qb-ts-run', 'qb-pro-ts-run'];
+
 export function initGuided(onAction?: (focus: string) => void): void {
   const host = $('qb-guided');
   if (!host) return;
+
+  // Diferido: estos listeners se registran después que los de la app, pero el
+  // resultado recién existe cuando el handler original terminó.
+  const refreshLater = () => setTimeout(() => renderGuided(), 0);
+  for (const id of REFRESH_ON_CHANGE) $(id)?.addEventListener('change', refreshLater);
+  // Al correr una serie hay que anotar con qué especificación se produjo el
+  // resultado; si no, cambiar la transformación después no invalida nada y el
+  // ADF de la serie anterior queda en pantalla como si correspondiera.
+  for (const id of REFRESH_ON_CLICK) {
+    $(id)?.addEventListener('click', () => setTimeout(() => {
+      const signature = buildAnalysisContext().spec?.signature;
+      if (signature) recordEstimation(signature);
+      renderGuided();
+    }, 0));
+  }
 
   host.addEventListener('click', event => {
     const el = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-guided-type],[data-guided-skip],[data-guided-act],[data-guided-mode]');
