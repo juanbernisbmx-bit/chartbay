@@ -5,6 +5,7 @@ import { interpret } from '../interpretation';
 import { significanceLabel } from '../utils/format';
 import { $, showError } from '../app/dom';
 import { appState } from '../app/state';
+import { isTimeSeriesAnalysisExportable } from '../timeseries/service';
 
 export function residualSumSquares(result: RegressionResult): number {
   return result.residuals.reduce((sum, residual) => sum + residual ** 2, 0);
@@ -95,6 +96,15 @@ function adfValue(adf: unknown, key: string): string | number {
 
 function adfUnavailableReason(result: TimeSeriesAnalysisResult): string {
   return result.adf.available ? result.adf.interpretation : result.adf.reason;
+}
+
+function exportableTimeSeriesResult(): TimeSeriesAnalysisResult | null {
+  const result = appState.lastTimeSeriesResult;
+  if (!result || !isTimeSeriesAnalysisExportable(result)) {
+    showError('Primero ejecutá un análisis válido de Time Series para poder exportar.');
+    return null;
+  }
+  return result;
 }
 
 function buildTimeSeriesCSVRows(result: TimeSeriesAnalysisResult): Array<Array<string | number>> {
@@ -297,11 +307,9 @@ function exportTimeSeriesPDF(result: TimeSeriesAnalysisResult, doc: any): void {
 
 export function exportAnalysisCSV(): void {
   if (appState.activeMode === 'timeseries') {
-    if (!appState.lastTimeSeriesResult) {
-      showError('Primero ejecuta un analisis de Time Series para poder exportar.');
-      return;
-    }
-    exportTimeSeriesCSV(appState.lastTimeSeriesResult);
+    const result = exportableTimeSeriesResult();
+    if (!result) return;
+    exportTimeSeriesCSV(result);
     return;
   }
 
@@ -356,11 +364,9 @@ export function exportAnalysisCSV(): void {
 
 export function exportAnalysisTXT(): void {
   if (appState.activeMode === 'timeseries') {
-    if (!appState.lastTimeSeriesResult) {
-      showError('Primero ejecuta un analisis de Time Series para poder exportar.');
-      return;
-    }
-    exportTimeSeriesTXT(appState.lastTimeSeriesResult);
+    const result = exportableTimeSeriesResult();
+    if (!result) return;
+    exportTimeSeriesTXT(result);
     return;
   }
 
@@ -422,12 +428,10 @@ export function exportPDF(): void {
   const jspdfLib = (window as any).jspdf;
   if (appState.activeMode === 'timeseries') {
     if (!jspdfLib?.jsPDF) { showError('Exportacion PDF no disponible. Verifica la conexion a internet.'); return; }
-    if (!appState.lastTimeSeriesResult) {
-      showError('Primero ejecuta un analisis de Time Series para poder exportar.');
-      return;
-    }
+    const result = exportableTimeSeriesResult();
+    if (!result) return;
     const { jsPDF } = jspdfLib;
-    exportTimeSeriesPDF(appState.lastTimeSeriesResult, new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' }));
+    exportTimeSeriesPDF(result, new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' }));
     return;
   }
   if (!jspdfLib?.jsPDF) { showError('Exportación PDF no disponible. Verificá la conexión a internet.'); return; }

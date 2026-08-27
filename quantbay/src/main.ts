@@ -50,7 +50,7 @@ import { renderRegressionResults } from './ui/regressionView';
 import { recommendFunctionalForm } from './services/formRecommender';
 import { renderFormRecommendation, showFormRecommendationPending } from './ui/formRecommendView';
 import { detectCategoricalColumns, encodeCategoricalX, encodeForRegression, dummyBaseName, type CategoricalVariableInfo } from './categoricalEncoding';
-import { runTimeSeriesAnalysis } from './timeseries/service';
+import { isTimeSeriesAnalysisExportable, runTimeSeriesAnalysis } from './timeseries/service';
 import {
   getACFMaxLag,
   getMovingAverageWindow,
@@ -406,7 +406,8 @@ function checkActiveEngineReady(): boolean {
 
 function updateExportButtonState(): void {
   const regressionReady = !!appState.lastResult;
-  const timeSeriesReady = !!appState.lastTimeSeriesResult;
+  const timeSeriesReady = !!appState.lastTimeSeriesResult &&
+    isTimeSeriesAnalysisExportable(appState.lastTimeSeriesResult);
   const proRegressionReady = !!(proExportState.lastProResult && proExportState.lastProResult.ok);
   const proTimeSeriesReady = !!(proExportState.lastProTimeSeriesResult && proExportState.lastProTimeSeriesResult.ok);
   for (const id of ['qb-export-pdf', 'qb-export-csv', 'qb-export-txt']) {
@@ -1030,16 +1031,31 @@ function onTimeSeriesRun(): void {
     movingAverageWindow: getMovingAverageWindow(),
     acfMaxLag: getACFMaxLag(),
   });
-  appState.lastTimeSeriesResult = result;
   renderTimeSeriesAnalysis(result);
   setText('qb-status-obs', result.summary.observations);
+  const panel = $('qb-ts-panel');
+
+  if (!isTimeSeriesAnalysisExportable(result)) {
+    appState.lastTimeSeriesResult = null;
+    setEngineStatus('ERROR');
+    writeRunLog([
+      `Time Series no ejecutado: la validación falló para ${valueColumn}`,
+      `Fecha: ${dateColumn}`,
+      `Observaciones válidas: ${result.summary.observations}`,
+      'Corregí las advertencias antes de exportar.',
+    ]);
+    if (panel) panel.scrollIntoView({ behavior: 'smooth' });
+    updateExportButtonState();
+    return;
+  }
+
+  appState.lastTimeSeriesResult = result;
   setEngineStatus('COMPLETADO');
   writeRunLog([
     `Time Series ejecutado: ${valueColumn}`,
     `Fecha: ${dateColumn}`,
     `Observaciones validas: ${result.summary.observations}`,
   ]);
-  const panel = $('qb-ts-panel');
   if (panel) panel.scrollIntoView({ behavior: 'smooth' });
   updateSidebarStep(3);
   updateExportButtonState();

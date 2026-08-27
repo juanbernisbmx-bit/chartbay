@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runTimeSeriesAnalysis } from '../../src/timeseries/service';
+import { isTimeSeriesAnalysisExportable, runTimeSeriesAnalysis } from '../../src/timeseries/service';
 
 describe('runTimeSeriesAnalysis', () => {
   function datedRows(values: number[]): Array<{ date: string; close: number }> {
@@ -89,6 +89,21 @@ describe('runTimeSeriesAnalysis', () => {
     expect(result.validation.missingValueRows).toEqual([2]);
     expect(result.interpretation.some(line => line.includes('duplicate dates'))).toBe(true);
     expect(result.interpretation.some(line => line.includes('missing or invalid'))).toBe(true);
+  });
+
+  it('does not consider an invalid analysis exportable', () => {
+    const result = runTimeSeriesAnalysis(
+      [
+        { id: 1, close: 100 },
+        { id: 2, close: 110 },
+        { id: 3, close: 121 },
+      ],
+      { dateColumn: 'id', valueColumn: 'close' }
+    );
+
+    expect(result.validation.isValid).toBe(false);
+    expect(result.summary.observations).toBe(0);
+    expect(isTimeSeriesAnalysisExportable(result)).toBe(false);
   });
 
   it('returns selected percent-return points and transformed summary', () => {
