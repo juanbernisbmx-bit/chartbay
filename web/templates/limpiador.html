@@ -1,48 +1,20 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-skin="v2">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ChartBay - Limpiador de CSV</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='redesign.css') }}">
 </head>
 <body>
+  {% set active = 'limpiador' %}
+  {% include '_topbar_v2.html' with context %}
   <div class="wrap qb-wrap" data-qb-module="limpiador">
-    {% include 'alfa_banner.html' %}
-    <header class="masthead">
-      <svg class="ship" viewBox="0 0 260 170" aria-hidden="true">
-        <path class="ship-wake" d="M28 144c18-9 31 7 49-2 17-8 31 7 49-1 18-8 31 8 50 0 18-8 33 4 56-3"/>
-        <path class="hull" d="M51 122c41 7 100 7 155-1-10 20-35 31-76 34-38-1-66-11-79-33z"/>
-        <path class="hull-line" d="M69 128c33 6 84 6 121 0"/>
-        <path class="mast" d="M128 122V16"/>
-        <path class="yard" d="M79 55c37-9 74-11 110-6"/>
-        <path class="yard" d="M67 93c42-8 91-9 133-3"/>
-        <path class="sail sail-main" d="M130 28c28 16 42 38 47 61-15 0-35-3-55-11 2-18 4-33 8-50z"/>
-        <path class="sail sail-left" d="M122 38c-25 19-39 42-45 70 15 0 32-5 48-16-2-18-3-35-3-54z"/>
-        <path class="sail sail-low" d="M126 83c29 11 53 15 74 13-16 15-38 24-67 28-3-12-5-26-7-41z"/>
-        <path class="rig" d="M128 18 72 119M128 18l91 109M82 56l-19 64M188 50l21 77"/>
-        <path class="flagbg" d="M130 15c22-4 39-1 54 8-8 8-8 17-1 27-17-8-33-10-53-5z"/>
-        <circle class="jolly" cx="157" cy="30" r="7"/>
-        <circle class="eye" cx="154.5" cy="28.8" r="1.2"/>
-        <circle class="eye" cx="159.5" cy="28.8" r="1.2"/>
-        <path class="jolly" d="M151 37h12v3h-12z"/>
-        <path class="jolly-line" d="M145 45l25-15M145 30l25 16"/>
-        <path class="chart" d="M103 108l10-12 11 6 15-22 13 8 18-27"/>
-        <path class="chart" d="M170 61h-15m15 0v15"/>
-      </svg>
-      <h1 class="wordmark" aria-label="Chart Bay">ℭ𝔥𝔞𝔯𝔱 <span class="bay">𝔅𝔞𝔶</span></h1>
-      <nav class="mainnav">
-        <a href="{{ url_for('dashboard') }}">Inicio</a><span class="sep">.</span>
-        {% if qb_module == 'econometria' %}<strong>Econometría</strong>{% else %}<a href="{{ url_for('econometria') }}">Econometría</a>{% endif %}<span class="sep">.</span>
-        {% if secciones.agro %}{% if qb_module == 'agro' %}<strong>Agro</strong>{% else %}<a href="{{ url_for('agro') }}">Agro</a>{% endif %}<span class="sep">.</span>{% endif %}
-        {% if secciones.mercados %}<a href="{{ url_for('finanzas') }}">Finanzas Quant</a><span class="sep">.</span>{% endif %}
-        <strong>Limpiador</strong><span class="sep">.</span>
-        <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
-        <a href="{{ url_for('guia') }}">Documentación</a><span class="sep">.</span>
-        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% endif %}
-      </nav>
-    </header>
     <section class="qb-shell-head">
       <div>
         <p class="qb-kicker">Chart Bay / Limpiador</p>

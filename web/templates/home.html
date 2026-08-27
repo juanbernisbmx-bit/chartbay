@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-skin="v2">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,9 +11,9 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='redesign.css') }}">
 </head>
-<body data-skin="v2">
-  <div class="wrap">
-    {% include '_topbar_v2.html' with context %}
+<body>
+  {% include '_topbar_v2.html' with context %}
+  <div class="wrap cb-full">
 
     <main>
       <section class="cb-hero">
@@ -37,7 +37,7 @@
               </div>
               <div>
                 <p class="n">49</p>
-                <p class="lbl">indicadores macro (FRED + World Bank)</p>
+                <p class="lbl">indicadores macro</p>
               </div>
               <div>
                 <p class="n">0</p>

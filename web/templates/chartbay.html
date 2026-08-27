@@ -1,28 +1,20 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-skin="v2">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ChartBay - Hub</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='redesign.css') }}">
 </head>
 <body>
+  {% set active = '' %}
+  {% include '_topbar_v2.html' with context %}
   <div class="wrap classic-page hub-classic-page">
-    {% include 'alfa_banner.html' %}
-    <header class="masthead classic-header">
-      <div class="ship" aria-hidden="true"></div>
-      <p class="classic-site-name">The Chart Bay</p>
-      <nav class="mainnav classic-nav">
-        <a href="{{ url_for('dashboard') }}">Inicio</a><span class="sep">.</span>
-        <a href="{{ url_for('econometria') }}">Econometría</a><span class="sep">.</span>
-        <a href="{{ url_for('agro') }}">Agro</a><span class="sep">.</span>
-        <a href="{{ url_for('finanzas') }}">Finanzas Quant</a><span class="sep">.</span>
-        <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
-        <a href="{{ url_for('guia') }}">Documentación</a><span class="sep">.</span>
-        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% endif %}
-      </nav>
-    </header>
 
     <main class="classic-container">
       <section class="classic-intro">
