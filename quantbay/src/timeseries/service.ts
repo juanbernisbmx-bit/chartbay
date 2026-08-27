@@ -22,6 +22,10 @@ export interface RunTimeSeriesAnalysisOptions {
   acfMaxLag?: number;
 }
 
+export function isTimeSeriesAnalysisExportable(result: TimeSeriesAnalysisResult): boolean {
+  return result.validation.isValid;
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function inferFrequency(dates: Date[]): TimeSeriesFrequency {

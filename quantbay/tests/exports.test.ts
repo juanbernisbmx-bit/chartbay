@@ -114,6 +114,25 @@ describe('csvCell', () => {
     expect(text).toContain('interpretation,pacf');
   });
 
+  it('refuses to export an invalid Time Series result', () => {
+    document.body.innerHTML = '<div id="qb-error" style="display:none"></div>';
+    appState.activeMode = 'timeseries';
+    appState.lastTimeSeriesResult = runTimeSeriesAnalysis(
+      [
+        { id: 1, close: 100 },
+        { id: 2, close: 110 },
+        { id: 3, close: 121 },
+      ],
+      { dateColumn: 'id', valueColumn: 'close' }
+    );
+
+    exportAnalysisCSV();
+
+    expect(downloadedBlob).toBeNull();
+    expect(downloadedFilename).toBe('');
+    expect(document.getElementById('qb-error')?.textContent).toMatch(/análisis válido/i);
+  });
+
   it('exports the computed ADF result when available', async () => {
     appState.activeMode = 'timeseries';
     let previous = 0;
