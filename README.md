@@ -1,11 +1,79 @@
-# ChartBay Engine — laboratorio de econometría
+# ChartBay Engine
+
+**Laboratorio web de econometría orientado a estudiantes.**
+
+[Abrir la aplicación](https://chartbay.onrender.com) ·
+[Ver el código fuente](https://github.com/juanbernisbmx-bit/chartbay)
+
+## Presentación
+
+ChartBay es un proyecto educativo que busca reducir la distancia entre la teoría
+econométrica y su aplicación práctica. Permite cargar un conjunto de datos,
+especificar un modelo y recorrer la estimación paso a paso, con explicaciones en
+castellano sobre los resultados y los supuestos que conviene revisar.
+
+La propuesta no es reemplazar la enseñanza teórica ni el criterio del analista,
+sino ofrecer un entorno de práctica accesible: una primera capa guiada para quien
+está aprendiendo y herramientas más avanzadas para profundizar.
+
+## Problema que aborda
+
+En las primeras experiencias con econometría, la dificultad suele estar repartida
+entre tres frentes: aprender la teoría, dominar la sintaxis de un paquete
+estadístico e interpretar correctamente su salida. ChartBay concentra esos pasos
+en una misma interfaz para que el estudiante pueda enfocarse primero en la
+pregunta económica, la elección de variables y la lectura crítica del modelo.
+
+## Funcionalidades principales
+
+- Estimación por mínimos cuadrados ordinarios mediante descomposición QR.
+- Regresión restringida y contrastes de hipótesis con test de Wald.
+- Inferencia estadística, intervalos de confianza y pruebas t y F.
+- Diagnósticos de residuos, heterocedasticidad y multicolinealidad.
+- Errores estándar robustos HC1, HC3 y HAC.
+- Análisis de series de tiempo con ADF, ACF, PACF y Ljung–Box.
+- Comparación de especificaciones y registro de decisiones del análisis.
+- Exportación de resultados y generación de código reproducible para Python,
+  R, Stata y notebooks.
+- Limpiador de archivos CSV y catálogo de indicadores macroeconómicos.
+- Casos de práctica preparados, documentación conceptual y modo guiado.
+
+## Privacidad y reproducibilidad
+
+El motor econométrico principal se ejecuta localmente en el navegador. Los CSV
+cargados por el usuario no se envían al servidor. El repositorio contiene el
+código fuente, los casos de prueba y los datos de ejemplo utilizados para
+reproducir y revisar el comportamiento de la aplicación.
+
+Los resultados del motor se contrastan mediante tests automatizados con
+implementaciones de referencia de `statsmodels` y `scipy`. La aplicación también
+puede generar la sintaxis equivalente para continuar el análisis fuera de
+ChartBay.
+
+## Recorrido sugerido para evaluar el proyecto
+
+1. Abrir [ChartBay](https://chartbay.onrender.com) y entrar al laboratorio.
+2. Elegir uno de los casos de práctica incluidos o cargar un CSV propio.
+3. Definir la variable que se desea explicar y sus regresores.
+4. Ejecutar la estimación y revisar la interpretación, los coeficientes y los
+   diagnósticos.
+5. Cambiar al modo avanzado para explorar restricciones, errores robustos o
+   series de tiempo.
+6. Exportar el informe o el código reproducible del análisis.
+
+## Alcance y limitaciones
+
+ChartBay es una herramienta educativa en desarrollo. Sus resultados deben
+interpretarse dentro del contexto de cada ejercicio y no sustituyen la revisión
+metodológica, el diagnóstico del modelo ni el trabajo con software estadístico
+de propósito general. No constituye asesoramiento financiero.
+
+## Documentación técnica
 
 Aplicación web para estimar modelos econométricos desde el navegador: cargás un
 CSV, corrés una regresión, validás supuestos y exportás resultados. El cálculo
 ocurre **en el navegador** (motor en TypeScript), así que no hay datos que suban
 a ningún servidor.
-
-En producción: <https://chartbay.onrender.com>
 
 ## Qué incluye
 
