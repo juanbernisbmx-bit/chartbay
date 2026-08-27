@@ -1,29 +1,20 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-skin="v2">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ChartBay · {{ bot.name }}</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='redesign.css') }}">
 </head>
 <body>
+  {% set active = '' %}
+  {% include '_topbar_v2.html' with context %}
   <div class="wrap">
-    {% include 'alfa_banner.html' %}
-    <header class="masthead">
-      <h1 class="wordmark">Chart<span class="bay">Bay</span></h1>
-      <nav class="mainnav">
-        <a href="{{ url_for('chartbay') }}">Hub</a><span class="sep">·</span>
-        <a href="{{ url_for('community') }}">Comunidad</a><span class="sep">·</span>
-        <a href="{{ url_for('dashboard') }}">Mercados</a><span class="sep">·</span>
-        <a href="{{ url_for('compare_view') }}">Comparar</a><span class="sep">·</span>
-        <a href="{{ url_for('heatmap') }}">Heatmap</a><span class="sep">·</span>
-        <a href="{{ url_for('guia') }}">Guía</a><span class="sep">·</span>
-        <a href="{{ url_for('econometria') }}">Econometria</a><span class="sep">·</span>
-        <a href="{{ url_for('finanzas') }}">Finanzas</a><span class="sep">·</span>
-        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% if registration_open %}<span class="sep">·</span><a href="{{ url_for('register') }}">Registrarse</a>{% endif %}{% endif %}
-      </nav>
-    </header>
 
     <div class="alfa-warn">⚠ Versión alfa: los bots son MODELOS BASE, sin probar y no 100% funcionales. Sirven como punto de partida para testear y aprender, no como sistemas listos para operar. No constituyen asesoramiento financiero.</div>
 

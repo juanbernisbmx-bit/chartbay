@@ -1,6 +1,6 @@
 <!doctype html>
 {% set qb_module = quantbay_module|default('econometria') %}
-<html lang="es">
+<html lang="es" data-skin="v2">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,10 +12,10 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='redesign.css') }}">
 </head>
-<body data-skin="v2">
+<body>
+  {% set active = 'agro' if qb_module == 'agro' else 'econometria' %}
+  {% include '_topbar_v2.html' with context %}
   <div class="wrap qb-wrap{% if qb_module == 'agro' %} qb-agro-initial{% endif %}" data-qb-module="{{ qb_module }}">
-    {% set active = 'agro' if qb_module == 'agro' else 'econometria' %}
-    {% include '_topbar_v2.html' with context %}
 
     {# Cinta de contexto: el mismo estado que antes vivia en su propia barra,
        ahora fijo bajo la barra superior. #}
