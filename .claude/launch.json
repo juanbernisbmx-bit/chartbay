@@ -3,9 +3,10 @@
   "configurations": [
     {
       "name": "chartbay",
-      "runtimeExecutable": "python",
+      "runtimeExecutable": "/Users/juani/Documents/GitHub/chartbay/.venv/bin/python",
       "runtimeArgs": ["web/app.py"],
-      "port": 5000
+      "port": 5000,
+      "autoPort": true
     }
   ]
 }

@@ -942,4 +942,7 @@ def api_data_download(indicator_id):
 if __name__ == "__main__":
     # debug=True is safe here: this block only runs with `python web/app.py`.
     # Gunicorn (producción) ignora este bloque completamente.
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    #
+    # PORT igual que en el Procfile: en macOS el 5000 lo ocupa ControlCenter
+    # (receptor de AirPlay), así que fijarlo dejaba el bloque inarrancable.
+    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 5000)), debug=True)
