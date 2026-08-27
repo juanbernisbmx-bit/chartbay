@@ -1,0 +1,29 @@
+{# Barra superior del skin v2. Espera `active` con el nombre de la seccion
+   ('inicio', 'econometria', 'agro', 'mercados', 'datos', 'limpiador', 'guia').
+   La marca conserva el logo del barco y el wordmark Fraktur de siempre. #}
+<div class="cb-topbar">
+  <a class="cb-brand" href="{{ url_for('dashboard') }}">
+    <span class="cb-brand-logo" aria-hidden="true"></span>
+    <span class="cb-brand-name" aria-label="Chart Bay">ℭ𝔥𝔞𝔯𝔱 𝔅𝔞𝔶</span>
+  </a>
+  <nav class="cb-nav">
+    {% if active == 'inicio' %}<strong>Inicio</strong>{% else %}<a href="{{ url_for('dashboard') }}">Inicio</a>{% endif %}
+    {% if active == 'econometria' %}<strong>Econometría</strong>{% else %}<a href="{{ url_for('econometria') }}">Econometría</a>{% endif %}
+    {% if secciones.agro %}
+      {% if active == 'agro' %}<strong>Agro</strong>{% else %}<a href="{{ url_for('agro') }}">Agro</a>{% endif %}
+    {% endif %}
+    {% if secciones.mercados %}
+      {% if active == 'mercados' %}<strong>Finanzas Quant</strong>{% else %}<a href="{{ url_for('finanzas') }}">Finanzas Quant</a>{% endif %}
+    {% endif %}
+    {% if active == 'datos' %}<strong>Datos</strong>{% else %}<a href="{{ url_for('frequent_data') }}">Datos</a>{% endif %}
+    {% if active == 'limpiador' %}<strong>Limpiador</strong>{% else %}<a href="{{ url_for('limpiador') }}">Limpiador</a>{% endif %}
+    {% if active == 'guia' %}<strong>Documentación</strong>{% else %}<a href="{{ url_for('guia') }}">Documentación</a>{% endif %}
+  </nav>
+  <div class="cb-topbar-end">
+    {% if session.user %}
+      <a href="{{ url_for('logout') }}" style="font-size:12.5px;color:#9aa7ba">Salir</a>
+    {% else %}
+      <a href="{{ url_for('login') }}" style="font-size:12.5px;color:#9aa7ba">Entrar</a>
+    {% endif %}
+  </div>
+</div>

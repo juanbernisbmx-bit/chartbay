@@ -6,104 +6,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if qb_module == 'agro' %}ChartBay Agro{% else %}ChartBay - Econometria{% endif %}</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='redesign.css') }}">
 </head>
-<body>
+<body data-skin="v2">
   <div class="wrap qb-wrap{% if qb_module == 'agro' %} qb-agro-initial{% endif %}" data-qb-module="{{ qb_module }}">
-    {% include 'alfa_banner.html' %}
-    <header class="masthead">
-      <svg class="ship" viewBox="0 0 260 170" aria-hidden="true">
-        <path class="ship-wake" d="M28 144c18-9 31 7 49-2 17-8 31 7 49-1 18-8 31 8 50 0 18-8 33 4 56-3"/>
-        <path class="hull" d="M51 122c41 7 100 7 155-1-10 20-35 31-76 34-38-1-66-11-79-33z"/>
-        <path class="hull-line" d="M69 128c33 6 84 6 121 0"/>
-        <path class="mast" d="M128 122V16"/>
-        <path class="yard" d="M79 55c37-9 74-11 110-6"/>
-        <path class="yard" d="M67 93c42-8 91-9 133-3"/>
-        <path class="sail sail-main" d="M130 28c28 16 42 38 47 61-15 0-35-3-55-11 2-18 4-33 8-50z"/>
-        <path class="sail sail-left" d="M122 38c-25 19-39 42-45 70 15 0 32-5 48-16-2-18-3-35-3-54z"/>
-        <path class="sail sail-low" d="M126 83c29 11 53 15 74 13-16 15-38 24-67 28-3-12-5-26-7-41z"/>
-        <path class="rig" d="M128 18 72 119M128 18l91 109M82 56l-19 64M188 50l21 77"/>
-        <path class="flagbg" d="M130 15c22-4 39-1 54 8-8 8-8 17-1 27-17-8-33-10-53-5z"/>
-        <circle class="jolly" cx="157" cy="30" r="7"/>
-        <circle class="eye" cx="154.5" cy="28.8" r="1.2"/>
-        <circle class="eye" cx="159.5" cy="28.8" r="1.2"/>
-        <path class="jolly" d="M151 37h12v3h-12z"/>
-        <path class="jolly-line" d="M145 45l25-15M145 30l25 16"/>
-        <path class="chart" d="M103 108l10-12 11 6 15-22 13 8 18-27"/>
-        <path class="chart" d="M170 61h-15m15 0v15"/>
-      </svg>
-      <h1 class="wordmark" aria-label="Chart Bay">ℭ𝔥𝔞𝔯𝔱 <span class="bay">𝔅𝔞𝔶</span></h1>
-      <nav class="mainnav">
-        <a href="{{ url_for('dashboard') }}">Inicio</a><span class="sep">.</span>
-        {% if qb_module == 'econometria' %}<strong>Econometría</strong>{% else %}<a href="{{ url_for('econometria') }}">Econometría</a>{% endif %}<span class="sep">.</span>
-        {% if secciones.agro %}{% if qb_module == 'agro' %}<strong>Agro</strong>{% else %}<a href="{{ url_for('agro') }}">Agro</a>{% endif %}<span class="sep">.</span>{% endif %}
-        {% if secciones.mercados %}<a href="{{ url_for('finanzas') }}">Finanzas Quant</a><span class="sep">.</span>{% endif %}
-        <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
-        <a href="{{ url_for('limpiador') }}">Limpiador</a><span class="sep">.</span>
-        <a href="{{ url_for('guia') }}">Documentación</a><span class="sep">.</span>
-        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% endif %}
-      </nav>
-    </header>
+    {% set active = 'agro' if qb_module == 'agro' else 'econometria' %}
+    {% include '_topbar_v2.html' with context %}
 
-    <section class="qb-shell-head">
-      <div>
-        <p class="qb-kicker">Chart Bay / {% if qb_module == 'agro' %}Agro{% else %}Econometria{% endif %}</p>
-        <h2>{% if qb_module == 'agro' %}ChartBay Agro{% else %}Econometria{% endif %}</h2>
-        {% if qb_module == 'agro' %}
-        <p>Laboratorio de análisis agronómico-económico para rindes, clima, precios, costos y márgenes. Agro usa el motor econométrico común de ChartBay, pero se presenta como vertical propia.</p>
-        {% else %}
-        <p>Laboratorio econometrico para CSV, regresion OLS, restricciones RLS, diagnosticos, tests estadisticos y series de tiempo. Todo corre en tu navegador: tus datos no salen de tu computadora.</p>
-        {% endif %}
-      </div>
-      <div class="qb-terminal-chip">{% if qb_module == 'agro' %}Rindes / Margen / Presets{% else %}OLS / RLS / Series{% endif %}</div>
-    </section>
-
-    {% if qb_module == 'agro' %}
-    <section class="qb-section qb-agro-flow-card" aria-label="Flujo de ChartBay Agro">
-      <div class="qb-panel-head">
-        <p class="qb-subtitle">Flujo Agro</p>
-        <span>VERTICAL PROPIA</span>
-      </div>
-      <ol class="qb-flow-list">
-        <li>Elegí o cargá un dataset agro.</li>
-        <li>Revisá columnas detectadas.</li>
-        <li>Usá un preset revisable.</li>
-        <li>Corré el modelo.</li>
-        <li>Leé la interpretación agropecuaria.</li>
-        <li>Simulá márgenes.</li>
-      </ol>
-    </section>
-    {% endif %}
-
-    <section class="qb-section qb-econometria-chrome" id="qb-version-panel">
-      <div class="qb-panel-head">
-        <p class="qb-subtitle">Versión</p>
-        <span>ChartBay</span>
-      </div>
-      <label for="qb-version" class="qb-label">Versión actual</label>
-      <select id="qb-version" style="width:100%;max-width:260px">
-        <option value="lite">Lite — TypeScript</option>
-        <option value="pro">Pro — Python (Pyodide)</option>
-      </select>
-      <div class="qb-runlog" style="margin-top:8px">
-        <div>Motor: <strong id="qb-version-engine"></strong></div>
-        <div>Límite CSV: <strong id="qb-version-limit"></strong></div>
-        <div>Estado: <strong id="qb-version-status"></strong></div>
-      </div>
-      <p class="muted qb-help" id="qb-version-desc"></p>
-    </section>
-
-    <section class="qb-section qb-econometria-chrome" id="qb-mode-panel">
-      <div class="qb-panel-head">
-        <p class="qb-subtitle">Modo</p>
-        <span>Workflow</span>
-      </div>
-      <label for="qb-mode" class="qb-label">Seleccionar modo</label>
-      <select id="qb-mode" style="width:100%;max-width:260px">
-        <option value="regression">Regression</option>
-        <option value="timeseries">Time Series</option>
-      </select>
-    </section>
+    {# Cinta de contexto: el mismo estado que antes vivia en su propia barra,
+       ahora fijo bajo la barra superior. #}
     <section class="qb-statusbar qb-econometria-chrome" aria-label="Estado del workspace">
       <div><span>Archivo</span><strong id="qb-status-dataset">Sin archivo</strong></div>
       <div><span>Observaciones</span><strong id="qb-status-obs">0</strong></div>
@@ -114,19 +29,18 @@
 
     <div id="qb-error" style="display:none"></div>
 
-    <div class="qb-workspace">
-      <aside class="qb-sidebar qb-econometria-chrome" aria-label="Modulos de Econometria">
-        <div class="qb-side-label">Pasos</div>
-        <a href="#qb-upload-panel">1. CSV</a>
-        <a href="#qb-vars">2. Variables</a>
-        <a href="#qb-forecast-panel">3. Gráfico</a>
-        <a href="#qb-correlation-panel">4. Correlación</a>
-        <a href="#qb-diagnostics-panel">5. Diagnóstico</a>
-        <a href="#qb-repro-panel">6. Código</a>
-      </aside>
-
-      <main class="qb-main">
-        <section class="qb-section qb-econometria-section" id="qb-guided" style="display:none"></section>
+    <div class="cb-lab">
+      <aside class="cb-lab-left" aria-label="Datos y sesion">
+        <div class="ph"><span class="pt">Datos</span></div>
+        <aside class="qb-sidebar qb-econometria-chrome" aria-label="Modulos de Econometria">
+          <div class="qb-side-label">Pasos</div>
+          <a href="#qb-upload-panel">1. CSV</a>
+          <a href="#qb-vars">2. Variables</a>
+          <a href="#qb-forecast-panel">3. Gráfico</a>
+          <a href="#qb-correlation-panel">4. Correlación</a>
+          <a href="#qb-diagnostics-panel">5. Diagnóstico</a>
+          <a href="#qb-repro-panel">6. Código</a>
+        </aside>
         <section class="qb-section qb-econometria-section" id="qb-upload-panel">
           <div class="qb-panel-head">
             <p class="qb-subtitle">1. Cargar datos</p>
@@ -161,6 +75,64 @@
         <!-- Perfil del dispositivo y modo de procesamiento. Lo rellena
              renderDeviceProfile tras cargar un archivo; oculto hasta entonces. -->
         <section class="qb-section qb-econometria-section" id="qb-device-profile" style="display:none"></section>
+        <section class="qb-section qb-econometria-chrome" id="qb-version-panel">
+          <div class="qb-panel-head">
+            <p class="qb-subtitle">Versión</p>
+            <span>ChartBay</span>
+          </div>
+          <label for="qb-version" class="qb-label">Versión actual</label>
+          <select id="qb-version" style="width:100%;max-width:260px">
+            <option value="lite">Lite — TypeScript</option>
+            <option value="pro">Pro — Python (Pyodide)</option>
+          </select>
+          <div class="qb-runlog" style="margin-top:8px">
+            <div>Motor: <strong id="qb-version-engine"></strong></div>
+            <div>Límite CSV: <strong id="qb-version-limit"></strong></div>
+            <div>Estado: <strong id="qb-version-status"></strong></div>
+          </div>
+          <p class="muted qb-help" id="qb-version-desc"></p>
+        </section>
+        <section class="qb-section qb-econometria-chrome" id="qb-mode-panel">
+          <div class="qb-panel-head">
+            <p class="qb-subtitle">Modo</p>
+            <span>Workflow</span>
+          </div>
+          <label for="qb-mode" class="qb-label">Seleccionar modo</label>
+          <select id="qb-mode" style="width:100%;max-width:260px">
+            <option value="regression">Regression</option>
+            <option value="timeseries">Time Series</option>
+          </select>
+        </section>
+      </aside>
+
+      <main class="cb-lab-main">
+        {# Titulo y bajada del laboratorio: venian de qb-shell-head, que el
+           skin v2 reemplazo por la cinta de estado. #}
+        <section class="cb-lab-head">
+          <h1>{% if qb_module == 'agro' %}ChartBay Agro{% else %}Econometría{% endif %}</h1>
+          {% if qb_module == 'agro' %}
+          <p>Laboratorio de análisis agronómico-económico para rindes, clima, precios, costos y márgenes. Agro usa el motor econométrico común de ChartBay, pero se presenta como vertical propia.</p>
+          {% else %}
+          <p>Elegís qué querés explicar y con qué variables; ChartBay estima el modelo, revisa los supuestos y te devuelve la lectura en castellano. Todo corre en tu navegador: tus datos no salen de tu computadora.</p>
+          {% endif %}
+        </section>
+        {% if qb_module == 'agro' %}
+        <section class="qb-section qb-agro-flow-card" aria-label="Flujo de ChartBay Agro">
+          <div class="qb-panel-head">
+            <p class="qb-subtitle">Flujo Agro</p>
+            <span>VERTICAL PROPIA</span>
+          </div>
+          <ol class="qb-flow-list">
+            <li>Elegí o cargá un dataset agro.</li>
+            <li>Revisá columnas detectadas.</li>
+            <li>Usá un preset revisable.</li>
+            <li>Corré el modelo.</li>
+            <li>Leé la interpretación agropecuaria.</li>
+            <li>Simulá márgenes.</li>
+          </ol>
+        </section>
+        {% endif %}
+        <section class="qb-section qb-econometria-section" id="qb-guided" style="display:none"></section>
 
         <section class="qb-section qb-econometria-section" id="qb-preview" style="display:none">
           <div class="qb-panel-head">
@@ -608,69 +580,6 @@
             </div>
           </div>
         </section>
-
-        <section class="qb-section qb-econometria-section qb-repro" id="qb-repro-panel">
-          <div class="qb-panel-head">
-            <div>
-              <p class="qb-subtitle">Código reproducible</p>
-              <p class="muted qb-repro-intro">Cada decisión analítica se traduce a sintaxis visible. La descarga queda vinculada a la última ejecución completada.</p>
-            </div>
-            <span id="qb-repro-status" data-state="draft">BORRADOR</span>
-          </div>
-
-          <div class="qb-repro-layout">
-            <div class="qb-repro-main">
-              <div class="qb-repro-toolbar">
-                <div class="qb-repro-tabs" role="tablist" aria-label="Lenguaje del código">
-                  <button type="button" class="qb-repro-tab" data-repro-language="r" role="tab">R</button>
-                  <button type="button" class="qb-repro-tab is-active" data-repro-language="python" role="tab" aria-selected="true">Python</button>
-                  <button type="button" class="qb-repro-tab" data-repro-language="stata" role="tab">Stata</button>
-                  <button type="button" class="qb-repro-tab" data-repro-language="notebook" role="tab">Notebook</button>
-                </div>
-                <button type="button" class="btn-ink qb-repro-copy" id="qb-repro-copy">Copiar código</button>
-              </div>
-              <pre class="qb-repro-code"><code id="qb-repro-code"></code></pre>
-              <div class="qb-repro-downloads" aria-label="Descargar receta ejecutable">
-                <button type="button" class="btn-ink" data-repro-download="r" disabled>Descargar .R</button>
-                <button type="button" class="btn-ink" data-repro-download="python" disabled>Descargar .py</button>
-                <button type="button" class="btn-ink" data-repro-download="stata" disabled>Descargar .do</button>
-                <button type="button" class="btn-ink" data-repro-download="notebook" disabled>Descargar .ipynb</button>
-              </div>
-              <p class="muted qb-repro-note">El CSV debe conservar el nombre indicado y estar en la misma carpeta que el script. Los encabezados, transformaciones, categorías base, restricciones y opciones del motor quedan fijados en el archivo.</p>
-            </div>
-
-            <aside class="qb-repro-trace" aria-label="Trazabilidad de acciones">
-              <div class="qb-repro-trace-head">
-                <strong>Trazabilidad</strong>
-                <span>últimas 20 acciones</span>
-              </div>
-              <div id="qb-repro-history" aria-live="polite"></div>
-            </aside>
-          </div>
-        </section>
-
-        <section class="qb-section qb-econometria-section" id="qb-model-comparison" style="display:none">
-          <div class="qb-panel-head">
-            <p class="qb-subtitle">Comparación de modelos</p>
-            <span>ESTIMACIONES GUARDADAS · SESIÓN ACTUAL</span>
-          </div>
-          <p class="muted qb-help">Guardá distintas especificaciones para contrastar coeficientes, inferencia, ajuste y diagnósticos. ChartBay señala cuándo una comparación requiere cautela; no elige automáticamente un modelo.</p>
-          <div class="qb-comparison-toolbar">
-            <span id="qb-comparison-current" class="muted"></span>
-            <input id="qb-comparison-name" type="text" maxlength="60" placeholder="Nombre opcional">
-            <button type="button" class="btn-ink" id="qb-comparison-save" disabled>Guardar estimación</button>
-            <label for="qb-comparison-filter">Vista</label>
-            <select id="qb-comparison-filter">
-              <option value="all">Todo</option>
-              <option value="common">Coeficientes comunes</option>
-              <option value="changed">Cambios</option>
-              <option value="metrics">Métricas</option>
-              <option value="diagnostics">Diagnósticos</option>
-            </select>
-          </div>
-          <div id="qb-comparison-saved"></div>
-          <div id="qb-comparison-output"></div>
-        </section>
         {% if qb_module == 'agro' %}
         <section class="qb-section" id="qb-agro-panel" style="display:none">
           <div class="qb-panel-head">
@@ -738,6 +647,125 @@
         </section>
         {% endif %}
       </main>
+
+      <aside class="cb-lab-right" aria-label="Reproducibilidad y glosario">
+        <div class="ph"><span class="pt">Reproducibilidad</span></div>
+
+        <section class="qb-section qb-econometria-section qb-repro" id="qb-repro-panel">
+          <div class="qb-panel-head">
+            <div>
+              <p class="qb-subtitle">Código reproducible</p>
+              <p class="muted qb-repro-intro">Cada decisión analítica se traduce a sintaxis visible. La descarga queda vinculada a la última ejecución completada.</p>
+            </div>
+            <span id="qb-repro-status" data-state="draft">BORRADOR</span>
+          </div>
+
+          <div class="qb-repro-layout">
+            <div class="qb-repro-main">
+              <div class="qb-repro-toolbar">
+                <div class="qb-repro-tabs" role="tablist" aria-label="Lenguaje del código">
+                  <button type="button" class="qb-repro-tab" data-repro-language="r" role="tab">R</button>
+                  <button type="button" class="qb-repro-tab is-active" data-repro-language="python" role="tab" aria-selected="true">Python</button>
+                  <button type="button" class="qb-repro-tab" data-repro-language="stata" role="tab">Stata</button>
+                  <button type="button" class="qb-repro-tab" data-repro-language="notebook" role="tab">Notebook</button>
+                </div>
+                <button type="button" class="btn-ink qb-repro-copy" id="qb-repro-copy">Copiar código</button>
+              </div>
+              <pre class="qb-repro-code"><code id="qb-repro-code"></code></pre>
+              <div class="qb-repro-downloads" aria-label="Descargar receta ejecutable">
+                <button type="button" class="btn-ink" data-repro-download="r" disabled>Descargar .R</button>
+                <button type="button" class="btn-ink" data-repro-download="python" disabled>Descargar .py</button>
+                <button type="button" class="btn-ink" data-repro-download="stata" disabled>Descargar .do</button>
+                <button type="button" class="btn-ink" data-repro-download="notebook" disabled>Descargar .ipynb</button>
+              </div>
+              <p class="muted qb-repro-note">El CSV debe conservar el nombre indicado y estar en la misma carpeta que el script. Los encabezados, transformaciones, categorías base, restricciones y opciones del motor quedan fijados en el archivo.</p>
+            </div>
+
+            <aside class="qb-repro-trace" aria-label="Trazabilidad de acciones">
+              <div class="qb-repro-trace-head">
+                <strong>Trazabilidad</strong>
+                <span>últimas 20 acciones</span>
+              </div>
+              <div id="qb-repro-history" aria-live="polite"></div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="qb-section qb-econometria-section" id="qb-model-comparison" style="display:none">
+          <div class="qb-panel-head">
+            <p class="qb-subtitle">Comparación de modelos</p>
+            <span>ESTIMACIONES GUARDADAS · SESIÓN ACTUAL</span>
+          </div>
+          <p class="muted qb-help">Guardá distintas especificaciones para contrastar coeficientes, inferencia, ajuste y diagnósticos. ChartBay señala cuándo una comparación requiere cautela; no elige automáticamente un modelo.</p>
+          <div class="qb-comparison-toolbar">
+            <span id="qb-comparison-current" class="muted"></span>
+            <input id="qb-comparison-name" type="text" maxlength="60" placeholder="Nombre opcional">
+            <button type="button" class="btn-ink" id="qb-comparison-save" disabled>Guardar estimación</button>
+            <label for="qb-comparison-filter">Vista</label>
+            <select id="qb-comparison-filter">
+              <option value="all">Todo</option>
+              <option value="common">Coeficientes comunes</option>
+              <option value="changed">Cambios</option>
+              <option value="metrics">Métricas</option>
+              <option value="diagnostics">Diagnósticos</option>
+            </select>
+          </div>
+          <div id="qb-comparison-saved"></div>
+          <div id="qb-comparison-output"></div>
+        </section>
+        <div class="ph"><span class="pt">Glosario</span></div>
+        <div class="cb-lab-card" style="padding:0">
+        <details>
+          <summary class="sum">Coeficiente</summary>
+          <div style="padding:0 14px 12px">
+            <p style="margin:0 0 6px;font-size:12.5px;line-height:1.65;color:var(--ink-2)">Cuánto cambia en promedio la variable que querés explicar cuando la explicativa sube una unidad, dejando las demás quietas.</p>
+            <p class="n" style="margin:0;font-size:12px;color:var(--accent)">β̂ⱼ</p>
+          </div>
+        </details>
+        <details>
+          <summary class="sum">p-valor</summary>
+          <div style="padding:0 14px 12px">
+            <p style="margin:0 0 6px;font-size:12.5px;line-height:1.65;color:var(--ink-2)">Qué tan probable sería ver un patrón así de fuerte si en realidad no hubiera relación. Chico significa que la casualidad es una mala explicación.</p>
+            <p class="n" style="margin:0;font-size:12px;color:var(--accent)">p &lt; 0.05 ⇒ se rechaza H₀</p>
+          </div>
+        </details>
+        <details>
+          <summary class="sum">R² ajustado</summary>
+          <div style="padding:0 14px 12px">
+            <p style="margin:0 0 6px;font-size:12.5px;line-height:1.65;color:var(--ink-2)">Qué parte de la variación de Y queda explicada, ya descontando el premio por agregar variables. Sirve para comparar modelos.</p>
+            <p class="n" style="margin:0;font-size:12px;color:var(--accent)">R̄² = 1 − (1−R²)(n−1)/(n−k)</p>
+          </div>
+        </details>
+        <details>
+          <summary class="sum">Error estándar</summary>
+          <div style="padding:0 14px 12px">
+            <p style="margin:0 0 6px;font-size:12.5px;line-height:1.65;color:var(--ink-2)">Cuánto se movería la estimación si tomaras otra muestra parecida. Chico significa medición precisa.</p>
+            <p class="n" style="margin:0;font-size:12px;color:var(--accent)">se(β̂) = √[σ̂²(X′X)⁻¹]ⱼⱼ</p>
+          </div>
+        </details>
+        <details>
+          <summary class="sum">Intervalo de confianza</summary>
+          <div style="padding:0 14px 12px">
+            <p style="margin:0 0 6px;font-size:12.5px;line-height:1.65;color:var(--ink-2)">El rango de valores compatibles con tus datos. Si no incluye el cero, hay efecto al nivel elegido.</p>
+            <p class="n" style="margin:0;font-size:12px;color:var(--accent)">β̂ ± t₀.₀₂₅ · se(β̂)</p>
+          </div>
+        </details>
+        <details>
+          <summary class="sum">Breusch-Pagan</summary>
+          <div style="padding:0 14px 12px">
+            <p style="margin:0 0 6px;font-size:12.5px;line-height:1.65;color:var(--ink-2)">Revisa si el error del modelo se agranda para ciertos valores de X. Si pasa, los coeficientes valen pero la precisión reportada, no.</p>
+            <p class="n" style="margin:0;font-size:12px;color:var(--accent)">LM = n·R²aux ~ χ²(k)</p>
+          </div>
+        </details>
+        <details>
+          <summary class="sum">VIF</summary>
+          <div style="padding:0 14px 12px">
+            <p style="margin:0 0 6px;font-size:12.5px;line-height:1.65;color:var(--ink-2)">Avisa si dos variables explicativas dicen casi lo mismo. Por encima de 10 los coeficientes se vuelven inestables.</p>
+            <p class="n" style="margin:0;font-size:12px;color:var(--accent)">VIF_j = 1/(1 − R²_j)</p>
+          </div>
+        </details>
+        </div>
+      </aside>
     </div>
 
     <p class="colophon">Análisis estadístico educativo. No constituye asesoramiento financiero ni garantía de resultados.</p>
