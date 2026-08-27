@@ -3,114 +3,149 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ChartBay Engine · Motor cuantitativo</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
+  <title>ChartBay Engine · Laboratorio de econometría</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%2318263c'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%231e5fa8'%20stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='redesign.css') }}">
 </head>
-<body>
-  <div class="wrap classic-page hub-classic-page">
-    {% include 'alfa_banner.html' %}
-    <header class="masthead classic-header">
-      <div class="ship" aria-hidden="true"></div>
-      <p class="classic-site-name">ChartBay Engine</p>
-      <nav class="mainnav classic-nav">
-        <strong>Inicio</strong><span class="sep">.</span>
-        <a href="{{ url_for('econometria') }}">Econometría</a><span class="sep">.</span>
-        {% if secciones.agro %}<a href="{{ url_for('agro') }}">Agro</a><span class="sep">.</span>{% endif %}
-        {% if secciones.mercados %}<a href="{{ url_for('finanzas') }}">Finanzas Quant</a><span class="sep">.</span>{% endif %}
-        <a href="{{ url_for('frequent_data') }}">Datos</a><span class="sep">.</span>
-        <a href="{{ url_for('limpiador') }}">Limpiador</a><span class="sep">.</span>
-        <a href="{{ url_for('guia') }}">Documentación</a><span class="sep">.</span>
-        {% if session.user %}<a href="{{ url_for('logout') }}">Salir</a>{% else %}<a href="{{ url_for('login') }}">Entrar</a>{% endif %}
-      </nav>
-    </header>
+<body data-skin="v2">
+  <div class="wrap">
+    {% include '_topbar_v2.html' with context %}
 
-    <main class="classic-container">
-      <section class="classic-intro">
-        <h1>ChartBay Engine</h1>
-        <p>Motor web de cálculo para econometría. Cargá tus datos, estimá modelos, validá supuestos y exportá resultados — todo desde el navegador.</p>
-      </section>
+    <main>
+      <section class="cb-hero">
+        <div class="cb-hero-in">
+          <div class="cb-hero-copy">
+            <div class="cb-hero-plate" style="border:0;background:transparent;padding:0;place-items:start;margin-bottom:10px">
+              <span class="ship" style="width:min(220px,60vw);height:120px" aria-hidden="true"></span>
+            </div>
+            <p class="cb-hero-name" aria-label="Chart Bay Engine">ℭ𝔥𝔞𝔯𝔱 𝔅𝔞𝔶</p>
+            <p class="cb-kicker">Laboratorio de econometría para estudiantes</p>
+            <h1>Corré tu primera regresión<br>sin saber la fórmula.</h1>
+            <p class="cb-lead">Elegís qué querés explicar, con qué variables, y ChartBay estima el modelo, revisa los supuestos y te devuelve la lectura en castellano. Cuando quieras profundizar, están MCO restringido, errores robustos y series de tiempo.</p>
+            <div class="cb-cta">
+              <a class="btnp" href="{{ url_for('econometria') }}" style="text-decoration:none;display:inline-block">Abrir el laboratorio</a>
+              <a class="btns" href="{{ url_for('guia') }}" style="text-decoration:none;display:inline-block">Ver la documentación</a>
+            </div>
+            <div class="cb-figures">
+              <div>
+                <p class="n">3 pasos</p>
+                <p class="lbl">hasta el primer resultado</p>
+              </div>
+              <div>
+                <p class="n">49</p>
+                <p class="lbl">indicadores macro (FRED + World Bank)</p>
+              </div>
+              <div>
+                <p class="n">0</p>
+                <p class="lbl">datos que salen de tu navegador</p>
+              </div>
+            </div>
+          </div>
 
-      <section class="classic-panel hub-lab-panel">
-        <h2>Laboratorio</h2>
-        <div class="classic-grid classic-grid-two">
-          <a class="classic-card classic-card-large" href="{{ url_for('econometria') }}">
-            <h3>Econometría</h3>
-            <p>OLS, RLS, diagnósticos de residuos, series de tiempo, ACF, PACF, ADF y Ljung-Box. Carga CSV y calcula en el navegador.</p>
-          </a>
-          {% if secciones.agro %}
-          <a class="classic-card classic-card-large" href="{{ url_for('agro') }}">
-            <h3>Agro</h3>
-            <p>Rindes, precios, clima, costos y márgenes agrícolas.</p>
-          </a>
-          {% endif %}
-          {% if secciones.mercados %}
-          <a class="classic-card classic-card-large" href="{{ url_for('finanzas') }}">
-            <h3>Finanzas Quant</h3>
-            <p>Retornos, volatilidad, Sharpe, VaR, CVaR, Markowitz, CAPM y backtesting. En desarrollo.</p>
-          </a>
-          {% endif %}
+          {# Vista previa del laboratorio: es una maqueta estatica, no el lab real. #}
+          <div style="border:1px solid var(--line-2);border-bottom:0;background:var(--paper)" aria-label="Vista previa del laboratorio">
+            <div style="display:flex;align-items:center;gap:8px;height:28px;padding:0 10px;background:var(--navy)">
+              <span style="width:7px;height:7px;border-radius:50%;background:#43536e"></span>
+              <span style="width:7px;height:7px;border-radius:50%;background:#43536e"></span>
+              <span class="n" style="margin-left:6px;font-size:10px;color:#8d9bb0">chartbay · laboratorio · modo guiado</span>
+            </div>
+            <div style="padding:16px 18px 18px">
+              <p style="margin:0 0 4px;font-size:14px;font-weight:500">¿Qué querés explicar?</p>
+              <div class="n" style="display:flex;justify-content:space-between;align-items:center;max-width:280px;font-size:13px;border:1px solid var(--line-2);border-radius:3px;padding:7px 9px">salario<span style="color:var(--ink-3)">▾</span></div>
+              <p style="margin:14px 0 6px;font-size:14px;font-weight:500">¿Qué variables podrían explicarlo?</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <span class="n" style="font-size:12.5px;padding:5px 10px;border:1px solid var(--accent);background:var(--accent-100);border-radius:3px">educacion</span>
+                <span class="n" style="font-size:12.5px;padding:5px 10px;border:1px solid var(--accent);background:var(--accent-100);border-radius:3px">experiencia</span>
+                <span class="n" style="font-size:12.5px;padding:5px 10px;border:1px solid var(--line-2);border-radius:3px;color:var(--ink-3)">mujer</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;margin:16px 0 0">
+                <span class="btnp" style="display:inline-block">Estimar modelo</span>
+                <span style="font-size:12px;color:var(--ink-3)">MCO · 526 observaciones</span>
+              </div>
+            </div>
+            <div style="border-top:1px solid var(--line);background:var(--panel);padding:14px 18px 16px">
+              <p style="margin:0 0 10px;font-size:13.5px;line-height:1.6">Cada año adicional de educación se asocia con <span class="n">0.54</span> unidades más de salario por hora.</p>
+              <div class="n" style="font-size:12.5px;padding:9px 11px;background:var(--paper);border:1px solid var(--line);border-radius:3px;white-space:nowrap;overflow-x:auto">salario&#770; = −0.9049 + 0.5414·educacion + 0.0701·experiencia</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px">
+                <span class="pill pill-ok">R² aj. 0.2223</span>
+                <span class="pill pill-ok">2 de 2 significativas</span>
+                <span class="pill pill-warn">1 supuesto a revisar</span>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section class="classic-panel">
-        <h2>Módulos disponibles</h2>
-        <div class="classic-grid">
-          <a class="classic-card" href="{{ url_for('econometria') }}">
-            <h3>Regresión OLS</h3>
-            <p>Descomposición QR, inferencia t/F, intervalos de confianza al 95%, R² y diagnósticos de colinealidad.</p>
-          </a>
-          {% if secciones.agro %}
-          <a class="classic-card" href="{{ url_for('agro') }}">
-            <h3>Agro</h3>
-            <p>Modelos, márgenes y datos para el análisis agropecuario.</p>
-          </a>
-          {% endif %}
-          <a class="classic-card" href="{{ url_for('econometria') }}">
-            <h3>Restricciones RLS</h3>
-            <p>Mínimos cuadrados restringidos con test Wald. Restricciones lineales de la forma R·β = q.</p>
-          </a>
-          <a class="classic-card" href="{{ url_for('econometria') }}">
-            <h3>Series de tiempo</h3>
-            <p>Test ADF (raíz unitaria), ACF, PACF, Ljung-Box. Transformaciones: retornos, diferencias, base 100.</p>
-          </a>
-          <a class="classic-card" href="{{ url_for('frequent_data') }}">
-            <h3>Datos macro</h3>
-            <p>49 indicadores: 37 de FRED y 12 de World Bank. Descarga en CSV o JSON con caché diario.</p>
-          </a>
-          <a class="classic-card" href="{{ url_for('econometria') }}">
-            <h3>Carga de CSV</h3>
-            <p>Subí tu propio dataset. El laboratorio detecta automáticamente las variables numéricas.</p>
-          </a>
-          <a class="classic-card" href="{{ url_for('guia') }}">
-            <h3>Documentación</h3>
-            <p>Conceptos, ejemplos guiados y guía de uso del laboratorio.</p>
-          </a>
+      <section class="cb-cols">
+        <div class="cb-cols-in">
+          <div class="cb-col">
+            <p class="n cb-num">01</p>
+            <h3>Simple al entrar</h3>
+            <p>El modo guiado muestra tres preguntas y un botón. Nada de sintaxis, nada de parámetros que todavía no significan nada.</p>
+          </div>
+          <div class="cb-col">
+            <p class="n cb-num">02</p>
+            <h3>Profundo cuando explorás</h3>
+            <p>MCO restringido con test de Wald, errores HC1, HC3 y HAC, ADF, ACF, PACF y Ljung-Box, y Python real vía WebAssembly.</p>
+          </div>
+          <div class="cb-col">
+            <p class="n cb-num">03</p>
+            <h3>Reproducible para la cátedra</h3>
+            <p>Cada estimación genera su sintaxis en R, Python, Stata y notebook, más el informe con tablas y estado de supuestos.</p>
+          </div>
         </div>
       </section>
 
-      <section class="classic-panel">
-        <h2>Motor de cálculo</h2>
-        <p>El núcleo corre <strong>en tu navegador</strong>, en TypeScript: los datos que cargás no se suben a ningún servidor. Cada módulo está validado contra statsmodels y scipy como referencia. El modo Pro carga un intérprete de Python real (NumPy, pandas y statsmodels vía WebAssembly) sin salir de la página.</p>
-        <ul class="classic-list classic-columns">
-          <li>OLS vía descomposición QR</li>
-          <li>RLS con test F/Wald</li>
-          <li>ADF con lag de Schwert y valores críticos</li>
-          <li>ACF y PACF con bandas de significatividad</li>
-          <li>Ljung-Box a lags 5, 10, 20</li>
-          <li>VIF y detección de colinealidad</li>
-        </ul>
+      <section class="cb-split">
+        <div class="cb-split-in">
+          <div>
+            <h2>Casos preparados para la práctica</h2>
+            <p>Se abren desde el laboratorio con el modelo ya especificado. Cada uno muestra un estado distinto: válido, a revisar, o bloqueado porque el modelo no se puede estimar.</p>
+            <a class="btns" href="{{ url_for('econometria') }}" style="text-decoration:none;display:inline-block">Ver los casos</a>
+          </div>
+          <div class="cb-frame">
+            <table class="tbl">
+              <thead><tr><th>Caso</th><th class="rt">n</th><th>Consigna</th><th>Resultado</th></tr></thead>
+              <tbody>
+                <tr><td class="n">01_simple_linear</td><td class="n rt">10</td><td style="font-size:12.5px">MCO simple</td><td><span class="pill pill-ok">válido</span></td></tr>
+                <tr><td class="n">03_beta1_eq_beta2_false</td><td class="n rt">200</td><td style="font-size:12.5px">Wald β₁ = β₂</td><td><span class="pill pill-warn">se rechaza H₀</span></td></tr>
+                <tr><td class="n">05_perfect_collinearity</td><td class="n rt">120</td><td style="font-size:12.5px">Matriz singular</td><td><span class="pill pill-err">no se puede estimar</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
-      <section class="classic-panel">
-        <h2>Roadmap</h2>
-        <ul class="classic-list classic-columns">
-          <li>Providers BCRA, OECD, IMF</li>
-        </ul>
+      <section class="cb-split">
+        <div class="cb-split-in">
+          <div>
+            <h2>Módulos disponibles</h2>
+            <p>El núcleo corre <strong>en tu navegador</strong>, en TypeScript: los datos que cargás no se suben a ningún servidor. Cada módulo está validado contra statsmodels y scipy como referencia. El modo Pro carga un intérprete de Python real (NumPy, pandas y statsmodels vía WebAssembly) sin salir de la página.</p>
+          </div>
+          <div class="cb-frame">
+            <table class="tbl">
+              <tbody>
+                <tr><td><a href="{{ url_for('econometria') }}">Regresión OLS</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">Descomposición QR, inferencia t/F, intervalos al 95 %, R² y colinealidad.</td></tr>
+                <tr><td><a href="{{ url_for('econometria') }}">Restricciones RLS</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">Mínimos cuadrados restringidos con test de Wald sobre R·β = q.</td></tr>
+                <tr><td><a href="{{ url_for('econometria') }}">Series de tiempo</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">ADF, ACF, PACF, Ljung-Box. Retornos, diferencias y base 100.</td></tr>
+                <tr><td><a href="{{ url_for('frequent_data') }}">Datos macro</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">49 indicadores: 37 de FRED y 12 de World Bank, con caché diario.</td></tr>
+                <tr><td><a href="{{ url_for('limpiador') }}">Limpiador</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">Revisión y corrección de CSV antes de estimar.</td></tr>
+                <tr><td><a href="{{ url_for('guia') }}">Documentación</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">Conceptos, ejemplos guiados y guía de uso del laboratorio.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
+
+      <footer class="cb-foot">
+        <span>ChartBay Engine · herramienta educativa · no constituye asesoramiento financiero</span>
+        <span>el cálculo ocurre en tu navegador</span>
+      </footer>
     </main>
-
-    <p class="colophon">Motor de cálculo educativo. No constituye asesoramiento financiero.</p>
   </div>
 </body>
 </html>
