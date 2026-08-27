@@ -3186,8 +3186,10 @@ body:has(.terminal-finance){
 .qb-g-mode.is-active{color:var(--accent);cursor:default}
 .qb-g-rec--practice{border-left-color:var(--accent)}
 .qb-g-opts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.qb-g-opt{width:100%;text-align:left;background:none;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:13px;line-height:1.45;padding:8px 11px;cursor:pointer}
-.qb-g-opt:hover{border-color:var(--accent);color:var(--accent)}
+.qb-g-opt{width:100%;text-align:left;background:none;border:1px solid var(--line);border-radius:4px;color:inherit;font-size:13px;line-height:1.45;padding:8px 11px;cursor:pointer}
+/* El hover mueve el borde y no el color: el acento es de la paleta oscura y
+   sobre el skin claro de la sección queda ilegible. */
+.qb-g-opt:hover{border-color:var(--accent)}
 .qb-g-steps{list-style:none;margin:0 0 12px;padding:0;border-top:1px solid var(--line-soft)}
 .qb-g-step{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
 .qb-g-n{font-family:var(--mono);font-size:11px;color:var(--faint);width:14px}
@@ -3223,12 +3225,12 @@ body:has(.terminal-finance){
 .qb-g-log>summary::-webkit-details-marker{display:none}
 .qb-g-log>summary::before{content:"+\00a0";font-weight:600}
 .qb-g-log[open]>summary::before{content:"\2212\00a0"}
-.qb-g-log>summary:hover{color:var(--text)}
+.qb-g-log>summary:hover{color:inherit}
 .qb-g-decs{list-style:none;margin:9px 0 10px;padding:0;max-height:290px;overflow:auto}
 .qb-g-dec{display:flex;align-items:baseline;gap:8px;padding:4px 0;border-bottom:1px solid var(--line-soft);font-size:12.5px;line-height:1.5}
 .qb-g-dec time{font-family:var(--mono);font-size:10px;color:var(--faint);flex:none}
 .qb-g-dec-kind{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);flex:none;min-width:74px}
-.qb-g-dec-text{flex:1;color:var(--text)}
+.qb-g-dec-text{flex:1;color:inherit}
 
 
 /* Código reproducible: receta completa + bitácora de decisiones. */
