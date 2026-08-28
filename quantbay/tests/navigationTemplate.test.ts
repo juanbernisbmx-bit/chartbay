@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { CHARTBAY_VERTICALS } from '../src/verticals/agro/agroFeatureFlags';
 
 const ROOT = join(__dirname, '..', '..');
 
@@ -9,23 +10,41 @@ function readRepoFile(path: string): string {
 }
 
 const APP = readRepoFile('web/app.py');
+const TOPBAR = readRepoFile('web/templates/_topbar_v2.html');
 const QUANTBAY = readRepoFile('web/templates/quantbay.html');
-const HOME = readRepoFile('web/templates/home.html');
-const CHARTBAY = readRepoFile('web/templates/chartbay.html');
 const GUIA = readRepoFile('web/templates/guia.html');
 
-describe('ChartBay Agro navigation', () => {
-  it('exposes Agro as its own Flask route with QuantBay CSP permissions', () => {
+describe('ChartBay product navigation', () => {
+  it('keeps Agro and Mercados disabled behind the current feature flags', () => {
+    expect(APP).toContain('"econometria": True');
+    expect(APP).toContain('"limpiador": True');
+    expect(APP).toContain('"datos": True');
+    expect(APP).toContain('"agro": False');
+    expect(APP).toContain('"mercados": False');
+
+    expect(CHARTBAY_VERTICALS).toEqual({
+      econometria: true,
+      agro: false,
+      finanzas: false,
+    });
+
     expect(APP).toContain('@app.route("/agro")');
+    expect(APP).toMatch(/@app\.route\("\/agro"\)\s*@seccion\("agro"\)/);
     expect(APP).toContain('quantbay_module="agro"');
-    expect(APP).toContain('"/agro"');
+    expect(APP).toMatch(/@app\.route\("\/chartbay"\)\s*@seccion\("mercados"\)/);
   });
 
-  it('links Agro from the main product hubs and QuantBay navbar', () => {
-    for (const html of [HOME, CHARTBAY, QUANTBAY]) {
-      expect(html).toContain("url_for('agro')");
-      expect(html).toContain('Agro');
-    }
+  it('shows active sections and feature-gates disabled ones in the shared navbar', () => {
+    expect(TOPBAR).toContain("url_for('dashboard')");
+    expect(TOPBAR).toContain("url_for('econometria')");
+    expect(TOPBAR).toContain("url_for('frequent_data')");
+    expect(TOPBAR).toContain("url_for('limpiador')");
+    expect(TOPBAR).toContain("url_for('guia')");
+    expect(TOPBAR).toContain("url_for('source_archive')");
+    expect(TOPBAR).toContain('rel="source"');
+    expect(TOPBAR).toContain('Código fuente');
+    expect(TOPBAR).toMatch(/\{% if secciones\.agro %\}[\s\S]*url_for\('agro'\)[\s\S]*\{% endif %\}/);
+    expect(TOPBAR).toMatch(/\{% if secciones\.mercados %\}[\s\S]*url_for\('finanzas'\)[\s\S]*\{% endif %\}/);
   });
 
   it('renders QuantBay as either Econometria or Agro without duplicating the Agro panel', () => {
@@ -34,22 +53,16 @@ describe('ChartBay Agro navigation', () => {
     expect(QUANTBAY).toContain('qb-agro-initial');
     expect(QUANTBAY).toMatch(/\{% if qb_module == 'agro' %\}\s*<section class="qb-section" id="qb-agro-panel"/);
     expect(QUANTBAY.match(/id="qb-agro-panel"/g) ?? []).toHaveLength(1);
+    expect(QUANTBAY).toMatch(/id="qb-version-beta"[^>]*\shidden(?:\s|>)/);
+    expect(QUANTBAY).not.toContain('MutationObserver');
   });
 });
 
 describe('Documentation navigation cleanup', () => {
-  it('uses the product navigation instead of legacy market/report options', () => {
-    const navStart = GUIA.indexOf('<nav class="mainnav">');
-    const navEnd = GUIA.indexOf('</nav>', navStart);
-    const nav = GUIA.slice(navStart, navEnd);
-
-    expect(nav).toContain("url_for('econometria')");
-    expect(nav).toContain("url_for('agro')");
-    expect(nav).toContain('Documentacion');
-    expect(nav).not.toContain("url_for('reports')");
-    expect(nav).not.toContain("url_for('compare_view')");
-    expect(nav).not.toContain("url_for('heatmap')");
-    expect(nav).not.toContain("url_for('community')");
+  it('uses the shared product navigation instead of a legacy local navbar', () => {
+    expect(GUIA).toContain("{% set active = 'guia' %}");
+    expect(GUIA).toContain("{% include '_topbar_v2.html' with context %}");
+    expect(GUIA).not.toContain('<nav class="mainnav">');
   });
 
   it('starts with non-active guide panels hidden', () => {
@@ -64,7 +77,7 @@ describe('Documentation navigation cleanup', () => {
 
   it('switches guide tabs by leaving only one visible panel', () => {
     document.documentElement.innerHTML = GUIA;
-    const script = GUIA.match(/<script>\s*([\s\S]*?)\s*<\/script>\s*<\/body>/)?.[1];
+    const script = GUIA.match(/<script[^>]*>\s*([\s\S]*?)\s*<\/script>\s*<\/body>/)?.[1];
     expect(script).toBeTruthy();
     new Function(script!)();
 

@@ -1,13 +1,12 @@
 # ChartBay Agro — MVP
 
-> Estado al 5 de julio de 2026. Vertical agropecuario conectado al flujo de
-> Econometría, con soporte para datasets grandes y una capa de preparación
-> para datos reales (sin APIs todavía).
+> Documento histórico del vertical. Agro permanece apagado y fuera del alcance
+> de ChartBay 1.0; sus rutas devuelven 404 por defecto.
 
 ## Qué es
 
 ChartBay Agro es la **capa vertical agropecuaria** de ChartBay. Toma el motor
-econométrico existente de ChartBay Econometría (Lite/Pro/Mega Pro) y le agrega
+econométrico existente de ChartBay Econometría (Lite/Pro) y le agrega
 contexto del sector agro: detección de columnas típicas del agro, presets de
 modelos, datasets sintéticos (chicos y grandes), un simulador de margen bruto,
 interpretaciones agropecuarias de resultados de regresión, y una capa de
@@ -131,7 +130,7 @@ igual, pero ahora el usuario lo sabe antes de intentarlo). **No reemplaza** los
 chequeos de rango de `regression.ts`: esos siguen siendo la única fuente de
 verdad ante un problema numérico real.
 
-### Límites por versión (Lite / Pro / Mega Pro)
+### Límites por versión (Lite / Pro)
 
 Estos límites son de **ChartBay Econometría**, no específicos de Agro — Agro
 carga datos por el mismo camino, así que hereda las mismas reglas
@@ -139,13 +138,12 @@ carga datos por el mismo camino, así que hereda las mismas reglas
 
 | Versión | Motor | Límite de CSV |
 |---|---|---|
-| Lite | TypeScript en el navegador | 2 MB |
-| Pro | Pyodide/statsmodels en el navegador | 10 MB |
-| Mega Pro | Servidor Python (en preparación) | 50 MB |
+| Lite | TypeScript en el navegador (estable) | 100 MB |
+| Pro | Pyodide/statsmodels en el navegador (beta) | 10 MB |
 
-Un dataset grande de Agro (1000 filas × ~10 columnas) pesa bien por debajo de
-2 MB, así que corre sin problema incluso en Lite. Para volúmenes mucho mayores
-(decenas de miles de filas), conviene Pro o esperar a Mega Pro.
+Un dataset grande de Agro (1000 filas × ~10 columnas) queda dentro del límite
+de Lite. Para volúmenes mayores, Lite sigue siendo el motor con más capacidad;
+Pro no es una vía de escape para archivos que superan los 100 MB.
 
 ### Advertencia sobre datos sintéticos
 
@@ -183,7 +181,7 @@ la corrida coincide con la del preset elegido — si no, no muestran nada
   que ya existe en Econometría sigue siendo el único camino de cálculo.
 - Helpers de UI (`$`, `escapeHtml`) y exportación de archivos
   (`downloadTextFile` de `ui/exports.ts`).
-- Límites de tamaño de CSV por versión (Lite/Pro/Mega Pro).
+- Límites de tamaño de CSV por versión (Lite/Pro).
 
 ## Módulos propios de Agro (`quantbay/src/verticals/agro/`)
 

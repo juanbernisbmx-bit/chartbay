@@ -1,5 +1,5 @@
 /**
- * Auto-repair module for Quant Bay.
+ * Auto-repair module for ChartBay.
  * Detects and fixes: perfect collinearity, singular matrix,
  * high VIF (multicollinearity), and insufficient observations.
  * Returns a structured log of every action taken and its statistical rationale.

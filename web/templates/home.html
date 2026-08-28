@@ -124,12 +124,12 @@
         <div class="cb-split-in">
           <div>
             <h2>Módulos disponibles</h2>
-            <p>El núcleo corre <strong>en tu navegador</strong>, en TypeScript: los datos que cargás no se suben a ningún servidor. Cada módulo está validado contra statsmodels y scipy como referencia. El modo Pro carga un intérprete de Python real (NumPy, pandas y statsmodels vía WebAssembly) sin salir de la página.</p>
+            <p>El núcleo corre <strong>en tu navegador</strong>, en TypeScript: los datos que cargás no se suben a ningún servidor. Cada módulo está validado contra statsmodels y scipy como referencia. El modo Pro carga un intérprete de Python real (NumPy, pandas y statsmodels vía WebAssembly) sin salir de la página; está <strong>en beta</strong> hasta terminar su QA, así que la versión estable es Lite.</p>
           </div>
           <div class="cb-frame">
             <table class="tbl">
               <tbody>
-                <tr><td><a href="{{ url_for('econometria') }}">Regresión OLS</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">Descomposición QR, inferencia t/F, intervalos al 95 %, R² y colinealidad.</td></tr>
+                <tr><td><a href="{{ url_for('econometria') }}">Regresión OLS</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">Ecuaciones normales, inferencia t/F, intervalos al 95 %, R² y colinealidad.</td></tr>
                 <tr><td><a href="{{ url_for('econometria') }}">Restricciones RLS</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">Mínimos cuadrados restringidos con test de Wald sobre R·β = q.</td></tr>
                 <tr><td><a href="{{ url_for('econometria') }}">Series de tiempo</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">ADF, ACF, PACF, Ljung-Box. Retornos, diferencias y base 100.</td></tr>
                 <tr><td><a href="{{ url_for('frequent_data') }}">Datos macro</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">49 indicadores: 37 de FRED y 12 de World Bank, con caché diario.</td></tr>

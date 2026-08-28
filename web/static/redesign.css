@@ -522,6 +522,23 @@
   color:var(--err);
   padding:12px 15px;
 }
+[data-skin="v2"] #qb-error{
+  border-color:var(--err-line);
+  border-left-color:var(--err);
+  background:var(--err-100);
+  color:var(--err);
+}
+[data-skin="v2"] .qb-load-warnings{
+  margin-top:10px;
+  border:1px solid var(--warn-line);
+  border-left:3px solid var(--warn);
+  background:var(--warn-100);
+  color:var(--ink);
+  padding:10px 12px;
+  font-size:12px;
+  line-height:1.5;
+}
+[data-skin="v2"] .qb-load-warnings ul{margin:5px 0 0;padding-left:18px}
 [data-skin="v2"] .qb-interp,
 [data-skin="v2"] .qb-interp-result{
   border-left:2px solid var(--accent);
@@ -656,7 +673,14 @@
 }
 [data-skin="v2"] .cb-split h2{margin:0 0 9px;font-size:23px;font-weight:600}
 [data-skin="v2"] .cb-split p{margin:0 0 15px;font-size:13.5px;line-height:1.7;color:var(--ink-2)}
-[data-skin="v2"] .cb-frame{border:1px solid var(--line);border-radius:4px;overflow:hidden}
+[data-skin="v2"] .cb-frame{
+  min-width:0;
+  max-width:100%;
+  border:1px solid var(--line);
+  border-radius:4px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
 
 [data-skin="v2"] .cb-foot{
   max-width:1280px;
@@ -682,6 +706,33 @@
   [data-skin="v2"] .cb-col:last-child{border-bottom:0}
   [data-skin="v2"] .cb-hero-name{font-size:34px}
   [data-skin="v2"] .cb-hero h1{font-size:27px}
+}
+
+/* Contención móvil: ningún resultado puede ensanchar el documento. Las tablas
+   mantienen su ancho legible y scrollean dentro de su panel. */
+[data-skin="v2"] .cb-lab,
+[data-skin="v2"] .cb-lab-left,
+[data-skin="v2"] .cb-lab-main,
+[data-skin="v2"] .cb-lab-right,
+[data-skin="v2"] .qb-section,
+[data-skin="v2"] .qb-results-grid,
+[data-skin="v2"] .qb-results-grid>*{min-width:0;max-width:100%}
+
+@media (max-width:820px){
+  [data-skin="v2"] .qb-section{
+    width:100%;
+    max-width:none;
+    padding-left:16px;
+    padding-right:16px;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  [data-skin="v2"] .qb-section pre,
+  [data-skin="v2"] .qb-section code{overflow-wrap:anywhere;word-break:break-word}
+}
+
+@media (max-width:600px){
+  [data-skin="v2"] .cb-frame .tbl{min-width:560px}
 }
 
 /* ── Densidad por columna ──────────────────────────────────── */

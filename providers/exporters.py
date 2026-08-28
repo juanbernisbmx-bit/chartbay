@@ -6,10 +6,23 @@ Excel (xlsx) más adelante sin tocar las rutas: basta registrar un formato.
 """
 from __future__ import annotations
 
+import csv
+import io
 import json
 from typing import Optional
 
 from .base import Observation, Series
+
+
+SOURCE_TERMS_URLS = {
+    "FRED": "https://fred.stlouisfed.org/legal/",
+    "World Bank": "https://www.worldbank.org/en/about/legal/permissions",
+}
+
+
+def source_terms_url(source: str) -> str:
+    """Página oficial que gobierna el uso del dataset de origen, si se conoce."""
+    return SOURCE_TERMS_URLS.get(source, "")
 
 
 def _num(value: Optional[float]) -> str:
@@ -23,13 +36,16 @@ def _num(value: Optional[float]) -> str:
 
 
 def to_csv(series: Series) -> str:
-    """CSV limpio: encabezado `date,value`, fechas ISO, sin filas vacías ni notas al pie."""
-    lines = ["date,value"]
+    """CSV normalizado que conserva atribución y términos junto a cada observación."""
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\n")
+    writer.writerow(("date", "value", "source", "series_id", "terms_url"))
+    terms_url = source_terms_url(series.source)
     for o in series.observations:
         if o.value is None:
             continue
-        lines.append(f"{o.date},{_num(o.value)}")
-    return "\n".join(lines) + "\n"
+        writer.writerow((o.date, _num(o.value), series.source, series.series_id, terms_url))
+    return output.getvalue()
 
 
 def to_json(series: Series) -> dict:
@@ -40,6 +56,7 @@ def to_json(series: Series) -> dict:
         "frequency": series.frequency,
         "source": series.source,
         "series_id": series.series_id,
+        "terms_url": source_terms_url(series.source),
         "units": series.units,
         "last_updated": series.last_updated,
         "observations": [{"date": o.date, "value": o.value} for o in series.observations],

@@ -1,4 +1,4 @@
-// Statistical utility functions — Quant Bay Phase 2
+// Statistical utility functions — ChartBay Phase 2
 
 function gammaLn(x: number): number {
   const c = [

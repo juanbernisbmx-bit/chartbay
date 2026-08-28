@@ -26,7 +26,8 @@
 
     {% if not fred_ready %}
     <div class="alfa-warn">
-      ⚠ Para activar las descargas falta configurar <code>FRED_API_KEY</code> en el <code>.env</code>.
+      ⚠ Las 37 series FRED necesitan <code>FRED_API_KEY</code>; las 12 de World Bank
+      siguen disponibles sin clave.
       Es gratis e instantáneo: <a href="https://fredaccount.stlouisfed.org/apikeys" target="_blank" rel="noopener">conseguila acá</a>.
     </div>
     {% endif %}
@@ -38,14 +39,18 @@
     <div class="fd-workspace" id="fdWorkspace" style="display:none"></div>
 
     <p class="colophon">
-      Series oficiales normalizadas a <code>date,value</code> · descarga en CSV o JSON.<br>
-      Próximamente más fuentes: BCRA · World Bank · IMF · OECD.<br><br>
+      Series oficiales normalizadas con <code>date,value</code> y atribución de origen · descarga en CSV o JSON.<br>
+      Fuentes activas: FRED · World Bank. Próximamente: BCRA · IMF · OECD.<br><br>
+      Las descargas no quedan bajo la AGPL de ChartBay: conservan los términos de
+      <a href="https://fred.stlouisfed.org/legal/" target="_blank" rel="noopener">FRED</a>
+      o <a href="https://www.worldbank.org/en/about/legal/permissions" target="_blank" rel="noopener">World Bank</a>.
+      Revisá la licencia y la atribución de cada serie antes de redistribuirla.<br><br>
       Datos con fines educativos. No constituye asesoramiento financiero.
     </p>
   </div>
 
-  <script id="fd-bootstrap" type="application/json">{{ bootstrap|tojson }}</script>
-  <script>
+  <script id="fd-bootstrap" type="application/json" nonce="{{ csp_nonce }}">{{ bootstrap|tojson }}</script>
+  <script nonce="{{ csp_nonce }}">
   /* ============================================================
      Datos Frecuentes — UI nativa escrita en "estilo componentes".
      Cada bloque mapea 1:1 a un futuro componente React:
@@ -64,13 +69,12 @@
       catalog:     function () { return BOOT.catalog; },
       categories:  function () { return BOOT.categories; },
       fredReady:   function () { return !!BOOT.fredReady; },
-      meta:        function (id) { return fetch("/api/data/meta/" + encodeURIComponent(id)).then(function (r) { return r.json(); }); },
+      downloadable:function (id) { return BOOT.downloadableIds.indexOf(id) !== -1; },
       downloadUrl: function (id, fmt) { return "/api/data/download/" + encodeURIComponent(id) + "?format=" + fmt; }
     };
 
     // ── estado ──────────────────────────────────────────────────
     var state = { query: "", category: "all", workspace: loadWorkspace() };
-    var metaCache = {};
 
     // ── helpers ─────────────────────────────────────────────────
     function esc(s) {
@@ -94,14 +98,12 @@
     }
 
     function IndicatorRow(ind, idx) {                       // <IndicatorCard>
-      var m = metaCache[ind.id];
-      var upd = (m && m.last_updated) ? m.last_updated : "···";
       var wsOn = inWorkspace(ind.id);
-      var ready = api.fredReady();
+      var ready = api.downloadable(ind.id);
       var actions = ready
         ? '<a class="fd-dl" href="' + api.downloadUrl(ind.id, "csv") + '" download>↓ CSV</a>'
           + '<a class="fd-dl fd-dl-soft" href="' + api.downloadUrl(ind.id, "json") + '" download>JSON</a>'
-        : '<span class="fd-dl fd-dl-off" title="Configurá FRED_API_KEY para descargar">↓ CSV</span>';
+        : '<span class="fd-dl fd-dl-off" title="Esta fuente no está configurada">↓ CSV</span>';
       return '' +
         '<li data-id="' + esc(ind.id) + '">' +
           '<div class="erow fd-row">' +
@@ -110,8 +112,7 @@
               '<span class="fd-text">' +
                 '<span class="name">' + esc(ind.name) + "</span>" +
                 '<span class="fd-meta">' + esc(ind.country) + " · " + esc(ind.frequency) +
-                  (ind.units ? " · " + esc(ind.units) : "") +
-                  ' · act. <span class="fd-upd">' + esc(upd) + "</span></span>" +
+                  (ind.units ? " · " + esc(ind.units) : "") + "</span>" +
               "</span>" +
             "</div>" +
             '<div class="fd-actions">' + actions +
@@ -145,7 +146,6 @@
       document.getElementById("fdList").innerHTML = items.map(IndicatorRow).join("");
       document.getElementById("fdEmpty").style.display = items.length ? "none" : "";
       renderWorkspaceBar();
-      lazyMeta(items);
     }
     function renderWorkspaceBar() {                          // <WorkspaceTray>
       var el = document.getElementById("fdWorkspace");
@@ -164,24 +164,6 @@
       var c = api.catalog();
       for (var i = 0; i < c.length; i++) if (c[i].id === id) return c[i];
       return null;
-    }
-
-    // ── carga perezosa de "última actualización" ────────────────
-    function lazyMeta(items) {
-      if (!api.fredReady()) return;
-      items.forEach(function (ind) {
-        if (ind.id in metaCache) { paintMeta(ind.id); return; }
-        api.meta(ind.id).then(function (d) {
-          metaCache[ind.id] = (d && d.ok) ? d : { last_updated: null };
-          paintMeta(ind.id);
-        }).catch(function () { metaCache[ind.id] = { last_updated: null }; });
-      });
-    }
-    function paintMeta(id) {
-      var row = document.querySelector('#fdList li[data-id="' + id + '"] .fd-upd');
-      if (!row) return;
-      var m = metaCache[id];
-      row.textContent = (m && m.last_updated) ? m.last_updated : "n/d";
     }
 
     // ── controladores ───────────────────────────────────────────

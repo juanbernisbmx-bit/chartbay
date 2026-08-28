@@ -55,7 +55,7 @@ UI-facing behavior is tested so invalid or unsupported RLS restrictions are reje
 
 Latest validation status:
 
-- `npm test`: 259 passed
+- `npm test`: 1507 passed in 85 test files
 - `npx tsc --noEmit --pretty false`: passed
 - `npm run build`: passed
 

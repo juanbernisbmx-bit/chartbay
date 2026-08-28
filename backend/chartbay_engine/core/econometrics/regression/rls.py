@@ -106,6 +106,11 @@ def validate_linear_constraint(constraint: LinearConstraint, parameter_count: in
             )
     if not all(np.isfinite(q)):
         raise ConstraintError("La restricción RLS contiene valores q no finitos.")
+    if np.linalg.matrix_rank(np.asarray(R, dtype=float)) < j:
+        raise ConstraintError(
+            "La restricción RLS es singular o redundante: las filas de R son colineales.",
+            code="singular_constraint",
+        )
 
 
 def _nan_inference(param_count: int):

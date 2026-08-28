@@ -8,6 +8,7 @@ const SRC_DIR = join(__dirname, '..', '..', 'src');
 // engine itself and the entry point that routes between engines.
 const ALLOWED = [
   join(SRC_DIR, 'pro'),
+  join(SRC_DIR, 'pro.worker.entry.ts'),
   join(SRC_DIR, 'main.ts'),
   join(SRC_DIR, 'ui', 'proView.ts'),
   join(SRC_DIR, 'ui', 'proTimeSeriesView.ts'),

@@ -1,8 +1,8 @@
 import type { LoadPyodideFn, PyodideInterface, PyodideLoadStatus } from './pyodideTypes';
 
 // Pyodide is intentionally NOT bundled: the script is injected at runtime from
-// the official CDN (same policy as papaparse/chart.js in quantbay.html), so the
-// main bundle stays small and Lite users never download Python.
+// the official CDN from the dedicated Pro worker. The critical Lite libraries
+// travel in the local bundle; Lite users never download Python.
 const PYODIDE_VERSION = '0.26.4';
 const PYODIDE_BASE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 const PYODIDE_SCRIPT_URL = `${PYODIDE_BASE_URL}pyodide.js`;
@@ -15,6 +15,19 @@ export function getPyodideLoadStatus(): PyodideLoadStatus {
 }
 
 function injectPyodideScript(): Promise<void> {
+  const workerScope = globalThis as typeof globalThis & {
+    importScripts?: (...urls: string[]) => void;
+  };
+  if (typeof document === 'undefined' && typeof workerScope.importScripts === 'function') {
+    try {
+      workerScope.importScripts(PYODIDE_SCRIPT_URL);
+      return Promise.resolve();
+    } catch (err) {
+      return Promise.reject(new Error(
+        `No se pudo descargar Pyodide desde ${PYODIDE_SCRIPT_URL}: ${err instanceof Error ? err.message : String(err)}`
+      ));
+    }
+  }
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = PYODIDE_SCRIPT_URL;

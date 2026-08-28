@@ -61,9 +61,11 @@ def _sample_series():
 def test_csv_is_clean():
     csv = to_csv(_sample_series())
     rows = csv.split("\n")
-    assert rows[0] == "date,value"             # encabezado limpio
-    assert rows[1] == "2020-01-01,1.5"          # fecha ISO
-    assert rows[2] == "2020-02-01,2"            # entero sin '.0'
+    assert rows[0] == "date,value,source,series_id,terms_url"
+    assert rows[1] == (
+        "2020-01-01,1.5,FRED,CPIAUCSL,https://fred.stlouisfed.org/legal/"
+    )                                           # fecha ISO + atribución
+    assert rows[2].startswith("2020-02-01,2,FRED,CPIAUCSL,")  # entero sin '.0'
     assert rows[-1] == ""                        # único salto final
     assert "" not in rows[:-1]                   # sin filas vacías intermedias
 
@@ -72,7 +74,15 @@ def test_json_shape():
     d = to_json(_sample_series())
     assert {"name", "country", "frequency", "observations"} <= set(d)
     assert d["last_updated"] == "2020-02-01"
+    assert d["terms_url"] == "https://fred.stlouisfed.org/legal/"
     assert d["observations"][0] == {"date": "2020-01-01", "value": 1.5}
+
+
+def test_world_bank_export_preserves_official_terms_link():
+    series = _sample_series()
+    series.source = "World Bank"
+    assert "https://www.worldbank.org/en/about/legal/permissions" in to_csv(series)
+    assert to_json(series)["terms_url"].startswith("https://www.worldbank.org/")
 
 
 # ── catálogo y registro ──────────────────────────────────────────────────────

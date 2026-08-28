@@ -10,36 +10,59 @@ services:
     #   cd quantbay && npm install && npm run build
     #     → web/static/js/quantbay.bundle.js   la app
     #     → web/static/js/quantbay.worker.js   el worker del limpiador de CSV
+    #     → web/static/js/quantbay.cleaner.js  la interfaz del Limpiador
+    #     → web/static/js/quantbay.pro.worker.js  Pyodide fuera del hilo principal
     #
     #   cd cleaner && make wasm && make wasm-test   (necesita emsdk en el PATH)
     #     → web/static/wasm/csvclean.js         glue de Emscripten
     #     → web/static/wasm/csvclean.wasm       el motor en C++
     #
-    # Los dos primeros salen del mismo `npm run build`, que desde que existe el
-    # worker corre dos builds de vite y no uno. Olvidarse del segundo no rompe
-    # nada de forma visible: el limpiador no encuentra el worker, cae al lector
-    # clásico y sigue andando con otro comportamiento. Esa degradación silenciosa
-    # es justamente lo que hace que valga la pena listarlos acá.
+    # Los cuatro salen del mismo `npm run build`, que corre cuatro builds de Vite.
+    # Olvidarse de cualquiera deja a Render sirviendo un artefacto viejo porque
+    # el runtime Python no recompila el frontend.
     #
     # Los de WASM solo hay que regenerarlos cuando cambia el C++ de cleaner/.
     #
-    # Migración futura: Docker con python:3.12 + node:20 para build automático.
+    # Migración futura: Docker con Python 3.12 + Node 22 para build automático.
     buildCommand: pip install -r requirements.txt
-    # Un solo worker con hilos: la carga es I/O-bound (Yahoo, Anthropic, FRED),
-    # así que los --threads son los que evitan que una request lenta bloquee al
-    # resto. Un segundo worker duplicaría pandas/numpy en RAM y el plan free
-    # tiene 512 MB. Tampoco usamos --preload: forkear después de importar la app
-    # (que abre sqlite en el import, web/app.py:180) es justo el patrón que
-    # rompe en local, y no gana nada con un único worker.
+    # Un solo worker con hilos: la carga es I/O-bound (las llamadas a FRED y a
+    # World Bank de la sección Datos), así que los --threads son los que evitan
+    # que una request lenta bloquee al resto. Un segundo worker duplicaría
+    # pandas/numpy en RAM y el plan free tiene 512 MB. Tampoco usamos --preload:
+    # forkear después de importar la app no gana nada con un único worker.
     startCommand: gunicorn web.app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120
+    # /version es la ruta mas barata del sitio: no toca la base, no renderiza
+    # plantillas y responde menos de 200 bytes. Es ademas la unica que prueba
+    # algo util — devuelve el commit que esta corriendo—, asi que un health
+    # check verde aca significa "arranco Y es el codigo que esperabas".
+    # Apuntarlo a "/" haria que Render pagase un render de plantilla por sonda.
+    healthCheckPath: /version
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.5"
+      # La genera Render. La app la exige al arrancar en produccion: firma las
+      # cookies de sesion y el token CSRF.
       - key: SECRET_KEY
         generateValue: true
-      - key: APP_USERNAME
+      # Unica variable que hay que completar a mano para que ChartBay 1.0 este
+      # completo. Sin ella la seccion Datos se ve, lista sus 49 indicadores y
+      # deja descargar los 12 de World Bank, pero los 37 de FRED quedan
+      # desactivados. Es gratis: https://fredaccount.stlouisfed.org/apikeys
+      - key: FRED_API_KEY
         sync: false
-      - key: APP_PASSWORD
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
+    # Lo que NO va aca, y por que:
+    #
+    #   APP_USERNAME / APP_PASSWORD — la sesion solo la usa la comunidad de bots
+    #   de Mercados, que esta apagada (SECCIONES en web/app.py). Con la seccion
+    #   apagada /login devuelve 404 y no hay usuario que sembrar, asi que
+    #   pedirlas en el Blueprint solo lograba que un despliegue nuevo no
+    #   arrancara por dos credenciales que nada iba a leer. El override local
+    #   CHARTBAY_SECCIONES=mercados=on sirve sólo para QA: además de volver a
+    #   agregar estas credenciales, una reactivación real exige persistencia y
+    #   revisión funcional; un único flag no alcanza.
+    #
+    #   ANTHROPIC_API_KEY — la consumen /api/verdict y el pipeline de analisis
+    #   tecnico de la raiz del repo. Las dos rutas estan bajo Mercados y
+    #   devuelven 404; el pipeline se corre a mano desde la linea de comandos
+    #   con un .env local. Una clave de pago en el entorno de un servicio que no
+    #   la usa es superficie de filtracion sin contrapartida.

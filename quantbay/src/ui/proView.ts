@@ -62,7 +62,7 @@ export function showProPanel(): void {
 }
 
 // El selector de errores estándar solo tiene sentido cuando el motor Pro
-// (Pyodide) está activo: oculto para Lite (siempre clásicos) y Mega Pro (bloqueado).
+// (Pyodide) está activo; queda oculto para Lite, que usa errores clásicos.
 export function setProSeSelectorVisible(visible: boolean): void {
   const wrap = $('qb-pro-se-wrap');
   if (wrap) wrap.style.display = visible ? '' : 'none';

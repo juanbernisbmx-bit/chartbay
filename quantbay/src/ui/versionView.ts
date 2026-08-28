@@ -9,7 +9,7 @@ const ENGINE_LABELS: Record<ChartBayVersionConfig['engine'], string> = {
 
 const STATUS_LABELS: Record<ChartBayVersionConfig['status'], string> = {
   available: 'Disponible',
-  experimental: 'Experimental',
+  beta: 'Beta',
   locked: 'Próximamente',
 };
 
@@ -17,6 +17,7 @@ export function renderVersionInfo(config: ChartBayVersionConfig): void {
   const engine = $('qb-version-engine');
   const limit = $('qb-version-limit');
   const status = $('qb-version-status');
+  const beta = $('qb-version-beta');
   const desc = $('qb-version-desc');
   const select = $('qb-version') as HTMLSelectElement | null;
 
@@ -24,5 +25,6 @@ export function renderVersionInfo(config: ChartBayVersionConfig): void {
   if (engine) engine.textContent = ENGINE_LABELS[config.engine];
   if (limit) limit.textContent = `${config.maxCsvSizeMb} MB`;
   if (status) status.textContent = STATUS_LABELS[config.status];
+  if (beta) beta.hidden = config.status !== 'beta';
   if (desc) desc.innerHTML = escapeHtml(config.description);
 }

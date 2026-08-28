@@ -17,7 +17,7 @@
   {% set active = 'inicio' %}
   {% include '_topbar_v2.html' with context %}
   <div id="boot" class="boot"><pre id="bootlog"></pre><span class="skip">[ clic para saltar ]</span></div>
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function(){
       var boot = document.getElementById("boot");
       if (!boot) return;
@@ -81,7 +81,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     const NAMES = {{ nombres|tojson }};
     const INFO = {
       tendencia: {nombre:"Tendencia (medias EMA 20/50/200)",que:"El rumbo general del precio según sus promedios.",como:"Si la EMA50 está por encima de la EMA200 y el precio sobre ellas → tendencia alcista; al revés → bajista; entrelazadas → lateral (sin rumbo claro)."},
@@ -119,6 +119,9 @@
     let MERCADOS = loadMarkets();
 
     function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+    // Plantilla heredada de Mercados: hoy no tiene una ruta publicada. Si se
+    // monta durante una auditoría, sus POST deben cumplir el CSRF global.
+    const CSRF_TOKEN = {{ csrf_token()|tojson }};
     const sleep = ms => new Promise(r=>setTimeout(r,ms));
 
     async function typeLine(parent, text, cls, speed=8){
@@ -312,7 +315,10 @@
       const log=document.getElementById("orlog");
       await typeLine(log, "[*] estableciendo canal con el motor IA...");
       await typeLine(log, "[*] analizando la foto tecnica... esto puede tardar.");
-      const resp=await fetch("/api/verdict_one?ticker="+encodeURIComponent(t),{method:"POST"});
+      const resp=await fetch("/api/verdict_one?ticker="+encodeURIComponent(t),{
+        method:"POST",
+        headers:{"X-CSRF-Token": CSRF_TOKEN}
+      });
       if(resp.status===401){
         out.innerHTML='<p class="muted" style="text-align:center;margin:14px 0">→ <a href="/login">Iniciá sesión</a> para consultar el motor IA.</p>';
         return;

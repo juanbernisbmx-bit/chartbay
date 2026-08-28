@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ParsedCSV } from '../../src/csvParser';
+import { PREVIEW_ROWS, type ParsedCSV } from '../../src/csvParser';
 import {
   buildFutureProTimeLabels,
   inferProTimeFrequency,
@@ -12,6 +12,32 @@ function csv(rows: Record<string, unknown>[]): ParsedCSV {
     headers: Object.keys(rows[0] ?? {}),
     rows,
     numericColumns: ['value'],
+  };
+}
+
+function columnarTimeSeries(rowCount: number): ParsedCSV {
+  const start = Date.UTC(2024, 0, 1) / 86_400_000;
+  const dates = Float64Array.from({ length: rowCount }, (_, i) => start + i);
+  const values = Float64Array.from({ length: rowCount }, (_, i) => i + 1);
+  const mask = new Uint8Array(rowCount).fill(1);
+  return {
+    headers: ['date', 'value'],
+    rows: Array.from({ length: PREVIEW_ROWS }, (_, i) => ({
+      date: new Date((start + i) * 86_400_000).toISOString().slice(0, 10),
+      value: i + 1,
+    })),
+    numericColumns: ['date', 'value'],
+    rowCount,
+    columns: {
+      numeric: new Map([
+        ['date', { values: dates, mask }],
+        ['value', { values, mask }],
+      ]),
+      categorical: new Map(),
+      text: new Map(),
+      dateColumns: new Set(['date']),
+      rowCount,
+    },
   };
 }
 
@@ -58,6 +84,16 @@ describe('proTimeIndex preparation', () => {
     if (result.ok) {
       expect(result.value.values).toEqual([1, 2, 3]);
       expect(result.value.timeIndex?.labels).toEqual(['2024-01', '2024-02', '2024-03']);
+    }
+  });
+
+  it('models every columnar row instead of the 50-row preview', () => {
+    const result = prepareProTimeSeriesValues(columnarTimeSeries(240), 'value', 'date');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.values).toHaveLength(240);
+      expect(result.value.values[result.value.values.length - 1]).toBe(240);
+      expect(result.value.timeIndex?.labels).toHaveLength(240);
     }
   });
 

@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend (Node 22)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: quantbay
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: quantbay/.nvmrc
+          cache: npm
+          cache-dependency-path: quantbay/package-lock.json
+
+      - name: Set up Python for numerical reference tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install numerical reference dependencies
+        run: python -m pip install -r ../requirements-dev.txt
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Type-check
+        run: npx tsc --noEmit --pretty false
+
+      - name: Build bundles
+        run: npm run build
+
+      - name: Verify reproducible bundles
+        working-directory: .
+        run: |
+          git diff --exit-code -- web/static/js
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  providers:
+    name: Providers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run provider tests
+        run: python tests/test_providers.py
+
+  flask:
+    name: Flask app (Python 3.12)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install web dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Test Flask routes and security
+        run: python tests/test_web.py
+
+  cleaner:
+    name: Cleaner (native and WASM)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cleaner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: quantbay/.nvmrc
+
+      - name: Test native cleaner
+        run: make test
+
+      - name: Test committed WASM bundle
+        run: make wasm-test
+
+  backend:
+    name: Backend (Python 3.12)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend and development dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest

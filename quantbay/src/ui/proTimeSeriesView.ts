@@ -27,9 +27,9 @@ import { renderInterpretationResults } from './interpretationView';
 import { buildModelDoctor, engineFindingFromInterpretation } from '../modelDoctor';
 import { renderModelDoctor } from './modelDoctorView';
 
-// Chart.js se carga globalmente por CDN en quantbay.html (igual que en el motor
-// Lite, ver ui/timeseriesView.ts). No es un import npm — se accede por el global
-// y todo acceso se protege con `typeof Chart === 'undefined'`.
+// Chart.js se empaqueta una sola vez en el bundle local. main.ts conserva el
+// global histórico que comparten las vistas Lite y Pro, y todo acceso se
+// protege con `typeof Chart === 'undefined'`.
 declare const Chart: any;
 
 // Ventana de observados a mostrar en el gráfico de forecast (los últimos N).
