@@ -1,4 +1,4 @@
-// Breusch-Pagan heteroskedasticity diagnostic — Quant Bay Phase 5.
+// Breusch-Pagan heteroskedasticity diagnostic — ChartBay Phase 5.
 //
 // Runs an auxiliary regression of the squared residuals of the main model
 // on the same regressors (already log-transformed / dummy-expanded as

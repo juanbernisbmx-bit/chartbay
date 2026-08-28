@@ -172,7 +172,7 @@ function buildTimeSeriesCSVRows(result: TimeSeriesAnalysisResult): Array<Array<s
 
 function exportTimeSeriesCSV(result: TimeSeriesAnalysisResult): void {
   downloadTextFile(
-    'quantbay_time_series.csv',
+    'chartbay_series_de_tiempo.csv',
     buildTimeSeriesCSVRows(result).map(row => row.map(csvCell).join(',')).join('\n'),
     'text/csv'
   );
@@ -181,7 +181,7 @@ function exportTimeSeriesCSV(result: TimeSeriesAnalysisResult): void {
 function exportTimeSeriesTXT(result: TimeSeriesAnalysisResult): void {
   const warnings = timeSeriesWarnings(result);
   const lines = [
-    'Quant Bay - Time Series',
+    'ChartBay - Series de tiempo',
     '',
     `Serie seleccionada: ${result.dataset.valueColumn}`,
     `Columna de fecha: ${result.dataset.dateColumn ?? 'N/D'}`,
@@ -224,7 +224,7 @@ function exportTimeSeriesTXT(result: TimeSeriesAnalysisResult): void {
     '',
   ];
 
-  downloadTextFile('quantbay_time_series.txt', lines.join('\n'), 'text/plain');
+  downloadTextFile('chartbay_series_de_tiempo.txt', lines.join('\n'), 'text/plain');
 }
 
 function exportTimeSeriesPDF(result: TimeSeriesAnalysisResult, doc: any): void {
@@ -250,7 +250,7 @@ function exportTimeSeriesPDF(result: TimeSeriesAnalysisResult, doc: any): void {
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.text('Quant Bay - Time Series', 10, y);
+  doc.text('ChartBay - Series de tiempo', 10, y);
   y += 7;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
@@ -302,7 +302,7 @@ function exportTimeSeriesPDF(result: TimeSeriesAnalysisResult, doc: any): void {
   ].join('\n');
   doc.text(doc.splitTextToSize(text, W), 10, y);
 
-  doc.save('quantbay_time_series.pdf');
+  doc.save('chartbay_series_de_tiempo.pdf');
 }
 
 export function exportAnalysisCSV(): void {
@@ -356,7 +356,7 @@ export function exportAnalysisCSV(): void {
   ];
 
   downloadTextFile(
-    'quantbay_resultados.csv',
+    'chartbay_resultados.csv',
     rows.map(row => row.map(csvCell).join(',')).join('\n'),
     'text/csv'
   );
@@ -379,7 +379,7 @@ export function exportAnalysisTXT(): void {
   const noInfTxt = result.restrictedInferenceAvailable === false;
   const fmtI = (v: number): string => noInfTxt ? 'N/D' : v.toFixed(6);
   const lines = [
-    'Quant Bay - Resultados del analisis',
+    'ChartBay - Resultados del análisis',
     '',
     `Variable dependiente: ${result.yName}`,
     `Metodo: ${result.method ?? 'OLS'}`,
@@ -421,7 +421,7 @@ export function exportAnalysisTXT(): void {
     '',
   ];
 
-  downloadTextFile('quantbay_resultados.txt', lines.join('\n'), 'text/plain');
+  downloadTextFile('chartbay_resultados.txt', lines.join('\n'), 'text/plain');
 }
 
 export function exportPDF(): void {
@@ -445,7 +445,7 @@ export function exportPDF(): void {
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.text('Quant Bay — Análisis de Regresión OLS', 10, y);
+  doc.text('ChartBay — Análisis de Regresión OLS', 10, y);
   y += 7;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
@@ -628,5 +628,5 @@ export function exportPDF(): void {
     doc.text(`Pág. ${i}/${pageCount}`, 185, 290);
   }
 
-  doc.save('quantbay_regresión.pdf');
+  doc.save('chartbay_regresion.pdf');
 }

@@ -53,6 +53,7 @@
           </div>
           <p class="muted qb-help">El archivo tiene que tener nombres de columnas en la primera fila. Econometria detecta automaticamente las columnas numericas. &nbsp;<a href="/datasets/01_simple_linear.csv" download="ejemplo_econometria.csv" class="muted" style="text-decoration:underline">Descargar ejemplo CSV</a></p>
           <div class="qb-runlog" id="qb-runlog" aria-live="polite"></div>
+          <div class="qb-load-warnings" id="qb-load-warnings" role="status" aria-live="polite" hidden></div>
         </section>
 
         <section class="qb-section qb-econometria-section" id="qb-demo-panel">
@@ -82,13 +83,25 @@
           </div>
           <label for="qb-version" class="qb-label">Versión actual</label>
           <select id="qb-version" style="width:100%;max-width:260px">
-            <option value="lite">Lite — TypeScript</option>
-            <option value="pro">Pro — Python (Pyodide)</option>
+            <option value="lite">Lite — TypeScript (estable)</option>
+            <option value="pro">Pro — Python (Pyodide) · beta</option>
           </select>
           <div class="qb-runlog" style="margin-top:8px">
             <div>Motor: <strong id="qb-version-engine"></strong></div>
             <div>Límite CSV: <strong id="qb-version-limit"></strong></div>
             <div>Estado: <strong id="qb-version-status"></strong></div>
+          </div>
+          {# Lo muestra y lo oculta renderVersionInfo (quantbay/src/ui/versionView.ts)
+             segun el `status` de la version: visible solo cuando es 'beta'.
+             Usa la caja de aviso del skin (.qb-warn) y no la ayuda gris de al
+             lado, porque un aviso que se ve igual que el resto del texto
+             auxiliar no se lee como aviso, y este cambia que version conviene
+             usar. #}
+          <div class="qb-warn" id="qb-version-beta" style="margin-top:8px;font-size:12px" hidden>
+            <p style="margin:0"><strong>Pro está en beta.</strong> Pyodide corre en un worker
+            separado para mantener utilizable la interfaz y se cancela a los 120 s, pero todavía
+            puede tardar, consumir mucha memoria o fallar con archivos grandes. Para resultados
+            que te importen, usá Lite.</p>
           </div>
           <p class="muted qb-help" id="qb-version-desc"></p>
         </section>
@@ -771,10 +784,8 @@
     <p class="colophon">Análisis estadístico educativo. No constituye asesoramiento financiero ni garantía de resultados.</p>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  {# Papa Parse, Chart.js, jsPDF y AutoTable viajan dentro del bundle local.
+     Pyodide se descarga sólo al elegir Pro, dentro de su worker. #}
   <!-- Limpiador de CSV en C++/WebAssembly. Servido desde el propio dominio, no
        desde un CDN: los datos del usuario no salen del navegador y el .wasm
        viaja compilado en el repo. Si no carga, el motor cae solo a PapaParse. -->

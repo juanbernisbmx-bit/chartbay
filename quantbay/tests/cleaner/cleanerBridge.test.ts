@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { bridgeCleanedTable } from '../../src/services/cleanerBridge';
+import { cleanerActionNotes } from '../../src/services/cleanerLoader';
 import {
   getValidRows,
   getValidRowsFrom,
@@ -43,6 +44,17 @@ function numeric(name: string, values: number[], missing: number[] = []) {
 }
 
 describe('bridgeCleanedTable', () => {
+  it('surfaces every column discarded by the cleaner', () => {
+    const report: CleanReport = {
+      ...emptyReport,
+      actions: [
+        { kind: 'dropped_duplicate_column', column: 'x_copy', count: 0, detail: 'x_copy duplica x.' },
+        { kind: 'inferred_dialect', column: '', count: 0, detail: 'Separador coma.' },
+      ],
+    };
+    expect(cleanerActionNotes(report)).toEqual(['x_copy duplica x.']);
+  });
+
   it('exposes typed columns without building a row per row', () => {
     const rows = 10_000;
     const values = Array.from({ length: rows }, (_, i) => i);

@@ -26,17 +26,17 @@ describe('Área Aprender (guia.html)', () => {
   });
 
   it.each([
-    ['modelo econométrico', 'Que es un modelo econometrico'],
-    ['OLS', 'Regresion lineal (OLS)'],
+    ['modelo econométrico', 'Qué es un modelo econométrico'],
+    ['OLS', 'Regresión lineal (OLS)'],
     ['RLS', 'Restricciones lineales (RLS)'],
     ['formas funcionales', 'Formas funcionales'],
     ['dummies', 'Variables dummy'],
-    ['errores robustos', 'Errores estandar y errores robustos'],
+    ['errores robustos', 'Errores estándar y errores robustos'],
     ['heterocedasticidad', 'Heterocedasticidad'],
     ['Breusch-Pagan', 'Breusch-Pagan'],
-    ['series de tiempo', 'Que es una serie de tiempo'],
+    ['series de tiempo', 'Qué es una serie de tiempo'],
     ['orden temporal', 'Orden temporal y frecuencia'],
-    ['ADF', 'ADF (raiz unitaria)'],
+    ['ADF', 'ADF (raíz unitaria)'],
     ['ACF/PACF', 'ACF y PACF'],
     ['Ljung-Box', 'Ljung-Box'],
     ['ARIMA', '<summary>AR, MA y ARIMA</summary>'],
@@ -48,7 +48,7 @@ describe('Área Aprender (guia.html)', () => {
 
   it('explains the econometric model with dependent variable, error term and the consumo example', () => {
     expect(APRENDER).toContain('Variable dependiente');
-    expect(APRENDER).toContain('termino de error');
+    expect(APRENDER).toContain('término de error');
     expect(APRENDER).toContain('consumo');
     expect(APRENDER).toContain('ingreso');
   });
@@ -76,14 +76,14 @@ describe('Área Aprender (guia.html)', () => {
 
   it('develops the empirical workflow instead of defining econometrics in one sentence', () => {
     expect(APRENDER).toContain('De la pregunta al resultado');
-    expect(APRENDER).toContain('Descripcion, prediccion y causalidad');
-    expect(APRENDER).toContain('Construir un modelo economico');
+    expect(APRENDER).toContain('Descripción, predicción y causalidad');
+    expect(APRENDER).toContain('Construir un modelo económico');
     expect(APRENDER).toContain('Evaluar el modelo');
   });
 
   it('distinguishes population parameters, estimates, errors and residuals', () => {
-    expect(APRENDER).toContain('Poblacion, muestra y estimacion');
-    expect(APRENDER).toContain('Los &beta; pertenecen a la poblacion');
+    expect(APRENDER).toContain('Población, muestra y estimación');
+    expect(APRENDER).toContain('Los &beta; pertenecen a la población');
     expect(APRENDER).toContain('Residuo no es error');
     expect(APRENDER).toContain('Que los residuos sumen cero no demuestra');
   });
@@ -104,14 +104,14 @@ describe('Área Aprender (guia.html)', () => {
   it('derives fit statistics and explains their limits', () => {
     expect(APRENDER).toContain('R<sup>2</sup> = 1 - SSR / SST');
     expect(APRENDER).toContain('R2 nunca baja al agregar una X');
-    expect(APRENDER).toContain('regresion espuria');
+    expect(APRENDER).toContain('regresión espuria');
     expect(APRENDER).toContain('SSR<sub>R</sub> - SSR<sub>UR</sub>');
   });
 
   it('states frequentist inference correctly and separates statistical from economic significance', () => {
     expect(APRENDER).toContain('suponiendo H0 y el modelo de contraste');
     expect(APRENDER).toContain('no se rechaza. Esto ultimo no demuestra que H0 sea verdadera');
-    expect(APRENDER).toContain('La economica pregunta si su magnitud importa');
+    expect(APRENDER).toContain('La económica pregunta si su magnitud importa');
     expect(APRENDER).toContain('no es correcto decir que hay 95% de probabilidad');
     expect(APRENDER).not.toContain('rango probable del coeficiente');
   });
@@ -155,8 +155,8 @@ describe('Área Aprender (guia.html)', () => {
   it('explains ADF specification and finite-sample critical-value reading', () => {
     expect(APRENDER).toContain('H0: &gamma; = 0');
     expect(APRENDER).toContain('Constante, tendencia y cantidad de rezagos');
-    expect(APRENDER).toContain('valores criticos MacKinnon ajustados por el n efectivo');
-    expect(APRENDER).toContain('no confirma una raiz unitaria');
+    expect(APRENDER).toContain('valores críticos MacKinnon ajustados por el n efectivo');
+    expect(APRENDER).toContain('no confirma una raíz unitaria');
   });
 
   it('explains ARIMA p/d/q with the ARIMA(1,1,1) example and the honesty note', () => {
@@ -167,7 +167,7 @@ describe('Área Aprender (guia.html)', () => {
   });
 
   it('explains forecast with horizon, intervals and why they widen', () => {
-    expect(APRENDER).toContain('pronostico puntual');
+    expect(APRENDER).toContain('pronóstico puntual');
     expect(APRENDER).toContain('abrirse a medida que crece el horizonte');
     expect(APRENDER).toContain('no es una promesa');
     expect(APRENDER).toContain('conjunto de prueba');
@@ -182,10 +182,10 @@ describe('Área Aprender (guia.html)', () => {
   });
 
   it('includes the pedagogical microcopy phrases', () => {
-    expect(APRENDER).toContain('asociacion estimada, no una verdad universal');
-    expect(APRENDER).toContain('no convierte automaticamente una relacion en causal');
+    expect(APRENDER).toContain('asociación estimada, no una verdad universal');
+    expect(APRENDER).toContain('no convierte automáticamente una relación en causal');
     expect(APRENDER).toContain('Antes de usar ARIMA');
-    expect(APRENDER).toContain('La categoria base no desaparece');
+    expect(APRENDER).toContain('La categoría base no desaparece');
     expect(APRENDER).toContain('no arreglan el modelo; ajustan la inferencia');
   });
 

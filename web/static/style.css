@@ -1433,7 +1433,7 @@ input,select,textarea,.search input,.compare-input,.filterbar input[type=text],.
   text-align:center;
 }
 
-/* Quant Bay: make it a simple guided form, not a terminal. */
+/* ChartBay: make it a simple guided form, not a terminal. */
 .qb-shell-head{
   display:block;
   margin:10px auto 8px;

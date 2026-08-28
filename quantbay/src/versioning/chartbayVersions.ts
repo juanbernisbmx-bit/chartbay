@@ -15,7 +15,7 @@ export type ChartBayEngine = 'typescript' | 'pyodide';
 export type ChartBayVersionConfig = {
   id: ChartBayVersion;
   label: string;
-  status: 'available' | 'experimental' | 'locked';
+  status: 'available' | 'beta' | 'locked';
   description: string;
   maxCsvSizeMb: number;
   engine: ChartBayEngine;
@@ -45,7 +45,7 @@ const LITE_FEATURES: ChartBayVersionConfig['features'] = {
   pyodideStatsmodels: false,
   advancedTimeSeries: false,
   quantFinance: false,
-  largeFiles: false,
+  largeFiles: true,
 };
 
 export const CHARTBAY_VERSIONS: Record<ChartBayVersion, ChartBayVersionConfig> = {
@@ -59,8 +59,8 @@ export const CHARTBAY_VERSIONS: Record<ChartBayVersion, ChartBayVersionConfig> =
       'OLS, RLS, formas funcionales, dummies, diagnósticos y series de tiempo.',
     // Medido: 516 MB y 7,9 M de filas se procesan en 17 s con 727 MB de heap
     // WASM. El tope de 100 MB deja margen sobre eso y, por encima, el preflight
-    // avisa según el equipo de cada uno. Era 2 MB, calculado para cuando esto
-    // pasaba por PapaParse y armaba un objeto por fila.
+    // avisa según el equipo de cada uno. El tope anterior se había calculado
+    // para PapaParse, que armaba un objeto JavaScript por fila.
     maxCsvSizeMb: 100,
     engine: 'typescript',
     features: { ...LITE_FEATURES },
@@ -68,9 +68,9 @@ export const CHARTBAY_VERSIONS: Record<ChartBayVersion, ChartBayVersionConfig> =
   pro: {
     id: 'pro',
     label: 'Pro',
-    status: 'available',
+    status: 'beta',
     description:
-      'ChartBay Pro v1 ejecuta OLS con statsmodels vía Pyodide (Python en el navegador), con las ' +
+      'ChartBay Pro v1 está en beta y ejecuta OLS con statsmodels vía Pyodide (Python en el navegador), con las ' +
       '4 formas funcionales (lin-lin, log-lin, lin-log, log-log), variables categóricas vía dummies (misma ' +
       'lógica que Lite), intercepto automático, errores estándar clásicos o robustos (HC1/HC3/HAC), diagnóstico ' +
       'Breusch-Pagan y test de restricciones lineales Rβ = q (Wald/F vía statsmodels, sin re-estimar los ' +
@@ -109,8 +109,6 @@ export function validateCsvFileSize(
     ok: false,
     message:
       `El archivo pesa ${sizeMb} MB. El máximo de ChartBay ${versionConfig.label} es ${versionConfig.maxCsvSizeMb} MB. ` +
-      (versionConfig.id === 'lite'
-        ? 'Elegí Pro o reducí el tamaño del CSV.'
-        : 'Reducí el tamaño del CSV.'),
+      'Reducí el tamaño del CSV.',
   };
 }

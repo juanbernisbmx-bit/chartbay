@@ -3,7 +3,7 @@
 **Laboratorio web de econometría orientado a estudiantes.**
 
 [Abrir la aplicación](https://chartbay.onrender.com) ·
-[Ver el código fuente](https://github.com/juanbernisbmx-bit/chartbay)
+[Descargar el código fuente servido](https://chartbay.onrender.com/source.tar.gz)
 
 ## Presentación
 
@@ -26,7 +26,8 @@ pregunta económica, la elección de variables y la lectura crítica del modelo.
 
 ## Funcionalidades principales
 
-- Estimación por mínimos cuadrados ordinarios mediante descomposición QR.
+- Estimación por mínimos cuadrados ordinarios mediante ecuaciones normales;
+  la regresión auxiliar del ADF usa QR para estabilidad numérica.
 - Regresión restringida y contrastes de hipótesis con test de Wald.
 - Inferencia estadística, intervalos de confianza y pruebas t y F.
 - Diagnósticos de residuos, heterocedasticidad y multicolinealidad.
@@ -63,7 +64,7 @@ ChartBay.
 
 ## Alcance y limitaciones
 
-ChartBay es una herramienta educativa en desarrollo. Sus resultados deben
+ChartBay 1.0 es una herramienta educativa. Sus resultados deben
 interpretarse dentro del contexto de cada ejercicio y no sustituyen la revisión
 metodológica, el diagnóstico del modelo ni el trabajo con software estadístico
 de propósito general. No constituye asesoramiento financiero.
@@ -79,9 +80,24 @@ a ningún servidor.
 
 | Sección | Ruta | Qué hace |
 |---|---|---|
-| Econometría | `/econometria` | OLS por descomposición QR, RLS con test de Wald, inferencia t/F, intervalos al 95%, diagnósticos de residuos y colinealidad (VIF), series de tiempo (ADF, ACF, PACF, Ljung-Box) |
-| Datos | `/data` | 49 indicadores macro (37 de FRED, 12 de World Bank), con caché diaria y descarga en CSV o JSON |
+| Inicio | `/` | Presentación, acceso al laboratorio y recorrido de módulos activos |
+| Econometría | `/econometria` | OLS, RLS con test de Wald, inferencia t/F, intervalos al 95%, diagnósticos de residuos y colinealidad (VIF), series de tiempo (ADF, ACF, PACF, Ljung-Box) |
+| Limpiador | `/limpiador` | Inspección y limpieza de CSV con motor C++/WebAssembly |
+| Datos | `/data` | 49 indicadores macro (37 de FRED, 12 de World Bank), con caché diaria y descarga en CSV o JSON con atribución de origen |
 | Documentación | `/guia` | Conceptos, ejemplos guiados y un curso de econometría |
+
+### Versiones del laboratorio
+
+| Versión | Estado 1.0 | Motor | Límite CSV |
+|---|---|---|---:|
+| Lite | Estable | TypeScript + limpiador WebAssembly | 100 MB |
+| Pro | Beta | Python/statsmodels vía Pyodide en un Web Worker | 10 MB |
+
+Lite y Pro son motores distintos, no niveles de una escalera. Lite admite
+archivos mayores; superar su límite nunca es una razón para cambiar a Pro.
+Las librerías de la interfaz viajan en el bundle local. Pro descarga Pyodide
+sólo al elegirlo, calcula fuera del hilo principal y cancela una ejecución que
+supere 120 segundos para mantener la página utilizable.
 
 ## Secciones desenchufadas
 
@@ -93,14 +109,17 @@ No se borraron, se desenchufaron con flags. Sus rutas devuelven 404 y sus
 enlaces desaparecen del menú, pero el código, las plantillas y los tests siguen
 en el repo:
 
-- **Python** — `SECCIONES` en [`web/app.py`](web/app.py). Poner una clave en
-  `True` reactiva sus rutas y sus enlaces.
+- **Python** — `SECCIONES` en [`web/app.py`](web/app.py). Los valores publicados
+  mantienen Agro y Mercados en `False`.
 - **TypeScript** — `CHARTBAY_VERTICALS` en
   [`quantbay/src/verticals/agro/agroFeatureFlags.ts`](quantbay/src/verticals/agro/agroFeatureFlags.ts).
   Al tocarlo hay que recompilar el bundle (ver más abajo).
 
 Los dos flags tienen que coincidir: el de Python saca la ruta, el de TypeScript
-evita que la vista se inicialice.
+evita que la vista se inicialice. Existe
+`CHARTBAY_SECCIONES=mercados=on` exclusivamente para auditar el código heredado
+en local. Ese override no habilita Agro y **no constituye una reactivación de
+Mercados**: faltan persistencia, credenciales, configuración de IA y QA integral.
 
 ## Estructura
 
@@ -119,11 +138,12 @@ datasets/     CSV de ejemplo para el laboratorio
 
 ## Correr en local
 
-Necesitás Python 3.10+.
+Necesitás Python 3.10+ para la app Flask y Node 22 para compilar el frontend.
 
 ```bash
-pip install -r requirements.txt
-cp .env.example .env      # y completá los valores
+python3 -m venv .venv
+./.venv/bin/pip install -r requirements.txt
+cp .env.example .env      # FRED_API_KEY es opcional en local
 python web/app.py
 ```
 
@@ -133,10 +153,11 @@ Variables del `.env`:
 
 | Variable | Para qué | ¿Obligatoria? |
 |---|---|---|
-| `SECRET_KEY` | firma de sesiones | sí en producción; en dev hay fallback |
-| `APP_USERNAME` / `APP_PASSWORD` | login de un solo usuario | sí en producción |
-| `FRED_API_KEY` | descargas de la sección Datos ([clave gratuita](https://fredaccount.stlouisfed.org/apikeys)) | sin ella la sección se ve pero no descarga |
-| `ANTHROPIC_API_KEY` | solo el pipeline de análisis técnico (ver el final) | no, para la web |
+| `SECRET_KEY` | firma de cookies y CSRF si se audita la autenticación heredada | Render la genera; en desarrollo hay fallback |
+| `FRED_API_KEY` | descargas FRED de Datos ([clave gratuita](https://fredaccount.stlouisfed.org/apikeys)) | opcional; sin ella World Bank y el catálogo siguen disponibles |
+| `APP_USERNAME` / `APP_PASSWORD` | login heredado de Mercados | fuera del despliegue 1.0 |
+| `ANTHROPIC_API_KEY` | pipeline CLI y veredictos heredados de Mercados | fuera del despliegue 1.0 |
+| `CHARTBAY_SECCIONES` | override local `mercados=on` para QA | no configurar en Render 1.0 |
 
 ## Compilar el motor
 
@@ -146,15 +167,16 @@ porque el runtime Python de Render no incluye Node. Después de tocar cualquier
 JavaScript viejo:
 
 ```bash
-cd quantbay && npm install && npm run build
+cd quantbay && npm ci && npm run build
 ```
 
 ## Tests
 
-El motor de cálculo se testea desde `quantbay/` con vitest (1108 tests):
+El motor de cálculo se testea desde `quantbay/` con Vitest: **1507 tests en 85
+archivos** para el alcance 1.0.
 
 ```bash
-cd quantbay && npm install && npm run test
+cd quantbay && npm ci && npm test
 ```
 
 Dieciocho de esos tests —los de `statsmodelsValidation.test.ts`— no se conforman
@@ -167,12 +189,23 @@ python3 -m venv .venv
 PATH="$PWD/.venv/bin:$PATH" npm --prefix quantbay run test
 ```
 
-El `PATH` no es opcional: el test invoca el binario **`python`**, y macOS solo
-trae `python3`. El venv resuelve ambas cosas, porque instala los paquetes y
-expone `python` en su `bin/`. Sin eso, esos 18 fallan con `spawnSync python
-ENOENT` — un fallo de entorno, no del código.
+La suite busca `CHARTBAY_PYTHON`, el `.venv` del repositorio y luego
+`python3`/`python`, y usa el primer intérprete que pueda importar NumPy, SciPy y
+statsmodels.
 
-El paquete `backend/` tiene su propia suite de pytest, que requiere Python 3.12.
+Controles adicionales, también ejecutados por CI:
+
+```bash
+python tests/test_providers.py
+python tests/test_web.py
+make -C cleaner test
+make -C cleaner wasm-test
+cd backend && python -m pip install -e ".[dev]" && ruff check . && pytest
+```
+
+El paquete `backend/` requiere Python 3.12 y conserva su suite independiente.
+GitHub Actions se ejecuta recién al hacer push o abrir un pull request; una
+validación local no equivale a afirmar que el workflow remoto pasó.
 
 ## Desplegar en Render
 
@@ -181,8 +214,9 @@ automático.
 
 1. Entrá a <https://render.com> e iniciá sesión con GitHub.
 2. New → **Blueprint** y elegí el repo (Render detecta el `render.yaml`).
-3. Completá las variables marcadas: `APP_USERNAME`, `APP_PASSWORD` y, si vas a
-   usar el pipeline de IA, `ANTHROPIC_API_KEY`. (`SECRET_KEY` se genera sola.)
+3. Completá `FRED_API_KEY` si querés habilitar las 37 series FRED.
+   `SECRET_KEY` se genera sola. No agregues credenciales de login ni Anthropic
+   al servicio 1.0.
 4. Deploy. En 1-2 minutos te da una URL tipo `https://chartbay.onrender.com`.
 
 Para un dominio propio: en Render, servicio → **Settings → Custom Domains**,
@@ -190,15 +224,14 @@ añadí el dominio y creá en tu registrador los registros que te indique
 (normalmente un `CNAME` para `www` y un `A`/`ALIAS` para el raíz). El
 certificado HTTPS lo emite Render solo.
 
-Gunicorn corre con **1 worker y 8 hilos**. La carga es I/O-bound (FRED,
-Anthropic), así que los hilos evitan que una llamada lenta bloquee toda la web;
+Gunicorn corre con **1 worker y 8 hilos**. La carga es I/O-bound (FRED y World
+Bank), así que los hilos evitan que una llamada lenta bloquee toda la web;
 un segundo worker duplicaría NumPy en RAM y el plan gratuito tiene 512 MB.
 
-> ⚠️ **Persistencia de datos.** El plan gratuito de Render usa un disco efímero:
-> la base de datos SQLite (`web/chartbay.db` con usuarios, bots y reseñas) **se
-> reinicia en cada redeploy**. Para conservarla hay que añadir un *Disk* de
-> Render (plan de pago) montado en `web/`, o migrar a PostgreSQL. Para uso
-> personal, el disco efímero alcanza.
+> **SQLite no participa de ChartBay 1.0.** Sólo lo usa la autenticación y la
+> comunidad heredada de Mercados; con el vertical apagado la app ni siquiera
+> abre la base. Una eventual reactivación necesitaría almacenamiento persistente
+> (disco o base externa) antes de considerarse operativa.
 
 ### Comprobar qué versión está desplegada
 
@@ -279,8 +312,28 @@ Los activos y el perfil de riesgo se configuran en `config.py`. Necesita
 ## Coste
 
 El hosting tiene plan gratuito en Render y los datos de FRED y Yahoo Finance son
-gratis. Lo único que se paga es la API de Anthropic, y solo si usás el pipeline
-de análisis técnico (céntimos por ticker).
+gratis. La web 1.0 no consume la API de Anthropic; esa clave sólo genera coste
+si el propietario ejecuta voluntariamente el pipeline CLI heredado.
+
+## Licencia
+
+El código fuente de ChartBay se distribuye bajo la
+[GNU Affero General Public License v3.0 únicamente](LICENSE) (`AGPL-3.0-only`).
+Podés usarlo, estudiarlo, modificarlo y redistribuirlo, incluso comercialmente,
+bajo las condiciones de esa licencia. Si ofrecés por red una versión
+modificada, tenés que brindar a sus usuarios acceso al código fuente
+correspondiente de esa versión.
+
+La licencia del código no concede derechos sobre el nombre ni los logotipos de
+ChartBay. Consultá [TRADEMARKS.md](TRADEMARKS.md) para conocer esa excepción.
+Los componentes y datos de terceros conservan sus licencias respectivas.
+El detalle de dependencias, recursos externos y datos incorporados está en
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Para el cierre 1.0 también están disponibles
+[`docs/V1_RELEASE_SCOPE.md`](docs/V1_RELEASE_SCOPE.md),
+[`docs/V1_QA_CHECKLIST.md`](docs/V1_QA_CHECKLIST.md) y
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## Aviso
 

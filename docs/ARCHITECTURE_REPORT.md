@@ -1,5 +1,14 @@
 # Informe técnico de arquitectura de ChartBay
 
+> **Documento histórico — auditoría del 30 de junio de 2026.**
+> Describe el repositorio como estaba entonces, no el producto desplegado.
+> Tres cosas que dice ya no son ciertas para ChartBay 1.0: Agro y Mercados
+> están **apagados** (sus rutas devuelven 404), el motor Python con FastAPI es
+> **experimental y no está desplegado** —la app Flask no lo invoca y
+> `render.yaml` levanta un único servicio—, y las secciones activas ya no
+> dependen de SQLite ni de la autenticación.
+> El alcance vigente está en [`V1_RELEASE_SCOPE.md`](V1_RELEASE_SCOPE.md).
+
 Fecha de auditoría: 2026-06-30  
 Repositorio auditado: `C:\Users\santi\Claude\Projects\indicador tv ia`
 
@@ -472,8 +481,8 @@ Este componente puede aportar contexto de análisis de mercado y reportes, pero 
 Durante la auditoría se ejecutaron las suites principales.
 
 ```text
-QuantBay: npm.cmd test
-Resultado: 17 archivos, 329 tests pasados.
+QuantBay: npm test
+Resultado actual de ChartBay 1.0: 85 archivos, 1507 tests pasados.
 ```
 
 ```text
@@ -585,9 +594,12 @@ Los tests existen, pero no se observó pipeline automatizado que ejecute root te
 
 FastAPI genera OpenAPI, pero falta documentación curada con ejemplos de request/response, casos de error y estrategia de versionado.
 
-### 19.8 Dependencia de CDNs en la UI
+### 19.8 Dependencias de UI y Pyodide
 
-QuantBay carga librerías como PapaParse, Chart.js y jsPDF desde CDN. Para una versión profesional convendría empaquetar dependencias críticas o definir una política explícita.
+Papa Parse, Chart.js, jsPDF y jsPDF-AutoTable se fijan en el lockfile y viajan
+en el bundle local. Sólo Pro descarga Pyodide bajo demanda desde jsDelivr; esa
+carga se ejecuta en un worker dedicado, con CSP acotado y error visible si el
+CDN no está disponible. Lite no depende de una CDN en tiempo de ejecución.
 
 ## 20. Escalabilidad
 

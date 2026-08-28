@@ -18,12 +18,25 @@
     {% if active == 'datos' %}<strong>Datos</strong>{% else %}<a href="{{ url_for('frequent_data') }}">Datos</a>{% endif %}
     {% if active == 'limpiador' %}<strong>Limpiador</strong>{% else %}<a href="{{ url_for('limpiador') }}">Limpiador</a>{% endif %}
     {% if active == 'guia' %}<strong>Documentación</strong>{% else %}<a href="{{ url_for('guia') }}">Documentación</a>{% endif %}
+    <a href="{{ url_for('source_archive') }}" rel="source" download>Código fuente</a>
   </nav>
+  {# El bloque de sesion solo aparece si hay alguna seccion que la necesite
+     (hoy solo Mercados, apagada). Ofrecer "Entrar" para una cuenta que no
+     desbloquea nada es una puerta que confunde y no lleva a ningun lado.
+     `auth_enabled` sale de AUTH_ENABLED en web/app.py, colgado del mismo flag
+     que las rutas /login y /logout. #}
+  {% if auth_enabled %}
   <div class="cb-topbar-end">
     {% if session.user %}
-      <a href="{{ url_for('logout') }}" style="font-size:12.5px;color:#9aa7ba">Salir</a>
+      {# Salir por POST: con un enlace GET basta un <img src="/logout"> ajeno
+         para cerrarle la sesion al usuario. #}
+      <form method="post" action="{{ url_for('logout') }}" style="margin:0">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button type="submit" style="font:inherit;font-size:12.5px;color:#9aa7ba;background:none;border:0;padding:0;cursor:pointer">Salir</button>
+      </form>
     {% else %}
       <a href="{{ url_for('login') }}" style="font-size:12.5px;color:#9aa7ba">Entrar</a>
     {% endif %}
   </div>
+  {% endif %}
 </div>

@@ -10,7 +10,7 @@
 
 import { parseCSVFile, type ParsedCSV } from '../csvParser';
 import { bridgeCleanedTable, type BridgedDataset } from './cleanerBridge';
-import { cleanCsv, loadCleaner, setCleanerBaseUrl } from '../../../cleaner/js/csvclean';
+import { cleanCsv, loadCleaner, setCleanerBaseUrl, type CleanReport } from '../../../cleaner/js/csvclean';
 import {
   cleanCsvInWorker,
   createCleanerWorker,
@@ -40,6 +40,16 @@ export interface LoadOptions {
 
 /** Where the worker bundle is served from. Built by `npm run build`. */
 const WORKER_URL = '/static/js/quantbay.worker.js';
+
+export function cleanerActionNotes(report: CleanReport): string[] {
+  return report.actions
+    .filter(action =>
+      action.kind === 'dropped_empty_column' ||
+      action.kind === 'dropped_constant_column' ||
+      action.kind === 'dropped_duplicate_column'
+    )
+    .map(action => action.detail);
+}
 
 // Explicit on the main thread too. It happens to resolve correctly there, but
 // relying on that would leave the two paths differing for no reason.
@@ -113,11 +123,13 @@ export async function loadCsv(file: File, options: LoadOptions = {}): Promise<Lo
       setCleanerWorker(createCleanerWorker(WORKER_URL));
       const table = await cleanCsvInWorker(file, { ...runOptions, terminateAfterRun: true });
       notes.push('Procesado en un worker; la interfaz no se bloqueó.');
+      notes.push(...cleanerActionNotes(table.report));
       return { data: bridgeCleanedTable(table), engine: 'wasm', budget, preflight: plan, notes };
     }
 
     await loadCleaner();
     const table = await cleanCsv(file, runOptions);
+    notes.push(...cleanerActionNotes(table.report));
     const data = bridgeCleanedTable(table);
     table.dispose();
     return { data, engine: 'wasm', budget, preflight: plan, notes };

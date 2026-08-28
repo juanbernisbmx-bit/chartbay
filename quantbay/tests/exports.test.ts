@@ -105,7 +105,7 @@ describe('csvCell', () => {
     exportAnalysisCSV();
     const text = await downloadedText();
 
-    expect(downloadedFilename).toBe('quantbay_time_series.csv');
+    expect(downloadedFilename).toBe('chartbay_series_de_tiempo.csv');
     expect(text).toContain('time_series,value_column,,close');
     expect(text).toContain('time_series,selected_transformation,,Original series');
     expect(text).toContain('acf,autocorrelation,1');
@@ -209,7 +209,7 @@ describe('csvCell', () => {
     exportAnalysisTXT();
     const text = await downloadedText();
 
-    expect(downloadedFilename).toBe('quantbay_time_series.txt');
+    expect(downloadedFilename).toBe('chartbay_series_de_tiempo.txt');
     expect(text).toContain('Serie seleccionada: close');
     expect(text).toContain('ACF no disponible');
     expect(text).toContain('PACF no disponible');
@@ -242,7 +242,7 @@ describe('csvCell', () => {
     exportAnalysisCSV();
     const text = await downloadedText();
 
-    expect(downloadedFilename).toBe('quantbay_resultados.csv');
+    expect(downloadedFilename).toBe('chartbay_resultados.csv');
     expect(text).toContain('model,dependent_variable,,y');
     expect(text).toContain('coefficient,estimate,x,2');
     expect(text).not.toContain('time_series,value_column');

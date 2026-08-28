@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-declare const Papa: any; // loaded via CDN (PapaParse)
+declare const Papa: any; // bundled and exposed by main.ts
 
 /**
  * Columnar backing for a dataset, as produced by the C++/WASM cleaner.

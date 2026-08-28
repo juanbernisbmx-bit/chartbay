@@ -12,6 +12,18 @@ import type { RLSConstraint } from '../../rls';
 
 export type PyodideOlsPhase = 'loading-pyodide' | 'loading-packages' | 'running';
 
+export interface PyodideOlsInput {
+  csvText: string;
+  yName: string;
+  xNames: string[];
+  dummyNames?: string[];
+  form: FunctionalForm;
+  rlsConstraint?: RLSConstraint;
+  standardErrorType?: string;
+  hacMaxLags?: number | null;
+  dropIncompleteRows?: boolean;
+}
+
 // OLS con statsmodels.api.OLS — con las 4 formas funcionales (lin-lin,
 // log-lin, lin-log, log-log), errores estándar clásicos o robustos HC1/HC3/HAC
 // (cov_type de statsmodels), diagnóstico de heterocedasticidad Breusch-Pagan
@@ -398,21 +410,7 @@ export function buildEncodedCsvText(rows: Record<string, unknown>[], columns: st
  * acá: un valor inválido devuelve error sin cargar ni ejecutar Python.
  */
 export async function runPyodideOls(
-  args: {
-    csvText: string;
-    yName: string;
-    xNames: string[];
-    // Subset of xNames that are 0/1 dummy columns from categorical encoding —
-    // excluded from the log-X transform under lin-log/log-log. Defaults to
-    // none (plain numeric run).
-    dummyNames?: string[];
-    form: FunctionalForm;
-    rlsConstraint?: RLSConstraint;
-    standardErrorType?: string;
-    // Rezagos de Newey-West. undefined/null = automático (regla de dedo en Python).
-    hacMaxLags?: number | null;
-    dropIncompleteRows?: boolean;
-  },
+  args: PyodideOlsInput,
   onPhase?: (phase: PyodideOlsPhase) => void
 ): Promise<PyodideOlsResult> {
   if (!args.csvText || args.csvText.trim() === '') {

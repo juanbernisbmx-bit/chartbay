@@ -1,4 +1,4 @@
-import type { ParsedCSV } from '../../csvParser';
+import { materializeRows, type ParsedCSV } from '../../csvParser';
 import type {
   ProArimaForecast,
   ProTimeFrequency,
@@ -229,8 +229,12 @@ export function prepareProTimeSeriesValues(
   valueColumn: string,
   timeColumn: string | null
 ): PrepareProTimeSeriesResult {
+  // El limpiador WASM conserva sólo 50 filas como vista previa. Pro necesita
+  // materializar deliberadamente el dataset entero antes de enviar la serie a
+  // statsmodels; de lo contrario el resultado describe otra muestra sin aviso.
+  const rows = materializeRows(data, { dates: 'iso' });
   if (!timeColumn) {
-    const values = data.rows.map(row => {
+    const values = rows.map(row => {
       const raw = row[valueColumn];
       if (raw === null || raw === undefined || raw === '') return NaN;
       const num = Number(raw);
@@ -249,7 +253,7 @@ export function prepareProTimeSeriesValues(
   let droppedValues = 0;
   let invalidDates = 0;
 
-  data.rows.forEach((row, rowIndex) => {
+  rows.forEach((row, rowIndex) => {
     const rawValue = row[valueColumn];
     const num = Number(rawValue);
     if (rawValue === null || rawValue === undefined || rawValue === '' || !Number.isFinite(num)) {

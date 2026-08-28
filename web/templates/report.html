@@ -19,8 +19,8 @@
   <div class="wrap">
     <hr class="rule">
     <article id="md" class="prose"></article>
-    <script id="raw" type="text/plain">{{ content }}</script>
-    <script>
+    <script id="raw" type="text/plain" nonce="{{ csp_nonce }}">{{ content }}</script>
+    <script nonce="{{ csp_nonce }}">
       document.getElementById("md").innerHTML =
         DOMPurify.sanitize(marked.parse(document.getElementById("raw").textContent));
     </script>

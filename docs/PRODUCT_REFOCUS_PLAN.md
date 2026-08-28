@@ -1,7 +1,11 @@
 # ChartBay — Plan de Reenfoque de Producto
 
-> Documento de auditoría y planificación. No modifica código.
-> Fecha: 30 de junio de 2026.
+> **Documento histórico — planificación del 30 de junio de 2026.**
+> Es el plan que llevó al reenfoque, no un informe de estado. Lo que quedó
+> efectivamente en ChartBay 1.0 está en
+> [`V1_RELEASE_SCOPE.md`](V1_RELEASE_SCOPE.md); varias filas de las tablas de
+> abajo marcan como "Producción" componentes que hoy están apagados o que nunca
+> se desplegaron, entre ellos el motor Python con FastAPI.
 
 ---
 

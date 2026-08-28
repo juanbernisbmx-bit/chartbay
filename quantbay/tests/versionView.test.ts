@@ -8,14 +8,16 @@ beforeEach(() => {
     <strong id="qb-version-engine"></strong>
     <strong id="qb-version-limit"></strong>
     <strong id="qb-version-status"></strong>
+    <p id="qb-version-beta" hidden>Pro está en beta.</p>
     <p id="qb-version-desc"></p>`;
 });
 
 describe('renderVersionInfo', () => {
-  it('shows the Pro v1 description even though Pro is available', () => {
+  it('shows Pro v1 as beta from the version configuration', () => {
     renderVersionInfo(getVersionConfig('pro'));
 
-    expect(document.getElementById('qb-version-status')?.textContent).toBe('Disponible');
+    expect(document.getElementById('qb-version-status')?.textContent).toBe('Beta');
+    expect(document.getElementById('qb-version-beta')?.hidden).toBe(false);
     const desc = document.getElementById('qb-version-desc')?.textContent ?? '';
     expect(desc).toContain('ChartBay Pro v1');
     expect(desc).toContain('statsmodels');
@@ -26,6 +28,7 @@ describe('renderVersionInfo', () => {
     renderVersionInfo(getVersionConfig('lite'));
 
     expect(document.getElementById('qb-version-status')?.textContent).toBe('Disponible');
+    expect(document.getElementById('qb-version-beta')?.hidden).toBe(true);
     const desc = document.getElementById('qb-version-desc')?.textContent ?? '';
     expect(desc).toContain('Motor TypeScript');
     expect(desc).toContain('archivos grandes');

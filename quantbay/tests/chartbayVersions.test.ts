@@ -5,12 +5,14 @@ describe('chartbayVersions', () => {
   it('Lite config matches spec', () => {
     const lite = getVersionConfig('lite');
     expect(lite.id).toBe('lite');
-    // Subido de 2 MB tras medir el limpiador en C++/WASM: 516 MB y 7,9 M de
-    // filas en 17 s con 727 MB de heap. El tope viejo se calculó para el
+    // Subido tras medir el limpiador en C++/WASM: 516 MB y 7,9 M de filas en
+    // 17 s con 727 MB de heap. El tope anterior se calculó para el
     // camino de PapaParse, que armaba un objeto de JS por fila.
     expect(lite.maxCsvSizeMb).toBe(100);
     expect(lite.engine).toBe('typescript');
     expect(lite.status).toBe('available');
+    expect(lite.features.largeFiles).toBe(true);
+    expect(lite.description).toContain('aguanta archivos grandes');
   });
 
   it('Pro config matches spec', () => {
@@ -18,14 +20,16 @@ describe('chartbayVersions', () => {
     expect(pro.id).toBe('pro');
     expect(pro.maxCsvSizeMb).toBe(10);
     expect(pro.engine).toBe('pyodide');
-    expect(pro.status).toBe('available');
+    expect(pro.status).toBe('beta');
     expect(pro.description).toContain('ChartBay Pro v1');
+    expect(pro.description).toContain('beta');
     expect(pro.description).toContain('ARIMA');
     expect(pro.description).toContain('índice temporal opcional');
     // Pro admite menos MB que Lite a propósito, y la copia lo dice: no es una
     // escalera, son dos motores con costos distintos.
     expect(pro.maxCsvSizeMb).toBeLessThan(getVersionConfig('lite').maxCsvSizeMb);
     expect(pro.description).toContain('archivos más chicos que Lite');
+    expect(pro.features.largeFiles).toBe(false);
   });
 
   it('solo hay dos versiones, y son dos motores distintos', () => {
@@ -48,6 +52,8 @@ describe('chartbayVersions', () => {
       if (!result.ok) {
         expect(result.message).toContain('100 MB');
         expect(result.message).toContain('Lite');
+        expect(result.message).not.toContain('Pro');
+        expect(result.message).toContain('Reducí el tamaño del CSV');
       }
     });
 

@@ -504,7 +504,7 @@ describe('selector de errores estándar Pro', () => {
     expect(document.getElementById('qb-pro-se-wrap')?.style.display).toBe('');
   });
 
-  it('setProSeSelectorVisible oculta el selector para Lite / Mega Pro', () => {
+  it('setProSeSelectorVisible oculta el selector fuera del motor Pro', () => {
     setProSeSelectorVisible(true);
     setProSeSelectorVisible(false);
     expect(document.getElementById('qb-pro-se-wrap')?.style.display).toBe('none');

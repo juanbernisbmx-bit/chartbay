@@ -8,8 +8,10 @@ Arrancar en local:
     -> abre http://127.0.0.1:5000
 """
 import json
+import io
 import os
 import re
+import secrets
 import sqlite3
 import sys
 import tempfile
@@ -23,7 +25,8 @@ from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from flask import (
-    Flask, Response, jsonify, redirect, render_template, request, session, url_for, abort
+    Flask, Response, abort, g, jsonify, redirect, render_template, request, send_file,
+    session, url_for,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -39,6 +42,7 @@ import indicators       # noqa: E402
 import db               # noqa: E402
 import providers        # noqa: E402
 from seed_data import BOTS_BASE  # noqa: E402
+from source_archive import build_source_archive  # noqa: E402
 
 CACHE_DIR = Path(__file__).resolve().parent / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
@@ -72,6 +76,95 @@ def write_atomic(fp: Path, text: str) -> None:
 
 app = Flask(__name__)
 
+
+# ─── Secciones activas ───────────────────────────────────────────────────────
+# Espejo en Python de CHARTBAY_VERTICALS (quantbay/src/verticals/agro/
+# agroFeatureFlags.ts), que hace lo mismo del lado del navegador.
+#
+# Apagar una sección acá la desenchufa sin borrar nada: sus rutas pasan a
+# devolver 404 y sus enlaces desaparecen del menú, pero las vistas y las
+# plantillas siguen en el repo. Mercados sólo admite un override local de QA;
+# no se considera reactivado ni soportado por cambiar este diccionario.
+#
+# Se define antes que nada porque de acá cuelga el resto del arranque: qué
+# credenciales hacen falta, si se abre la base y qué permisos lleva el CSP.
+#
+# Las plantillas de las secciones apagadas se conservan para auditoría. Son
+# inalcanzables mientras el flag esté en False; una reactivación futura exige
+# revisar sus flujos completos, no solamente cambiar este diccionario.
+SECCIONES = {
+    "econometria": True,
+    "limpiador": True,
+    "datos": True,
+    "agro": False,
+    "mercados": False,
+}
+
+
+def _aplicar_overrides(seccion_env: str) -> None:
+    """Permite encender Mercados para QA local, sin cambiar el alcance de 1.0.
+
+    Formato: ``CHARTBAY_SECCIONES=mercados=on``. El override existe para probar
+    rutas, autenticación y headers del código heredado. No habilita Agro ni
+    permite apagar las secciones de 1.0, y tampoco convierte Mercados en una
+    sección soportada: todavía requiere credenciales, persistencia y una revisión
+    funcional separada antes de cualquier despliegue.
+
+    El default no cambia. Cualquier otro nombre se ignora para que una variable
+    de entorno no pueda ampliar o reducir accidentalmente el alcance publicado.
+    """
+    for par in seccion_env.split(","):
+        nombre, _, valor = par.partition("=")
+        nombre = nombre.strip().lower()
+        if nombre == "mercados":
+            SECCIONES["mercados"] = valor.strip().lower() in (
+                "1", "true", "on", "si", "sí", "yes"
+            )
+
+
+_aplicar_overrides(os.environ.get("CHARTBAY_SECCIONES", ""))
+
+# La sesión existe por una sola razón: la comunidad de bots de Mercados, que es
+# lo único que tiene autor, login y contenido propio de cada usuario. Las
+# secciones de 1.0 (Econometría, Limpiador, Datos, Documentación) calculan todo
+# en el navegador y no guardan nada, así que con Mercados apagado no hay ni una
+# ruta activa que mire `session`.
+#
+# De ese hecho cuelgan cuatro consecuencias, todas condicionadas acá y no
+# repetidas por el archivo: no se piden credenciales al arrancar, no se abre
+# SQLite, /login y /register devuelven 404, y la barra superior no ofrece
+# "Entrar". El override de QA de Mercados devuelve esas superficies para
+# probarlas, pero no garantiza que el vertical heredado esté operativo.
+AUTH_ENABLED = SECCIONES["mercados"]
+
+
+def seccion(nombre: str):
+    """Deja la vista fuera de servicio (404) mientras su sección esté apagada."""
+    def decorador(fn):
+        @wraps(fn)
+        def envoltura(*args, **kwargs):
+            if not SECCIONES.get(nombre, False):
+                abort(404)
+            return fn(*args, **kwargs)
+        return envoltura
+    return decorador
+
+
+def solo_con_auth(fn):
+    """404 para las rutas de sesión mientras la autenticación esté apagada.
+
+    Mismo criterio que `seccion`, pero colgado de AUTH_ENABLED: sin secciones
+    que necesiten login, un formulario de acceso es una superficie de ataque
+    que no le sirve a nadie.
+    """
+    @wraps(fn)
+    def envoltura(*args, **kwargs):
+        if not AUTH_ENABLED:
+            abort(404)
+        return fn(*args, **kwargs)
+    return envoltura
+
+
 # _is_dev must be defined before credential checks so both SECRET_KEY and APP_PASSWORD
 # can decide whether to fail fast or use a local dev fallback.
 _is_dev = os.environ.get("APP_ENV", "").lower() in ("development", "dev") or \
@@ -97,13 +190,23 @@ app.secret_key = _secret_key
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
+    # Secure fuera de desarrollo: sin esto la cookie de sesión viaja también por
+    # HTTP y basta un enlace en texto plano para filtrarla. En local se apaga
+    # porque el servidor de desarrollo no habla HTTPS y el navegador
+    # descartaría la cookie, dejando el login inutilizable.
+    SESSION_COOKIE_SECURE=not _is_dev,
 )
 
 APP_USERNAME = os.environ.get("APP_USERNAME", "juan")
 
 _raw_pw = os.environ.get("APP_PASSWORD", "")
 if not _raw_pw:
-    if _is_dev:
+    if not AUTH_ENABLED:
+        # Sin secciones que pidan sesión no hay usuario que sembrar, así que
+        # exigir la contraseña acá solo lograba que un Blueprint recién creado
+        # no arrancara por una credencial que nada iba a usar.
+        APP_PASSWORD = ""
+    elif _is_dev:
         import logging as _logging
         _logging.getLogger(__name__).warning(
             "APP_PASSWORD no configurado — usando contraseña de desarrollo local. "
@@ -112,7 +215,7 @@ if not _raw_pw:
         APP_PASSWORD = "dev-inseguro-cambiar"
     else:
         raise RuntimeError(
-            "APP_PASSWORD no está configurado. "
+            "APP_PASSWORD no está configurado y la sección Mercados está encendida. "
             "Definí esta variable de entorno en el panel de Render antes de desplegar."
         )
 else:
@@ -122,39 +225,78 @@ REGISTRATION_OPEN = False  # cambiar a True para reabrir el registro
 
 
 # ─── Seguridad: headers de respuesta ────────────────────────────────────────
+# El CSP se arma por partes en vez de escribirse entero tres veces, porque las
+# tres variantes se diferencian en dos directivas y copiarlas completas fue
+# justamente lo que dejó permisos de TradingView en páginas que ya no lo cargan.
 
-_CSP = (
-    "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com s3.tradingview.com; "
-    "style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data: blob:; "
-    "connect-src 'self' *.tradingview.com wss://*.tradingview.com; "
-    "frame-src s3.tradingview.com *.tradingview.com; "
-    "frame-ancestors 'none'"
-)
+# Las fuentes se sirven desde Google Fonts en las 17 plantillas (`<link>` a
+# fonts.googleapis.com, que a su vez baja los .woff2 de fonts.gstatic.com). El
+# CSP anterior no las nombraba en ninguna directiva, así que la hoja de estilos
+# caía por style-src y los archivos de fuente por default-src: el sitio entero
+# se veía con la fuente de sistema. Van las dos, porque son dos peticiones a dos
+# orígenes distintos.
+_FONT_STYLE_SRC = "fonts.googleapis.com"
+_FONT_SRC = "'self' fonts.gstatic.com"
 
-# ChartBay Pro (Pyodide) necesita compilar WebAssembly y bajar su runtime y los
-# wheels de numpy/pandas vía fetch() desde jsdelivr. Ese permiso queda acotado
-# a la página que carga quantbay.bundle.js — el resto de la app mantiene el CSP
-# más estricto de arriba.
-# 'wasm-unsafe-eval' solo habilita compilar WebAssembly; no habilita eval() de
-# JavaScript como haría 'unsafe-eval'.
-_CSP_QUANTBAY = (
-    "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' cdn.jsdelivr.net cdnjs.cloudflare.com s3.tradingview.com; "
-    "style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data: blob:; "
-    "connect-src 'self' cdn.jsdelivr.net *.tradingview.com wss://*.tradingview.com; "
-    "frame-src s3.tradingview.com *.tradingview.com; "
-    "frame-ancestors 'none'"
-)
+# TradingView queda reservado a la única ruta que hoy inserta su widget
+# (`/compare`) y sólo cuando se habilita el override de QA de Mercados. No se
+# agrega globalmente: Inicio, Econometría, Limpiador y Datos no necesitan esos
+# permisos ni siquiera durante una auditoría del código heredado.
 
-# El worker del limpiador de CSV se incluye acá porque un Worker corre bajo el
-# CSP de la respuesta de su PROPIO script, no bajo el del documento que lo
-# creó. Sin esta línea, compilar WebAssembly dentro del worker queda bloqueado
-# aunque /econometria tenga el permiso, y el limpiador cae en silencio al
-# lector clásico.
-_QUANTBAY_PATHS = {"/econometria", "/agro", "/limpiador", "/static/js/quantbay.worker.js"}
+
+def _csp(
+    *, nonce: str, wasm: bool = False, cdn: bool = False, tradingview: bool = False
+) -> str:
+    """Arma el CSP de una página a partir de lo que esa página realmente carga.
+
+    `wasm` habilita compilar WebAssembly ('wasm-unsafe-eval', que NO habilita
+    eval() de JavaScript como haría 'unsafe-eval'). `cdn` abre jsdelivr sólo
+    para el worker de Pro, que descarga Pyodide y sus paquetes bajo demanda.
+    """
+    wasm_src = " 'wasm-unsafe-eval'" if wasm else ""
+    cdn_script = " cdn.jsdelivr.net" if cdn else ""
+    cdn_connect = " cdn.jsdelivr.net" if cdn else ""
+    tv_script = " s3.tradingview.com" if tradingview else ""
+    tv_frame = (
+        "frame-src s3.tradingview.com *.tradingview.com; "
+        if tradingview else "frame-src 'none'; "
+    )
+    return (
+        "default-src 'self'; "
+        f"script-src 'self' 'nonce-{nonce}'{wasm_src}{cdn_script}{tv_script}; "
+        "script-src-attr 'none'; "
+        f"style-src 'self' {_FONT_STYLE_SRC}; "
+        "style-src-attr 'unsafe-inline'; "
+        f"font-src {_FONT_SRC}; "
+        "img-src 'self' data: blob:; "
+        f"connect-src 'self'{cdn_connect}; "
+        "worker-src 'self'; "
+        f"{tv_frame}"
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'"
+    )
+
+
+# Un Worker corre bajo el CSP de la respuesta de su PROPIO script, no bajo el
+# del documento que lo creó. Sin la entrada de /static/js/quantbay.worker.js,
+# compilar WebAssembly dentro del worker queda bloqueado aunque /limpiador
+# tenga el permiso, y el limpiador cae en silencio al lector clásico.
+_CSP_PERFIL_POR_RUTA = {
+    "/econometria": {"wasm": True},
+    "/agro": {"wasm": True},
+    "/limpiador": {"wasm": True},
+    "/static/js/quantbay.worker.js": {"wasm": True},
+    "/static/js/quantbay.pro.worker.js": {"wasm": True, "cdn": True},
+}
+if SECCIONES["mercados"]:
+    _CSP_PERFIL_POR_RUTA["/compare"] = {"tradingview": True}
+
+
+@app.before_request
+def preparar_csp_nonce():
+    g.csp_nonce = secrets.token_urlsafe(18)
 
 
 @app.after_request
@@ -162,9 +304,46 @@ def add_security_headers(response):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    csp = _CSP_QUANTBAY if request.path in _QUANTBAY_PATHS else _CSP
-    response.headers.setdefault("Content-Security-Policy", csp)
+    profile = _CSP_PERFIL_POR_RUTA.get(request.path, {})
+    response.headers.setdefault("Content-Security-Policy", _csp(nonce=g.csp_nonce, **profile))
     return response
+
+
+# ─── Seguridad: CSRF ────────────────────────────────────────────────────────
+# Solo corre con la autenticación encendida: sin sesión no hay nada que
+# falsificar, y generar el token metería una cookie a cada visitante de un sitio
+# que hoy no guarda ni una.
+#
+# El token se acepta por formulario (`_csrf`) o por cabecera (`X-CSRF-Token`).
+# Lo segundo es para las llamadas fetch de Mercados (/api/verdict y
+# /api/verdict_one): hoy devuelven 404, pero si se reactiva la sección tienen
+# que mandar la cabecera o el POST se rechaza.
+
+_METODOS_INSEGUROS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def csrf_token() -> str:
+    """Token de la sesión, creado la primera vez que se pide."""
+    token = session.get("_csrf")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["_csrf"] = token
+    return token
+
+
+@app.before_request
+def verificar_csrf():
+    if not AUTH_ENABLED or request.method not in _METODOS_INSEGUROS:
+        return None
+    esperado = session.get("_csrf", "")
+    recibido = request.form.get("_csrf", "") or request.headers.get("X-CSRF-Token", "")
+    # compare_digest y no ==: la comparación byte a byte de Python corta en el
+    # primer carácter distinto y filtra el prefijo correcto por tiempo.
+    if not esperado or not secrets.compare_digest(esperado, recibido):
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Token CSRF inválido o ausente"}), 400
+        abort(400)
+    return None
 
 
 # ─── Arranque BD ─────────────────────────────────────────────────────────────
@@ -210,46 +389,29 @@ def seed_starter_bots():
     conn.close()
 
 
-db.init_db()
-seed_owner()
-seed_starter_bots()
-
-
-# ─── Secciones activas ───────────────────────────────────────────────────────
-# Espejo en Python de CHARTBAY_VERTICALS (quantbay/src/verticals/agro/
-# agroFeatureFlags.ts), que hace lo mismo del lado del navegador.
-#
-# Apagar una sección acá la desenchufa sin borrar nada: sus rutas pasan a
-# devolver 404 y sus enlaces desaparecen del menú, pero las vistas y las
-# plantillas siguen en el repo. Volver a encenderla es poner True.
-#
-# Las plantillas de las secciones apagadas se dejan como están a propósito: son
-# inalcanzables mientras el flag esté en False, y si algún día se reactiva la
-# sección vuelven a funcionar tal cual estaban.
-SECCIONES = {
-    "econometria": True,
-    "limpiador": True,
-    "datos": True,
-    "agro": False,
-    "mercados": False,
-}
-
-
-def seccion(nombre: str):
-    """Deja la vista fuera de servicio (404) mientras su sección esté apagada."""
-    def decorador(fn):
-        @wraps(fn)
-        def envoltura(*args, **kwargs):
-            if not SECCIONES.get(nombre, False):
-                abort(404)
-            return fn(*args, **kwargs)
-        return envoltura
-    return decorador
+# La base solo la usan la autenticación y la comunidad de bots, las dos de
+# Mercados. Con la sección apagada, abrir SQLite en el import era trabajo puro:
+# creaba tablas, hasheaba una contraseña y sembraba bots que ninguna ruta activa
+# podía llegar a leer, y encima dejaba un archivo .db (más su -wal y su -shm)
+# en el disco efímero de Render en cada arranque.
+if AUTH_ENABLED:
+    db.init_db()
+    seed_owner()
+    seed_starter_bots()
 
 
 @app.context_processor
 def inject_globals():
-    return {"registration_open": REGISTRATION_OPEN, "secciones": SECCIONES}
+    return {
+        "registration_open": REGISTRATION_OPEN,
+        "secciones": SECCIONES,
+        # La barra superior lo usa para decidir si muestra "Entrar".
+        "auth_enabled": AUTH_ENABLED,
+        "csp_nonce": g.csp_nonce,
+        # Callable y no valor: así el token se crea (y con él la cookie de
+        # sesión) solo en las plantillas que de verdad renderizan un formulario.
+        "csrf_token": csrf_token,
+    }
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -346,6 +508,7 @@ def login_required(f):
 
 
 @app.route("/login", methods=["GET", "POST"])
+@solo_con_auth
 def login():
     error = None
     if request.method == "POST":
@@ -367,6 +530,7 @@ def login():
 
 
 @app.route("/register", methods=["GET", "POST"])
+@solo_con_auth
 def register():
     if not REGISTRATION_OPEN:
         return render_template("register.html", error=None)
@@ -397,7 +561,13 @@ def register():
     return render_template("register.html", error=error)
 
 
-@app.route("/logout")
+# POST y no GET: con logout por GET alcanza que un tercero incruste
+# <img src="/logout"> en cualquier página para desloguear al usuario, y un
+# prefetch del navegador puede cerrar la sesión sin que nadie haga clic.
+# El formulario de la barra superior manda el token CSRF, que ya valida
+# `verificar_csrf`.
+@app.route("/logout", methods=["POST"])
+@solo_con_auth
 def logout():
     session.clear()
     return redirect(url_for("login"))
@@ -441,6 +611,18 @@ def version():
         "arrancado": arranque.isoformat(timespec="seconds"),
         "uptime_s": round(time.time() - _STARTED),
     })
+
+
+@app.route("/source.tar.gz")
+def source_archive():
+    """Offer the complete source of the version served over the network."""
+    return send_file(
+        io.BytesIO(build_source_archive(ROOT)),
+        mimetype="application/gzip",
+        as_attachment=True,
+        download_name="chartbay-source.tar.gz",
+        max_age=3600,
+    )
 
 
 # ─── Herramienta ─────────────────────────────────────────────────────────────
@@ -852,10 +1034,18 @@ def _fred_ready() -> bool:
 
 @app.route("/data")
 def frequent_data():
+    available_providers = {
+        source["code"] for source in providers.provider_status() if source["available"]
+    }
     bootstrap = {
         "catalog": providers.catalog_public(),
         "categories": providers.CATEGORIES,
         "fredReady": _fred_ready(),
+        "downloadableIds": [
+            indicator.id
+            for indicator in providers.CATALOG
+            if indicator.provider in available_providers
+        ],
     }
     return render_template(
         "frequent_data.html",

@@ -1,9 +1,20 @@
 import { materializeRows, parseCSVFile, parseCSVText, rowCountOf, type ParsedCSV } from './csvParser';
+import Papa from 'papaparse';
+import Chart from 'chart.js/auto';
+import { jsPDF } from 'jspdf';
+import { applyPlugin as applyAutoTablePlugin } from 'jspdf-autotable';
 import { type BridgedDataset } from './services/cleanerBridge';
 import { loadCsv, type LoadResult } from './services/cleanerLoader';
 import { takeHandoff } from './services/datasetHandoff';
 import { renderDeviceProfile } from '../../cleaner/js/deviceProfileView';
 import { detectDeviceProfile } from '../../cleaner/js/deviceProfiler';
+
+// Dependencias de la aplicación principal, empaquetadas por Vite. Mantenerlas
+// acá conserva la API global que usan las vistas históricas sin ejecutar
+// código de terceros descargado por separado al abrir el laboratorio.
+applyAutoTablePlugin(jsPDF);
+Object.assign(globalThis, { Papa, Chart });
+(globalThis as typeof globalThis & { jspdf?: { jsPDF: typeof jsPDF } }).jspdf = { jsPDF };
 
 /**
  * Shows what the device is thought to be and what that implied. Only on the
@@ -23,6 +34,36 @@ function showDeviceProfile(loaded: LoadResult): void {
     budget: loaded.budget,
     preflight: loaded.preflight,
   });
+}
+
+function showLoadWarnings(loaded: LoadResult): void {
+  const container = $('qb-load-warnings');
+  if (!container) return;
+  const report = (loaded.data as Partial<BridgedDataset>).report;
+  const dropped = report?.actions.filter(action =>
+    action.kind === 'dropped_empty_column' ||
+    action.kind === 'dropped_constant_column' ||
+    action.kind === 'dropped_duplicate_column'
+  ) ?? [];
+  container.replaceChildren();
+  container.hidden = dropped.length === 0;
+  if (dropped.length === 0) return;
+  const title = document.createElement('strong');
+  title.textContent = `Revisá ${dropped.length === 1 ? 'esta columna descartada' : 'estas columnas descartadas'}:`;
+  const list = document.createElement('ul');
+  for (const action of dropped) {
+    const item = document.createElement('li');
+    item.textContent = action.detail;
+    list.appendChild(item);
+  }
+  container.append(title, list);
+}
+
+function clearLoadWarnings(): void {
+  const container = $('qb-load-warnings');
+  if (!container) return;
+  container.hidden = true;
+  container.replaceChildren();
 }
 import type { RLSConstraint } from './rls';
 import { parseRLSRestriction, refineCategoricalRlsError } from './rlsParser';
@@ -64,7 +105,12 @@ import {
 import { getVersionConfig, validateCsvFileSize, type ChartBayVersion } from './versioning/chartbayVersions';
 import { renderVersionInfo } from './ui/versionView';
 import { resolveEngineAction } from './pro/engineRouting';
-import { runPyodideOls, buildEncodedCsvText } from './pro/pyodide/pythonOlsRunner';
+import { buildEncodedCsvText } from './pro/pyodide/pythonOlsRunner';
+import {
+  disposeProWorker,
+  runProOlsInWorker,
+  runProTimeSeriesInWorker,
+} from './pro/pyodide/proWorkerClient';
 import { DEFAULT_PRO_STANDARD_ERROR_TYPE, PRO_STANDARD_ERROR_LABELS, proError } from './pro/pyodide/proResultTypes';
 import {
   clearProResult,
@@ -79,7 +125,6 @@ import {
 import { checkProCapability } from './pro/proCapability';
 import { checkProFunctionalDomain } from './pro/proDomainCheck';
 import { buildLiteComparison } from './pro/liteComparison';
-import { runPyodideTimeSeries } from './pro/pyodide/pythonTimeSeriesRunner';
 import {
   clearProTimeSeriesResult,
   getProArimaEnabled,
@@ -384,9 +429,9 @@ function isTimeSeriesMode(): boolean {
   return appState.activeMode === 'timeseries';
 }
 
-// Time series + Pro (Pyodide) → diagnósticos de series con statsmodels. Con
-// cualquier otra versión (Lite / Mega Pro) sigue el flujo Lite existente, para
-// no mezclar corte transversal y series de tiempo de forma silenciosa.
+// Time series + Pro (Pyodide) → diagnósticos de series con statsmodels. Lite
+// conserva su flujo existente para no mezclar corte transversal y series de
+// tiempo de forma silenciosa.
 function isProTimeSeries(): boolean {
   return isTimeSeriesMode() && resolveEngineAction(appState.activeVersion) === 'pro_pyodide';
 }
@@ -439,8 +484,7 @@ function updateModePanels(): void {
   const tsPanel = $('qb-ts-panel');
   const proTsPanel = $('qb-pro-ts-panel');
   const ts = isTimeSeriesMode();
-  // Pro usa su propio panel de series (statsmodels); Lite y Mega Pro usan el
-  // panel Lite existente (Mega Pro sigue bloqueando en el run como antes).
+  // Pro usa su propio panel de series (statsmodels); Lite usa el panel nativo.
   const proTs = ts && isProTimeSeries();
   const liteTs = ts && !proTs;
 
@@ -469,7 +513,13 @@ function updateModePanels(): void {
   }
 }
 
+let analysisContextGeneration = 0;
+
 function setActiveMode(mode: 'regression' | 'timeseries'): void {
+  if (appState.activeMode !== mode && appState.activeVersion === 'pro') {
+    disposeProWorker();
+  }
+  analysisContextGeneration += 1;
   appState.activeMode = mode;
   showError('');
   updateModePanels();
@@ -477,9 +527,13 @@ function setActiveMode(mode: 'regression' | 'timeseries'): void {
 }
 
 function setActiveVersion(version: ChartBayVersion): void {
+  analysisContextGeneration += 1;
   appState.activeVersion = version;
   showError('');
-  if (version !== 'pro') hideProPanel();
+  if (version !== 'pro') {
+    hideProPanel();
+    disposeProWorker();
+  }
   renderVersionInfo(getVersionConfig(version));
   setProSeSelectorVisible(resolveEngineAction(version) === 'pro_pyodide');
   // En modo series de tiempo, cambiar de versión intercambia el panel Lite por
@@ -492,6 +546,7 @@ async function loadDemoCase(id: string): Promise<void> {
   showError('');
   hideProPanel();
   clearAgroContext();
+  clearLoadWarnings();
   appState.activeDemoId = id;
   setEngineStatus('LEYENDO');
   writeRunLog([`Cargando demo: ${demo.label}`]);
@@ -596,6 +651,7 @@ async function loadFile(file: File): Promise<void> {
   }
 
   showError('');
+  clearLoadWarnings();
   hideProPanel();
   clearAgroContext();
   appState.activeDemoId = null;
@@ -626,6 +682,7 @@ async function loadFile(file: File): Promise<void> {
     appState.loadNotes = loaded.notes;
     appState.loadEngine = loaded.engine;
     showDeviceProfile(loaded);
+    showLoadWarnings(loaded);
     if (!isTimeSeriesMode() && appState.csvData.numericColumns.length < 2) {
       showError('El CSV necesita al menos 2 columnas numéricas.');
       return;
@@ -805,6 +862,12 @@ async function onRunPro(
     return;
   }
 
+  const runGeneration = analysisContextGeneration;
+  const runStillCurrent = () => (
+    analysisContextGeneration === runGeneration
+    && appState.activeVersion === 'pro'
+    && appState.activeMode === 'regression'
+  );
   proRunInFlight = true;
   const runButton = $('qb-run') as HTMLButtonElement | null;
   if (runButton) runButton.disabled = true;
@@ -830,6 +893,7 @@ async function onRunPro(
     const effectiveCsvText = hasCategorical
       ? buildEncodedCsvText(encoding.rows, [yName, ...encoding.expandedXNames])
       : await proCsvText();
+    if (!runStillCurrent()) return;
     // `columns` MUST be dropped here. Encoding produced new dummy columns that
     // live only in `encoding.rows`; leaving the old columnar store in place
     // would make getValidRowsFrom read the pre-encoding data and silently
@@ -853,6 +917,7 @@ async function onRunPro(
       new Set(dummyNames)
     );
     if (domainError) {
+      if (!runStillCurrent()) return;
       renderProResult(proError(domainError));
       hideAgroInterpretationPanels();
       setEngineStatus('ERROR');
@@ -863,7 +928,7 @@ async function onRunPro(
     showProStatus('Cargando Python en navegador…');
     writeRunLog(['ChartBay Pro: preparando Python en el navegador…']);
 
-    const rawResult = await runPyodideOls(
+    const rawResult = await runProOlsInWorker(
       {
         csvText: effectiveCsvText,
         yName,
@@ -876,11 +941,13 @@ async function onRunPro(
         dropIncompleteRows: dropIncompleteRowsSelected(),
       },
       phase => {
+        if (!runStillCurrent()) return;
         if (phase === 'loading-pyodide') showProStatus('Cargando Python en navegador…');
         else if (phase === 'loading-packages') showProStatus('Cargando numpy, pandas y statsmodels…');
         else showProStatus('Ejecutando OLS con statsmodels…');
       }
     );
+    if (!runStillCurrent()) return;
     // Categorical metadata (base category, dummies created) is a TS-side
     // concern end to end — attached here for display, never round-tripped
     // through Python's JSON payload (see proResultTypes.ts).
@@ -1108,6 +1175,12 @@ async function onRunProTimeSeries(): Promise<void> {
     return;
   }
 
+  const runGeneration = analysisContextGeneration;
+  const runStillCurrent = () => (
+    analysisContextGeneration === runGeneration
+    && appState.activeVersion === 'pro'
+    && appState.activeMode === 'timeseries'
+  );
   proTsRunInFlight = true;
   const runButton = $('qb-pro-ts-run') as HTMLButtonElement | null;
   if (runButton) runButton.disabled = true;
@@ -1143,7 +1216,7 @@ async function onRunProTimeSeries(): Promise<void> {
     writeRunLog(['ChartBay Pro: preparando diagnósticos de series de tiempo…']);
 
     const runArima = getProArimaEnabled();
-    const rawResult = await runPyodideTimeSeries(
+    const rawResult = await runProTimeSeriesInWorker(
       {
         values,
         variableName: valueColumn,
@@ -1156,11 +1229,13 @@ async function onRunProTimeSeries(): Promise<void> {
         forecastSteps: runArima ? getProForecastSteps() : undefined,
       },
       phase => {
+        if (!runStillCurrent()) return;
         if (phase === 'loading-pyodide') showProTimeSeriesStatus('Cargando Python en navegador…');
         else if (phase === 'loading-packages') showProTimeSeriesStatus('Cargando numpy, pandas y statsmodels…');
         else showProTimeSeriesStatus('Ejecutando diagnósticos con statsmodels…');
       }
     );
+    if (!runStillCurrent()) return;
     const result = withPreparedProTimeIndex(rawResult, prepared.value);
 
     // El gráfico de forecast dibuja los últimos observados: se pasan las

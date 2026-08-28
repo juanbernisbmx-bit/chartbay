@@ -18,6 +18,7 @@
     <p class="catalog-title">Publicar ficha de bot</p>
     {% if error %}<p class="err" style="text-align:center">{{ error }}</p>{% endif %}
     <form class="botform" method="post">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <label>Nombre del bot
         <input type="text" name="name" maxlength="80" required placeholder="Ej. RSI Momentum">
       </label>

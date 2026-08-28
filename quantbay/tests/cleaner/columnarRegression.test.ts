@@ -5,7 +5,7 @@
  * previa de 50 filas y el dataset entero quedó en `columns` como arrays
  * tipados. Cuatro lugares seguían armando la matriz de diseño desde `.rows`,
  * así que un CSV de 60 000 filas se estimaba con 50. Estuvo así en producción y
- * los 1172 tests seguían en verde, porque todos los fixtures construyen un
+ * la suite seguía en verde, porque todos los fixtures construyen un
  * ParsedCSV a mano, sin `columns`, y por eso siempre tomaban el camino por
  * filas.
  *
