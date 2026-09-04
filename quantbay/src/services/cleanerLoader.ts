@@ -1,7 +1,7 @@
 /**
  * Loads a CSV through the WASM cleaner, falling back to PapaParse.
  *
- * The fallback is not decoration. The module is 160 KB that has to be fetched
+ * The fallback is not decoration. The module is 213 KB that has to be fetched
  * and compiled, WebAssembly can be disabled by policy, and this path is new
  * where PapaParse has been carrying the app for a long time. Anything that
  * goes wrong here drops back to the old loader with a note in the run log,

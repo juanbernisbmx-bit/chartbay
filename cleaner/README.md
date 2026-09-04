@@ -31,7 +31,7 @@ ni siquiera de la columna (ver más abajo).
 | CLI nativo `csvclean` | listo |
 | Modulo WASM (`web/static/wasm/csvclean.wasm`, 213 KB) | compilado y verificado contra el binario nativo |
 | Capa adaptativa TypeScript (perfilado, preflight, worker, UI) | lista, 99 tests en verde |
-| Conexión a `quantbay/` | **pendiente** |
+| Conexión a `quantbay/` | hecha: el Limpiador y el laboratorio corren sobre esto |
 
 `make wasm-test` corre el modulo compilado bajo Node y exige que su reporte sea
 **identico byte a byte** al del binario nativo. Compilar no prueba nada por si
@@ -327,9 +327,10 @@ El test `chunk_boundaries_are_invisible` alimenta la misma entrada en **todos**
 los tamaños de bloque posibles y exige un único resultado. Es el test que
 sostiene todo lo anterior.
 
-## Integrar en ChartBay
+## Compilar el módulo WASM
 
-Falta esto, y necesita [emsdk](https://emscripten.org/docs/getting_started/downloads.html):
+Tocar `src/`, `include/` o `wasm/` obliga a rehacer el módulo del navegador, y
+eso necesita [emsdk](https://emscripten.org/docs/getting_started/downloads.html):
 
 ```bash
 git clone https://github.com/emscripten-core/emsdk && cd emsdk
@@ -342,26 +343,37 @@ cd ../cleaner && make wasm && make wasm-test
 ultima que corre sobre 3.9, trae su propio Node y compila todo esto sin
 problemas. Si instalas un Python mas nuevo, `latest` deberia andar igual.
 
-Eso deja `web/static/wasm/csvclean.{js,wasm}`. Igual que
-`quantbay.bundle.js`, **hay que commitearlos**: el runtime Python de Render no
-tiene Node ni Emscripten, así que nada se compila en el deploy.
+Eso deja `web/static/wasm/csvclean.{js,wasm}`. Igual que `quantbay.bundle.js`,
+**hay que commitearlos**: el runtime Python de Render no tiene Node ni
+Emscripten, así que nada se compila en el deploy.
 
-Después:
+Lo que decide si el módulo sirve es `make wasm-test`, no que haya compilado.
+Corre el compilado bajo Node y exige que su reporte sea **idéntico byte a byte**
+al del binario nativo, sobre un fixture que trae a propósito preámbulo, pie de
+tabla, un byte de Windows-1252, escrituras repetidas de una categoría, comillas
+mal formadas y una columna vacía.
 
-1. Cargar `csvclean.js` desde `web/templates/quantbay.html`, junto a PapaParse.
-2. Mover `js/csvclean.ts` a `quantbay/src/cleaner/` y agregarlo al bundle.
-3. En [`main.ts:506`](../quantbay/src/main.ts), reemplazar `parseCSVFile(file)`
-   por `cleanCsv(file)`.
-4. Usar `extractMatrix()` en lugar de `getValidRows()` para armar X e y; ahí
-   está la ganancia real, porque evita reconstruir objetos por fila.
-5. Mostrar `report.actions` en el panel de log — ya vienen redactadas en
-   castellano y con el motivo.
-6. `toRowObjects(table, 100)` solo para la tabla de preview. Tiene límite de
-   filas a propósito: reconstruye exactamente la representación que este módulo
-   existe para evitar.
+## Cómo está conectado
 
-Conviene dejar PapaParse como camino de respaldo hasta que el WASM esté probado
-en producción.
+- `csvclean.js` se carga desde `web/templates/quantbay.html` y desde
+  `web/templates/limpiador.html`.
+- `js/csvclean.ts` se quedó acá: los bundles de quantbay lo importan desde
+  `cleaner/js/` y no hizo falta moverlo.
+- El laboratorio entra por
+  [`services/cleanerLoader.ts`](../quantbay/src/services/cleanerLoader.ts), que
+  elige el camino WASM y **cae a PapaParse** cuando algo falla. El respaldo no
+  es decoración: el módulo hay que bajarlo, y el camino de PapaParse venía
+  sosteniendo la app desde mucho antes que esto existiera.
+- `getValidRowsFrom()` lee los arrays tipados cuando el dataset viene del
+  limpiador, y sólo reconstruye objetos por fila cuando viene de PapaParse. Ahí
+  está la ganancia real, porque evita la representación que este módulo existe
+  para no tener que armar.
+- `report.actions` se muestra en el log del laboratorio y, completo, en la
+  sección "Qué se hizo" del Limpiador. Ya viene redactado en castellano y con
+  el motivo de cada cosa.
+- El Limpiador es su propia página y su propio bundle
+  ([`cleaner.entry.ts`](../quantbay/src/cleaner.entry.ts)): no arrastra los 375
+  kB del motor econométrico para limpiar un archivo.
 
 ### Cuánto aguanta el navegador
 
