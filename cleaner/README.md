@@ -30,7 +30,7 @@ ni siquiera de la columna (ver más abajo).
 | Core C++ (parser, tipado, limpieza, reporte) | listo, 700 checks en verde |
 | CLI nativo `csvclean` | listo |
 | Modulo WASM (`web/static/wasm/csvclean.wasm`, 213 KB) | compilado y verificado contra el binario nativo |
-| Capa adaptativa TypeScript (perfilado, preflight, worker, UI) | lista, 99 tests en verde |
+| Capa adaptativa TypeScript (perfilado, preflight, worker, UI) | lista, 100 tests en verde |
 | Conexión a `quantbay/` | hecha: el Limpiador y el laboratorio corren sobre esto |
 
 `make wasm-test` corre el modulo compilado bajo Node y exige que su reporte sea

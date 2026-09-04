@@ -202,6 +202,35 @@ describe('diagnose', () => {
     expect(issue!.detail).toContain('mensual');
   });
 
+  it('los títulos concuerdan en singular, que es donde se nota', () => {
+    // "Faltan 1 período" delata que lo escribió una plantilla, justo en el
+    // panel que existe para que el usuario confíe en lo que se decidió.
+    const uno = diagnose(
+      report({
+        timeIndex: timeIndex({ periodsObserved: 11, periodsExpected: 12, missingPeriods: 1 }),
+        actions: [
+          { kind: 'unified_levels', column: 'p', count: 1, detail: 'x' },
+          { kind: 'skipped_preamble_rows', column: '', count: 1, detail: 'x' },
+        ],
+      })
+    );
+    const titulo = (id: string) => uno.find(i => i.id === id)!.title;
+    expect(titulo('time-gaps')).toBe('Falta 1 período en la serie');
+    expect(titulo('unified-levels')).toBe('Se unificó 1 escritura de las mismas categorías');
+    expect(titulo('skipped-preamble')).toBe('Se salteó 1 fila arriba del encabezado');
+
+    const varios = diagnose(
+      report({
+        timeIndex: timeIndex({ periodsObserved: 10, periodsExpected: 12, missingPeriods: 2 }),
+        actions: [{ kind: 'skipped_preamble_rows', column: '', count: 3, detail: 'x' }],
+      })
+    );
+    expect(varios.find(i => i.id === 'time-gaps')!.title).toBe('Faltan 2 períodos en la serie');
+    expect(varios.find(i => i.id === 'skipped-preamble')!.title).toBe(
+      'Se saltearon 3 filas arriba del encabezado'
+    );
+  });
+
   it('el título concuerda con el número de columnas descartadas', () => {
     const una = diagnose(
       report({

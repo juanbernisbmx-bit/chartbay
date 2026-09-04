@@ -46,6 +46,18 @@ function plural(n: number, uno: string, varios: string): string {
   return `${n.toLocaleString('es-AR')} ${n === 1 ? uno : varios}`;
 }
 
+/**
+ * Concuerda el verbo con el número.
+ *
+ * `plural` resuelve el sustantivo pero no el verbo que va adelante, y un título
+ * que dice "Faltan 1 período" delata que lo escribió una plantilla y no una
+ * persona — justo en el panel que existe para que el usuario confíe en lo que
+ * el limpiador decidió.
+ */
+function verbo(n: number, uno: string, varios: string): string {
+  return n === 1 ? uno : varios;
+}
+
 export function diagnose(report: CleanReport): Issue[] {
   const issues: Issue[] = [];
 
@@ -223,7 +235,11 @@ export function diagnose(report: CleanReport): Issue[] {
     issues.push({
       id: 'time-gaps',
       severity: 'media',
-      title: `Faltan ${plural(t.missingPeriods, 'período', 'períodos')} en la serie`,
+      title: `${verbo(t.missingPeriods, 'Falta', 'Faltan')} ${plural(
+        t.missingPeriods,
+        'período',
+        'períodos'
+      )} en la serie`,
       columns: [t.column],
       detail:
         `Entre ${t.first} y ${t.last} la serie avanza de forma ${FREQUENCY_LABEL[t.frequency]}, ` +
@@ -240,7 +256,11 @@ export function diagnose(report: CleanReport): Issue[] {
     issues.push({
       id: 'unified-levels',
       severity: 'media',
-      title: `Se unificaron ${plural(total, 'escritura', 'escrituras')} de las mismas categorías`,
+      title: `${verbo(total, 'Se unificó', 'Se unificaron')} ${plural(
+        total,
+        'escritura',
+        'escrituras'
+      )} de las mismas categorías`,
       columns: unified.map(a => a.column),
       detail:
         `${unified.map(a => a.detail).join(' ')} Es la única parte de la limpieza que cambia ` +
@@ -255,7 +275,11 @@ export function diagnose(report: CleanReport): Issue[] {
     issues.push({
       id: 'skipped-preamble',
       severity: 'media',
-      title: `Se saltearon ${plural(preamble.count, 'fila', 'filas')} arriba del encabezado`,
+      title: `${verbo(preamble.count, 'Se salteó', 'Se saltearon')} ${plural(
+        preamble.count,
+        'fila',
+        'filas'
+      )} arriba del encabezado`,
       detail:
         `${preamble.detail} Si el encabezado no es ese, el archivo entero quedó corrido ` +
         'una fila y todos los nombres de columna están mal.',
@@ -297,7 +321,7 @@ export function diagnose(report: CleanReport): Issue[] {
     issues.push({
       id: 'dropped-columns',
       severity: 'baja',
-      title: `${descartadas.length === 1 ? 'Se descartó' : 'Se descartaron'} ${plural(
+      title: `${verbo(descartadas.length, 'Se descartó', 'Se descartaron')} ${plural(
         descartadas.length,
         'columna',
         'columnas'
