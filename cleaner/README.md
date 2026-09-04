@@ -30,7 +30,7 @@ ni siquiera de la columna (ver más abajo).
 | Core C++ (parser, tipado, limpieza, reporte) | listo, 728 checks en verde |
 | CLI nativo `csvclean` | listo |
 | Modulo WASM (`web/static/wasm/csvclean.wasm`, 221 KB) | compilado y verificado contra el binario nativo |
-| Capa adaptativa TypeScript (perfilado, preflight, worker, UI) | lista, 103 tests en verde |
+| Capa adaptativa TypeScript (perfilado, preflight, worker, UI) | lista, 104 tests en verde |
 | Conexión a `quantbay/` | hecha: el Limpiador y el laboratorio corren sobre esto |
 
 `make wasm-test` corre el modulo compilado bajo Node y exige que su reporte sea
@@ -166,14 +166,15 @@ Es la única parte de la limpieza que **cambia lo que el archivo dice**, así qu
 cada fusión va al reporte con las dos escrituras a la vista y el diagnóstico
 ofrece revertirla.
 
-**Parecerse no es lo mismo que ser equivalente, y por eso eso sí se pregunta.**
-"CÓRDOBA" y "Córdoba" son la misma palabra escrita distinto en cualquier
-archivo; "Cordova" y "Córdoba" son la misma palabra *casi seguro*, y "Salta" y
-"Malta" están a una letra y son dos lugares. Los parecidos se detectan siempre
-y se listan con las dos escrituras y sus frecuencias, pero fusionarlos es una
-decisión del usuario — `--fuzzy-categories`, o un botón en el diagnóstico.
+**Parecerse no es lo mismo que ser equivalente.** "CÓRDOBA" y "Córdoba" son la
+misma palabra escrita distinto en cualquier archivo; "Cordova" y "Córdoba" son
+la misma palabra *casi seguro*, y "Salta" y "Malta" están a una letra y son dos
+lugares. Las parecidas también se fusionan, con las dos escrituras y sus
+frecuencias en el reporte y un botón para deshacerlo entero
+(`--no-fuzzy-categories` en el CLI). Es el único lugar donde el limpiador puede
+equivocarse sin que los números lo delaten, así que esa lista está para leerla.
 
-Cuando se piden, la apuesta se acota con tres guardas: claves de menos de cinco
+La apuesta se acota con tres guardas: claves de menos de cinco
 caracteres no se comparan nunca (`AR` y `BR` están a una edición y son dos
 países); se admite una edición, o dos si la clave tiene ocho caracteres o más;
 y la rara tiene que ser **como mucho la décima parte** de la frecuente, porque

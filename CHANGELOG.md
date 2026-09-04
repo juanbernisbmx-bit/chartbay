@@ -69,12 +69,11 @@ así que resumen por temas en vez de listar cada commit.
 
 - **Escrituras parecidas.** Además de las equivalentes, se detectan las que se
   parecen: "Cordova" junto a "Córdoba", "Buenos Aries" junto a "Buenos Aires".
-  A diferencia del resto de la limpieza **no se aplican solas**. Plegar acentos
-  es una equivalencia que vale en cualquier archivo; parecerse es una apuesta, y
-  "Salta" y "Malta" están a una letra. Así que se listan en el reporte con las
-  dos escrituras y sus frecuencias, y fusionarlas es una decisión del usuario:
-  `--fuzzy-categories` en el CLI, un botón en el diagnóstico. Cuando se piden,
-  la apuesta se acota: claves de menos de cinco caracteres no se comparan nunca
+  Se fusionan, con las dos escrituras y sus frecuencias en el reporte y un botón
+  para deshacerlo entero (`--no-fuzzy-categories` en el CLI). Es el único lugar
+  donde el limpiador puede equivocarse sin que los números lo delaten —plegar
+  acentos es una equivalencia, parecerse es una inferencia, y "Salta" y "Malta"
+  están a una letra—, así que la lista está para leerla. La apuesta se acota: claves de menos de cinco caracteres no se comparan nunca
   ("AR" y "BR" están a una edición), se admite una edición —o dos desde ocho
   caracteres— y la rara tiene que ser como mucho la décima parte de la
   frecuente. La distancia es Damerau-Levenshtein, así que una transposición

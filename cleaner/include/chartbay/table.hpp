@@ -113,20 +113,23 @@ struct CleanOptions {
    */
   bool unify_categories = true;
   /**
-   * Además de las escrituras equivalentes, **fusiona** las que se parecen:
+   * Además de las escrituras equivalentes, fusiona las que **se parecen**:
    * "Cordova" con "Córdoba", "Buenos Aries" con "Buenos Aires".
    *
-   * Apagado a propósito, al revés que el resto de la limpieza. Plegar
-   * mayúsculas y acentos no es una apuesta — "CÓRDOBA" y "Córdoba" son la misma
-   * palabra escrita distinto y no hay archivo donde no lo sean. Parecerse, sí:
-   * "Salta" y "Malta" están a una letra y son dos lugares. Los guardas de acá
-   * abajo hacen esa apuesta razonable, no segura, y una fusión equivocada mete
-   * dos categorías reales en una sin dejar rastro en los números.
+   * Es la parte de la limpieza con menos margen: plegar mayúsculas y acentos es
+   * una equivalencia que vale en cualquier archivo, y parecerse es una
+   * inferencia — "Salta" y "Malta" están a una letra y son dos lugares. Lo que
+   * hace la apuesta razonable son los tres guardas de `find_similar_levels`, y
+   * sobre todo el de frecuencia: una escritura que aparece menos de la décima
+   * parte que otra casi igual es una errata, no una categoría.
    *
-   * Así que por defecto se detectan y se listan en el reporte con las dos
-   * escrituras y sus frecuencias, y aplicarlas es una decisión del usuario.
+   * Toda fusión va al reporte con las dos escrituras y sus frecuencias, y el
+   * diagnóstico ofrece deshacerla entera. Si el archivo tiene dos categorías
+   * genuinamente parecidas y una es rara, esto las junta: es el único lugar
+   * donde el limpiador puede equivocarse sin que los números lo delaten, así
+   * que la lista está para leerla.
    */
-  bool fuzzy_categories = false;
+  bool fuzzy_categories = true;
   /**
    * Analiza la columna de fechas como índice temporal: frecuencia, fechas
    * repetidas y períodos faltantes.

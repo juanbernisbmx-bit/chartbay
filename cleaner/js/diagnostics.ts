@@ -231,7 +231,12 @@ export function diagnose(report: CleanReport): Issue[] {
   }
 
   if (t?.found && t.missingPeriods > 0) {
-    const ejemplos = t.gapExamples.length > 0 ? ` Faltan, por ejemplo: ${t.gapExamples.join(', ')}.` : '';
+    const ejemplos =
+      t.gapExamples.length > 0
+        ? ` ${verbo(t.gapExamples.length, 'Falta', 'Faltan')}, por ejemplo: ${t.gapExamples.join(
+            ', '
+          )}.`
+        : '';
     issues.push({
       id: 'time-gaps',
       severity: 'media',
@@ -266,9 +271,10 @@ export function diagnose(report: CleanReport): Issue[] {
       )}`,
       columns: fusionadas.map(a => a.column),
       detail:
-        `${fusionadas.map(a => a.detail).join(' ')} Esto lo pediste vos: es la única parte ` +
-        'de la limpieza que junta dos categorías que el archivo escribía distinto sin que ' +
-        'sean la misma palabra.',
+        `${fusionadas.map(a => a.detail).join(' ')} Es la única parte de la limpieza que ` +
+        'junta dos categorías sin que sean la misma palabra escrita distinto, sino apenas ' +
+        'parecidas. Los números no van a delatar una fusión equivocada, así que leé la ' +
+        'lista: si dos de esas eran categorías de verdad, dejalas separadas.',
       fix: { label: 'Deshacer: dejarlas separadas', options: { fuzzyCategories: false } },
     });
   }
@@ -310,10 +316,12 @@ export function diagnose(report: CleanReport): Issue[] {
       )}`,
       columns: [...new Set(parecidas.map(m => m.column))],
       detail:
-        `${lista}${resto}. No se fusionaron: acentos y mayúsculas son la misma palabra ` +
-        'escrita distinto, pero parecerse es otra cosa — "Salta" y "Malta" están a una ' +
-        'letra y son dos lugares. Cada una de estas es rara al lado de la otra, que es ' +
-        'lo que las hace sospechosas de ser erratas, pero sos vos quien sabe.',
+        `${lista}${resto}. ${verbo(
+          parecidas.length,
+          'No se fusionó',
+          'No se fusionaron'
+        )} porque pediste dejarlas separadas. Cada una es rara al lado de la otra, que es ` +
+        'lo que las hace sospechosas de ser erratas y no categorías.',
       fix: { label: 'Fusionarlas con la escritura frecuente', options: { fuzzyCategories: true } },
     });
   }

@@ -109,10 +109,11 @@ export interface CleanOptions {
    * Fusiona además las escrituras que **se parecen**: "Cordova" con "Córdoba",
    * "Buenos Aries" con "Buenos Aires".
    *
-   * Apagado a propósito, al revés que el resto. Plegar acentos es una
-   * equivalencia; parecerse es una apuesta, y "Salta" y "Malta" están a una
-   * letra. Sin esto los parecidos se detectan igual y vienen en
-   * `report.fuzzyMatches` para que decida el usuario.
+   * Es la parte de la limpieza con menos margen: plegar acentos es una
+   * equivalencia, parecerse es una inferencia, y "Salta" y "Malta" están a una
+   * letra. Lo que la hace razonable son los guardas de largo, distancia y
+   * frecuencia. Apagándola los parecidos se detectan igual y vienen en
+   * `report.fuzzyMatches` sin tocar nada.
    */
   fuzzyCategories?: boolean;
   /**
@@ -314,7 +315,10 @@ export interface CleanReport {
   dialect: { delimiter: string; quote: string; hasHeader: boolean };
   /** Ausente cuando la tabla no tiene ninguna columna de fechas. */
   timeIndex?: TimeIndexReport;
-  /** Parecidos detectados y **no** fusionados: falta que alguien decida. */
+  /**
+   * Parecidos detectados y **no** fusionados. Con `fuzzyCategories` prendido —
+   * que es el default — llega vacío: lo que se fusionó está en las acciones.
+   */
   fuzzyMatches?: FuzzyMatch[];
   quoteAnomalies: number;
   unterminatedQuote: boolean;
@@ -410,7 +414,7 @@ function encodeOptions(
   ints[23] = flag(options.unifyCategories, 1);
   ints[24] = flag(options.analyzeTimeIndex, 1);
   ints[25] = flag(options.sortByTime, 1);
-  ints[26] = flag(options.fuzzyCategories, 0);
+  ints[26] = flag(options.fuzzyCategories, 1);
 
   reals[0] = options.numericThreshold ?? 0.8;
   reals[1] = options.dateThreshold ?? 0.9;
