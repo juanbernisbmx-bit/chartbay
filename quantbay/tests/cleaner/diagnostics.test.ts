@@ -202,6 +202,27 @@ describe('diagnose', () => {
     expect(issue!.detail).toContain('mensual');
   });
 
+  it('el título concuerda con el número de columnas descartadas', () => {
+    const una = diagnose(
+      report({
+        actions: [
+          { kind: 'dropped_constant_column', column: 'region', count: 0, detail: 'x' },
+        ],
+      })
+    ).find(i => i.id === 'dropped-columns');
+    expect(una!.title).toBe('Se descartó 1 columna');
+
+    const dos = diagnose(
+      report({
+        actions: [
+          { kind: 'dropped_constant_column', column: 'region', count: 0, detail: 'x' },
+          { kind: 'dropped_empty_column', column: 'notas', count: 0, detail: 'x' },
+        ],
+      })
+    ).find(i => i.id === 'dropped-columns');
+    expect(dos!.title).toBe('Se descartaron 2 columnas');
+  });
+
   it('una serie sana no genera ningún problema', () => {
     expect(diagnose(report({ timeIndex: timeIndex() }))).toEqual([]);
   });
