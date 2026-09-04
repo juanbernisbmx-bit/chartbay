@@ -1,5 +1,6 @@
 #include "chartbay/report.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -85,6 +86,42 @@ std::string to_json(const CleanResult& result) {
   if (!result.error.empty()) {
     out += ",\"error\":";
     escape_json(out, result.error);
+  }
+
+  if (result.time_index.found || result.time_index.ambiguous) {
+    const TimeIndex& t = result.time_index;
+    out += ",\"timeIndex\":{\"found\":";
+    out += t.found ? "true" : "false";
+    out += ",\"ambiguous\":";
+    out += t.ambiguous ? "true" : "false";
+    out += ",\"column\":";
+    escape_json(out, t.column);
+    out += ",\"frequency\":";
+    escape_json(out, frequency_code(t.frequency));
+    out += ",\"ordered\":";
+    out += t.ordered ? "true" : "false";
+    out += ",\"sorted\":";
+    out += t.sorted_here ? "true" : "false";
+    out += ",\"observations\":";
+    json_uint(out, t.observations);
+    out += ",\"periodsObserved\":";
+    json_uint(out, t.periods_observed);
+    out += ",\"periodsExpected\":";
+    json_uint(out, t.periods_expected);
+    out += ",\"duplicates\":";
+    json_uint(out, t.duplicates);
+    out += ",\"missingPeriods\":";
+    json_uint(out, t.missing_periods);
+    out += ",\"first\":";
+    escape_json(out, t.first);
+    out += ",\"last\":";
+    escape_json(out, t.last);
+    out += ",\"gapExamples\":[";
+    for (std::size_t i = 0; i < t.gap_examples.size(); ++i) {
+      if (i) out.push_back(',');
+      escape_json(out, t.gap_examples[i]);
+    }
+    out += "]}";
   }
 
   out += ",\"columns\":[";
@@ -189,6 +226,45 @@ std::string to_json(const CleanResult& result) {
   return out;
 }
 
+namespace {
+
+// printf alinea contando bytes. En UTF-8 eso corre la tabla un lugar por cada
+// acento — y ahora que el arreglo de encoding hace que los acentos sobrevivan,
+// una columna llamada "region" con tilde desalinea toda la fila. Peor: cortar
+// un nombre largo por byte puede partir un caracter al medio y dejar el resumen
+// con bytes invalidos.
+//
+// Se cuentan caracteres, no anchos de celda tipografica: para un CSV en
+// castellano es lo mismo, y contar ancho real pediria una tabla de Unicode.
+std::size_t utf8_length(std::string_view s) {
+  std::size_t n = 0;
+  for (char c : s) n += (static_cast<unsigned char>(c) & 0xC0) != 0x80;
+  return n;
+}
+
+std::string_view utf8_prefix(std::string_view s, std::size_t chars) {
+  std::size_t seen = 0, i = 0;
+  for (; i < s.size(); ++i) {
+    if ((static_cast<unsigned char>(s[i]) & 0xC0) == 0x80) continue;
+    if (seen == chars) break;
+    ++seen;
+  }
+  return s.substr(0, i);
+}
+
+// Campo de ancho fijo, recortando por caracter y rellenando a la izquierda o a
+// la derecha segun `left`.
+std::string utf8_field(std::string_view s, std::size_t width, bool left = true) {
+  std::string out(s);
+  if (utf8_length(out) > width) {
+    out = std::string(utf8_prefix(out, width > 3 ? width - 3 : width)) + "...";
+  }
+  const std::size_t pad = width - std::min(width, utf8_length(out));
+  return left ? out + std::string(pad, ' ') : std::string(pad, ' ') + out;
+}
+
+}  // namespace
+
 std::string to_text(const CleanResult& result) {
   std::string out;
   char buf[256];
@@ -201,22 +277,38 @@ std::string to_text(const CleanResult& result) {
                             : result.dialect.delimiter == kNoDelimiter
                                 ? "ninguno"
                                 : std::string(1, result.dialect.delimiter);
-  std::snprintf(buf, sizeof buf, "separador '%s'  encabezado %s\n\n", delim.c_str(),
+  std::snprintf(buf, sizeof buf, "separador '%s'  encabezado %s\n", delim.c_str(),
                 result.dialect.has_header ? "sí" : "no");
   out += buf;
 
-  std::snprintf(buf, sizeof buf, "%-24s %-12s %9s %9s %9s %9s\n", "columna", "tipo", "n",
-                "faltan", "únicos", "atípicos");
-  out += buf;
+  if (result.time_index.ambiguous) {
+    out += "índice: hay más de una columna de fechas, ninguna se tomó como índice\n";
+  }
+  if (const TimeIndex& t = result.time_index; t.found) {
+    out += "índice '" + t.column + "'  " + frequency_label(t.frequency) + "  " + t.first +
+           " → " + t.last;
+    if (t.duplicates > 0) {
+      out += "  " + std::to_string(t.duplicates) + (t.duplicates == 1 ? " repetida" : " repetidas");
+    }
+    if (t.missing_periods > 0) {
+      out += "  " + std::to_string(t.missing_periods) +
+             (t.missing_periods == 1 ? " faltante" : " faltantes");
+    }
+    if (!t.ordered && !t.sorted_here) out += "  SIN ORDENAR";
+    if (t.sorted_here) out += "  (reordenado)";
+    out.push_back('\n');
+  }
+  out.push_back('\n');
+
+  out += utf8_field("columna", 24) + " " + utf8_field("tipo", 12) + " " +
+         utf8_field("n", 9, false) + " " + utf8_field("faltan", 9, false) + " " +
+         utf8_field("únicos", 9, false) + " " + utf8_field("atípicos", 9, false) + "\n";
   out += std::string(78, '-') + "\n";
 
   for (const Column& col : result.columns) {
-    std::string name = col.name;
-    if (name.size() > 24) name = name.substr(0, 21) + "...";
-    std::snprintf(buf, sizeof buf, "%-24s %-12s %9zu %9zu %9zu %9zu\n", name.c_str(),
-                  type_name(col.type), col.stats.present, col.stats.missing,
-                  col.stats.unique, col.stats.outliers);
-    out += buf;
+    std::snprintf(buf, sizeof buf, "%-12s %9zu %9zu %9zu %9zu\n", type_name(col.type),
+                  col.stats.present, col.stats.missing, col.stats.unique, col.stats.outliers);
+    out += utf8_field(col.name, 24) + " " + buf;
     if (col.stats.has_moments && col.type == ColumnType::Numeric) {
       std::snprintf(buf, sizeof buf, "%-24s   min %s  p50 %s  max %s  media %s  sd %s\n", "",
                     format_number(col.stats.min).c_str(), format_number(col.stats.p50).c_str(),

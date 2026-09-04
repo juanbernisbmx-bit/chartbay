@@ -40,6 +40,18 @@ let overrides: Partial<Parameters<typeof cleanCsv>[1]> = {};
  * no falta al azar. Que la interfaz elija el default silencioso y no lo
  * explique es cómo se terminan publicando modelos que nadie puede auditar.
  */
+const FRECUENCIA: Record<string, string> = {
+  daily: 'diaria',
+  business_daily: 'días hábiles',
+  weekly: 'semanal',
+  fortnightly: 'quincenal',
+  monthly: 'mensual',
+  quarterly: 'trimestral',
+  semiannual: 'semestral',
+  annual: 'anual',
+  unknown: 'irregular',
+};
+
 const MISSING_HELP: Record<MissingPolicy, string> = {
   keep: 'Los faltantes quedan marcados y no se inventa nada. Es el default. Ojo: Econometría se niega a estimar si las columnas elegidas tienen huecos, así que para calcular vas a tener que elegir otra opción o filtrar a mano.',
   drop: 'Se elimina toda fila con al menos un dato faltante (casos completos). Es el criterio más transparente y el que usa la mayoría del software estadístico, pero descarta información y sesga los resultados si lo que falta no falta al azar.',
@@ -87,6 +99,22 @@ function renderReport(table: CleanedTable): void {
       ],
       ['Separador', report.dialect.delimiter === '\t' ? 'tabulación' : report.dialect.delimiter],
     ];
+
+    // El índice temporal solo aparece si la tabla tiene uno. Es la línea que
+    // contesta la pregunta que nadie hace antes de estimar: de qué a qué va la
+    // serie, cada cuánto, y si está completa.
+    const t = report.timeIndex;
+    if (t?.found) {
+      filas.push(['Índice temporal', `${t.column} (${FRECUENCIA[t.frequency] ?? 'irregular'})`]);
+      filas.push(['Período', `${t.first} → ${t.last}`]);
+      if (t.periodsExpected > 0) {
+        const huecos = t.missingPeriods > 0 ? `, faltan ${t.missingPeriods}` : ', completa';
+        filas.push(['Observaciones', `${t.periodsObserved} de ${t.periodsExpected}${huecos}`]);
+      }
+      if (t.duplicates > 0) {
+        filas.push(['Fechas repetidas', t.duplicates.toLocaleString('es-AR')]);
+      }
+    }
     for (const [k, v] of filas) {
       const row = document.createElement('div');
       row.className = 'cl-row';

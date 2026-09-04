@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { diagnose } from '../../../cleaner/js/diagnostics';
-import type { CleanReport, ColumnReport } from '../../../cleaner/js/csvclean';
+import type { CleanReport, ColumnReport, TimeIndexReport } from '../../../cleaner/js/csvclean';
 
 function column(overrides: Partial<ColumnReport> = {}): ColumnReport {
   return {
@@ -13,6 +13,26 @@ function column(overrides: Partial<ColumnReport> = {}): ColumnReport {
     invalid: 0,
     unique: 100,
     outliers: 0,
+    ...overrides,
+  };
+}
+
+function timeIndex(overrides: Partial<TimeIndexReport> = {}): TimeIndexReport {
+  return {
+    found: true,
+    ambiguous: false,
+    column: 'fecha',
+    frequency: 'monthly',
+    ordered: true,
+    sorted: false,
+    observations: 12,
+    periodsObserved: 12,
+    periodsExpected: 12,
+    duplicates: 0,
+    missingPeriods: 0,
+    first: '2024-01',
+    last: '2024-12',
+    gapExamples: [],
     ...overrides,
   };
 }
@@ -146,6 +166,127 @@ describe('diagnose', () => {
     const [issue] = diagnose(report({ unterminatedQuote: true }));
     expect(issue.id).toBe('unterminated-quote');
     expect(issue.severity).toBe('alta');
+  });
+
+  it('una serie desordenada que no se pudo ordenar sola es lo más grave', () => {
+    const issues = diagnose(
+      report({ timeIndex: timeIndex({ ordered: false, sorted: false, duplicates: 4 }) })
+    );
+    expect(issues[0].id).toBe('unsorted-time-index');
+    expect(issues[0].severity).toBe('alta');
+    // Y dice por qué no se ordenó sola, que es lo accionable.
+    expect(issues[0].detail).toContain('panel');
+  });
+
+  it('una serie que se ordenó sola ya no es un problema', () => {
+    const issues = diagnose(
+      report({ timeIndex: timeIndex({ ordered: false, sorted: true }) })
+    );
+    expect(issues.find(i => i.id === 'unsorted-time-index')).toBeUndefined();
+  });
+
+  it('los huecos de la serie se nombran', () => {
+    const issues = diagnose(
+      report({
+        timeIndex: timeIndex({
+          periodsObserved: 10,
+          periodsExpected: 12,
+          missingPeriods: 2,
+          gapExamples: ['2024-04', '2024-09'],
+        }),
+      })
+    );
+    const issue = issues.find(i => i.id === 'time-gaps');
+    expect(issue).toBeDefined();
+    expect(issue!.detail).toContain('2024-04');
+    expect(issue!.detail).toContain('mensual');
+  });
+
+  it('una serie sana no genera ningún problema', () => {
+    expect(diagnose(report({ timeIndex: timeIndex() }))).toEqual([]);
+  });
+
+  it('la unificación de categorías se puede revertir desde el diagnóstico', () => {
+    const issues = diagnose(
+      report({
+        actions: [
+          {
+            kind: 'unified_levels',
+            column: 'provincia',
+            count: 3,
+            detail: 'En "provincia" se unificaron 3 escrituras con las que ya estaban.',
+          },
+        ],
+      })
+    );
+    const issue = issues.find(i => i.id === 'unified-levels');
+    expect(issue).toBeDefined();
+    expect(issue!.columns).toEqual(['provincia']);
+    // Es la única parte de la limpieza que cambia lo que el archivo dice, así
+    // que el camino de vuelta tiene que estar a un click.
+    expect(issue!.fix?.options).toEqual({ unifyCategories: false });
+  });
+
+  it('el encoding convertido se avisa, y el que no se puede leer va primero', () => {
+    const issues = diagnose(
+      report({
+        actions: [
+          {
+            kind: 'converted_encoding',
+            column: '',
+            count: 3,
+            detail: 'El archivo no estaba en UTF-8: se tradujeron 3 bytes.',
+          },
+          {
+            kind: 'unsupported_encoding',
+            column: '',
+            count: 1,
+            detail: 'El archivo empieza con una marca de UTF-16.',
+          },
+        ],
+      })
+    );
+    // UTF-16 es grave: nada de lo que se muestra abajo significa algo.
+    expect(issues[0].id).toBe('unsupported-encoding');
+    expect(issues.find(i => i.id === 'converted-encoding')?.severity).toBe('media');
+  });
+
+  it('avisa cuando se salteó un preámbulo, porque el encabezado pudo salir mal', () => {
+    const issues = diagnose(
+      report({
+        actions: [
+          {
+            kind: 'skipped_preamble_rows',
+            column: '',
+            count: 2,
+            detail: 'Se saltearon 2 filas arriba del encabezado.',
+          },
+        ],
+      })
+    );
+    const issue = issues.find(i => i.id === 'skipped-preamble');
+    expect(issue).toBeDefined();
+    expect(issue!.detail).toContain('Se saltearon 2 filas');
+  });
+
+  it('el pie de tabla descartado se puede recuperar desde el diagnóstico', () => {
+    const issues = diagnose(
+      report({
+        actions: [
+          {
+            kind: 'dropped_footer_rows',
+            column: '',
+            count: 1,
+            detail: 'Se descartó 1 fila de pie de tabla.',
+          },
+        ],
+      })
+    );
+    const issue = issues.find(i => i.id === 'dropped-footer');
+    expect(issue).toBeDefined();
+    // Descartar una fila es destructivo y la heurística puede equivocarse: el
+    // camino de vuelta tiene que estar a un click.
+    expect(issue!.fix?.options).toEqual({ dropFooterRows: false });
   });
 
   it('cada problema con corrección trae opciones aplicables', () => {

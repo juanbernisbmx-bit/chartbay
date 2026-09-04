@@ -35,12 +35,20 @@ void usage() {
       "    --date-order dmy|mdy|ymd\n"
       "    --percent-fraction    12,5% se guarda como 0.125 en vez de 12.5\n"
       "    --sample N            filas usadas para inferir tipos (5000)\n"
+      "    --skip N              saltear N filas antes del encabezado (las líneas\n"
+      "                          en blanco no cuentan: el scanner no las emite)\n"
+      "    --no-skip             no detectar el preámbulo solo\n"
+      "    --no-encoding-fix     no traducir a UTF-8 lo que venga en Windows-1252\n"
+      "    --no-unify-categories tratar \"Córdoba\" y \"Cordoba\" como dos categorías\n"
+      "    --no-sort-by-date     no reordenar las filas por el índice temporal\n"
+      "    --no-time-index       no analizar la columna de fechas como serie\n"
       "\n"
       "  limpieza\n"
       "    --missing keep|drop|zero|mean|median|ffill      (keep)\n"
       "    --outliers flag|winsorize|missing|drop          (flag)\n"
       "    --outlier-rule iqr|zscore|mad                   (iqr)\n"
       "    --outlier-k N                                   (3)\n"
+      "    --keep-footer-rows    conservar la fila de totales del final\n"
       "    --keep-duplicate-rows --keep-empty-cols\n"
       "    --keep-constant-cols  --keep-duplicate-cols\n",
       stderr);
@@ -136,6 +144,21 @@ int main(int argc, char** argv) {
       opts.outlier_rule = eq(v, "zscore") ? R::ZScore : eq(v, "mad") ? R::MAD : R::IQR;
     } else if (eq(a, "--outlier-k")) {
       opts.outlier_k = std::atof(next(a));
+    } else if (eq(a, "--skip")) {
+      opts.dialect.preamble_rows = static_cast<std::size_t>(std::atoll(next(a)));
+    } else if (eq(a, "--no-skip")) {
+      opts.detect_preamble = false;
+    } else if (eq(a, "--no-encoding-fix")) {
+      opts.fix_encoding = false;
+    } else if (eq(a, "--no-unify-categories")) {
+      opts.unify_categories = false;
+    } else if (eq(a, "--no-sort-by-date")) {
+      opts.sort_by_time = false;
+    } else if (eq(a, "--no-time-index")) {
+      opts.analyze_time_index = false;
+      opts.sort_by_time = false;
+    } else if (eq(a, "--keep-footer-rows")) {
+      opts.drop_footer_rows = false;
     } else if (eq(a, "--keep-duplicate-rows")) {
       opts.drop_duplicate_rows = false;
     } else if (eq(a, "--keep-empty-cols")) {

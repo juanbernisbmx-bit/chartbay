@@ -18,6 +18,8 @@ constexpr std::size_t kMinOutlierObs = 8;
 // Hard stop on dictionary growth for a categorical column whose tail turns out
 // to be far more varied than its sample suggested.
 constexpr std::size_t kMaxLevels = 100000;
+// "No hay tal columna", para la busqueda del indice temporal.
+constexpr std::size_t kNoColumn = static_cast<std::size_t>(-1);
 
 std::uint64_t fnv1a(std::uint64_t h, std::string_view s) {
   for (char c : s) {
@@ -46,6 +48,48 @@ double quantile(const std::vector<double>& sorted, double q) {
 
 std::string plural(std::size_t n, const std::string& one, const std::string& many) {
   return std::to_string(n) + " " + (n == 1 ? one : many);
+}
+
+// Cuantas filas del final se miran buscando un pie de tabla. Tres alcanzan para
+// el caso habitual — total, o total y una nota debajo — y acotan el riesgo: una
+// fila legitima que se parezca a un subtotal solo puede confundirse si esta
+// pegada al final del archivo.
+constexpr std::size_t kFooterWindow = 3;
+// Terminos que la suma tiene que tener encima para que la coincidencia
+// signifique algo. Con dos valores, que el tercero sea la suma es casualidad
+// barata; con "0" en todos, es aritmetica trivial.
+constexpr std::size_t kMinFooterTerms = 3;
+
+bool iequals_ascii(std::string_view a, std::string_view b) {
+  if (a.size() != b.size()) return false;
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    char ca = a[i], cb = b[i];
+    if (ca >= 'A' && ca <= 'Z') ca = static_cast<char>(ca - 'A' + 'a');
+    if (cb >= 'A' && cb <= 'Z') cb = static_cast<char>(cb - 'A' + 'a');
+    if (ca != cb) return false;
+  }
+  return true;
+}
+
+// La etiqueta con la que una planilla cierra una tabla. Se compara sin
+// distinguir mayusculas y sin la puntuacion que suele colgar del final
+// ("TOTAL:", "Total."), que es como aparece la mitad de las veces.
+bool is_total_label(std::string_view raw) {
+  static constexpr std::string_view kLabels[] = {
+      "total",     "totales",  "totals",    "total general", "gran total", "grand total",
+      "subtotal",  "sub total", "subtotales", "suma",        "suma total", "sumatoria",
+      "sum",       "promedio", "average",   "media",         "totale",     "somme",
+  };
+  std::string_view s = trim(raw);
+  while (!s.empty() && (s.back() == ':' || s.back() == '.' || s.back() == '=')) {
+    s.remove_suffix(1);
+    s = trim(s);
+  }
+  if (s.empty()) return false;
+  for (std::string_view label : kLabels) {
+    if (iequals_ascii(s, label)) return true;
+  }
+  return false;
 }
 
 // Open-addressed set of 64-bit row hashes, used only for duplicate detection.
@@ -116,6 +160,36 @@ const char* type_name(ColumnType t) {
   return "text";
 }
 
+const char* frequency_code(TimeFrequency f) {
+  switch (f) {
+    case TimeFrequency::Daily: return "daily";
+    case TimeFrequency::BusinessDaily: return "business_daily";
+    case TimeFrequency::Weekly: return "weekly";
+    case TimeFrequency::Fortnightly: return "fortnightly";
+    case TimeFrequency::Monthly: return "monthly";
+    case TimeFrequency::Quarterly: return "quarterly";
+    case TimeFrequency::Semiannual: return "semiannual";
+    case TimeFrequency::Annual: return "annual";
+    case TimeFrequency::Unknown: break;
+  }
+  return "unknown";
+}
+
+const char* frequency_label(TimeFrequency f) {
+  switch (f) {
+    case TimeFrequency::Daily: return "diaria";
+    case TimeFrequency::BusinessDaily: return "de días hábiles";
+    case TimeFrequency::Weekly: return "semanal";
+    case TimeFrequency::Fortnightly: return "quincenal";
+    case TimeFrequency::Monthly: return "mensual";
+    case TimeFrequency::Quarterly: return "trimestral";
+    case TimeFrequency::Semiannual: return "semestral";
+    case TimeFrequency::Annual: return "anual";
+    case TimeFrequency::Unknown: break;
+  }
+  return "irregular";
+}
+
 const char* action_code(ActionKind k) {
   switch (k) {
     case ActionKind::InferredDialect: return "inferred_dialect";
@@ -125,6 +199,12 @@ const char* action_code(ActionKind k) {
     case ActionKind::AmbiguousDateOrder: return "ambiguous_date_order";
     case ActionKind::PaddedRaggedRow: return "padded_ragged_row";
     case ActionKind::TruncatedRaggedRow: return "truncated_ragged_row";
+    case ActionKind::SkippedPreambleRows: return "skipped_preamble_rows";
+    case ActionKind::DroppedFooterRows: return "dropped_footer_rows";
+    case ActionKind::ConvertedEncoding: return "converted_encoding";
+    case ActionKind::UnifiedLevels: return "unified_levels";
+    case ActionKind::SortedByTime: return "sorted_by_time";
+    case ActionKind::UnsupportedEncoding: return "unsupported_encoding";
     case ActionKind::DroppedEmptyRows: return "dropped_empty_rows";
     case ActionKind::DroppedDuplicateRows: return "dropped_duplicate_rows";
     case ActionKind::DroppedEmptyColumn: return "dropped_empty_column";
@@ -169,6 +249,19 @@ class Cleaner::Sink : public RowSink {
   explicit Sink(CleanOptions options) : opts_(std::move(options)) {}
 
   void feed(const char* data, std::size_t len) {
+    if (!opts_.fix_encoding) {
+      feed_bytes(data, len);
+      return;
+    }
+    // Todo pasa primero por el arreglo de encoding, incluida la ventana que
+    // usa el sniffer: si el archivo esta en Windows-1252, lo que tiene que ver
+    // el resto del pipeline ya es UTF-8. Un archivo correcto sale de aca sin
+    // que se le copie un byte.
+    const std::string_view fixed = encoding_.feed(data, len);
+    if (!fixed.empty()) feed_bytes(fixed.data(), fixed.size());
+  }
+
+  void feed_bytes(const char* data, std::size_t len) {
     if (!started_) {
       pre_.append(data, len);
       if (pre_.size() < kSniffBytes) return;
@@ -179,13 +272,27 @@ class Cleaner::Sink : public RowSink {
   }
 
   CleanResult finish() {
+    if (opts_.fix_encoding) {
+      const std::string_view tail = encoding_.finish();
+      if (!tail.empty()) feed_bytes(tail.data(), tail.size());
+    }
     if (!started_) start();
     scanner_->finish();
     if (sampling_) {
+      // Antes de votar los tipos, no después: una fila "TOTAL" adentro de la
+      // muestra no solo mueve la media, baja la proporción de celdas que
+      // parsean. En un archivo de seis filas eso deja la columna de fechas en
+      // 5/6 = 0,83, por debajo del umbral de 0,9, y la columna entera termina
+      // tipada como texto por culpa del pie.
+      if (opts_.drop_footer_rows) drop_footer_in_sample();
       resolve_types();
       flush_sample();
       sampling_ = false;
     }
+
+    // Antes de cualquier estadístico: el conteo de únicos de una categórica es
+    // la cantidad de niveles, y esta es la que decide cuántos hay.
+    unify_levels();
 
     if (opts_.scan_only) {
       // Nothing was materialised, so there is nothing to sort, compact,
@@ -194,6 +301,13 @@ class Cleaner::Sink : public RowSink {
       rows_out_ = rows_kept_;
       drop_columns();
     } else {
+      // Y acá otra vez, ahora con los números parseados: el pie tiene que irse
+      // antes de que se calcule un solo estadístico, porque los cuantiles que
+      // salgan de él son los que después deciden qué es un atípico.
+      if (opts_.drop_footer_rows) drop_footer_in_columns();
+      // Ordenar va antes de imputar: el arrastre copia el último valor
+      // anterior, y sobre filas desordenadas "anterior" no quiere decir nada.
+      if (opts_.sort_by_time) sort_by_time();
       compute_stats();
       std::vector<std::uint8_t> keep(rows_kept_, 1);
       apply_outliers(keep);
@@ -203,12 +317,17 @@ class Cleaner::Sink : public RowSink {
       // (flag outliers, keep missing) nothing above touches a value, so the
       // second pass would sort millions of doubles to reproduce what we have.
       if (values_changed_) compute_stats();
+      // Y analizar va al final, sobre las filas que efectivamente quedaron: si
+      // una política de faltantes eliminó filas, los huecos que hay que
+      // reportar son los del archivo que se lleva el usuario.
+      if (opts_.analyze_time_index) analyze_time_index();
       drop_columns();
     }
     emit_actions();
 
     CleanResult result;
     result.dialect = dialect_;
+    result.time_index = std::move(time_index_);
     result.rows_in = rows_in_;
     result.rows_out = rows_out_;
     result.quote_anomalies = scanner_->quote_anomalies();
@@ -219,6 +338,16 @@ class Cleaner::Sink : public RowSink {
   }
 
  private:
+  // Una escritura vista en el archivo: a qué nivel fue a parar, cuántas veces
+  // apareció y en qué orden se la vio. Lo segundo elige el nivel que se muestra
+  // y lo tercero desempata, para que el resultado no dependa del orden en que
+  // el unordered_map decida iterar.
+  struct LevelEntry {
+    std::int32_t code = -1;
+    std::size_t count = 0;
+    std::size_t seq = 0;
+  };
+
   // Evidence collected over the sample for one column, before its type is set.
   struct ColumnVotes {
     NumberFormatVotes numbers;
@@ -233,8 +362,19 @@ class Cleaner::Sink : public RowSink {
   void start() {
     started_ = true;
     const std::string_view body = strip_bom(pre_);
-    dialect_ = opts_.sniff ? sniff_dialect(body.substr(0, std::min(body.size(), kSniffBytes)))
-                           : opts_.dialect;
+    if (opts_.sniff) {
+      dialect_ = sniff_dialect(body.substr(0, std::min(body.size(), kSniffBytes)));
+      // Un preambulo puesto a mano gana sobre el detectado: quien ya abrio el
+      // archivo y conto las lineas sabe mas que la heuristica. El interruptor
+      // solo apaga la deteccion, no pisa lo que el usuario escribio.
+      if (opts_.dialect.preamble_rows > 0) {
+        dialect_.preamble_rows = opts_.dialect.preamble_rows;
+      } else if (!opts_.detect_preamble) {
+        dialect_.preamble_rows = 0;
+      }
+    } else {
+      dialect_ = opts_.dialect;
+    }
     scanner_ = std::make_unique<CsvScanner>(dialect_, *this);
     scanner_->feed(body.data(), body.size());
     pre_.clear();
@@ -242,6 +382,13 @@ class Cleaner::Sink : public RowSink {
   }
 
   void on_row(const std::string_view* fields, std::size_t n) override {
+    // El preambulo se va antes que nada. No es encabezado ni dato: si entrara
+    // al conteo aparecería como una fila rota más, y sus celdas votarían el
+    // tipo de columnas a las que no pertenece.
+    if (preamble_skipped_ < dialect_.preamble_rows) {
+      ++preamble_skipped_;
+      return;
+    }
     if (dialect_.has_header && !header_taken_) {
       header_taken_ = true;
       raw_names_.reserve(n);
@@ -302,6 +449,7 @@ class Cleaner::Sink : public RowSink {
     finalize_names();
     cols_.resize(ncols_);
     level_index_.resize(ncols_);
+    key_index_.resize(ncols_);
     scan_m2_.assign(ncols_, 0.0);
 
     // Phase 1 — gather evidence, per column and for the file as a whole.
@@ -319,6 +467,13 @@ class Cleaner::Sink : public RowSink {
         if (!v.uniq_capped) {
           if (v.uniq.size() >= kUniqueCap) {
             v.uniq_capped = true;
+          } else if (opts_.unify_categories) {
+            // Contar únicos por la clave normalizada y no por la escritura es
+            // lo que decide el tipo: con "Buenos Aires" y "buenos aires" como
+            // dos valores distintos, una columna de provincias sucia supera el
+            // umbral de cardinalidad y se tipa como texto libre — con lo cual
+            // no entra a ningún modelo y nadie se entera de por qué.
+            v.uniq.emplace(category_key(cell));
           } else {
             v.uniq.emplace(cell);
           }
@@ -626,12 +781,7 @@ class Cleaner::Sink : public RowSink {
           }
           // The dictionary is bounded by max_categorical_levels, so keeping it
           // does not make memory grow with the row count.
-          auto& index = level_index_[j];
-          if (index.find(std::string(cell)) == index.end() &&
-              col.levels.size() < kMaxLevels) {
-            index.emplace(std::string(cell), static_cast<std::int32_t>(col.levels.size()));
-            col.levels.emplace_back(cell);
-          }
+          level_code(j, cell);
           scan_value(j, true, false, 0.0);
           break;
         }
@@ -707,23 +857,14 @@ class Cleaner::Sink : public RowSink {
           ++col.stats.missing;
           break;
         }
-        auto& index = level_index_[j];
-        const auto it = index.find(std::string(cell));
-        if (it != index.end()) {
-          col.codes.push_back(it->second);
-          col.mask.push_back(1);
-          break;
-        }
-        if (col.levels.size() >= kMaxLevels) {
+        const std::int32_t code = level_code(j, cell);
+        if (code < 0) {
           col.codes.push_back(-1);
           col.mask.push_back(0);
           ++col.stats.missing;
           ++col.stats.invalid;
           break;
         }
-        const auto code = static_cast<std::int32_t>(col.levels.size());
-        index.emplace(std::string(cell), code);
-        col.levels.emplace_back(cell);
         col.codes.push_back(code);
         col.mask.push_back(1);
         break;
@@ -739,6 +880,554 @@ class Cleaner::Sink : public RowSink {
           col.mask.push_back(1);
         }
         break;
+    }
+  }
+
+  // ── Pie de tabla ───────────────────────────────────────────────────────────
+
+  /**
+   * ¿La fila cruda es un pie de tabla?
+   *
+   * Sobre el texto, sin números parseados: es lo único que hay cuando el
+   * archivo entero entra en la muestra y todavía no se votaron los tipos.
+   */
+  bool footer_in_text(const std::vector<std::string>& row, std::string* why) const {
+    std::size_t filled = 0, last = 0;
+    for (std::size_t j = 0; j < row.size(); ++j) {
+      if (is_missing_token(row[j])) continue;
+      ++filled;
+      last = j;
+      if (is_total_label(row[j])) {
+        *why = "una celda dice \"" + std::string(trim(row[j])) + "\"";
+        return true;
+      }
+    }
+    // Una nota al pie ("Fuente: INDEC", "Elaboración propia") deja una sola
+    // celda con texto y el resto vacío. No es una observación con faltantes:
+    // una observación no llena la columna de etiquetas y deja en blanco todas
+    // las de números.
+    if (filled == 1 && row.size() > 1 && !looks_numeric(row[last])) {
+      *why = "la única celda con contenido es un texto suelto (\"" +
+             std::string(trim(row[last])) + "\")";
+      return true;
+    }
+    return false;
+  }
+
+  static bool looks_numeric(std::string_view cell) {
+    return parse_number(cell, NumberFormat{'.'}).ok || parse_number(cell, NumberFormat{','}).ok ||
+           parse_date(cell, DateOrder::DMY).ok;
+  }
+
+  // Se comen las últimas filas de la muestra mientras sigan pareciendo pie.
+  // Hacia arriba y frenando en la primera que no lo parece: un pie es un bloque
+  // pegado al final, y con esa regla una fila legítima que se llame "Total"
+  // solo se pierde si además es la última del archivo.
+  void drop_footer_in_sample() {
+    while (!sample_.empty() && footer_rows_ < kFooterWindow) {
+      std::string why;
+      if (!footer_in_text(sample_.back(), &why)) break;
+      footer_why_.push_back(std::move(why));
+      ++footer_rows_;
+      sample_cells_ -= std::min(sample_cells_, sample_.back().size());
+      sample_.pop_back();
+    }
+  }
+
+  /**
+   * Lo mismo sobre las columnas materializadas, que es donde aparece la prueba
+   * dura: que el valor de una columna numérica sea exactamente la suma de lo
+   * que tiene encima no depende del idioma de la etiqueta ni de que haya
+   * etiqueta. Un archivo en portugués o sin columna de texto queda cubierto
+   * igual.
+   */
+  bool footer_in_columns(std::size_t row, std::size_t slot,
+                         const std::vector<std::vector<double>>& prefix,
+                         const std::vector<std::vector<std::size_t>>& terms,
+                         std::string* why) const {
+    std::size_t filled = 0;
+    const Column* lone = nullptr;
+    std::string lone_text;
+
+    for (const Column& col : cols_) {
+      if (row >= col.mask.size() || !col.mask[row]) continue;
+      ++filled;
+      std::string label;
+      if (col.type == ColumnType::Text) {
+        label = col.text[row];
+      } else if (col.type == ColumnType::Categorical) {
+        const std::int32_t code = col.codes[row];
+        if (code >= 0 && static_cast<std::size_t>(code) < col.levels.size()) {
+          label = col.levels[static_cast<std::size_t>(code)];
+        }
+      }
+      if (!label.empty()) {
+        if (is_total_label(label)) {
+          *why = "la celda de \"" + col.name + "\" dice \"" + label + "\"";
+          return true;
+        }
+        lone = &col;
+        lone_text = label;
+      }
+    }
+
+    for (std::size_t j = 0; j < cols_.size(); ++j) {
+      const Column& col = cols_[j];
+      if (col.type != ColumnType::Numeric) continue;
+      if (row >= col.mask.size() || !col.mask[row]) continue;
+      if (slot >= terms[j].size() || terms[j][slot] < kMinFooterTerms) continue;
+      const double sum = prefix[j][slot];
+      const double v = col.values[row];
+      // Una columna de ceros cumple la igualdad sin decir nada.
+      if (std::fabs(v) < 1e-12) continue;
+      if (std::fabs(v - sum) > 1e-6 * std::max(1.0, std::fabs(sum))) continue;
+      *why = "el valor de \"" + col.name + "\" (" + format_number(v) +
+             ") es exactamente la suma de las " + std::to_string(terms[j][slot]) +
+             " filas de arriba";
+      return true;
+    }
+
+    if (filled == 1 && lone != nullptr && cols_.size() > 1) {
+      *why = "la única celda con contenido es un texto suelto en \"" + lone->name + "\" (\"" +
+             lone_text + "\")";
+      return true;
+    }
+    return false;
+  }
+
+  void drop_footer_in_columns() {
+    if (cols_.empty() || rows_kept_ == 0) return;
+    const std::size_t budget = kFooterWindow > footer_rows_ ? kFooterWindow - footer_rows_ : 0;
+    if (budget == 0) return;
+    const std::size_t first = rows_kept_ > budget ? rows_kept_ - budget : 0;
+
+    // Suma de cada columna numérica *antes* de cada fila de la ventana, en una
+    // sola pasada. Recalcularla por fila candidata serían tres recorridas más
+    // sobre millones de valores para mirar tres filas.
+    std::vector<std::vector<double>> prefix(cols_.size());
+    std::vector<std::vector<std::size_t>> terms(cols_.size());
+    for (std::size_t j = 0; j < cols_.size(); ++j) {
+      const Column& col = cols_[j];
+      if (col.type != ColumnType::Numeric) continue;
+      double sum = 0.0;
+      std::size_t seen = 0;
+      const std::size_t n = std::min(first, col.mask.size());
+      for (std::size_t i = 0; i < n; ++i) {
+        if (col.mask[i]) {
+          sum += col.values[i];
+          ++seen;
+        }
+      }
+      prefix[j].reserve(budget);
+      terms[j].reserve(budget);
+      for (std::size_t i = first; i < rows_kept_ && i < col.mask.size(); ++i) {
+        prefix[j].push_back(sum);
+        terms[j].push_back(seen);
+        if (col.mask[i]) {
+          sum += col.values[i];
+          ++seen;
+        }
+      }
+    }
+
+    std::vector<std::uint8_t> keep(rows_kept_, 1);
+    std::size_t dropped = 0;
+    for (std::size_t i = rows_kept_; i-- > first;) {
+      std::string why;
+      if (!footer_in_columns(i, i - first, prefix, terms, &why)) break;
+      keep[i] = 0;
+      ++dropped;
+      footer_why_.push_back(std::move(why));
+    }
+    if (dropped == 0) return;
+
+    compact(keep);
+    rows_kept_ = rows_out_;
+    footer_rows_ += dropped;
+    // compact() lo prendió para que el perfil se recalcule sobre lo que quedó,
+    // pero acá todavía no se calculó ninguno: el compute_stats() que sigue ya
+    // ve las columnas compactadas.
+    values_changed_ = false;
+  }
+
+  // ── Categorías ─────────────────────────────────────────────────────────────
+
+  /**
+   * Nivel al que pertenece una escritura, creándolo si es nueva. -1 cuando el
+   * diccionario ya llegó al tope.
+   */
+  std::int32_t level_code(std::size_t j, std::string_view cell) {
+    Column& col = cols_[j];
+    auto& exact = level_index_[j];
+    std::string raw(cell);
+    if (const auto it = exact.find(raw); it != exact.end()) {
+      ++it->second.count;
+      return it->second.code;
+    }
+
+    std::int32_t code = -1;
+    if (opts_.unify_categories) {
+      auto& keys = key_index_[j];
+      const std::string key = category_key(cell);
+      if (const auto it = keys.find(key); it != keys.end()) {
+        code = it->second;  // otra forma de escribir una categoría que ya existe
+      } else if (col.levels.size() < kMaxLevels) {
+        code = static_cast<std::int32_t>(col.levels.size());
+        col.levels.emplace_back(cell);
+        keys.emplace(key, code);
+      }
+    } else if (col.levels.size() < kMaxLevels) {
+      code = static_cast<std::int32_t>(col.levels.size());
+      col.levels.emplace_back(cell);
+    }
+    if (code < 0) return -1;
+    exact.emplace(std::move(raw), LevelEntry{code, 1, level_seq_++});
+    return code;
+  }
+
+  /**
+   * Elige qué escritura se muestra en cada nivel y anota las fusiones.
+   *
+   * Gana la más frecuente del archivo, no la primera que apareció: si noventa
+   * filas dicen "Buenos Aires" y una dice "buenos aires", el nivel tiene que
+   * leerse como lo escribe el archivo casi siempre. Los empates los rompe el
+   * orden de aparición, que es lo que hace que el resultado no dependa del
+   * orden de iteración de un unordered_map — y por lo tanto que el WASM y el
+   * binario nativo den lo mismo.
+   */
+  void unify_levels() {
+    if (!opts_.unify_categories) return;
+    for (std::size_t j = 0; j < cols_.size(); ++j) {
+      Column& col = cols_[j];
+      if (col.type != ColumnType::Categorical || col.levels.empty()) continue;
+
+      // Escrituras agrupadas por nivel. Se guardan punteros a las entradas del
+      // índice, que sobreviven a cualquier reordenamiento de este vector.
+      using Entry = std::pair<const std::string, LevelEntry>;
+      std::vector<std::vector<const Entry*>> by_code(col.levels.size());
+      for (const Entry& entry : level_index_[j]) {
+        const std::int32_t code = entry.second.code;
+        if (code < 0 || static_cast<std::size_t>(code) >= by_code.size()) continue;
+        by_code[static_cast<std::size_t>(code)].push_back(&entry);
+      }
+
+      std::size_t absorbed = 0;
+      std::vector<std::string> examples;
+      for (std::size_t code = 0; code < by_code.size(); ++code) {
+        auto& group = by_code[code];
+        if (group.size() < 2) continue;
+        std::sort(group.begin(), group.end(), [](const Entry* a, const Entry* b) {
+          if (a->second.count != b->second.count) return a->second.count > b->second.count;
+          return a->second.seq < b->second.seq;
+        });
+        const std::string& winner = group[0]->first;
+        absorbed += group.size() - 1;
+        if (examples.size() < 3) {
+          std::string listed;
+          for (std::size_t i = 1; i < group.size() && i <= 3; ++i) {
+            listed += (i == 1 ? "" : ", ");
+            listed += "\"" + group[i]->first + "\"";
+          }
+          examples.push_back(listed + " → \"" + winner + "\"");
+        }
+        col.levels[code] = winner;
+      }
+      if (absorbed == 0) continue;
+
+      std::string detail = "En \"" + col.name + "\" se " +
+                           (absorbed == 1 ? "unificó " : "unificaron ") +
+                           plural(absorbed, "escritura", "escrituras") +
+                           " con las que ya estaban: ";
+      for (std::size_t i = 0; i < examples.size(); ++i) {
+        detail += (i == 0 ? "" : "; ");
+        detail += examples[i];
+      }
+      detail +=
+          ". Difieren solo en mayúsculas, acentos o espacios, así que son la misma categoría; "
+          "cada escritura de más sería una variable dummy de más. Se conservó la forma más "
+          "frecuente del archivo.";
+      add(ActionKind::UnifiedLevels, col.name, absorbed, std::move(detail));
+    }
+  }
+
+  // ── Índice temporal ────────────────────────────────────────────────────────
+
+  // 1970-01-01 fue jueves, así que el serial 0 cae en el día 4 contando desde
+  // el domingo.
+  static bool is_weekend(std::int64_t serial) {
+    const std::int64_t dow = ((serial % 7) + 7 + 4) % 7;  // 0 domingo … 6 sábado
+    return dow == 0 || dow == 6;
+  }
+
+  static bool is_calendar(TimeFrequency f) {
+    return f == TimeFrequency::Monthly || f == TimeFrequency::Quarterly ||
+           f == TimeFrequency::Semiannual || f == TimeFrequency::Annual;
+  }
+
+  // Meses por período, para las frecuencias que se cuentan por calendario. Un
+  // trimestre no son 90 días ni un año 365: contarlos así deja huecos falsos en
+  // febrero y en los bisiestos.
+  static int months_per_period(TimeFrequency f) {
+    switch (f) {
+      case TimeFrequency::Monthly: return 1;
+      case TimeFrequency::Quarterly: return 3;
+      case TimeFrequency::Semiannual: return 6;
+      case TimeFrequency::Annual: return 12;
+      default: return 0;
+    }
+  }
+
+  /**
+   * Frecuencia de la serie, del espacio más frecuente entre observaciones
+   * consecutivas.
+   *
+   * El grano del parseo manda cuando existe: si las celdas decían "2024Q2" o
+   * "2024-03", la frecuencia ya está escrita en el archivo y no hay nada que
+   * inferir.
+   */
+  static TimeFrequency infer_frequency(const std::vector<std::int64_t>& days, DateGrain grain) {
+    if (grain == DateGrain::Year) return TimeFrequency::Annual;
+    if (grain == DateGrain::Quarter) return TimeFrequency::Quarterly;
+    if (grain == DateGrain::Month) return TimeFrequency::Monthly;
+    if (days.size() < 3) return TimeFrequency::Unknown;
+
+    std::vector<std::int64_t> gaps;
+    gaps.reserve(days.size() - 1);
+    for (std::size_t i = 1; i < days.size(); ++i) gaps.push_back(days[i] - days[i - 1]);
+    std::vector<std::int64_t> sorted = gaps;
+    std::sort(sorted.begin(), sorted.end());
+    std::int64_t mode = sorted[0], best = 0, run = 0, prev = sorted[0];
+    for (std::int64_t g : sorted) {
+      run = (g == prev) ? run + 1 : 1;
+      prev = g;
+      if (run > best) {
+        best = run;
+        mode = g;
+      }
+    }
+
+    if (mode == 1) {
+      // Diaria o de días hábiles. Lo que las separa no es el salto de tres días
+      // sino dónde cae: una serie financiera no tiene sábados ni domingos.
+      bool weekend_seen = false;
+      for (std::int64_t d : days) {
+        if (is_weekend(d)) {
+          weekend_seen = true;
+          break;
+        }
+      }
+      if (!weekend_seen && days.size() >= 5) return TimeFrequency::BusinessDaily;
+      return TimeFrequency::Daily;
+    }
+    if (mode == 7) return TimeFrequency::Weekly;
+    if (mode == 14) return TimeFrequency::Fortnightly;
+    if (mode >= 28 && mode <= 31) return TimeFrequency::Monthly;
+    if (mode >= 89 && mode <= 92) return TimeFrequency::Quarterly;
+    if (mode >= 180 && mode <= 184) return TimeFrequency::Semiannual;
+    if (mode >= 365 && mode <= 366) return TimeFrequency::Annual;
+    return TimeFrequency::Unknown;
+  }
+
+  /**
+   * La única columna de fechas de la tabla, o kNoColumn.
+   *
+   * Con más de una no se elige: "fecha_alta" y "fecha_baja" son las dos fechas
+   * y ninguna es el índice, y ordenar por la que no es desordena el archivo
+   * entero sin que nadie lo pida.
+   */
+  std::size_t pick_time_column() {
+    std::size_t found = kNoColumn;
+    std::size_t seen = 0;
+    for (std::size_t j = 0; j < cols_.size(); ++j) {
+      if (cols_[j].type != ColumnType::Date) continue;
+      ++seen;
+      found = j;
+    }
+    if (seen > 1) {
+      time_index_.ambiguous = true;
+      return kNoColumn;
+    }
+    return seen == 1 ? found : kNoColumn;
+  }
+
+  /**
+   * Ordena las filas por fecha, cuando la columna de fechas es inequívocamente
+   * el índice. Tiene que correr antes de imputar: el arrastre de faltantes
+   * copia el último valor *anterior*, y sobre filas desordenadas "anterior"
+   * quiere decir cualquier cosa.
+   */
+  void sort_by_time() {
+    const std::size_t j = pick_time_column();
+    if (j == kNoColumn) return;
+    const Column& key = cols_[j];
+    const std::size_t n = key.size();
+    if (n < 2) return;
+
+    // Primero lo barato, que es lo que paga todo archivo con fechas: una
+    // pasada sin asignar nada. La mayoría de las series vienen ordenadas y se
+    // van por acá.
+    bool ordered = true;
+    for (std::size_t i = 0; i < n; ++i) {
+      if (!key.mask[i]) return;  // un faltante en el índice: no se ordena nada
+      if (i > 0 && key.values[i] < key.values[i - 1]) ordered = false;
+    }
+    if (ordered) return;
+
+    std::vector<std::uint32_t> order(n);
+    for (std::size_t i = 0; i < n; ++i) order[i] = static_cast<std::uint32_t>(i);
+    const std::vector<double>& v = key.values;
+    std::sort(order.begin(), order.end(),
+              [&v](std::uint32_t a, std::uint32_t b) { return v[a] < v[b]; });
+
+    // Las fechas repetidas se buscan acá y no antes: ya ordenadas quedan
+    // pegadas, así que sale de la misma pasada que hacía falta igual, sin un
+    // hash de millones de entradas. Si hay alguna se descarta todo el trabajo:
+    // con fechas repetidas lo que suele haber es un panel, y ordenar solo por
+    // fecha mezclaría las unidades y arruinaría cualquier rezago.
+    for (std::size_t i = 1; i < n; ++i) {
+      if (v[order[i]] == v[order[i - 1]]) return;
+    }
+
+    for (Column& col : cols_) {
+      permute(col, order);
+    }
+    values_changed_ = true;
+    time_index_.sorted_here = true;
+  }
+
+  // Reordena una columna según `order`, con un solo buffer auxiliar por vector.
+  static void permute(Column& col, const std::vector<std::uint32_t>& order) {
+    const std::size_t n = order.size();
+    if (!col.values.empty()) {
+      std::vector<double> out(n);
+      for (std::size_t i = 0; i < n; ++i) out[i] = col.values[order[i]];
+      col.values.swap(out);
+    }
+    if (!col.codes.empty()) {
+      std::vector<std::int32_t> out(n);
+      for (std::size_t i = 0; i < n; ++i) out[i] = col.codes[order[i]];
+      col.codes.swap(out);
+    }
+    if (!col.text.empty()) {
+      std::vector<std::string> out(n);
+      for (std::size_t i = 0; i < n; ++i) out[i] = std::move(col.text[order[i]]);
+      col.text.swap(out);
+    }
+    if (!col.mask.empty()) {
+      std::vector<std::uint8_t> out(n);
+      for (std::size_t i = 0; i < n; ++i) out[i] = col.mask[order[i]];
+      col.mask.swap(out);
+    }
+  }
+
+  /** Frecuencia, repetidas y huecos, sobre las filas que quedaron. */
+  void analyze_time_index() {
+    const std::size_t j = pick_time_column();
+    if (j == kNoColumn) return;
+    const Column& col = cols_[j];
+
+    std::vector<std::int64_t> days;
+    days.reserve(col.size());
+    bool ordered = true;  // tal como están las filas ahora
+    for (std::size_t i = 0; i < col.size(); ++i) {
+      if (!col.mask[i]) continue;
+      const auto day = static_cast<std::int64_t>(col.values[i]);
+      if (!days.empty() && day < days.back()) ordered = false;
+      days.push_back(day);
+    }
+    if (days.size() < 2) return;
+
+    time_index_.found = true;
+    time_index_.column = col.name;
+    time_index_.grain = col.date_grain;
+    // `ordered` dice cómo venía el archivo, no cómo quedó: si lo reordenamos
+    // nosotros es porque venía desordenado, y el análisis corre después.
+    time_index_.ordered = !time_index_.sorted_here && ordered;
+    time_index_.observations = days.size();
+
+    // Si la serie ya está en orden — porque venía así o porque la ordenamos —
+    // no hay nada que ordenar de nuevo: son millones de valores.
+    if (!ordered) std::sort(days.begin(), days.end());
+    days.erase(std::unique(days.begin(), days.end()), days.end());
+
+    time_index_.first = to_iso(date_from_serial(days.front(), col.date_grain));
+    time_index_.last = to_iso(date_from_serial(days.back(), col.date_grain));
+    time_index_.frequency = infer_frequency(days, col.date_grain);
+    count_periods(days, col.date_grain);
+  }
+
+  /**
+   * Cuenta períodos observados, esperados y faltantes.
+   *
+   * Dos caminos porque son dos cosas distintas: una serie mensual se cuenta por
+   * calendario — un trimestre no son 90 días ni un año 365, y contarlos así
+   * inventa huecos en febrero y en cada bisiesto — y una diaria o semanal se
+   * cuenta por días.
+   */
+  void count_periods(const std::vector<std::int64_t>& distinct, DateGrain grain) {
+    const TimeFrequency f = time_index_.frequency;
+    if (distinct.empty()) return;
+    if (f == TimeFrequency::Unknown) {
+      // Sin frecuencia no hay período, así que "faltar" no significa nada. Lo
+      // que sí se puede decir es cuántas fechas distintas hay.
+      time_index_.periods_observed = distinct.size();
+      time_index_.duplicates = time_index_.observations - distinct.size();
+      return;
+    }
+
+    // `distinct` viene ordenado y el número de período crece con la fecha, así
+    // que los períodos salen ordenados solos: alcanza con recorrer los dos a la
+    // vez. Un unordered_set acá costaría una inserción por observación sobre
+    // series de millones de filas, para responder algo que ya está ordenado.
+    const auto period_of = [&](std::int64_t day) -> std::int64_t {
+      if (!is_calendar(f)) return day;
+      const DateParse d = date_from_serial(day);
+      const std::int64_t months = static_cast<std::int64_t>(d.year) * 12 + (d.month - 1);
+      return months / months_per_period(f);
+    };
+
+    std::vector<std::int64_t> periods;
+    periods.reserve(distinct.size());
+    for (std::int64_t day : distinct) {
+      const std::int64_t p = period_of(day);
+      if (periods.empty() || periods.back() != p) periods.push_back(p);
+    }
+    time_index_.periods_observed = periods.size();
+    time_index_.duplicates = time_index_.observations - periods.size();
+
+    const std::int64_t step = is_calendar(f)                     ? 1
+                              : f == TimeFrequency::Weekly      ? 7
+                              : f == TimeFrequency::Fortnightly ? 14
+                                                                : 1;
+    const std::int64_t span = (periods.back() - periods.front()) / step + 1;
+    // Una fecha con el año mal tipeado estira el rango a milenios. No se cuenta
+    // un hueco por día de un rango que ya no describe a la serie.
+    if (span <= 0 || span > 4000000) return;
+
+    std::size_t k = 0;
+    for (std::int64_t p = periods.front(); p <= periods.back(); p += step) {
+      if (!is_calendar(f) && f == TimeFrequency::BusinessDaily && is_weekend(p)) continue;
+      ++time_index_.periods_expected;
+      while (k < periods.size() && periods[k] < p) ++k;  // observaciones fuera de la grilla
+      if (k < periods.size() && periods[k] == p) {
+        ++k;
+        continue;
+      }
+      ++time_index_.missing_periods;
+      if (time_index_.gap_examples.size() < 5) {
+        if (is_calendar(f)) {
+          const std::int64_t months = p * months_per_period(f);
+          DateParse d;
+          d.ok = true;
+          d.year = static_cast<std::int32_t>(months / 12);
+          d.month = static_cast<std::int32_t>(months % 12) + 1;
+          d.day = 1;
+          d.grain = grain == DateGrain::Day ? DateGrain::Month : grain;
+          time_index_.gap_examples.push_back(to_iso(d));
+        } else {
+          time_index_.gap_examples.push_back(to_iso(date_from_serial(p, DateGrain::Day)));
+        }
+      }
     }
   }
 
@@ -1106,6 +1795,59 @@ class Cleaner::Sink : public RowSink {
          std::string("Separador detectado: ") + delim + ". Primera fila tratada como " +
              (dialect_.has_header ? "encabezado" : "datos") + ".");
 
+    if (encoding_.utf16_bom()) {
+      note(ActionKind::UnsupportedEncoding, "", 1,
+           "El archivo empieza con una marca de UTF-16. ChartBay lee UTF-8 y Windows-1252, "
+           "así que lo que sigue va a estar mal leído de punta a punta. Abrilo en la "
+           "planilla y volvé a guardarlo como \"CSV UTF-8\".");
+    } else if (encoding_.converted() > 0) {
+      note(ActionKind::ConvertedEncoding, "", encoding_.converted(),
+           std::string("El archivo no estaba en UTF-8: se ") +
+               (encoding_.converted() == 1 ? "tradujo " : "tradujeron ") +
+               plural(encoding_.converted(), "byte", "bytes") +
+               " leyéndolos como Windows-1252, que es lo que guarda Excel en español. Sin "
+               "esto, cada acento y cada ñ quedan rotos en los nombres de columna, en los "
+               "niveles de las categóricas y en el CSV que te llevás.");
+    }
+    if (time_index_.sorted_here) {
+      note(ActionKind::SortedByTime, time_index_.column, 0,
+           "Las filas se reordenaron por \"" + time_index_.column +
+               "\": el archivo no venía en orden cronológico. Todo lo que mira el pasado —"
+               " el arrastre de faltantes, los rezagos, la autocorrelación, las raíces "
+               "unitarias — depende de ese orden, y sobre filas desordenadas devuelve un "
+               "número, no un error.");
+    }
+    if (preamble_skipped_ > 0) {
+      // Se nombra el encabezado que quedó, no el número de fila: entre el
+      // título y la tabla suele haber líneas en blanco, que el scanner no
+      // cuenta como filas, así que cualquier número que diéramos acá no
+      // coincidiría con lo que el usuario ve al abrir el archivo.
+      std::string head;
+      for (std::size_t j = 0; j < names_.size() && j < 3; ++j) {
+        head += (j == 0 ? "" : ", ") + names_[j];
+      }
+      if (names_.size() > 3) head += ", …";
+      note(ActionKind::SkippedPreambleRows, "", preamble_skipped_,
+           (preamble_skipped_ == 1 ? "Se salteó " : "Se saltearon ") +
+               plural(preamble_skipped_, "fila", "filas") +
+               " arriba del encabezado: título, metadata o líneas sueltas, todas más "
+               "angostas que la tabla." +
+               (head.empty() ? "" : " El encabezado tomado es \"" + head + "\"."));
+    }
+    if (footer_rows_ > 0) {
+      std::string why;
+      for (std::size_t i = 0; i < footer_why_.size(); ++i) {
+        why += (i == 0 ? (footer_rows_ == 1 ? " Se reconoció porque " : " Se reconocieron porque ")
+                       : "; ");
+        why += footer_why_[i];
+      }
+      if (!why.empty()) why += ".";
+      note(ActionKind::DroppedFooterRows, "", footer_rows_,
+           (footer_rows_ == 1 ? "Se descartó " : "Se descartaron ") +
+               plural(footer_rows_, "fila de pie de tabla", "filas de pie de tabla") + "." + why +
+               " Un subtotal adentro de la columna no es una observación más: está en otra "
+               "escala y arrastra la media, el desvío y el máximo de toda la variable.");
+    }
     if (empty_rows_ > 0) {
       note(ActionKind::DroppedEmptyRows, "", empty_rows_,
            "Se descartaron " + plural(empty_rows_, "fila vacía", "filas vacías") +
@@ -1196,6 +1938,7 @@ class Cleaner::Sink : public RowSink {
   // ── State ──────────────────────────────────────────────────────────────────
 
   CleanOptions opts_;
+  EncodingFixer encoding_;
   std::string pre_;
   std::unique_ptr<CsvScanner> scanner_;
   bool started_ = false;
@@ -1215,7 +1958,13 @@ class Cleaner::Sink : public RowSink {
   DateOrder file_date_order_ = DateOrder::DMY;
 
   std::vector<Column> cols_;
-  std::vector<std::unordered_map<std::string, std::int32_t>> level_index_;
+  // Escritura exacta → nivel. Atiende el caso normal, que es una categoría
+  // repitiéndose idéntica millones de veces, con una sola búsqueda por hash.
+  std::vector<std::unordered_map<std::string, LevelEntry>> level_index_;
+  // Clave normalizada → nivel. Solo se consulta cuando aparece una escritura
+  // que no se vio nunca, así que el costo es por variante y no por fila.
+  std::vector<std::unordered_map<std::string, std::int32_t>> key_index_;
+  std::size_t level_seq_ = 0;
   std::vector<double> scan_m2_;  // Welford accumulator, scan mode only
 
   bool values_changed_ = false;
@@ -1224,6 +1973,10 @@ class Cleaner::Sink : public RowSink {
   std::size_t rows_out_ = 0;
   std::size_t empty_rows_ = 0;
   std::size_t dup_rows_ = 0;
+  std::size_t preamble_skipped_ = 0;
+  std::size_t footer_rows_ = 0;
+  TimeIndex time_index_;
+  std::vector<std::string> footer_why_;
   std::size_t padded_ = 0;
   std::size_t truncated_ = 0;
 

@@ -24,6 +24,21 @@ std::string_view trim(std::string_view s);
 // "", NA, N/A, #N/A, NULL, NONE, NIL, -, --, ., ?, s/d, NaN, missing...
 bool is_missing_token(std::string_view s);
 
+/**
+ * Clave con la que se comparan dos escrituras de la misma categoría.
+ *
+ * Pasa a minúsculas, saca los acentos y colapsa los espacios internos, todo
+ * sobre UTF-8. "Buenos Aires", "buenos aires" y "BUENOS  AIRES" dan la misma
+ * clave; "Córdoba" y "Cordoba" también. Es una clave de comparación y nada
+ * más: el nivel que se muestra sigue siendo una de las escrituras del archivo,
+ * nunca esta forma aplanada.
+ *
+ * Cubre Latin-1 y los agregados de Windows-1252, que es todo el castellano,
+ * portugués, francés, italiano y alemán. Lo que caiga afuera pasa tal cual: es
+ * preferible no unificar a unificar mal.
+ */
+std::string category_key(std::string_view s);
+
 // ── Numbers ───────────────────────────────────────────────────────────────────
 
 // The decimal separator inferred for a column. The group separator is always

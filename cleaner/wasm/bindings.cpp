@@ -72,6 +72,13 @@ enum Ints {
   kScanOnly,
   kForceDecimal,
   kForceDateOrder,
+  kDetectPreamble,
+  kPreambleRows,
+  kDropFooterRows,
+  kFixEncoding,
+  kUnifyCategories,
+  kAnalyzeTimeIndex,
+  kSortByTime,
   kIntCount,
 };
 
@@ -126,6 +133,15 @@ CleanOptions decode_options(const std::int32_t* ints, std::int32_t nints, const 
     case 3: opts.force_date_order = DateOrder::MDY; break;
     default: break;
   }
+  opts.detect_preamble = geti(kDetectPreamble, 1) != 0;
+  if (const std::int32_t preamble = geti(kPreambleRows, 0); preamble > 0) {
+    opts.dialect.preamble_rows = static_cast<std::size_t>(preamble);
+  }
+  opts.drop_footer_rows = geti(kDropFooterRows, 1) != 0;
+  opts.fix_encoding = geti(kFixEncoding, 1) != 0;
+  opts.unify_categories = geti(kUnifyCategories, 1) != 0;
+  opts.analyze_time_index = geti(kAnalyzeTimeIndex, 1) != 0;
+  opts.sort_by_time = geti(kSortByTime, 1) != 0;
   opts.drop_empty_rows = geti(kDropEmptyRows, 1) != 0;
   opts.drop_duplicate_rows = geti(kDropDuplicateRows, 1) != 0;
   opts.drop_empty_columns = geti(kDropEmptyColumns, 1) != 0;

@@ -233,6 +233,31 @@ CB_TEST(date, order_votes) {
   CB_CHECK_EQ(tie.parseable, static_cast<std::size_t>(2));
 }
 
+CB_TEST(category_key, folds_case_accents_and_inner_spaces) {
+  CB_CHECK_EQ(category_key("Buenos Aires"), std::string("buenos aires"));
+  CB_CHECK_EQ(category_key("BUENOS AIRES"), category_key("buenos aires"));
+  CB_CHECK_EQ(category_key("Buenos   Aires"), category_key("Buenos Aires"));
+  CB_CHECK_EQ(category_key("  Buenos\tAires  "), std::string("buenos aires"));
+  CB_CHECK_EQ(category_key("Córdoba"), std::string("cordoba"));
+  CB_CHECK_EQ(category_key("Neuquén"), category_key("NEUQUEN"));
+  CB_CHECK_EQ(category_key("Nuñez"), category_key("Nunez"));
+  // El espacio duro que sueltan las planillas cuenta como espacio.
+  CB_CHECK_EQ(category_key("Santa\xC2\xA0" "Fe"), std::string("santa fe"));
+}
+
+CB_TEST(category_key, keeps_apart_what_is_actually_different) {
+  CB_CHECK(category_key("Córdoba") != category_key("Cordova"));
+  CB_CHECK(category_key("Santa Fe") != category_key("SantaFe"));
+  CB_CHECK(category_key("norte") != category_key("sur"));
+}
+
+CB_TEST(category_key, leaves_alone_what_it_does_not_know) {
+  // Sin pliegue conocido se pasa tal cual: unificar mal es peor que no
+  // unificar.
+  CB_CHECK_EQ(category_key("日本語"), std::string("日本語"));
+  CB_CHECK_EQ(category_key("ЮГ"), std::string("ЮГ"));
+}
+
 CB_TEST(boolean, common_spellings) {
   bool b = false;
   CB_CHECK(parse_bool("true", &b) && b);
