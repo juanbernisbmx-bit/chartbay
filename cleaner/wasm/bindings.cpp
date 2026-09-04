@@ -79,6 +79,7 @@ enum Ints {
   kUnifyCategories,
   kAnalyzeTimeIndex,
   kSortByTime,
+  kFuzzyCategories,
   kIntCount,
 };
 
@@ -142,6 +143,7 @@ CleanOptions decode_options(const std::int32_t* ints, std::int32_t nints, const 
   opts.unify_categories = geti(kUnifyCategories, 1) != 0;
   opts.analyze_time_index = geti(kAnalyzeTimeIndex, 1) != 0;
   opts.sort_by_time = geti(kSortByTime, 1) != 0;
+  opts.fuzzy_categories = geti(kFuzzyCategories, 0) != 0;
   opts.drop_empty_rows = geti(kDropEmptyRows, 1) != 0;
   opts.drop_duplicate_rows = geti(kDropDuplicateRows, 1) != 0;
   opts.drop_empty_columns = geti(kDropEmptyColumns, 1) != 0;

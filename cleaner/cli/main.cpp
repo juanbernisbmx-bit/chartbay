@@ -40,6 +40,8 @@ void usage() {
       "    --no-skip             no detectar el preámbulo solo\n"
       "    --no-encoding-fix     no traducir a UTF-8 lo que venga en Windows-1252\n"
       "    --no-unify-categories tratar \"Córdoba\" y \"Cordoba\" como dos categorías\n"
+      "    --fuzzy-categories    fusionar además las que se parecen (\"Cordova\");\n"
+      "                          sin esto solo se listan al final del resumen\n"
       "    --no-sort-by-date     no reordenar las filas por el índice temporal\n"
       "    --no-time-index       no analizar la columna de fechas como serie\n"
       "\n"
@@ -152,6 +154,8 @@ int main(int argc, char** argv) {
       opts.fix_encoding = false;
     } else if (eq(a, "--no-unify-categories")) {
       opts.unify_categories = false;
+    } else if (eq(a, "--fuzzy-categories")) {
+      opts.fuzzy_categories = true;
     } else if (eq(a, "--no-sort-by-date")) {
       opts.sort_by_time = false;
     } else if (eq(a, "--no-time-index")) {

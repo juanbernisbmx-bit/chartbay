@@ -124,6 +124,28 @@ std::string to_json(const CleanResult& result) {
     out += "]}";
   }
 
+  if (!result.fuzzy_matches.empty()) {
+    out += ",\"fuzzyMatches\":[";
+    for (std::size_t i = 0; i < result.fuzzy_matches.size(); ++i) {
+      const FuzzyMatch& m = result.fuzzy_matches[i];
+      if (i) out.push_back(',');
+      out += "{\"column\":";
+      escape_json(out, m.column);
+      out += ",\"from\":";
+      escape_json(out, m.from);
+      out += ",\"to\":";
+      escape_json(out, m.to);
+      out += ",\"fromCount\":";
+      json_uint(out, m.from_count);
+      out += ",\"toCount\":";
+      json_uint(out, m.to_count);
+      out += ",\"distance\":";
+      json_uint(out, m.distance);
+      out.push_back('}');
+    }
+    out.push_back(']');
+  }
+
   out += ",\"columns\":[";
   for (std::size_t j = 0; j < result.columns.size(); ++j) {
     const Column& col = result.columns[j];
@@ -334,6 +356,16 @@ std::string to_text(const CleanResult& result) {
       out += "\n";
     }
   }
+  if (!result.fuzzy_matches.empty()) {
+    out += "\nescrituras parecidas (no se fusionaron)\n";
+    out += std::string(78, '-') + "\n";
+    for (const FuzzyMatch& m : result.fuzzy_matches) {
+      out += "  · " + m.column + ": \"" + m.from + "\" (" + std::to_string(m.from_count) +
+             ") se parece a \"" + m.to + "\" (" + std::to_string(m.to_count) + ")\n";
+    }
+    out += "  usá --fuzzy-categories para fusionarlas\n";
+  }
+
   if (!result.error.empty()) {
     out += "\nerror: " + result.error + "\n";
   }

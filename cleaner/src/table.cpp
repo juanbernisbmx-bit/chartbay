@@ -20,6 +20,12 @@ constexpr std::size_t kMinOutlierObs = 8;
 constexpr std::size_t kMaxLevels = 100000;
 // "No hay tal columna", para la busqueda del indice temporal.
 constexpr std::size_t kNoColumn = static_cast<std::size_t>(-1);
+// Tope de niveles para buscar parecidos: la busqueda es cuadratica y una
+// columna con cientos de niveles no es una categorica que alguien mire a ojo.
+constexpr std::size_t kMaxFuzzyLevels = 200;
+// Claves mas cortas que esto no se comparan nunca: con cuatro caracteres una
+// edicion ya es un cuarto de la palabra, y "AR"/"BR" estan a distancia 1.
+constexpr std::size_t kMinFuzzyLength = 5;
 
 std::uint64_t fnv1a(std::uint64_t h, std::string_view s) {
   for (char c : s) {
@@ -203,6 +209,7 @@ const char* action_code(ActionKind k) {
     case ActionKind::DroppedFooterRows: return "dropped_footer_rows";
     case ActionKind::ConvertedEncoding: return "converted_encoding";
     case ActionKind::UnifiedLevels: return "unified_levels";
+    case ActionKind::MergedSimilarLevels: return "merged_similar_levels";
     case ActionKind::SortedByTime: return "sorted_by_time";
     case ActionKind::UnsupportedEncoding: return "unsupported_encoding";
     case ActionKind::DroppedEmptyRows: return "dropped_empty_rows";
@@ -293,6 +300,7 @@ class Cleaner::Sink : public RowSink {
     // Antes de cualquier estadístico: el conteo de únicos de una categórica es
     // la cantidad de niveles, y esta es la que decide cuántos hay.
     unify_levels();
+    find_similar_levels();
 
     if (opts_.scan_only) {
       // Nothing was materialised, so there is nothing to sort, compact,
@@ -328,6 +336,7 @@ class Cleaner::Sink : public RowSink {
     CleanResult result;
     result.dialect = dialect_;
     result.time_index = std::move(time_index_);
+    result.fuzzy_matches = std::move(fuzzy_);
     result.rows_in = rows_in_;
     result.rows_out = rows_out_;
     result.quote_anomalies = scanner_->quote_anomalies();
@@ -1156,6 +1165,143 @@ class Cleaner::Sink : public RowSink {
     }
   }
 
+  /**
+   * Escrituras que se parecen demasiado como para ser dos categorías.
+   *
+   * Corre después de la unificación exacta, así que compara claves ya plegadas:
+   * lo que queda acá no son mayúsculas ni acentos, son erratas.
+   *
+   * Los tres guardas son lo que separa "arriesgado" de "temerario":
+   *
+   * - **Claves cortas, nunca.** Con menos de cinco caracteres una edición es
+   *   media palabra: "AR" y "BR" son países distintos, "M" y "F" son sexos
+   *   distintos, y los dos pares están a distancia 1.
+   * - **Una edición, o dos si son largas.** Sobre ocho caracteres o más, dos
+   *   ediciones siguen siendo un cuarto de la palabra o menos.
+   * - **La rara tiene que ser rara de verdad**: como mucho la décima parte de
+   *   la frecuente. Dos escrituras igual de comunes no son una errata y su
+   *   dueño, son dos categorías — y si "Salta" y "Malta" aparecen mil veces
+   *   cada una, acá no pasa nada.
+   *
+   * Cada candidata se engancha a una sola dominante, la más frecuente que la
+   * acepte. Sin cadenas: que A se parezca a B y B a C no hace que A y C sean lo
+   * mismo, y encadenarlas es como tres provincias terminan en una.
+   */
+  void find_similar_levels() {
+    if (!opts_.unify_categories) return;
+    for (std::size_t j = 0; j < cols_.size(); ++j) {
+      Column& col = cols_[j];
+      if (col.type != ColumnType::Categorical) continue;
+      // Comparar todos contra todos es cuadrático. Una columna con cientos de
+      // niveles no es una variable categórica que alguien vaya a mirar a ojo.
+      if (col.levels.size() < 2 || col.levels.size() > kMaxFuzzyLevels) continue;
+
+      std::vector<std::size_t> counts(col.levels.size(), 0);
+      for (const auto& entry : level_index_[j]) {
+        const std::int32_t code = entry.second.code;
+        if (code >= 0 && static_cast<std::size_t>(code) < counts.size()) {
+          counts[static_cast<std::size_t>(code)] += entry.second.count;
+        }
+      }
+      std::vector<std::string> keys(col.levels.size());
+      for (const auto& entry : key_index_[j]) {
+        const std::int32_t code = entry.second;
+        if (code >= 0 && static_cast<std::size_t>(code) < keys.size()) {
+          keys[static_cast<std::size_t>(code)] = entry.first;
+        }
+      }
+
+      // rare → dominante. -1 = sin par.
+      std::vector<std::int32_t> merge_to(col.levels.size(), -1);
+      for (std::size_t a = 0; a < col.levels.size(); ++a) {
+        if (keys[a].size() < kMinFuzzyLength) continue;
+        std::size_t best = static_cast<std::size_t>(-1);
+        std::size_t best_distance = 0;
+        for (std::size_t b = 0; b < col.levels.size(); ++b) {
+          if (a == b || keys[b].size() < kMinFuzzyLength) continue;
+          if (counts[a] * 10 > counts[b]) continue;  // la rara tiene que ser rara
+          const std::size_t shortest = std::min(keys[a].size(), keys[b].size());
+          const std::size_t max_edits = shortest >= 8 ? 2 : 1;
+          const std::size_t d = edit_distance(keys[a], keys[b], max_edits);
+          if (d == 0 || d > max_edits) continue;
+          // Gana la más frecuente; a igual frecuencia, la más parecida; y si
+          // todo empata, el orden de los niveles, que es estable.
+          const bool mejor = best == static_cast<std::size_t>(-1) ||
+                             counts[b] > counts[best] ||
+                             (counts[b] == counts[best] && d < best_distance);
+          if (mejor) {
+            best = b;
+            best_distance = d;
+          }
+        }
+        if (best == static_cast<std::size_t>(-1)) continue;
+        // Una candidata no puede ser a su vez dominante de otra: sin cadenas.
+        merge_to[a] = static_cast<std::int32_t>(best);
+      }
+      for (std::size_t a = 0; a < merge_to.size(); ++a) {
+        if (merge_to[a] < 0) continue;
+        const auto b = static_cast<std::size_t>(merge_to[a]);
+        if (merge_to[b] >= 0) merge_to[a] = -1;  // su dominante es a su vez candidata
+      }
+
+      if (opts_.fuzzy_categories) {
+        // Aplicadas, quedan documentadas en la acción. `fuzzy_matches` es la
+        // lista de lo que falta decidir, así que acá no va nada.
+        apply_similar_levels(j, merge_to);
+        continue;
+      }
+      for (std::size_t a = 0; a < merge_to.size(); ++a) {
+        if (merge_to[a] < 0) continue;
+        const auto b = static_cast<std::size_t>(merge_to[a]);
+        fuzzy_.push_back({col.name, col.levels[a], col.levels[b], counts[a], counts[b],
+                          edit_distance(keys[a], keys[b], 2)});
+      }
+    }
+  }
+
+  /** Reescribe los códigos y saca los niveles absorbidos. */
+  void apply_similar_levels(std::size_t j, const std::vector<std::int32_t>& merge_to) {
+    Column& col = cols_[j];
+    std::size_t merged = 0;
+    for (std::int32_t m : merge_to) merged += (m >= 0);
+    if (merged == 0) return;
+
+    // El texto se arma antes de tocar `levels`: después, los niveles que
+    // sobreviven ya fueron movidos y nombrarlos devuelve cadenas vacías.
+    std::string detail = "En \"" + col.name + "\" se " +
+                         (merged == 1 ? "fusionó " : "fusionaron ") +
+                         plural(merged, "escritura parecida", "escrituras parecidas") + ": ";
+    std::size_t listed = 0;
+    for (std::size_t i = 0; i < merge_to.size() && listed < 3; ++i) {
+      if (merge_to[i] < 0) continue;
+      detail += (listed++ ? "; " : "");
+      detail += "\"" + col.levels[i] + "\" → \"" +
+                col.levels[static_cast<std::size_t>(merge_to[i])] + "\"";
+    }
+    if (merged > listed) detail += "; y " + std::to_string(merged - listed) + " más";
+    detail +=
+        ". Se parecen a una escritura mucho más frecuente y casi seguro son erratas, pero es "
+        "una apuesta y no una equivalencia: revisá la lista antes de estimar.";
+
+    std::vector<std::int32_t> renumber(col.levels.size(), -1);
+    std::vector<std::string> kept;
+    kept.reserve(col.levels.size() - merged);
+    for (std::size_t i = 0; i < col.levels.size(); ++i) {
+      if (merge_to[i] >= 0) continue;
+      renumber[i] = static_cast<std::int32_t>(kept.size());
+      kept.push_back(std::move(col.levels[i]));
+    }
+    for (std::int32_t& code : col.codes) {
+      if (code < 0 || static_cast<std::size_t>(code) >= merge_to.size()) continue;
+      const auto old_code = static_cast<std::size_t>(code);
+      const std::size_t target =
+          merge_to[old_code] >= 0 ? static_cast<std::size_t>(merge_to[old_code]) : old_code;
+      code = renumber[target];
+    }
+    col.levels = std::move(kept);
+    add(ActionKind::MergedSimilarLevels, col.name, merged, std::move(detail));
+  }
+
   // ── Índice temporal ────────────────────────────────────────────────────────
 
   // 1970-01-01 fue jueves, así que el serial 0 cae en el día 4 contando desde
@@ -1982,6 +2128,7 @@ class Cleaner::Sink : public RowSink {
   std::size_t preamble_skipped_ = 0;
   std::size_t footer_rows_ = 0;
   TimeIndex time_index_;
+  std::vector<FuzzyMatch> fuzzy_;
   std::vector<std::string> footer_why_;
   std::size_t padded_ = 0;
   std::size_t truncated_ = 0;

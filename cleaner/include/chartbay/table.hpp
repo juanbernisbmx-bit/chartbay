@@ -113,6 +113,21 @@ struct CleanOptions {
    */
   bool unify_categories = true;
   /**
+   * Además de las escrituras equivalentes, **fusiona** las que se parecen:
+   * "Cordova" con "Córdoba", "Buenos Aries" con "Buenos Aires".
+   *
+   * Apagado a propósito, al revés que el resto de la limpieza. Plegar
+   * mayúsculas y acentos no es una apuesta — "CÓRDOBA" y "Córdoba" son la misma
+   * palabra escrita distinto y no hay archivo donde no lo sean. Parecerse, sí:
+   * "Salta" y "Malta" están a una letra y son dos lugares. Los guardas de acá
+   * abajo hacen esa apuesta razonable, no segura, y una fusión equivocada mete
+   * dos categorías reales en una sin dejar rastro en los números.
+   *
+   * Así que por defecto se detectan y se listan en el reporte con las dos
+   * escrituras y sus frecuencias, y aplicarlas es una decisión del usuario.
+   */
+  bool fuzzy_categories = false;
+  /**
    * Analiza la columna de fechas como índice temporal: frecuencia, fechas
    * repetidas y períodos faltantes.
    */
@@ -252,6 +267,22 @@ struct TimeIndex {
   std::vector<std::string> gap_examples;  // hasta 5, para poder ir a mirarlos
 };
 
+/**
+ * Dos escrituras que quedaron como categorías distintas pero se parecen
+ * demasiado: casi siempre una errata.
+ *
+ * Se informan aunque no se apliquen, porque el usuario es el único que sabe si
+ * "Salta" y "Malta" son un error de tipeo o dos lugares.
+ */
+struct FuzzyMatch {
+  std::string column;
+  std::string from;  // la escritura rara, la candidata a errata
+  std::string to;    // la frecuente, con la que se fusionaría
+  std::size_t from_count = 0;
+  std::size_t to_count = 0;
+  std::size_t distance = 0;  // ediciones entre las dos claves normalizadas
+};
+
 enum class ActionKind : std::uint8_t {
   InferredDialect,
   InferredDecimal,
@@ -265,6 +296,7 @@ enum class ActionKind : std::uint8_t {
   ConvertedEncoding,
   UnsupportedEncoding,
   UnifiedLevels,
+  MergedSimilarLevels,
   SortedByTime,
   DroppedEmptyRows,
   DroppedDuplicateRows,
@@ -302,6 +334,8 @@ struct CleanResult {
   std::vector<Action> actions;
   Dialect dialect;
   TimeIndex time_index;
+  /** Parecidos detectados. Vacío cuando no hay ninguno. */
+  std::vector<FuzzyMatch> fuzzy_matches;
   std::size_t quote_anomalies = 0;
   bool unterminated_quote = false;
   std::string error;
