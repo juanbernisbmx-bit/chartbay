@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { diagnose } from '../../../cleaner/js/diagnostics';
-import type { CleanReport, ColumnReport, TimeIndexReport } from '../../../cleaner/js/csvclean';
+import type {
+  CleanReport,
+  ColumnReport,
+  FuzzyMatch,
+  TimeIndexReport,
+} from '../../../cleaner/js/csvclean';
 
 function column(overrides: Partial<ColumnReport> = {}): ColumnReport {
   return {
@@ -254,6 +259,37 @@ describe('diagnose', () => {
 
   it('una serie sana no genera ningún problema', () => {
     expect(diagnose(report({ timeIndex: timeIndex() }))).toEqual([]);
+  });
+
+  it('las escrituras parecidas se ofrecen, no se dan por hechas', () => {
+    const parecidas: FuzzyMatch[] = [
+      { column: 'provincia', from: 'Cordova', to: 'Córdoba', fromCount: 1, toCount: 14, distance: 1 },
+    ];
+    const issue = diagnose(report({ fuzzyMatches: parecidas })).find(
+      i => i.id === 'similar-levels'
+    );
+    expect(issue).toBeDefined();
+    expect(issue!.title).toBe('Hay 1 escritura parecida a otra');
+    expect(issue!.detail).toContain('"Cordova" (1) se parece a "Córdoba" (14)');
+    // La acción es opt-in: el botón la aplica, el default no.
+    expect(issue!.fix?.options).toEqual({ fuzzyCategories: true });
+  });
+
+  it('si ya se fusionaron, el camino de vuelta también está', () => {
+    const issue = diagnose(
+      report({
+        actions: [
+          { kind: 'merged_similar_levels', column: 'provincia', count: 2, detail: 'x' },
+        ],
+      })
+    ).find(i => i.id === 'merged-similar-levels');
+    expect(issue).toBeDefined();
+    expect(issue!.title).toBe('Se fusionaron 2 escrituras parecidas a otras');
+    expect(issue!.fix?.options).toEqual({ fuzzyCategories: false });
+  });
+
+  it('sin parecidos no dice nada', () => {
+    expect(diagnose(report({ fuzzyMatches: [] }))).toEqual([]);
   });
 
   it('la unificación de categorías se puede revertir desde el diagnóstico', () => {

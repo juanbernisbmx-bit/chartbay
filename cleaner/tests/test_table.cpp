@@ -280,6 +280,96 @@ CB_TEST(table, spelling_noise_was_turning_categories_into_free_text) {
   CB_CHECK_EQ(prov->levels.size(), static_cast<std::size_t>(10));
 }
 
+// ── Escrituras parecidas ─────────────────────────────────────────────────────
+
+namespace {
+
+// Una columna con `veces` repeticiones de cada nivel dominante y una sola
+// aparición de cada errata.
+std::string with_typos(const std::vector<std::string>& dominantes,
+                       const std::vector<std::string>& erratas, int veces) {
+  std::string csv = "provincia;v\n";
+  int n = 0;
+  for (const std::string& d : dominantes) {
+    for (int i = 0; i < veces; ++i) csv += d + ";" + std::to_string(++n) + "\n";
+  }
+  for (const std::string& e : erratas) csv += e + ";" + std::to_string(++n) + "\n";
+  return csv;
+}
+
+}  // namespace
+
+CB_TEST(table, similar_spellings_are_reported_but_not_merged) {
+  // El default es avisar, no fusionar: plegar acentos es una equivalencia,
+  // parecerse es una apuesta.
+  const CleanResult r = clean_buffer(with_typos({"Córdoba", "Mendoza"}, {"Cordova"}, 12));
+  const Column* prov = col_by_name(r, "provincia");
+  CB_CHECK(prov != nullptr && prov->levels.size() == 3);
+  CB_CHECK_EQ(r.fuzzy_matches.size(), static_cast<std::size_t>(1));
+  CB_CHECK_EQ(r.fuzzy_matches[0].from, std::string("Cordova"));
+  CB_CHECK_EQ(r.fuzzy_matches[0].to, std::string("Córdoba"));
+  CB_CHECK_EQ(r.fuzzy_matches[0].from_count, static_cast<std::size_t>(1));
+  CB_CHECK_EQ(r.fuzzy_matches[0].to_count, static_cast<std::size_t>(12));
+  CB_CHECK(!has_action(r, ActionKind::MergedSimilarLevels));
+}
+
+CB_TEST(table, similar_spellings_merge_when_asked) {
+  CleanOptions opts;
+  opts.fuzzy_categories = true;
+  const CleanResult r = clean_buffer(with_typos({"Córdoba", "Mendoza"}, {"Cordova"}, 12), opts);
+  const Column* prov = col_by_name(r, "provincia");
+  CB_CHECK(prov != nullptr);
+  CB_CHECK_EQ(prov->levels.size(), static_cast<std::size_t>(2));
+  CB_CHECK(has_action(r, ActionKind::MergedSimilarLevels));
+  // Aplicadas dejan de ser una sugerencia pendiente.
+  CB_CHECK(r.fuzzy_matches.empty());
+  // Y la fila de la errata quedó apuntando al nivel bueno, no a -1.
+  std::size_t cordoba = 0;
+  for (std::size_t i = 0; i < prov->size(); ++i) {
+    if (prov->codes[i] >= 0 && prov->levels[static_cast<std::size_t>(prov->codes[i])] == "Córdoba") {
+      ++cordoba;
+    }
+  }
+  CB_CHECK_EQ(cordoba, static_cast<std::size_t>(13));
+}
+
+CB_TEST(table, a_transposition_is_one_edit_not_two) {
+  const CleanResult r = clean_buffer(with_typos({"Buenos Aires"}, {"Buenos Aries"}, 12));
+  CB_CHECK_EQ(r.fuzzy_matches.size(), static_cast<std::size_t>(1));
+  CB_CHECK_EQ(r.fuzzy_matches[0].distance, static_cast<std::size_t>(1));
+}
+
+CB_TEST(table, two_common_spellings_are_two_categories) {
+  // "Salta" y "Malta" están a una edición y son dos lugares. Lo que las salva
+  // no es la distancia sino la frecuencia: ninguna es rara.
+  CleanOptions opts;
+  opts.fuzzy_categories = true;
+  const CleanResult r = clean_buffer(with_typos({"Salta", "Malta"}, {}, 12), opts);
+  CB_CHECK_EQ(col_by_name(r, "provincia")->levels.size(), static_cast<std::size_t>(2));
+  CB_CHECK(r.fuzzy_matches.empty());
+  CB_CHECK(!has_action(r, ActionKind::MergedSimilarLevels));
+}
+
+CB_TEST(table, short_codes_are_never_compared) {
+  // "AR" y "BR" están a una edición y son dos países. Con claves cortas no hay
+  // guarda de frecuencia que alcance, así que directamente no se miran.
+  CleanOptions opts;
+  opts.fuzzy_categories = true;
+  const CleanResult r = clean_buffer(with_typos({"AR"}, {"BR"}, 20), opts);
+  CB_CHECK_EQ(col_by_name(r, "provincia")->levels.size(), static_cast<std::size_t>(2));
+  CB_CHECK(r.fuzzy_matches.empty());
+}
+
+CB_TEST(table, similarity_does_not_chain) {
+  // Que A se parezca a B y B a C no hace que A y C sean lo mismo. Si la
+  // dominante elegida es a su vez candidata de otra, la fusión no se hace.
+  const CleanResult r =
+      clean_buffer(with_typos({"Mendoza"}, {"Mendozaa", "Mendozaaa"}, 30));
+  for (const FuzzyMatch& m : r.fuzzy_matches) {
+    CB_CHECK_EQ(m.to, std::string("Mendoza"));
+  }
+}
+
 CB_TEST(table, a_consistent_column_is_left_exactly_as_it_was) {
   const CleanResult r = clean_buffer(
       "region;valor\nnorte;1\nsur;2\nnorte;3\nsur;4\nnorte;5\nsur;6\n");

@@ -258,6 +258,22 @@ CB_TEST(category_key, leaves_alone_what_it_does_not_know) {
   CB_CHECK_EQ(category_key("ЮГ"), std::string("ЮГ"));
 }
 
+CB_TEST(edit_distance, counts_the_typos_that_actually_ocurren) {
+  CB_CHECK_EQ(edit_distance("cordoba", "cordoba", 2), static_cast<std::size_t>(0));
+  CB_CHECK_EQ(edit_distance("cordoba", "cordova", 2), static_cast<std::size_t>(1));
+  // Transposicion: para Levenshtein a secas serian dos ediciones.
+  CB_CHECK_EQ(edit_distance("buenos aires", "buenos aries", 2), static_cast<std::size_t>(1));
+  CB_CHECK_EQ(edit_distance("mendoza", "mendza", 2), static_cast<std::size_t>(1));
+  CB_CHECK_EQ(edit_distance("salta", "malta", 2), static_cast<std::size_t>(1));
+}
+
+CB_TEST(edit_distance, gives_up_instead_of_computing_a_big_number) {
+  // No interesa cuanto se parecen dos cosas que no se parecen: se corta.
+  CB_CHECK_EQ(edit_distance("cordoba", "tierra del fuego", 2), static_cast<std::size_t>(3));
+  CB_CHECK_EQ(edit_distance("norte", "sur", 1), static_cast<std::size_t>(2));
+  CB_CHECK_EQ(edit_distance("", "abc", 2), static_cast<std::size_t>(3));
+}
+
 CB_TEST(boolean, common_spellings) {
   bool b = false;
   CB_CHECK(parse_bool("true", &b) && b);

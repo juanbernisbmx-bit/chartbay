@@ -67,6 +67,20 @@ así que resumen por temas en vez de listar cada commit.
   `--no-time-index` en el CLI, `sortByTime` y `analyzeTimeIndex` en el
   navegador.
 
+- **Escrituras parecidas.** Además de las equivalentes, se detectan las que se
+  parecen: "Cordova" junto a "Córdoba", "Buenos Aries" junto a "Buenos Aires".
+  A diferencia del resto de la limpieza **no se aplican solas**. Plegar acentos
+  es una equivalencia que vale en cualquier archivo; parecerse es una apuesta, y
+  "Salta" y "Malta" están a una letra. Así que se listan en el reporte con las
+  dos escrituras y sus frecuencias, y fusionarlas es una decisión del usuario:
+  `--fuzzy-categories` en el CLI, un botón en el diagnóstico. Cuando se piden,
+  la apuesta se acota: claves de menos de cinco caracteres no se comparan nunca
+  ("AR" y "BR" están a una edición), se admite una edición —o dos desde ocho
+  caracteres— y la rara tiene que ser como mucho la décima parte de la
+  frecuente. La distancia es Damerau-Levenshtein, así que una transposición
+  cuenta como un error y no como dos. No se encadena. Costo medido sobre 129 MB:
+  ninguno, porque la búsqueda es sobre los niveles y no sobre las filas.
+
 ### Corregido
 
 - Una columna de fechas sin día — "2024-03", "2024Q2" — se reportaba como

@@ -39,6 +39,18 @@ bool is_missing_token(std::string_view s);
  */
 std::string category_key(std::string_view s);
 
+/**
+ * Distancia de edición entre dos claves, contando también las transposiciones.
+ *
+ * Damerau y no Levenshtein a secas porque el error de tipeo más común es
+ * cambiar dos letras de lugar — "Buenos Aries" —, y para Levenshtein eso son
+ * dos ediciones, lo mismo que dos errores independientes.
+ *
+ * Corta apenas se pasa de `max` y devuelve `max + 1`: acá se compara cada nivel
+ * contra todos los demás, y lo único que importa es si están cerca.
+ */
+std::size_t edit_distance(std::string_view a, std::string_view b, std::size_t max);
+
 // ── Numbers ───────────────────────────────────────────────────────────────────
 
 // The decimal separator inferred for a column. The group separator is always

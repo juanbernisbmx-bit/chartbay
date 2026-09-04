@@ -250,6 +250,29 @@ export function diagnose(report: CleanReport): Issue[] {
     });
   }
 
+  const fusionadas = report.actions.filter(a => a.kind === 'merged_similar_levels');
+  if (fusionadas.length > 0) {
+    issues.push({
+      id: 'merged-similar-levels',
+      severity: 'media',
+      title: `${verbo(
+        fusionadas.reduce((n, a) => n + a.count, 0),
+        'Se fusionó',
+        'Se fusionaron'
+      )} ${plural(
+        fusionadas.reduce((n, a) => n + a.count, 0),
+        'escritura parecida a otra',
+        'escrituras parecidas a otras'
+      )}`,
+      columns: fusionadas.map(a => a.column),
+      detail:
+        `${fusionadas.map(a => a.detail).join(' ')} Esto lo pediste vos: es la única parte ` +
+        'de la limpieza que junta dos categorías que el archivo escribía distinto sin que ' +
+        'sean la misma palabra.',
+      fix: { label: 'Deshacer: dejarlas separadas', options: { fuzzyCategories: false } },
+    });
+  }
+
   const unified = report.actions.filter(a => a.kind === 'unified_levels');
   if (unified.length > 0) {
     const total = unified.reduce((sum, a) => sum + a.count, 0);
@@ -267,6 +290,31 @@ export function diagnose(report: CleanReport): Issue[] {
         'lo que dice el archivo, así que mirá la lista: si dos de esas eran categorías ' +
         'distintas de verdad, conviene apagarlo.',
       fix: { label: 'Tratarlas como categorías distintas', options: { unifyCategories: false } },
+    });
+  }
+
+  const parecidas = report.fuzzyMatches ?? [];
+  if (parecidas.length > 0) {
+    const lista = parecidas
+      .slice(0, 4)
+      .map(m => `"${m.from}" (${m.fromCount}) se parece a "${m.to}" (${m.toCount})`)
+      .join('; ');
+    const resto = parecidas.length > 4 ? `; y ${parecidas.length - 4} más` : '';
+    issues.push({
+      id: 'similar-levels',
+      severity: 'media',
+      title: `Hay ${plural(
+        parecidas.length,
+        'escritura parecida a otra',
+        'escrituras parecidas a otras'
+      )}`,
+      columns: [...new Set(parecidas.map(m => m.column))],
+      detail:
+        `${lista}${resto}. No se fusionaron: acentos y mayúsculas son la misma palabra ` +
+        'escrita distinto, pero parecerse es otra cosa — "Salta" y "Malta" están a una ' +
+        'letra y son dos lugares. Cada una de estas es rara al lado de la otra, que es ' +
+        'lo que las hace sospechosas de ser erratas, pero sos vos quien sabe.',
+      fix: { label: 'Fusionarlas con la escritura frecuente', options: { fuzzyCategories: true } },
     });
   }
 

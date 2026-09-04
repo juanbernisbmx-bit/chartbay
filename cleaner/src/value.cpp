@@ -1,9 +1,11 @@
 #include "chartbay/value.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 
 namespace chartbay {
 namespace {
@@ -458,6 +460,40 @@ std::string category_key(std::string_view s) {
     out.append(s.substr(i - len, len));  // sin pliegue conocido: tal cual
   }
   return out;
+}
+
+std::size_t edit_distance(std::string_view a, std::string_view b, std::size_t max) {
+  const std::size_t n = a.size(), m = b.size();
+  // La diferencia de largo ya es una cota inferior: dos claves que difieren en
+  // tres caracteres no pueden estar a una edicion, y no hace falta la matriz.
+  if (n > m + max || m > n + max) return max + 1;
+  if (n == 0) return m;
+  if (m == 0) return n;
+
+  // Damerau-Levenshtein con tres filas: la anterior a la anterior es la que
+  // permite contar una transposicion como una sola edicion.
+  std::vector<std::size_t> prev2(m + 1), prev(m + 1), cur(m + 1);
+  for (std::size_t j = 0; j <= m; ++j) prev[j] = j;
+
+  for (std::size_t i = 1; i <= n; ++i) {
+    cur[0] = i;
+    std::size_t best = cur[0];
+    for (std::size_t j = 1; j <= m; ++j) {
+      const std::size_t cost = a[i - 1] == b[j - 1] ? 0 : 1;
+      std::size_t d = std::min({prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost});
+      if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) {
+        d = std::min(d, prev2[j - 2] + 1);
+      }
+      cur[j] = d;
+      best = std::min(best, d);
+    }
+    // Ninguna celda de esta fila baja de `best`, y las que siguen solo pueden
+    // crecer: si ya se paso, no hay vuelta.
+    if (best > max) return max + 1;
+    prev2.swap(prev);
+    prev.swap(cur);
+  }
+  return prev[m] > max ? max + 1 : prev[m];
 }
 
 // ── Trimming and missing values ───────────────────────────────────────────────

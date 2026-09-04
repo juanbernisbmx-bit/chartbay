@@ -27,10 +27,10 @@ ni siquiera de la columna (ver más abajo).
 
 | Pieza | Estado |
 |---|---|
-| Core C++ (parser, tipado, limpieza, reporte) | listo, 700 checks en verde |
+| Core C++ (parser, tipado, limpieza, reporte) | listo, 728 checks en verde |
 | CLI nativo `csvclean` | listo |
-| Modulo WASM (`web/static/wasm/csvclean.wasm`, 213 KB) | compilado y verificado contra el binario nativo |
-| Capa adaptativa TypeScript (perfilado, preflight, worker, UI) | lista, 100 tests en verde |
+| Modulo WASM (`web/static/wasm/csvclean.wasm`, 221 KB) | compilado y verificado contra el binario nativo |
+| Capa adaptativa TypeScript (perfilado, preflight, worker, UI) | lista, 103 tests en verde |
 | Conexión a `quantbay/` | hecha: el Limpiador y el laboratorio corren sobre esto |
 
 `make wasm-test` corre el modulo compilado bajo Node y exige que su reporte sea
@@ -73,7 +73,8 @@ meses con nombre en español e inglés.
 **Limpieza.** Filas vacías, filas duplicadas, el pie de tabla (la fila de
 totales y las notas al pie), columnas vacías, constantes y duplicadas fila por
 fila. Unifica las escrituras de una misma categoría: mayúsculas, acentos y
-espacios internos.
+espacios internos. Detecta —y opcionalmente fusiona— las que además se parecen,
+que es como se ve una errata.
 
 **Índice temporal.** Reconoce la columna de fechas como índice de una serie:
 infiere la frecuencia (diaria, días hábiles, semanal, quincenal, mensual,
@@ -163,7 +164,25 @@ dummies y no entra a ningún modelo, sin que nada diga por qué.
 
 Es la única parte de la limpieza que **cambia lo que el archivo dice**, así que
 cada fusión va al reporte con las dos escrituras a la vista y el diagnóstico
-ofrece revertirla. `ñ` pliega a `n`: quien escribe sin teclado en castellano
+ofrece revertirla.
+
+**Parecerse no es lo mismo que ser equivalente, y por eso eso sí se pregunta.**
+"CÓRDOBA" y "Córdoba" son la misma palabra escrita distinto en cualquier
+archivo; "Cordova" y "Córdoba" son la misma palabra *casi seguro*, y "Salta" y
+"Malta" están a una letra y son dos lugares. Los parecidos se detectan siempre
+y se listan con las dos escrituras y sus frecuencias, pero fusionarlos es una
+decisión del usuario — `--fuzzy-categories`, o un botón en el diagnóstico.
+
+Cuando se piden, la apuesta se acota con tres guardas: claves de menos de cinco
+caracteres no se comparan nunca (`AR` y `BR` están a una edición y son dos
+países); se admite una edición, o dos si la clave tiene ocho caracteres o más;
+y la rara tiene que ser **como mucho la décima parte** de la frecuente, porque
+dos escrituras igual de comunes no son una errata y su dueña sino dos
+categorías. La distancia es Damerau-Levenshtein, no Levenshtein: el error de
+tipeo más común es cambiar dos letras de lugar —"Buenos Aries"— y para
+Levenshtein eso son dos ediciones, lo mismo que dos errores independientes.
+Tampoco se encadena: que A se parezca a B y B a C no hace que A y C sean lo
+mismo. `ñ` pliega a `n`: quien escribe sin teclado en castellano
 pone "Nunez" donde el resto del archivo dice "Nuñez", y eso pasa mucho más
 seguido de lo que "año" y "ano" son dos categorías distintas — pero si lo son,
 la fusión se ve en el reporte.
@@ -428,10 +447,13 @@ menor que estos números.
   se elige ninguna: se informa la ambigüedad y no se ordena nada. Tampoco se
   analiza un rango que supere los cuatro millones de períodos, que es lo que
   pasa cuando una fecha trae el año mal tipeado.
+- **Los parecidos se buscan hasta 200 niveles.** La comparación es de todos
+  contra todos, y una columna con cientos de niveles no es una categórica que
+  alguien vaya a mirar a ojo.
 - **La unificación de categorías cubre Latin-1 y Windows-1252**, que es todo el
   castellano, portugués, francés, italiano y alemán. Un alfabeto que caiga
   afuera pasa tal cual y no se unifica: es preferible no unificar a unificar
-  mal. Tampoco corrige erratas — "Cordova" y "Córdoba" siguen siendo dos.
+  mal.
 - **UTF-8 y Windows-1252.** Cualquier otro encoding pasa los bytes tal cual. De
   UTF-16 se reconoce el BOM y se avisa, pero no se convierte.
 - **Sin paralelismo.** Un solo hilo. Partir el archivo por bloques y usar

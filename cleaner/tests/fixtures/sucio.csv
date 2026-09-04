@@ -12,4 +12,15 @@ fecha;pais;pbi;inflacion;deuda;vacia;constante;nota
 07/03/2024;Chile;120,25;3,2%;$ 1.800;;7;séptimo
 08/03/2024;Uruguay;115,00;7,9%;$ 1.700;;7;octavo
 09/03/2024;ARGENTINA;abc;6,0%;$ 1.900;;7;noveno
+10/03/2024;Argentina;100,00;5,0%;$ 1.000;;7;fila
+11/03/2024;Argentina;101,00;5,0%;$ 1.000;;7;fila
+12/03/2024;Argentina;102,00;5,0%;$ 1.000;;7;fila
+13/03/2024;Argentina;103,00;5,0%;$ 1.000;;7;fila
+14/03/2024;Argentina;104,00;5,0%;$ 1.000;;7;fila
+15/03/2024;Argentina;105,00;5,0%;$ 1.000;;7;fila
+16/03/2024;Argentina;106,00;5,0%;$ 1.000;;7;fila
+17/03/2024;Argentina;107,00;5,0%;$ 1.000;;7;fila
+18/03/2024;Argentina;108,00;5,0%;$ 1.000;;7;fila
+19/03/2024;Argentina;109,00;5,0%;$ 1.000;;7;fila
+25/03/2024;Argentna;150,00;5,0%;$ 1.000;;7;errata
 TOTAL;;7.037,00;;$ 220.900;;7;
