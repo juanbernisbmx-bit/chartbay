@@ -69,6 +69,12 @@ así que resumen por temas en vez de listar cada commit.
 
 ### Corregido
 
+- Una columna de fechas sin día — "2024-03", "2024Q2" — se reportaba como
+  ambigua entre DD/MM y MM/DD, y con severidad alta: era lo primero que veía
+  quien subía una serie mensual sana, sobre un componente que sus fechas no
+  tienen, y el arreglo que se le ofrecía no cambiaba nada. La bandera se
+  calculaba antes de conocer el grano de la columna.
+- El diagnóstico decía "Se descartaron 1 columna".
 - El resumen del CLI alineaba las columnas contando bytes en vez de caracteres,
   así que un nombre con acento corría la tabla, y recortar uno largo podía
   partir un carácter al medio.

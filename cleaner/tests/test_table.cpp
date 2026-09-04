@@ -92,6 +92,30 @@ CB_TEST(table, single_column_of_comma_decimals_is_not_split) {
 
 // ── Índice temporal ──────────────────────────────────────────────────────────
 
+CB_TEST(table, a_month_grain_column_has_no_day_to_be_ambiguous_about) {
+  // "2024-03" no tiene día: no hay nada que pueda leerse DD/MM ni MM/DD. Sin
+  // este corte, una serie mensual sana abría el diagnóstico con una advertencia
+  // grave sobre un componente que sus fechas no tienen.
+  const CleanResult r = clean_buffer("fecha;v\n2024-01;1\n2024-02;2\n2024-03;3\n2024-04;4\n");
+  const Column* fecha = col_by_name(r, "fecha");
+  CB_CHECK(fecha != nullptr && fecha->type == ColumnType::Date);
+  CB_CHECK_EQ(fecha->date_grain, DateGrain::Month);
+  CB_CHECK(!fecha->stats.ambiguous_date_order);
+  CB_CHECK(!has_action(r, ActionKind::AmbiguousDateOrder));
+}
+
+CB_TEST(table, a_day_grain_column_without_a_day_over_twelve_still_is_ambiguous) {
+  // Y el caso que la advertencia sí existe para: acá hay día, y ninguno pasa
+  // de 12, así que las dos lecturas siguen siendo posibles.
+  const CleanResult r = clean_buffer(
+      "fecha;v\n01/02/2024;1\n03/04/2024;2\n05/06/2024;3\n07/08/2024;4\n");
+  const Column* fecha = col_by_name(r, "fecha");
+  CB_CHECK(fecha != nullptr && fecha->type == ColumnType::Date);
+  CB_CHECK_EQ(fecha->date_grain, DateGrain::Day);
+  CB_CHECK(fecha->stats.ambiguous_date_order);
+  CB_CHECK(has_action(r, ActionKind::AmbiguousDateOrder));
+}
+
 CB_TEST(table, sorts_a_series_that_arrived_out_of_order) {
   const CleanResult r = clean_buffer(
       "fecha;ipc\n2024-03;102,9\n2024-01;100,5\n2024-04;103,4\n2024-02;101,2\n");

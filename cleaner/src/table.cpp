@@ -603,6 +603,12 @@ class Cleaner::Sink : public RowSink {
         if (grain_count[g] > grain_count[best]) best = g;
       }
       col.date_grain = static_cast<DateGrain>(best);
+      // Una columna "2024-03" o "2024Q2" no tiene día, así que no hay ninguna
+      // ambigüedad DD/MM que resolver. La bandera se calcula arriba, antes de
+      // que se sepa el grano, y sin esto una serie mensual perfectamente sana
+      // abría el diagnóstico con una advertencia sobre un componente que sus
+      // fechas no tienen, y ofrecía releerlas al revés.
+      if (col.date_grain != DateGrain::Day) col.stats.ambiguous_date_order = false;
       return;
     }
     if (static_cast<double>(numeric_ok) >= n * opts_.numeric_threshold) {

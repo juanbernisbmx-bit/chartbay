@@ -297,7 +297,11 @@ export function diagnose(report: CleanReport): Issue[] {
     issues.push({
       id: 'dropped-columns',
       severity: 'baja',
-      title: `Se descartaron ${plural(descartadas.length, 'columna', 'columnas')}`,
+      title: `${descartadas.length === 1 ? 'Se descartó' : 'Se descartaron'} ${plural(
+        descartadas.length,
+        'columna',
+        'columnas'
+      )}`,
       columns: descartadas.map(a => a.column),
       detail:
         'Estaban vacías, tenían siempre el mismo valor, o eran idénticas a otra. ' +
