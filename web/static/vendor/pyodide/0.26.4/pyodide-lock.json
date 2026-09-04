@@ -1,0 +1,167 @@
+{
+  "info": {
+    "abi_version": "2024_0",
+    "arch": "wasm32",
+    "platform": "emscripten_3_1_58",
+    "python": "3.12.1",
+    "version": "0.26.4"
+  },
+  "packages": {
+    "numpy": {
+      "depends": [],
+      "file_name": "numpy-1.26.4-cp312-cp312-pyodide_2024_0_wasm32.whl",
+      "imports": [
+        "numpy"
+      ],
+      "install_dir": "site",
+      "name": "numpy",
+      "package_type": "package",
+      "sha256": "4a2f5303a88a0747c5e6c80701e0ff4ff5667e487c0c9f9c73875e4d88f4cf9a",
+      "shared_library": false,
+      "unvendored_tests": true,
+      "version": "1.26.4"
+    },
+    "openblas": {
+      "depends": [],
+      "file_name": "openblas-0.3.26.zip",
+      "imports": [],
+      "install_dir": "dynlib",
+      "name": "openblas",
+      "package_type": "shared_library",
+      "sha256": "3c0afcaaabec774f5fa739b908ae08672eacf3c8fe265328da2d632a04ba3cd3",
+      "shared_library": true,
+      "unvendored_tests": false,
+      "version": "0.3.26"
+    },
+    "packaging": {
+      "depends": [],
+      "file_name": "packaging-23.2-py3-none-any.whl",
+      "imports": [
+        "packaging"
+      ],
+      "install_dir": "site",
+      "name": "packaging",
+      "package_type": "package",
+      "sha256": "3c30fe6689a35520f2040f4963eae8dbdf6aaa8e326674a13bca3f11514c674a",
+      "shared_library": false,
+      "unvendored_tests": false,
+      "version": "23.2"
+    },
+    "pandas": {
+      "depends": [
+        "numpy",
+        "python-dateutil",
+        "pytz"
+      ],
+      "file_name": "pandas-2.2.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
+      "imports": [
+        "pandas"
+      ],
+      "install_dir": "site",
+      "name": "pandas",
+      "package_type": "package",
+      "sha256": "ae979af0f0be1e8c482408d838ea1366d187f3f057f47b429910e66dbba60673",
+      "shared_library": false,
+      "unvendored_tests": true,
+      "version": "2.2.0"
+    },
+    "patsy": {
+      "depends": [
+        "numpy",
+        "six"
+      ],
+      "file_name": "patsy-0.5.6-py2.py3-none-any.whl",
+      "imports": [
+        "patsy"
+      ],
+      "install_dir": "site",
+      "name": "patsy",
+      "package_type": "package",
+      "sha256": "5b72ff0a647d824ef84a33f892976770f9f65167eab01b4d6ccda54ad0d7b5ab",
+      "shared_library": false,
+      "unvendored_tests": true,
+      "version": "0.5.6"
+    },
+    "python-dateutil": {
+      "depends": [
+        "six"
+      ],
+      "file_name": "python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+      "imports": [
+        "dateutil"
+      ],
+      "install_dir": "site",
+      "name": "python-dateutil",
+      "package_type": "package",
+      "sha256": "302d74af893af51ee8b52e2c06a1fc2bc73cfe645eed3f35a17f082cdf101c7d",
+      "shared_library": false,
+      "unvendored_tests": false,
+      "version": "2.9.0.post0"
+    },
+    "pytz": {
+      "depends": [],
+      "file_name": "pytz-2024.1-py2.py3-none-any.whl",
+      "imports": [
+        "pytz"
+      ],
+      "install_dir": "site",
+      "name": "pytz",
+      "package_type": "package",
+      "sha256": "561652a008b98ef7b66a6acf816e3f4d1c0e17e8ed9eb8dbb993037413cda597",
+      "shared_library": false,
+      "unvendored_tests": false,
+      "version": "2024.1"
+    },
+    "scipy": {
+      "depends": [
+        "numpy",
+        "openblas"
+      ],
+      "file_name": "scipy-1.12.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
+      "imports": [
+        "scipy"
+      ],
+      "install_dir": "site",
+      "name": "scipy",
+      "package_type": "package",
+      "sha256": "1a081410432367ee43f52a280961df4ba7e9bb65d8b9862b3cd2e3727e84d873",
+      "shared_library": false,
+      "unvendored_tests": true,
+      "version": "1.12.0"
+    },
+    "six": {
+      "depends": [],
+      "file_name": "six-1.16.0-py2.py3-none-any.whl",
+      "imports": [
+        "six"
+      ],
+      "install_dir": "site",
+      "name": "six",
+      "package_type": "package",
+      "sha256": "f359c3850331f250d1a5e394aae58193774c6358676340aba992718589b9dcf1",
+      "shared_library": false,
+      "unvendored_tests": false,
+      "version": "1.16.0"
+    },
+    "statsmodels": {
+      "depends": [
+        "numpy",
+        "scipy",
+        "pandas",
+        "patsy",
+        "packaging"
+      ],
+      "file_name": "statsmodels-0.14.2-cp312-cp312-pyodide_2024_0_wasm32.whl",
+      "imports": [
+        "statsmodels"
+      ],
+      "install_dir": "site",
+      "name": "statsmodels",
+      "package_type": "package",
+      "sha256": "55c4c184d04e7bc8bb6f8394a152eb5916712a98d97171cd880e599dc4c5a845",
+      "shared_library": false,
+      "unvendored_tests": true,
+      "version": "0.14.2"
+    }
+  }
+}

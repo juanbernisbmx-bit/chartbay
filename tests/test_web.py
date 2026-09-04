@@ -151,6 +151,26 @@ def test_archivo_de_fuente_incluye_licencia_y_excluye_estado_local():
     assert not any("/.git/" in name or name.endswith("/.env") for name in names)
 
 
+def test_archivo_de_fuente_documenta_pyodide_sin_duplicar_binarios_upstream():
+    from source_archive import _safe_source_file
+
+    base = Path("web/static/vendor/pyodide/0.26.4")
+    for documentacion in (
+        "LICENSE.PYODIDE",
+        "LICENSE.OPENBLAS",
+        "chartbay-pyodide-manifest.json",
+        "pyodide-lock.json",
+    ):
+        assert _safe_source_file(ROOT, base / documentacion)
+    for binario in (
+        "pyodide.asm.wasm",
+        "pyodide.js",
+        "statsmodels-0.14.2-cp312-cp312-pyodide_2024_0_wasm32.whl",
+    ):
+        assert not _safe_source_file(ROOT, base / binario)
+    assert _safe_source_file(ROOT, Path("scripts/vendor_pyodide.py"))
+
+
 def test_quantbay_redirige_a_econometria():
     _, c = _cliente(**SIN_SESION)
     r = c.get("/quantbay")
@@ -397,14 +417,24 @@ def test_csp_del_limpiador_permite_wasm_pero_ningun_cdn():
         assert "jsdelivr" not in script and "cdnjs" not in script, ruta
 
 
-def test_csp_del_worker_pro_aisla_pyodide_y_su_cdn():
+def test_csp_del_worker_pro_permite_wasm_sin_abrir_cdn():
     _, c = _cliente(**SIN_SESION)
     politica = _csp(c, "/static/js/quantbay.pro.worker.js")
     script = politica.split("script-src")[1].split(";")[0]
     assert "'wasm-unsafe-eval'" in script
-    assert "cdn.jsdelivr.net" in script
-    assert "cdn.jsdelivr.net" in politica.split("connect-src")[1].split(";")[0]
-    assert "cdnjs" not in politica
+    assert "jsdelivr" not in script and "cdnjs" not in script
+    assert "jsdelivr" not in politica.split("connect-src")[1].split(";")[0]
+
+
+def test_pyodide_vendorizado_se_sirve_con_cache_inmutable():
+    _, c = _cliente(**SIN_SESION)
+    respuesta = c.get("/static/vendor/pyodide/0.26.4/pyodide.js")
+    assert respuesta.status_code == 200
+    assert respuesta.headers["Cache-Control"] == "public, max-age=31536000, immutable"
+
+    wasm = c.get("/static/vendor/pyodide/0.26.4/pyodide.asm.wasm")
+    assert wasm.status_code == 200
+    assert wasm.mimetype == "application/wasm"
 
 
 def test_csp_de_paginas_simples_no_hereda_permisos_del_laboratorio():

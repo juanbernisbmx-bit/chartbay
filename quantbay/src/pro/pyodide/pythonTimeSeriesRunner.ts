@@ -69,11 +69,9 @@ def _chartbay_pro_time_series():
         return fail('Tipo de regresión ADF no soportado: "' + str(adf_regression) + '". Usá c, ct, ctt o n.')
 
     try:
-        raw_values = json.loads(chartbay_ts_values_json)
+        arr = np.asarray(chartbay_ts_values, dtype=float)
     except Exception as exc:
         return fail("No se pudieron leer los valores de la serie (" + str(exc) + ").")
-
-    arr = np.asarray(raw_values, dtype=float)
     arr = arr[np.isfinite(arr)]
     n = int(arr.size)
 
@@ -391,23 +389,15 @@ export async function runPyodideTimeSeries(
 
   let pyodide;
   try {
-    onPhase?.('loading-pyodide');
-    pyodide = await getPyodide();
+    pyodide = await getPyodide(onPhase);
   } catch (err) {
     return tsError(`No se pudo cargar Pyodide (Python en el navegador): ${errorMessage(err)}`);
   }
 
   try {
-    onPhase?.('loading-packages');
-    await pyodide.loadPackage(['numpy', 'pandas', 'statsmodels']);
-  } catch (err) {
-    return tsError(`No se pudieron cargar numpy/pandas/statsmodels en el navegador: ${errorMessage(err)}`);
-  }
-
-  try {
     onPhase?.('running');
     pyodide.globals.set('chartbay_ts_name', variableName);
-    pyodide.globals.set('chartbay_ts_values_json', JSON.stringify(values));
+    pyodide.globals.set('chartbay_ts_values', values);
     pyodide.globals.set('chartbay_ts_max_lag', maxLag);
     pyodide.globals.set('chartbay_ts_adf_regression', adfRegression);
     pyodide.globals.set('chartbay_ts_ljung_box_lags_json', JSON.stringify(ljungBoxLags));

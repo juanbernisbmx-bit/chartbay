@@ -3,23 +3,42 @@ import { tsError, type PyodideTimeSeriesInput, type PyodideTimeSeriesResult } fr
 import type { PyodideOlsInput, PyodideOlsPhase } from './pythonOlsRunner';
 import type { PyodideTimeSeriesPhase } from './pythonTimeSeriesRunner';
 import type { ProWorkerRequest, ProWorkerResponse } from './proWorkerProtocol';
+import type { ProWorkerWarmupResult } from './proWorkerProtocol';
+import type { PyodideLoadPhase } from './pyodideTypes';
 
 const WORKER_URL = '/static/js/quantbay.pro.worker.js';
 const RUN_TIMEOUT_MS = 120_000;
+const IDLE_TIMEOUT_MS = 10 * 60_000;
 
 type Pending = {
-  kind: 'ols' | 'timeseries';
-  phase?: (phase: PyodideOlsPhase | PyodideTimeSeriesPhase) => void;
-  finish: (result: PyodideOlsResult | PyodideTimeSeriesResult) => void;
+  kind: 'warmup' | 'ols' | 'timeseries';
+  phase?: (phase: PyodideLoadPhase | PyodideOlsPhase | PyodideTimeSeriesPhase) => void;
+  finish: (result: ProWorkerWarmupResult | PyodideOlsResult | PyodideTimeSeriesResult) => void;
   timer: ReturnType<typeof setTimeout>;
 };
 
 let worker: Worker | null = null;
 let nextId = 1;
 const pending = new Map<number, Pending>();
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
-function failure(kind: Pending['kind'], message: string): PyodideOlsResult | PyodideTimeSeriesResult {
+function failure(
+  kind: Pending['kind'],
+  message: string
+): ProWorkerWarmupResult | PyodideOlsResult | PyodideTimeSeriesResult {
+  if (kind === 'warmup') return { ok: false, error: message };
   return kind === 'ols' ? proError(message) : tsError(message);
+}
+
+function clearIdleTimer(): void {
+  if (idleTimer !== null) clearTimeout(idleTimer);
+  idleTimer = null;
+}
+
+function scheduleIdleDisposal(): void {
+  clearIdleTimer();
+  if (!worker || pending.size > 0) return;
+  idleTimer = setTimeout(() => resetWorker(), IDLE_TIMEOUT_MS);
 }
 
 function failAll(message: string): void {
@@ -31,6 +50,7 @@ function failAll(message: string): void {
 }
 
 function resetWorker(message?: string): void {
+  clearIdleTimer();
   worker?.terminate();
   worker = null;
   if (message) failAll(message);
@@ -51,6 +71,7 @@ function getWorker(): Worker | null {
     clearTimeout(request.timer);
     pending.delete(response.id);
     request.finish(response.result);
+    scheduleIdleDisposal();
   };
   worker.onerror = () => {
     resetWorker('El worker de Pro se detuvo. Recargá la página e intentá de nuevo.');
@@ -60,8 +81,10 @@ function getWorker(): Worker | null {
 
 function requestWorker(
   request: ProWorkerRequest,
-  phase: Pending['phase']
-): Promise<PyodideOlsResult | PyodideTimeSeriesResult> {
+  phase: Pending['phase'],
+  transfer: Transferable[] = []
+): Promise<ProWorkerWarmupResult | PyodideOlsResult | PyodideTimeSeriesResult> {
+  clearIdleTimer();
   const activeWorker = getWorker();
   if (!activeWorker) {
     return Promise.resolve(failure(
@@ -81,8 +104,15 @@ function requestWorker(
       resetWorker('El worker de Pro se reinició después de superar el tiempo máximo.');
     }, RUN_TIMEOUT_MS);
     pending.set(request.id, { kind: request.kind, phase, finish: resolve, timer });
-    activeWorker.postMessage(request);
+    activeWorker.postMessage(request, transfer);
   });
+}
+
+export async function warmupProWorker(
+  onPhase?: (phase: PyodideLoadPhase) => void
+): Promise<ProWorkerWarmupResult> {
+  const id = nextId++;
+  return requestWorker({ id, kind: 'warmup' }, onPhase as Pending['phase']) as Promise<ProWorkerWarmupResult>;
 }
 
 export async function runProOlsInWorker(
@@ -90,7 +120,11 @@ export async function runProOlsInWorker(
   onPhase?: (phase: PyodideOlsPhase) => void
 ): Promise<PyodideOlsResult> {
   const id = nextId++;
-  return requestWorker({ id, kind: 'ols', input }, onPhase as Pending['phase']) as Promise<PyodideOlsResult>;
+  const transfer: Transferable[] = [];
+  if (input.numericData) {
+    transfer.push(input.numericData.yValues.buffer, input.numericData.xValues.buffer);
+  }
+  return requestWorker({ id, kind: 'ols', input }, onPhase as Pending['phase'], transfer) as Promise<PyodideOlsResult>;
 }
 
 export async function runProTimeSeriesInWorker(
@@ -98,7 +132,19 @@ export async function runProTimeSeriesInWorker(
   onPhase?: (phase: PyodideTimeSeriesPhase) => void
 ): Promise<PyodideTimeSeriesResult> {
   const id = nextId++;
-  return requestWorker({ id, kind: 'timeseries', input }, onPhase as Pending['phase']) as Promise<PyodideTimeSeriesResult>;
+  const values = input.values instanceof Float64Array ? input.values : Float64Array.from(input.values);
+  return requestWorker(
+    { id, kind: 'timeseries', input: { ...input, values } },
+    onPhase as Pending['phase'],
+    [values.buffer]
+  ) as Promise<PyodideTimeSeriesResult>;
+}
+
+export function hasActiveProAnalysis(): boolean {
+  for (const request of pending.values()) {
+    if (request.kind !== 'warmup') return true;
+  }
+  return false;
 }
 
 /** Libera el heap de Pyodide cuando el usuario vuelve a Lite. */

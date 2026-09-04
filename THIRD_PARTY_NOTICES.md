@@ -10,8 +10,20 @@ archivo documenta las excepciones y atribuciones que deben conservarse.
   jsPDF 4.2.1 y jsPDF-AutoTable 5.0.8. Esos proyectos se distribuyen bajo MIT y
   conservan sus avisos en `quantbay/package-lock.json`; la AGPL de ChartBay no
   los relicencia.
-- ChartBay Pro carga Pyodide 0.26.4 (MPL-2.0) y, dentro de ese entorno, NumPy,
-  pandas, SciPy y statsmodels, que conservan sus licencias BSD respectivas.
+- ChartBay Pro sirve localmente el núcleo oficial sin modificar de Pyodide
+  0.26.4 (MPL-2.0), con un lock filtrado al cierre fijado de statsmodels:
+  NumPy 1.26.4, OpenBLAS 0.3.26,
+  packaging 23.2, pandas 2.2.0, Patsy 0.5.6, python-dateutil 2.9.0.post0,
+  pytz 2024.1, SciPy 1.12.0, six 1.16.0 y statsmodels 0.14.2. Cada proyecto
+  conserva su licencia propia (BSD, MIT y/o Apache-2.0 según corresponda); los
+  avisos originales permanecen dentro de las distribuciones oficiales. Como el
+  ZIP oficial de OpenBLAS contiene sólo el binario, su licencia BSD se agrega
+  explícitamente como `LICENSE.OPENBLAS`. La licencia de Pyodide se conserva
+  como `LICENSE.PYODIDE`, y
+  `chartbay-pyodide-manifest.json` registra hashes y URLs de origen. El código
+  fuente de Pyodide 0.26.4 está enlazado de forma exacta en ese manifiesto; el
+  vendor se puede reproducir con `scripts/vendor_pyodide.py` sin que ChartBay
+  relicencie esos componentes.
 - Las dependencias npm instaladas para compilar y probar se mantienen bajo las
   licencias registradas individualmente en `quantbay/package-lock.json`. El
   conjunto actual contiene MIT, MIT-0, ISC, BSD-2-Clause, BSD-3-Clause,

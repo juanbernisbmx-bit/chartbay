@@ -51,7 +51,11 @@ beforeEach(() => {
 describe('runPyodideOls (statsmodels)', () => {
   it('runs the bridge end to end with a mocked Pyodide', async () => {
     const fake = makeFakePyodide();
-    mocks.getPyodide.mockResolvedValue(fake);
+    mocks.getPyodide.mockImplementation(async onPhase => {
+      onPhase?.('loading-pyodide');
+      onPhase?.('loading-packages');
+      return fake;
+    });
 
     const phases: string[] = [];
     const result = await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin' }, phase => phases.push(phase));
@@ -66,7 +70,7 @@ describe('runPyodideOls (statsmodels)', () => {
     expect(result.fitted).toEqual([3, 5, 7, 9, 11]);
     expect(phases).toEqual(['loading-pyodide', 'loading-packages', 'running']);
 
-    expect(fake.loadPackage).toHaveBeenCalledWith(['numpy', 'pandas', 'statsmodels']);
+    expect(fake.loadPackage).not.toHaveBeenCalled();
     expect(fake.globals.set).toHaveBeenCalledWith('chartbay_csv_text', CSV);
     expect(fake.globals.set).toHaveBeenCalledWith('chartbay_y_name', 'y');
     expect(fake.globals.set).toHaveBeenCalledWith('chartbay_x_names_json', JSON.stringify(['x']));
@@ -261,12 +265,11 @@ describe('runPyodideOls (statsmodels)', () => {
     expect(result.error).toContain('CDN caído');
   });
 
-  it('reports package load failures mentioning statsmodels without throwing', async () => {
-    const fake = makeFakePyodide({ loadPackage: vi.fn().mockRejectedValue(new Error('sin red')) });
-    mocks.getPyodide.mockResolvedValue(fake);
+  it('reports package bootstrap failures mentioning Pyodide without throwing', async () => {
+    mocks.getPyodide.mockRejectedValue(new Error('no se pudo cargar statsmodels local'));
     const result = await runPyodideOls({ csvText: CSV, yName: 'y', xNames: ['x'], form: 'lin-lin' });
     expect(result.ok).toBe(false);
-    expect(result.error).toContain('numpy/pandas/statsmodels');
+    expect(result.error).toContain('statsmodels local');
   });
 
   it('reports Python execution failures without throwing', async () => {

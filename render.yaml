@@ -12,6 +12,7 @@ services:
     #     → web/static/js/quantbay.worker.js   el worker del limpiador de CSV
     #     → web/static/js/quantbay.cleaner.js  la interfaz del Limpiador
     #     → web/static/js/quantbay.pro.worker.js  Pyodide fuera del hilo principal
+    # El runtime Pyodide fijado ya está versionado en web/static/vendor/.
     #
     #   cd cleaner && make wasm && make wasm-test   (necesita emsdk en el PATH)
     #     → web/static/wasm/csvclean.js         glue de Emscripten

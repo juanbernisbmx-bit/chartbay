@@ -63,7 +63,11 @@ beforeEach(() => {
 describe('runPyodideTimeSeries (statsmodels)', () => {
   it('runs the bridge end to end and sets the Python globals', async () => {
     const fake = makeFakePyodide();
-    mocks.getPyodide.mockResolvedValue(fake);
+    mocks.getPyodide.mockImplementation(async onPhase => {
+      onPhase?.('loading-pyodide');
+      onPhase?.('loading-packages');
+      return fake;
+    });
 
     const phases: string[] = [];
     const result = await runPyodideTimeSeries({ values: SERIES, variableName: 'serie' }, p => phases.push(p));
@@ -71,9 +75,9 @@ describe('runPyodideTimeSeries (statsmodels)', () => {
     expect(result.ok).toBe(true);
     expect(result.observations).toBe(40);
     expect(phases).toEqual(['loading-pyodide', 'loading-packages', 'running']);
-    expect(fake.loadPackage).toHaveBeenCalledWith(['numpy', 'pandas', 'statsmodels']);
+    expect(fake.loadPackage).not.toHaveBeenCalled();
     expect(fake.globals.set).toHaveBeenCalledWith('chartbay_ts_name', 'serie');
-    expect(fake.globals.set).toHaveBeenCalledWith('chartbay_ts_values_json', JSON.stringify(SERIES));
+    expect(fake.globals.set).toHaveBeenCalledWith('chartbay_ts_values', expect.any(Float64Array));
     expect(fake.globals.set).toHaveBeenCalledWith('chartbay_ts_max_lag', 12);
     expect(fake.globals.set).toHaveBeenCalledWith('chartbay_ts_adf_regression', 'c');
     expect(fake.globals.set).toHaveBeenCalledWith(
@@ -224,12 +228,11 @@ describe('runPyodideTimeSeries (statsmodels)', () => {
     expect(result.error).toContain('No se pudo cargar Pyodide');
   });
 
-  it('reports package load failures mentioning statsmodels', async () => {
-    const fake = makeFakePyodide({ loadPackage: vi.fn().mockRejectedValue(new Error('sin red')) });
-    mocks.getPyodide.mockResolvedValue(fake);
+  it('reports package bootstrap failures mentioning statsmodels', async () => {
+    mocks.getPyodide.mockRejectedValue(new Error('no se pudo cargar statsmodels local'));
     const result = await runPyodideTimeSeries({ values: SERIES, variableName: 'serie' });
     expect(result.ok).toBe(false);
-    expect(result.error).toContain('numpy/pandas/statsmodels');
+    expect(result.error).toContain('statsmodels local');
   });
 
   it('reports Python execution failures without throwing', async () => {

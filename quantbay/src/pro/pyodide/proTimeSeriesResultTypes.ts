@@ -65,7 +65,7 @@ export interface ProTimeIndex {
 // (los valores no finitos se limpian en la validación TS, ver
 // proTimeSeriesValidation.ts) más las opciones de diagnóstico.
 export interface PyodideTimeSeriesInput {
-  values: number[];
+  values: number[] | Float64Array;
   variableName: string;
   maxLag?: number;
   adfRegression?: ProAdfRegression;
