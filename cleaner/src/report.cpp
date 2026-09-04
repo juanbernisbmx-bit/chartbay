@@ -363,7 +363,7 @@ std::string to_text(const CleanResult& result) {
       out += "  · " + m.column + ": \"" + m.from + "\" (" + std::to_string(m.from_count) +
              ") se parece a \"" + m.to + "\" (" + std::to_string(m.to_count) + ")\n";
     }
-    out += "  usá --fuzzy-categories para fusionarlas\n";
+    out += "  se detectaron pero no se tocaron, porque corriste --no-fuzzy-categories\n";
   }
 
   if (!result.error.empty()) {

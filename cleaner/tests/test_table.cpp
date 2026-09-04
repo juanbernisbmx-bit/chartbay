@@ -299,63 +299,63 @@ std::string with_typos(const std::vector<std::string>& dominantes,
 
 }  // namespace
 
-CB_TEST(table, similar_spellings_are_reported_but_not_merged) {
-  // El default es avisar, no fusionar: plegar acentos es una equivalencia,
-  // parecerse es una apuesta.
+CB_TEST(table, similar_spellings_merge_into_the_common_one) {
   const CleanResult r = clean_buffer(with_typos({"Córdoba", "Mendoza"}, {"Cordova"}, 12));
-  const Column* prov = col_by_name(r, "provincia");
-  CB_CHECK(prov != nullptr && prov->levels.size() == 3);
-  CB_CHECK_EQ(r.fuzzy_matches.size(), static_cast<std::size_t>(1));
-  CB_CHECK_EQ(r.fuzzy_matches[0].from, std::string("Cordova"));
-  CB_CHECK_EQ(r.fuzzy_matches[0].to, std::string("Córdoba"));
-  CB_CHECK_EQ(r.fuzzy_matches[0].from_count, static_cast<std::size_t>(1));
-  CB_CHECK_EQ(r.fuzzy_matches[0].to_count, static_cast<std::size_t>(12));
-  CB_CHECK(!has_action(r, ActionKind::MergedSimilarLevels));
-}
-
-CB_TEST(table, similar_spellings_merge_when_asked) {
-  CleanOptions opts;
-  opts.fuzzy_categories = true;
-  const CleanResult r = clean_buffer(with_typos({"Córdoba", "Mendoza"}, {"Cordova"}, 12), opts);
   const Column* prov = col_by_name(r, "provincia");
   CB_CHECK(prov != nullptr);
   CB_CHECK_EQ(prov->levels.size(), static_cast<std::size_t>(2));
   CB_CHECK(has_action(r, ActionKind::MergedSimilarLevels));
-  // Aplicadas dejan de ser una sugerencia pendiente.
+  // Aplicadas dejan de ser una sugerencia pendiente: quedan en la acción.
   CB_CHECK(r.fuzzy_matches.empty());
-  // Y la fila de la errata quedó apuntando al nivel bueno, no a -1.
+  // Y la fila de la errata apunta al nivel bueno, no a -1.
   std::size_t cordoba = 0;
   for (std::size_t i = 0; i < prov->size(); ++i) {
-    if (prov->codes[i] >= 0 && prov->levels[static_cast<std::size_t>(prov->codes[i])] == "Córdoba") {
+    if (prov->codes[i] >= 0 &&
+        prov->levels[static_cast<std::size_t>(prov->codes[i])] == "Córdoba") {
       ++cordoba;
     }
   }
   CB_CHECK_EQ(cordoba, static_cast<std::size_t>(13));
 }
 
-CB_TEST(table, a_transposition_is_one_edit_not_two) {
-  const CleanResult r = clean_buffer(with_typos({"Buenos Aires"}, {"Buenos Aries"}, 12));
+CB_TEST(table, similar_spellings_can_be_left_alone) {
+  // Apagado, se detectan igual y se listan: el usuario decide, pero se entera.
+  CleanOptions opts;
+  opts.fuzzy_categories = false;
+  const CleanResult r = clean_buffer(with_typos({"Córdoba", "Mendoza"}, {"Cordova"}, 12), opts);
+  CB_CHECK_EQ(col_by_name(r, "provincia")->levels.size(), static_cast<std::size_t>(3));
+  CB_CHECK(!has_action(r, ActionKind::MergedSimilarLevels));
   CB_CHECK_EQ(r.fuzzy_matches.size(), static_cast<std::size_t>(1));
+  if (r.fuzzy_matches.size() != 1) return;
+  CB_CHECK_EQ(r.fuzzy_matches[0].from, std::string("Cordova"));
+  CB_CHECK_EQ(r.fuzzy_matches[0].to, std::string("Córdoba"));
+  CB_CHECK_EQ(r.fuzzy_matches[0].from_count, static_cast<std::size_t>(1));
+  CB_CHECK_EQ(r.fuzzy_matches[0].to_count, static_cast<std::size_t>(12));
+}
+
+CB_TEST(table, a_transposition_is_one_edit_not_two) {
+  CleanOptions opts;
+  opts.fuzzy_categories = false;
+  const CleanResult r = clean_buffer(with_typos({"Buenos Aires"}, {"Buenos Aries"}, 12), opts);
+  CB_CHECK_EQ(r.fuzzy_matches.size(), static_cast<std::size_t>(1));
+  if (r.fuzzy_matches.size() != 1) return;
   CB_CHECK_EQ(r.fuzzy_matches[0].distance, static_cast<std::size_t>(1));
 }
 
 CB_TEST(table, two_common_spellings_are_two_categories) {
   // "Salta" y "Malta" están a una edición y son dos lugares. Lo que las salva
   // no es la distancia sino la frecuencia: ninguna es rara.
-  CleanOptions opts;
-  opts.fuzzy_categories = true;
-  const CleanResult r = clean_buffer(with_typos({"Salta", "Malta"}, {}, 12), opts);
+  const CleanResult r = clean_buffer(with_typos({"Salta", "Malta"}, {}, 12));
   CB_CHECK_EQ(col_by_name(r, "provincia")->levels.size(), static_cast<std::size_t>(2));
   CB_CHECK(r.fuzzy_matches.empty());
   CB_CHECK(!has_action(r, ActionKind::MergedSimilarLevels));
 }
 
 CB_TEST(table, short_codes_are_never_compared) {
-  // "AR" y "BR" están a una edición y son dos países. Con claves cortas no hay
-  // guarda de frecuencia que alcance, así que directamente no se miran.
-  CleanOptions opts;
-  opts.fuzzy_categories = true;
-  const CleanResult r = clean_buffer(with_typos({"AR"}, {"BR"}, 20), opts);
+  // "AR" y "BR" están a una edición y son dos países, y la proporción entre
+  // ellos —20 contra 1— pasa el guarda de frecuencia sin problema. Lo único
+  // que los salva es el largo mínimo de la clave.
+  const CleanResult r = clean_buffer(with_typos({"AR"}, {"BR"}, 20));
   CB_CHECK_EQ(col_by_name(r, "provincia")->levels.size(), static_cast<std::size_t>(2));
   CB_CHECK(r.fuzzy_matches.empty());
 }
@@ -363,8 +363,10 @@ CB_TEST(table, short_codes_are_never_compared) {
 CB_TEST(table, similarity_does_not_chain) {
   // Que A se parezca a B y B a C no hace que A y C sean lo mismo. Si la
   // dominante elegida es a su vez candidata de otra, la fusión no se hace.
+  CleanOptions opts;
+  opts.fuzzy_categories = false;
   const CleanResult r =
-      clean_buffer(with_typos({"Mendoza"}, {"Mendozaa", "Mendozaaa"}, 30));
+      clean_buffer(with_typos({"Mendoza"}, {"Mendozaa", "Mendozaaa"}, 30), opts);
   for (const FuzzyMatch& m : r.fuzzy_matches) {
     CB_CHECK_EQ(m.to, std::string("Mendoza"));
   }

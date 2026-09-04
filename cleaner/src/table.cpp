@@ -1279,9 +1279,12 @@ class Cleaner::Sink : public RowSink {
                 col.levels[static_cast<std::size_t>(merge_to[i])] + "\"";
     }
     if (merged > listed) detail += "; y " + std::to_string(merged - listed) + " más";
-    detail +=
-        ". Se parecen a una escritura mucho más frecuente y casi seguro son erratas, pero es "
-        "una apuesta y no una equivalencia: revisá la lista antes de estimar.";
+    detail += merged == 1
+                  ? ". Se parece a una escritura mucho más frecuente y casi seguro es una "
+                    "errata, pero es una inferencia y no una equivalencia: revisala antes de "
+                    "estimar."
+                  : ". Se parecen a escrituras mucho más frecuentes y casi seguro son erratas, "
+                    "pero es una inferencia y no una equivalencia: revisalas antes de estimar.";
 
     std::vector<std::int32_t> renumber(col.levels.size(), -1);
     std::vector<std::string> kept;

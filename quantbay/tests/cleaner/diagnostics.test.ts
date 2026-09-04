@@ -288,6 +288,29 @@ describe('diagnose', () => {
     expect(issue!.fix?.options).toEqual({ fuzzyCategories: false });
   });
 
+  it('el aviso de parecidos también concuerda en singular', () => {
+    const uno = diagnose(
+      report({
+        fuzzyMatches: [
+          { column: 'p', from: 'Cordova', to: 'Córdoba', fromCount: 1, toCount: 14, distance: 1 },
+        ],
+      })
+    ).find(i => i.id === 'similar-levels');
+    expect(uno!.detail).toContain('No se fusionó porque');
+    // Y el ejemplo de huecos, que también lleva verbo.
+    const hueco = diagnose(
+      report({
+        timeIndex: timeIndex({
+          periodsObserved: 11,
+          periodsExpected: 12,
+          missingPeriods: 1,
+          gapExamples: ['2024-04'],
+        }),
+      })
+    ).find(i => i.id === 'time-gaps');
+    expect(hueco!.detail).toContain('Falta, por ejemplo: 2024-04');
+  });
+
   it('sin parecidos no dice nada', () => {
     expect(diagnose(report({ fuzzyMatches: [] }))).toEqual([]);
   });
