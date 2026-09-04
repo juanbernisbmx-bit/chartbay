@@ -597,9 +597,10 @@ FastAPI genera OpenAPI, pero falta documentación curada con ejemplos de request
 ### 19.8 Dependencias de UI y Pyodide
 
 Papa Parse, Chart.js, jsPDF y jsPDF-AutoTable se fijan en el lockfile y viajan
-en el bundle local. Sólo Pro descarga Pyodide bajo demanda desde jsDelivr; esa
-carga se ejecuta en un worker dedicado, con CSP acotado y error visible si el
-CDN no está disponible. Lite no depende de una CDN en tiempo de ejecución.
+en el bundle local. Pyodide 0.26.4 y el cierre exacto de statsmodels también se
+sirven desde ChartBay, con manifiesto SHA-256 y caché inmutable. Pro los prepara
+en un worker dedicado y reutilizable; Lite no carga ese worker ni depende de
+una CDN en tiempo de ejecución.
 
 ## 20. Escalabilidad
 

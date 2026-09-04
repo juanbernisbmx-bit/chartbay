@@ -95,9 +95,16 @@ a ningún servidor.
 
 Lite y Pro son motores distintos, no niveles de una escalera. Lite admite
 archivos mayores; superar su límite nunca es una razón para cambiar a Pro.
-Las librerías de la interfaz viajan en el bundle local. Pro descarga Pyodide
-sólo al elegirlo, calcula fuera del hilo principal y cancela una ejecución que
-supere 120 segundos para mantener la página utilizable.
+Las librerías de la interfaz y el runtime fijado de Pyodide 0.26.4 viajan desde
+el mismo origen. Pro empieza a preparar Python al elegirlo, reutiliza el worker
+entre regresión y series, transfiere matrices numéricas sin serializar otra vez
+el CSV y cancela una ejecución que supere 120 segundos. El worker se libera al
+volver a Lite o después de 10 minutos sin uso.
+
+Los artefactos Pyodide se verifican sin red con
+`python scripts/vendor_pyodide.py --check`. Para reproducirlos desde las
+publicaciones oficiales, ejecutar el mismo script sin `--check`; cada descarga
+queda fijada por SHA-256 en el script y en el manifiesto generado.
 
 ## Secciones desenchufadas
 
@@ -172,8 +179,8 @@ cd quantbay && npm ci && npm run build
 
 ## Tests
 
-El motor de cálculo se testea desde `quantbay/` con Vitest: **1507 tests en 85
-archivos** para el alcance 1.0.
+El motor de cálculo se testea desde `quantbay/` con Vitest: **1516 tests en 87
+archivos** para el alcance actual.
 
 ```bash
 cd quantbay && npm ci && npm test

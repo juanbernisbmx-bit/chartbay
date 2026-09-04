@@ -1,0 +1,116 @@
+{
+  "files": [
+    {
+      "bytes": 1548,
+      "path": "LICENSE.OPENBLAS",
+      "sha256": "190b5a9c8d9723fe958ad33916bd7346d96fab3c5ea90832bb02d854f620fcff"
+    },
+    {
+      "bytes": 16725,
+      "path": "LICENSE.PYODIDE",
+      "sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5"
+    },
+    {
+      "bytes": 11959269,
+      "path": "numpy-1.26.4-cp312-cp312-pyodide_2024_0_wasm32.whl",
+      "sha256": "4a2f5303a88a0747c5e6c80701e0ff4ff5667e487c0c9f9c73875e4d88f4cf9a"
+    },
+    {
+      "bytes": 6117592,
+      "path": "openblas-0.3.26.zip",
+      "sha256": "3c0afcaaabec774f5fa739b908ae08672eacf3c8fe265328da2d632a04ba3cd3"
+    },
+    {
+      "bytes": 194236,
+      "path": "packaging-23.2-py3-none-any.whl",
+      "sha256": "3c30fe6689a35520f2040f4963eae8dbdf6aaa8e326674a13bca3f11514c674a"
+    },
+    {
+      "bytes": 23759073,
+      "path": "pandas-2.2.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
+      "sha256": "ae979af0f0be1e8c482408d838ea1366d187f3f057f47b429910e66dbba60673"
+    },
+    {
+      "bytes": 420437,
+      "path": "patsy-0.5.6-py2.py3-none-any.whl",
+      "sha256": "5b72ff0a647d824ef84a33f892976770f9f65167eab01b4d6ccda54ad0d7b5ab"
+    },
+    {
+      "bytes": 4563,
+      "path": "pyodide-lock.json",
+      "sha256": "42f238d7efe2d909fbae4534bfe6ac0e39e46ab1b639aeba76e6a56d9e0d9d41"
+    },
+    {
+      "bytes": 1229099,
+      "path": "pyodide.asm.js",
+      "sha256": "919560652ed3dad3707cb3a394785da1e046fb13dc0defa162058ff230cb7eed"
+    },
+    {
+      "bytes": 10088051,
+      "path": "pyodide.asm.wasm",
+      "sha256": "b7e66a19427a55010ac3367c1b6c64b893f9826f783412945fdf0c3337f3bc94"
+    },
+    {
+      "bytes": 14761,
+      "path": "pyodide.js",
+      "sha256": "c0069107621d5b942a659e737a12e774cc0451feaa2256f475d72e071d844ec7"
+    },
+    {
+      "bytes": 444927,
+      "path": "python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+      "sha256": "302d74af893af51ee8b52e2c06a1fc2bc73cfe645eed3f35a17f082cdf101c7d"
+    },
+    {
+      "bytes": 2341872,
+      "path": "python_stdlib.zip",
+      "sha256": "72894522b791858b9d613ac786b951d8b5094035dcf376313ea24a466810f336"
+    },
+    {
+      "bytes": 1083571,
+      "path": "pytz-2024.1-py2.py3-none-any.whl",
+      "sha256": "561652a008b98ef7b66a6acf816e3f4d1c0e17e8ed9eb8dbb993037413cda597"
+    },
+    {
+      "bytes": 47107789,
+      "path": "scipy-1.12.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
+      "sha256": "1a081410432367ee43f52a280961df4ba7e9bb65d8b9862b3cd2e3727e84d873"
+    },
+    {
+      "bytes": 38737,
+      "path": "six-1.16.0-py2.py3-none-any.whl",
+      "sha256": "f359c3850331f250d1a5e394aae58193774c6358676340aba992718589b9dcf1"
+    },
+    {
+      "bytes": 15745902,
+      "path": "statsmodels-0.14.2-cp312-cp312-pyodide_2024_0_wasm32.whl",
+      "sha256": "55c4c184d04e7bc8bb6f8394a152eb5916712a98d97171cd880e599dc4c5a845"
+    }
+  ],
+  "packages": [
+    "numpy",
+    "openblas",
+    "packaging",
+    "pandas",
+    "patsy",
+    "python-dateutil",
+    "pytz",
+    "scipy",
+    "six",
+    "statsmodels"
+  ],
+  "pyodide_version": "0.26.4",
+  "root_packages": [
+    "statsmodels"
+  ],
+  "upstream": {
+    "core_sha256": "70dba93432f3653155998cc9001f9c200182343c2f95165a2f9e9e4673fa35e8",
+    "core_url": "https://github.com/pyodide/pyodide/releases/download/0.26.4/pyodide-core-0.26.4.tar.bz2",
+    "license_sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5",
+    "license_url": "https://raw.githubusercontent.com/pyodide/pyodide/0.26.4/LICENSE",
+    "source_url": "https://github.com/pyodide/pyodide/tree/0.26.4",
+    "lock_sha256": "cd50b49de944c579045e122fe8628b31f9ce446379f032f36c05e273d38766e0",
+    "lock_url": "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide-lock.json",
+    "openblas_license_sha256": "190b5a9c8d9723fe958ad33916bd7346d96fab3c5ea90832bb02d854f620fcff",
+    "openblas_license_url": "https://raw.githubusercontent.com/OpenMathLib/OpenBLAS/v0.3.26/LICENSE"
+  }
+}

@@ -147,9 +147,11 @@ Ninguno amplía lo que ChartBay 1.0 promete:
 1. **Pro permanece beta.** Pasó la paridad numérica y las pruebas de carga
    disponibles, y ya no calcula en el hilo principal; faltan Safari, un móvil
    real y un equipo modesto. Ver el checklist de QA.
-2. **Pyodide se descarga bajo demanda desde jsDelivr.** Las librerías de la UI
-   viajan localmente. Si ese CDN falla, Pro muestra un error y Lite continúa
-   funcionando; el permiso se limita al script del worker Pro.
+2. **Pro permanece pesado aunque Pyodide ya es local.** El runtime y el cierre
+   fijado de statsmodels se sirven desde ChartBay con caché inmutable y hashes
+   reproducibles. La precarga y la reutilización del worker reducen la espera,
+   pero Safari, móvil real, hardware modesto y memoria máxima siguen pendientes
+   de medición; por eso Pro conserva la etiqueta beta y el límite de 10 MB.
 3. **Los estilos HTML heredados usan `style-src-attr 'unsafe-inline'`.** Los
    scripts inline llevan nonce, los manejadores HTML están bloqueados y ni
    `script-src` ni `style-src` aceptan inline global. El permiso restante sólo

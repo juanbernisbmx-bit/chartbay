@@ -32,7 +32,7 @@ export const HARD_MAX_LAG = 40;
 const DEFAULT_MAX_LAG = 12;
 
 export interface ValidatedProTimeSeriesInput {
-  values: number[];
+  values: Float64Array;
   variableName: string;
   maxLag: number;
   adfRegression: ProAdfRegression;
@@ -65,9 +65,19 @@ export function validateProTimeSeriesInput(input: PyodideTimeSeriesInput): ProTi
 
   // Limpieza: se descartan valores no numéricos, faltantes o infinitos (misma
   // convención que el motor Lite: quantbay/src/timeseries/acf.ts).
-  const raw = Array.isArray(input.values) ? input.values : [];
-  const values = raw.filter(v => typeof v === 'number' && Number.isFinite(v));
-  const dropped = raw.length - values.length;
+  const raw = Array.isArray(input.values) || input.values instanceof Float64Array
+    ? input.values
+    : [];
+  let finiteCount = 0;
+  for (const value of raw) {
+    if (typeof value === 'number' && Number.isFinite(value)) finiteCount++;
+  }
+  const values = new Float64Array(finiteCount);
+  let offset = 0;
+  for (const value of raw) {
+    if (typeof value === 'number' && Number.isFinite(value)) values[offset++] = value;
+  }
+  const dropped = raw.length - finiteCount;
   if (dropped > 0) {
     warnings.push(`Se descartaron ${dropped} observaciones no numéricas, faltantes o infinitas.`);
   }
@@ -83,8 +93,12 @@ export function validateProTimeSeriesInput(input: PyodideTimeSeriesInput): ProTi
   }
 
   // Serie constante: ADF/ACF/PACF no tienen sentido (varianza nula).
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  let min = values[0];
+  let max = values[0];
+  for (let i = 1; i < values.length; i++) {
+    min = Math.min(min, values[i]);
+    max = Math.max(max, values[i]);
+  }
   if (max - min === 0) {
     return {
       ok: false,

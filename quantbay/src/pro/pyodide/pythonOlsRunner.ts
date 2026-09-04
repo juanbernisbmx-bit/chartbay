@@ -13,7 +13,14 @@ import type { RLSConstraint } from '../../rls';
 export type PyodideOlsPhase = 'loading-pyodide' | 'loading-packages' | 'running';
 
 export interface PyodideOlsInput {
-  csvText: string;
+  csvText?: string;
+  numericData?: {
+    yValues: Float64Array;
+    xValues: Float64Array;
+    rows: number;
+    columns: number;
+    droppedRows: number;
+  };
   yName: string;
   xNames: string[];
   dummyNames?: string[];
@@ -88,56 +95,65 @@ def _chartbay_pro_ols():
             'Tipo de errores estándar no soportado: "' + str(se_type) + '". Usá classic, HC1, HC3 o HAC.'
         )
 
-    try:
-        df = pd.read_csv(io.StringIO(chartbay_csv_text))
-    except Exception as exc:
-        return fail("CSV inválido: no se pudo leer el archivo (" + str(exc) + ").")
-
-    missing = [c for c in [y_name] + x_names if c not in df.columns]
-    if missing:
-        return fail("Columnas faltantes en el CSV: " + ", ".join(missing) + ".")
-
-    if len(df) == 0:
-        return fail("El CSV no tiene filas de datos.")
-
     warnings = []
-    numeric = {}
-    blank = {}
-    unparsed = {}
-    for col in [y_name] + x_names:
-        raw_col = df[col]
-        converted = pd.to_numeric(raw_col, errors="coerce")
-        if converted.notna().sum() == 0:
-            kind = "Y" if col == y_name else "X"
-            return fail("La columna " + kind + ' "' + col + '" no contiene valores numéricos.')
-        # Celda vacía y celda con texto son dos problemas distintos, y Lite los
-        # trata distinto (missing_values vs invalid_numeric). Antes Pro los
-        # mezclaba en un solo descarte silencioso.
-        is_blank = raw_col.isna() | raw_col.astype(str).str.strip().eq("")
-        blank[col] = is_blank
-        unparsed[col] = converted.isna() & ~is_blank
-        numeric[col] = converted
+    if bool(chartbay_use_numeric):
+        rows = int(chartbay_numeric_rows)
+        columns = int(chartbay_numeric_columns)
+        if rows <= 0:
+            return fail("El CSV no tiene filas de datos.")
+        if columns != len(x_names):
+            return fail("La matriz numérica de Pro no coincide con las columnas X seleccionadas.")
+        try:
+            y_values = np.asarray(chartbay_y_values, dtype=float).reshape(rows)
+            x_values = np.asarray(chartbay_x_values, dtype=float).reshape((rows, columns))
+            numeric = {y_name: y_values}
+            for idx, col in enumerate(x_names):
+                numeric[col] = x_values[:, idx]
+            data = pd.DataFrame(numeric)
+        except Exception as exc:
+            return fail("No se pudo preparar la matriz numérica de Pro (" + str(exc) + ").")
+        n_dropped = int(chartbay_dropped_rows)
+    else:
+        try:
+            df = pd.read_csv(io.StringIO(chartbay_csv_text))
+        except Exception as exc:
+            return fail("CSV inválido: no se pudo leer el archivo (" + str(exc) + ").")
 
-    # Texto no numérico frena siempre, tildado o no el listwise: es un error de
-    # lectura del archivo, no una decisión sobre datos que faltan.
-    unparsed_cols = [col for col in numeric if bool(unparsed[col].any())]
-    if unparsed_cols:
-        return fail(
-            "Hay valores con texto o formato no numérico en: "
-            + ", ".join('"' + c + '"' for c in unparsed_cols)
-            + ". Revisá separadores decimales, símbolos y celdas mezcladas con palabras."
-        )
+        missing = [c for c in [y_name] + x_names if c not in df.columns]
+        if missing:
+            return fail("Columnas faltantes en el CSV: " + ", ".join(missing) + ".")
+        if len(df) == 0:
+            return fail("El CSV no tiene filas de datos.")
 
-    # ±inf cuenta como valor inválido igual que NaN: se descarta la fila entera.
-    frame = pd.DataFrame(numeric).replace([np.inf, -np.inf], np.nan)
-    n_dropped = int(frame.isna().any(axis=1).sum())
-    if n_dropped > 0 and not drop_incomplete:
-        return fail(
-            "Hay " + str(n_dropped) + " fila(s) con celdas vacías o valores infinitos en las columnas "
-            "del modelo. Completá esos datos, o tildá \\"Excluir las filas con datos faltantes "
-            "(listwise)\\" para estimar sin esas filas."
-        )
-    data = frame.dropna().reset_index(drop=True)
+        numeric = {}
+        unparsed = {}
+        for col in [y_name] + x_names:
+            raw_col = df[col]
+            converted = pd.to_numeric(raw_col, errors="coerce")
+            if converted.notna().sum() == 0:
+                kind = "Y" if col == y_name else "X"
+                return fail("La columna " + kind + ' "' + col + '" no contiene valores numéricos.')
+            is_blank = raw_col.isna() | raw_col.astype(str).str.strip().eq("")
+            unparsed[col] = converted.isna() & ~is_blank
+            numeric[col] = converted
+
+        unparsed_cols = [col for col in numeric if bool(unparsed[col].any())]
+        if unparsed_cols:
+            return fail(
+                "Hay valores con texto o formato no numérico en: "
+                + ", ".join('"' + c + '"' for c in unparsed_cols)
+                + ". Revisá separadores decimales, símbolos y celdas mezcladas con palabras."
+            )
+
+        frame = pd.DataFrame(numeric).replace([np.inf, -np.inf], np.nan)
+        n_dropped = int(frame.isna().any(axis=1).sum())
+        if n_dropped > 0 and not drop_incomplete:
+            return fail(
+                "Hay " + str(n_dropped) + " fila(s) con celdas vacías o valores infinitos en las columnas "
+                "del modelo. Completá esos datos, o tildá \\"Excluir las filas con datos faltantes "
+                "(listwise)\\" para estimar sin esas filas."
+            )
+        data = frame.dropna().reset_index(drop=True)
     if n_dropped > 0:
         warnings.append(
             "Listwise: se excluyó 1 fila con celdas vacías o valores infinitos."
@@ -413,7 +429,7 @@ export async function runPyodideOls(
   args: PyodideOlsInput,
   onPhase?: (phase: PyodideOlsPhase) => void
 ): Promise<PyodideOlsResult> {
-  if (!args.csvText || args.csvText.trim() === '') {
+  if ((!args.csvText || args.csvText.trim() === '') && !args.numericData) {
     return proError('No hay CSV cargado para ejecutar en ChartBay Pro.');
   }
   if (!args.yName) {
@@ -439,22 +455,20 @@ export async function runPyodideOls(
 
   let pyodide;
   try {
-    onPhase?.('loading-pyodide');
-    pyodide = await getPyodide();
+    pyodide = await getPyodide(onPhase);
   } catch (err) {
     return proError(`No se pudo cargar Pyodide (Python en el navegador): ${errorMessage(err)}`);
   }
 
   try {
-    onPhase?.('loading-packages');
-    await pyodide.loadPackage(['numpy', 'pandas', 'statsmodels']);
-  } catch (err) {
-    return proError(`No se pudieron cargar numpy/pandas/statsmodels en el navegador: ${errorMessage(err)}`);
-  }
-
-  try {
     onPhase?.('running');
-    pyodide.globals.set('chartbay_csv_text', args.csvText);
+    pyodide.globals.set('chartbay_use_numeric', Boolean(args.numericData));
+    pyodide.globals.set('chartbay_csv_text', args.csvText ?? '');
+    pyodide.globals.set('chartbay_y_values', args.numericData?.yValues ?? new Float64Array());
+    pyodide.globals.set('chartbay_x_values', args.numericData?.xValues ?? new Float64Array());
+    pyodide.globals.set('chartbay_numeric_rows', args.numericData?.rows ?? 0);
+    pyodide.globals.set('chartbay_numeric_columns', args.numericData?.columns ?? 0);
+    pyodide.globals.set('chartbay_dropped_rows', args.numericData?.droppedRows ?? 0);
     pyodide.globals.set('chartbay_y_name', args.yName);
     pyodide.globals.set('chartbay_x_names_json', JSON.stringify(args.xNames));
     pyodide.globals.set('chartbay_dummy_names_json', JSON.stringify(args.dummyNames ?? []));

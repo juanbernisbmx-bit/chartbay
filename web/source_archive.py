@@ -24,6 +24,12 @@ _EXCLUDED_PARTS = {
 }
 _EXCLUDED_NAMES = {"chartbay.db", "credentials.json", "secrets.json"}
 _EXCLUDED_SUFFIXES = {".pyc", ".db", ".db-shm", ".db-wal", ".key", ".pem"}
+_PYODIDE_SOURCE_OFFER_FILES = {
+    "LICENSE.PYODIDE",
+    "LICENSE.OPENBLAS",
+    "chartbay-pyodide-manifest.json",
+    "pyodide-lock.json",
+}
 
 
 def _safe_source_file(root: Path, relative: Path) -> bool:
@@ -35,6 +41,13 @@ def _safe_source_file(root: Path, relative: Path) -> bool:
         return False
     if any(relative.name.endswith(suffix) for suffix in _EXCLUDED_SUFFIXES):
         return False
+    if relative.parts[:4] == ("web", "static", "vendor", "pyodide"):
+        # Wheels, WebAssembly y bundles upstream son artefactos ejecutables, no
+        # código fuente correspondiente de ChartBay. El archivo conserva el
+        # lock, manifiesto y licencia; scripts/vendor_pyodide.py permite
+        # reproducir el vendor con hashes oficiales verificados.
+        if relative.name not in _PYODIDE_SOURCE_OFFER_FILES:
+            return False
     path = root / relative
     return path.is_file() and not path.is_symlink()
 

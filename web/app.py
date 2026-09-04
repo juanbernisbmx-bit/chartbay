@@ -244,18 +244,14 @@ _FONT_SRC = "'self' fonts.gstatic.com"
 # permisos ni siquiera durante una auditoría del código heredado.
 
 
-def _csp(
-    *, nonce: str, wasm: bool = False, cdn: bool = False, tradingview: bool = False
-) -> str:
+def _csp(*, nonce: str, wasm: bool = False, tradingview: bool = False) -> str:
     """Arma el CSP de una página a partir de lo que esa página realmente carga.
 
     `wasm` habilita compilar WebAssembly ('wasm-unsafe-eval', que NO habilita
-    eval() de JavaScript como haría 'unsafe-eval'). `cdn` abre jsdelivr sólo
-    para el worker de Pro, que descarga Pyodide y sus paquetes bajo demanda.
+    eval() de JavaScript como haría 'unsafe-eval'). Pyodide y sus paquetes se
+    sirven desde ChartBay, así que ni siquiera el worker Pro abre una CDN.
     """
     wasm_src = " 'wasm-unsafe-eval'" if wasm else ""
-    cdn_script = " cdn.jsdelivr.net" if cdn else ""
-    cdn_connect = " cdn.jsdelivr.net" if cdn else ""
     tv_script = " s3.tradingview.com" if tradingview else ""
     tv_frame = (
         "frame-src s3.tradingview.com *.tradingview.com; "
@@ -263,13 +259,13 @@ def _csp(
     )
     return (
         "default-src 'self'; "
-        f"script-src 'self' 'nonce-{nonce}'{wasm_src}{cdn_script}{tv_script}; "
+        f"script-src 'self' 'nonce-{nonce}'{wasm_src}{tv_script}; "
         "script-src-attr 'none'; "
         f"style-src 'self' {_FONT_STYLE_SRC}; "
         "style-src-attr 'unsafe-inline'; "
         f"font-src {_FONT_SRC}; "
         "img-src 'self' data: blob:; "
-        f"connect-src 'self'{cdn_connect}; "
+        "connect-src 'self'; "
         "worker-src 'self'; "
         f"{tv_frame}"
         "object-src 'none'; "
@@ -288,7 +284,7 @@ _CSP_PERFIL_POR_RUTA = {
     "/agro": {"wasm": True},
     "/limpiador": {"wasm": True},
     "/static/js/quantbay.worker.js": {"wasm": True},
-    "/static/js/quantbay.pro.worker.js": {"wasm": True, "cdn": True},
+    "/static/js/quantbay.pro.worker.js": {"wasm": True},
 }
 if SECCIONES["mercados"]:
     _CSP_PERFIL_POR_RUTA["/compare"] = {"tradingview": True}
@@ -306,6 +302,8 @@ def add_security_headers(response):
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     profile = _CSP_PERFIL_POR_RUTA.get(request.path, {})
     response.headers.setdefault("Content-Security-Policy", _csp(nonce=g.csp_nonce, **profile))
+    if request.path.startswith("/static/vendor/pyodide/0.26.4/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
 
 

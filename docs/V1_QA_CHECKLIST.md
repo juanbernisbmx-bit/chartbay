@@ -32,9 +32,9 @@ make -C cleaner test
 make -C cleaner wasm-test
 ```
 
-- [ ] Vitest: 1510/1510 en 86 archivos
+- [ ] Vitest: 1516/1516 en 87 archivos
 - [ ] Providers: 13/13
-- [ ] Flask: 49/49
+- [ ] Flask: 51/51
 - [ ] Cleaner nativo y WASM
 - [ ] `npx tsc --noEmit` sin errores
 - [ ] `npm run build` no deja el bundle desactualizado (`git diff --exit-code -- web/static/js`)
@@ -136,11 +136,11 @@ En `/econometria`, consola:
 
 - [ ] `Papa` es `object`, `Chart.version` es **exactamente `4.5.1`**, `jspdf` es `object`
 - [ ] No hay requests a jsDelivr ni cdnjs al usar Lite
-- [ ] Al bloquear jsDelivr, Pro falla con un mensaje visible y Lite sigue disponible
+- [ ] Pro no hace requests a jsDelivr ni cdnjs; Pyodide sale del mismo origen
 
 > Estas librerías viajan en `quantbay.bundle.js`; sus versiones exactas están en
-> `quantbay/package-lock.json`. Pyodide es la única descarga bajo demanda y se
-> ejecuta dentro de `quantbay.pro.worker.js`.
+> `quantbay/package-lock.json`. Pyodide se sirve localmente y se ejecuta dentro
+> de `quantbay.pro.worker.js`.
 
 ### B.5 — Un análisis de punta a punta (Lite)
 
@@ -178,7 +178,7 @@ curl -sI https://chartbay.onrender.com/econometria | grep -i \
 ```
 
 - [ ] El CSP de `/econometria` incluye `wasm-unsafe-eval` y no abre CDNs
-- [ ] El CSP de `/static/js/quantbay.pro.worker.js` abre sólo `cdn.jsdelivr.net`
+- [ ] El CSP de `/static/js/quantbay.pro.worker.js` permite WASM y no abre CDNs
 - [ ] El CSP de `/` **no** los incluye
 - [ ] Ningún CSP menciona `tradingview`
 - [ ] Las fuentes cargan sobre HTTPS real (no solo en local)
@@ -201,8 +201,9 @@ Resultados ya obtenidos:
   cálculo ahora está aislado en un worker y se cancela a los 120 s. El límite
   de Pro se mantiene en 10 MB y no debe subirse.
 - [x] Pyodide arrancó en 21–35 s en una máquina rápida.
-- [x] Más de 10 MB muestra un error claro; una caída de jsDelivr falla con
-  mensaje después de 16 s; seis alternancias Lite⇄Pro fueron estables.
+- [x] Más de 10 MB muestra un error claro. Pyodide y statsmodels ahora se sirven
+  desde el mismo origen, y seis alternancias Lite⇄Pro fueron estables antes de
+  incorporar la reutilización persistente del worker.
 
 Lo que todavía hace falta medir:
 

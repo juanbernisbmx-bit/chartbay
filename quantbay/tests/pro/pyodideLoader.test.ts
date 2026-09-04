@@ -44,7 +44,7 @@ describe('pyodideLoader', () => {
     const promise = getPyodide();
     expect(getPyodideLoadStatus()).toBe('loading');
 
-    // The real CDN script defines window.loadPyodide as a side effect of loading,
+    // The vendored script defines window.loadPyodide as a side effect of loading,
     // then fires onload — so the global is only set once the script "finishes".
     const fakeInstance = {} as PyodideInterface;
     setGlobalLoadPyodide(vi.fn().mockResolvedValue(fakeInstance));
@@ -54,21 +54,25 @@ describe('pyodideLoader', () => {
     expect(getPyodideLoadStatus()).toBe('ready');
   });
 
-  it('injects the CDN script tag and resolves once loadPyodide becomes available', async () => {
+  it('injects the same-origin script and loads the pinned local package closure', async () => {
     const { getPyodide } = await loadModule();
     const fakeInstance = { marker: 'pyodide' } as unknown as PyodideInterface;
     const fakeLoadPyodide = vi.fn().mockResolvedValue(fakeInstance);
 
     const promise = getPyodide();
     const script = getAppendedScript(appendChildSpy);
-    expect(script.src).toContain('pyodide.js');
+    expect(script.src).toContain('/static/vendor/pyodide/0.26.4/pyodide.js');
 
     setGlobalLoadPyodide(fakeLoadPyodide);
     script.onload?.(new Event('load'));
 
     const instance = await promise;
     expect(instance).toBe(fakeInstance);
-    expect(fakeLoadPyodide).toHaveBeenCalledWith({ indexURL: expect.stringContaining('pyodide') });
+    expect(fakeLoadPyodide).toHaveBeenCalledWith({
+      indexURL: '/static/vendor/pyodide/0.26.4/',
+      lockFileURL: '/static/vendor/pyodide/0.26.4/pyodide-lock.json',
+      packages: ['statsmodels'],
+    });
   });
 
   it('caches the promise: a second call does not inject another script tag', async () => {
@@ -102,7 +106,7 @@ describe('pyodideLoader', () => {
     const removeSpy = vi.spyOn(script, 'remove');
     script.onerror?.(new Event('error'));
 
-    await expect(p1).rejects.toThrow(/No se pudo descargar Pyodide/);
+    await expect(p1).rejects.toThrow(/No se pudo cargar Pyodide desde ChartBay/);
     expect(getPyodideLoadStatus()).toBe('error');
     expect(removeSpy).toHaveBeenCalledTimes(1);
   });
@@ -132,7 +136,7 @@ describe('pyodideLoader', () => {
     const { getPyodide } = await loadModule();
     const promise = getPyodide();
     const script = getAppendedScript(appendChildSpy);
-    // Simulate a script that "loaded" but never defined the global (corrupted CDN response).
+    // Simulate a script that "loaded" but never defined the global (corrupted response).
     script.onload?.(new Event('load'));
     await expect(promise).rejects.toThrow(/loadPyodide no está disponible/);
   });

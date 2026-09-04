@@ -105,12 +105,14 @@ import {
 import { getVersionConfig, validateCsvFileSize, type ChartBayVersion } from './versioning/chartbayVersions';
 import { renderVersionInfo } from './ui/versionView';
 import { resolveEngineAction } from './pro/engineRouting';
-import { buildEncodedCsvText } from './pro/pyodide/pythonOlsRunner';
 import {
   disposeProWorker,
+  hasActiveProAnalysis,
   runProOlsInWorker,
   runProTimeSeriesInWorker,
+  warmupProWorker,
 } from './pro/pyodide/proWorkerClient';
+import { buildProNumericPayload } from './pro/pyodide/proNumericPayload';
 import { DEFAULT_PRO_STANDARD_ERROR_TYPE, PRO_STANDARD_ERROR_LABELS, proError } from './pro/pyodide/proResultTypes';
 import {
   clearProResult,
@@ -516,7 +518,7 @@ function updateModePanels(): void {
 let analysisContextGeneration = 0;
 
 function setActiveMode(mode: 'regression' | 'timeseries'): void {
-  if (appState.activeMode !== mode && appState.activeVersion === 'pro') {
+  if (appState.activeMode !== mode && appState.activeVersion === 'pro' && hasActiveProAnalysis()) {
     disposeProWorker();
   }
   analysisContextGeneration += 1;
@@ -539,6 +541,29 @@ function setActiveVersion(version: ChartBayVersion): void {
   // En modo series de tiempo, cambiar de versión intercambia el panel Lite por
   // el panel Pro (statsmodels) y viceversa.
   if (isTimeSeriesMode()) updateModePanels();
+  if (version === 'pro') void warmupActiveProEngine(analysisContextGeneration);
+}
+
+async function warmupActiveProEngine(generation: number): Promise<void> {
+  const stillCurrent = () => appState.activeVersion === 'pro' && analysisContextGeneration === generation;
+  const setStatus = (message: string) => {
+    if (!stillCurrent()) return;
+    if (isTimeSeriesMode()) showProTimeSeriesStatus(message);
+    else showProStatus(message);
+  };
+  setStatus('Preparando Python local en segundo plano…');
+  const result = await warmupProWorker(phase => {
+    if (phase === 'loading-pyodide') setStatus('Cargando Python local…');
+    else setStatus('Cargando numpy, pandas y statsmodels locales…');
+  });
+  if (!stillCurrent()) return;
+  if (result.ok) {
+    setStatus('Python y statsmodels listos.');
+    writeRunLog(['ChartBay Pro: Python y statsmodels listos en el navegador.']);
+  } else {
+    setStatus(`No se pudo preparar Python local: ${result.error}`);
+    writeRunLog([`ChartBay Pro: falló la preparación de Python — ${result.error}`]);
+  }
 }
 async function loadDemoCase(id: string): Promise<void> {
   const demo = DEMO_CASES[id];
@@ -605,21 +630,6 @@ async function loadDemoCase(id: string): Promise<void> {
     showError(`Error al cargar demo: ${(err as Error).message}`);
   }
 }
-/**
- * El CSV como texto, para el único motor que lo necesita.
- *
- * Pro corre statsmodels en Pyodide y le pasa el archivo entero a Python, así
- * que ahí el string es inevitable. Leerlo recién en este punto, y no al subir,
- * es lo que permite que el camino Lite procese archivos que como texto no
- * entrarían en memoria.
- */
-async function proCsvText(): Promise<string> {
-  if (appState.csvText !== null) return appState.csvText;
-  if (!appState.csvFile) throw new Error('No hay archivo original disponible.');
-  appState.csvText = await appState.csvFile.text();
-  return appState.csvText;
-}
-
 // ── Upload ────────────────────────────────────────────────────────────────────
 
 /**
@@ -671,7 +681,8 @@ async function loadFile(file: File): Promise<void> {
   try {
     // No se lee el texto acá. Un CSV de 500 MB serían ~1 GB de string UTF-16
     // en el heap antes de que el limpiador leyera el primer byte, y en el
-    // camino Lite nadie lo usa. Pro lo pide bajo demanda en proCsvText().
+    // camino Lite nadie lo usa. Pro consume las columnas ya parseadas como
+    // buffers numéricos, así que tampoco necesita duplicar el archivo entero.
     appState.csvText = null;
     appState.csvFile = file;
     const loaded = await loadCsv(file, {
@@ -857,8 +868,8 @@ async function onRunPro(
   rlsConstraint: RLSConstraint | undefined
 ): Promise<void> {
   if (proRunInFlight) return;
-  if ((!appState.csvText && !appState.csvFile) || !appState.csvData) {
-    showError('No hay CSV original disponible para el motor Pro. Volvé a cargar el archivo.');
+  if (!appState.csvData) {
+    showError('No hay datos disponibles para el motor Pro. Volvé a cargar el archivo.');
     return;
   }
 
@@ -884,26 +895,8 @@ async function onRunPro(
     // self-contained; encodeCategoricalX is pure/deterministic, so this
     // reproduces exactly what the pre-flight capability check already
     // validated.
-    const encoding = encodeCategoricalX(materializeRows(appState.csvData), xNames);
+    const { encoding, effectiveCsvData } = encodeForRegression(appState.csvData, xNames);
     const dummyNames = encoding.categoricalInfo.flatMap(c => c.createdDummies);
-    const hasCategorical = encoding.categoricalInfo.length > 0;
-    // Only re-serialize to CSV when dummies actually exist — the common
-    // numeric-only case keeps sending the original upload's csvText
-    // untouched (byte-for-byte, same as before this feature existed).
-    const effectiveCsvText = hasCategorical
-      ? buildEncodedCsvText(encoding.rows, [yName, ...encoding.expandedXNames])
-      : await proCsvText();
-    if (!runStillCurrent()) return;
-    // `columns` MUST be dropped here. Encoding produced new dummy columns that
-    // live only in `encoding.rows`; leaving the old columnar store in place
-    // would make getValidRowsFrom read the pre-encoding data and silently
-    // ignore every dummy.
-    const effectiveCsvData: ParsedCSV = {
-      ...appState.csvData,
-      rows: encoding.rows,
-      rowCount: encoding.rows.length,
-      columns: undefined,
-    };
 
     // Fail fast on an invalid log domain (Y/X <= 0) before paying the cost of
     // loading Pyodide/numpy/pandas/statsmodels. The Python script re-validates
@@ -925,12 +918,28 @@ async function onRunPro(
       return;
     }
 
+    const dropIncompleteRows = dropIncompleteRowsSelected();
+    const numericPayload = buildProNumericPayload(
+      effectiveCsvData,
+      yName,
+      encoding.expandedXNames,
+      dropIncompleteRows
+    );
+    if (!numericPayload.ok) {
+      if (!runStillCurrent()) return;
+      renderProResult(proError(numericPayload.error));
+      hideAgroInterpretationPanels();
+      setEngineStatus('ERROR');
+      writeRunLog([`ChartBay Pro: error de datos — ${numericPayload.error}`]);
+      return;
+    }
+
     showProStatus('Cargando Python en navegador…');
     writeRunLog(['ChartBay Pro: preparando Python en el navegador…']);
 
     const rawResult = await runProOlsInWorker(
       {
-        csvText: effectiveCsvText,
+        numericData: numericPayload.value,
         yName,
         xNames: encoding.expandedXNames,
         dummyNames,
@@ -938,7 +947,7 @@ async function onRunPro(
         rlsConstraint,
         standardErrorType: getSelectedProStandardErrorType(),
         hacMaxLags: getSelectedProHacMaxLags(),
-        dropIncompleteRows: dropIncompleteRowsSelected(),
+        dropIncompleteRows,
       },
       phase => {
         if (!runStillCurrent()) return;

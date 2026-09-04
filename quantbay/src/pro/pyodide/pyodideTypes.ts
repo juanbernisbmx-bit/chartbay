@@ -1,7 +1,7 @@
-// Minimal typing for the subset of the Pyodide API that the Pro POC uses.
-// Pyodide is loaded at runtime from CDN, so there is no npm package to type against.
+// Minimal typing for the subset of the vendored Pyodide API that Pro uses.
 
 export type PyodideLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
+export type PyodideLoadPhase = 'loading-pyodide' | 'loading-packages';
 
 export interface PyodideGlobals {
   set(name: string, value: unknown): void;
@@ -13,4 +13,8 @@ export interface PyodideInterface {
   globals: PyodideGlobals;
 }
 
-export type LoadPyodideFn = (options: { indexURL: string }) => Promise<PyodideInterface>;
+export type LoadPyodideFn = (options: {
+  indexURL: string;
+  lockFileURL: string;
+  packages: string[];
+}) => Promise<PyodideInterface>;
