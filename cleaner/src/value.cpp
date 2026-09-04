@@ -353,6 +353,113 @@ DateParse parse_quarter(std::string_view s) {
 
 }  // namespace
 
+// ── Categorías ────────────────────────────────────────────────────────────────
+
+namespace {
+
+// Punto de codigo que empieza en s[i], y cuantos bytes ocupa. El texto que
+// llega aca ya paso por el arreglo de encoding, asi que es UTF-8 valido; aun
+// asi, un byte suelto no rompe nada: se devuelve como su propio punto.
+std::uint32_t decode_utf8(std::string_view s, std::size_t i, std::size_t* len) {
+  const auto c = static_cast<unsigned char>(s[i]);
+  const auto cont = [&](std::size_t k) {
+    return i + k < s.size() && (static_cast<unsigned char>(s[i + k]) & 0xC0) == 0x80;
+  };
+  const auto bits = [&](std::size_t k) {
+    return static_cast<std::uint32_t>(static_cast<unsigned char>(s[i + k]) & 0x3F);
+  };
+  if (c < 0x80) {
+    *len = 1;
+    return c;
+  }
+  if (c >= 0xC2 && c <= 0xDF && cont(1)) {
+    *len = 2;
+    return ((c & 0x1FU) << 6) | bits(1);
+  }
+  if (c >= 0xE0 && c <= 0xEF && cont(1) && cont(2)) {
+    *len = 3;
+    return ((c & 0x0FU) << 12) | (bits(1) << 6) | bits(2);
+  }
+  if (c >= 0xF0 && c <= 0xF4 && cont(1) && cont(2) && cont(3)) {
+    *len = 4;
+    return ((c & 0x07U) << 18) | (bits(1) << 12) | (bits(2) << 6) | bits(3);
+  }
+  *len = 1;
+  return c;
+}
+
+bool is_space_code_point(std::uint32_t cp) {
+  return cp == 0x09 || cp == 0x0A || cp == 0x0B || cp == 0x0C || cp == 0x0D || cp == 0x20 ||
+         cp == 0xA0 || (cp >= 0x2000 && cp <= 0x200B) || cp == 0x202F || cp == 0x205F ||
+         cp == 0x3000 || cp == 0xFEFF;
+}
+
+// Letra base de un punto de codigo acentuado, o vacio si no hay pliegue
+// conocido. "ñ" pliega a "n": quien escribe sin teclado en castellano pone
+// "Nunez" donde el resto del archivo dice "Nuñez", y esas dos son la misma
+// categoria mucho mas seguido de lo que "año" y "ano" son categorias distintas.
+// Como toda fusion queda escrita en el reporte, el caso raro se ve.
+std::string_view fold_letter(std::uint32_t cp) {
+  switch (cp) {
+    case 0xC0: case 0xC1: case 0xC2: case 0xC3: case 0xC4: case 0xC5:
+    case 0xE0: case 0xE1: case 0xE2: case 0xE3: case 0xE4: case 0xE5: return "a";
+    case 0xC6: case 0xE6: return "ae";
+    case 0xC7: case 0xE7: return "c";
+    case 0xC8: case 0xC9: case 0xCA: case 0xCB:
+    case 0xE8: case 0xE9: case 0xEA: case 0xEB: return "e";
+    case 0xCC: case 0xCD: case 0xCE: case 0xCF:
+    case 0xEC: case 0xED: case 0xEE: case 0xEF: return "i";
+    case 0xD0: case 0xF0: return "d";
+    case 0xD1: case 0xF1: return "n";
+    case 0xD2: case 0xD3: case 0xD4: case 0xD5: case 0xD6: case 0xD8:
+    case 0xF2: case 0xF3: case 0xF4: case 0xF5: case 0xF6: case 0xF8: return "o";
+    case 0xD9: case 0xDA: case 0xDB: case 0xDC:
+    case 0xF9: case 0xFA: case 0xFB: case 0xFC: return "u";
+    case 0xDD: case 0xFD: case 0xFF: case 0x178: return "y";
+    case 0xDE: case 0xFE: return "th";
+    case 0xDF: return "ss";
+    case 0x152: case 0x153: return "oe";
+    case 0x160: case 0x161: return "s";
+    case 0x17D: case 0x17E: return "z";
+    case 0x192: return "f";
+    default: return {};
+  }
+}
+
+}  // namespace
+
+std::string category_key(std::string_view s) {
+  s = trim(s);
+  std::string out;
+  out.reserve(s.size());
+  bool pending_space = false;
+  for (std::size_t i = 0; i < s.size();) {
+    std::size_t len = 1;
+    const std::uint32_t cp = decode_utf8(s, i, &len);
+    i += len;
+    if (is_space_code_point(cp)) {
+      // Los espacios internos se colapsan a uno solo, y el que quede colgando
+      // al final no se escribe nunca.
+      pending_space = !out.empty();
+      continue;
+    }
+    if (pending_space) {
+      out.push_back(' ');
+      pending_space = false;
+    }
+    if (cp < 0x80) {
+      out.push_back(static_cast<char>(lower(static_cast<char>(cp))));
+      continue;
+    }
+    if (const std::string_view folded = fold_letter(cp); !folded.empty()) {
+      out += folded;
+      continue;
+    }
+    out.append(s.substr(i - len, len));  // sin pliegue conocido: tal cual
+  }
+  return out;
+}
+
 // ── Trimming and missing values ───────────────────────────────────────────────
 
 std::string_view trim(std::string_view s) {

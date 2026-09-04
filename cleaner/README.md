@@ -27,10 +27,10 @@ ni siquiera de la columna (ver más abajo).
 
 | Pieza | Estado |
 |---|---|
-| Core C++ (parser, tipado, limpieza, reporte) | listo, 435 checks en verde |
+| Core C++ (parser, tipado, limpieza, reporte) | listo, 692 checks en verde |
 | CLI nativo `csvclean` | listo |
-| Modulo WASM (`web/static/wasm/csvclean.wasm`, 160 KB) | compilado y verificado contra el binario nativo |
-| Capa adaptativa TypeScript (perfilado, preflight, worker, UI) | lista, 45 tests en verde |
+| Modulo WASM (`web/static/wasm/csvclean.wasm`, 213 KB) | compilado y verificado contra el binario nativo |
+| Capa adaptativa TypeScript (perfilado, preflight, worker, UI) | lista, 98 tests en verde |
 | Conexión a `quantbay/` | **pendiente** |
 
 `make wasm-test` corre el modulo compilado bajo Node y exige que su reporte sea
@@ -54,8 +54,11 @@ legible siempre va a stderr, así que se puede pipear.
 
 **Parseo.** Detecta el separador (`,` `;` tab `|`), comillas, BOM, CRLF, saltos
 de línea dentro de campos entrecomillados, `""` escapadas y comillas sueltas
-mal formadas. Decide si la primera fila es encabezado o datos. Filas con más o
-menos celdas que el resto se completan o se recortan, contándolo.
+mal formadas. Traduce a UTF-8 lo que venga en Windows-1252, que es lo que
+guarda Excel en castellano. Saltea el preámbulo — título, fecha de emisión, líneas en blanco —
+que casi todo export de planilla pone encima del encabezado. Decide si la
+primera fila de la tabla es encabezado o datos. Filas con más o menos celdas que
+el resto se completan o se recortan, contándolo.
 
 **Tipos**, inferidos sobre una muestra: numérica, fecha, categórica, texto,
 vacía.
@@ -67,8 +70,15 @@ espacios invisibles de Excel, y ~30 marcadores de faltante (`NA`, `n/d`, `-`,
 `s/d`, `#N/A`…). Fechas ISO, DD/MM, MM/DD, `AAAA-MM`, trimestres (`2024Q2`) y
 meses con nombre en español e inglés.
 
-**Limpieza.** Filas vacías, filas duplicadas, columnas vacías, constantes y
-duplicadas fila por fila. Faltantes: conservar, eliminar fila, cero, media,
+**Limpieza.** Filas vacías, filas duplicadas, el pie de tabla (la fila de
+totales y las notas al pie), columnas vacías, constantes y duplicadas fila por
+fila. Unifica las escrituras de una misma categoría: mayúsculas, acentos y
+espacios internos.
+
+**Índice temporal.** Reconoce la columna de fechas como índice de una serie:
+infiere la frecuencia (diaria, días hábiles, semanal, quincenal, mensual,
+trimestral, semestral, anual), cuenta las fechas repetidas y los períodos
+faltantes con sus ejemplos, y ordena las filas cuando corresponde. Faltantes: conservar, eliminar fila, cero, media,
 mediana o arrastre. Atípicos por IQR, z-score o MAD, con política de marcar,
 winsorizar, pasar a faltante o eliminar la fila.
 
@@ -78,7 +88,7 @@ justificación en castellano**, en el mismo espíritu que
 [`autoRepair.ts`](../quantbay/src/services/autoRepair.ts). Nunca desaparece una
 columna sin que el reporte diga por qué.
 
-## Tres decisiones que vale la pena conocer
+## Ocho decisiones que vale la pena conocer
 
 **El separador decimal se vota por columna, no por celda.** Se recorre la
 muestra juntando evidencia: un valor con punto *y* coma delata cuál es cuál; un
@@ -95,6 +105,92 @@ leer `$ 45.000` como 45 mil o como 45.
 decimal, `1,5` se rechaza y queda como faltante, en vez de tirar la coma y
 devolver `15`. Un faltante señalado es recuperable; un valor multiplicado por
 diez en silencio, no.
+
+**El encoding se arregla byte a byte, y no se adivina.** Cada secuencia UTF-8
+válida se deja intacta — un archivo ya en UTF-8 sale idéntico al que entró, sin
+una copia ni un byte cambiado — y todo byte que no pueda ser UTF-8 se traduce
+como Windows-1252. La tabla es Windows-1252 y no ISO-8859-1 porque se separan
+justo en `0x80`–`0x9F`, donde Latin-1 pone controles y Windows pone las
+comillas tipográficas, los guiones y el euro que Word mete en el texto: `0x92`
+es el apóstrofo de *don't*, el byte alto más común de todos.
+
+Lo que **no** hace es arreglar el mojibake ya cometido. `Ã³` es UTF-8 perfectamente
+válido, así que se respeta. Adivinar ahí rompería los archivos correctos, que
+son la mayoría.
+
+Un archivo en UTF-16 tampoco se adivina: se reconoce el BOM y se dice que el
+resultado va a estar mal, en vez de entregar una columna llamada `f\0e\0c\0h\0a`
+como si nada.
+
+**Las filas se ordenan por fecha, pero solo cuando la columna de fechas es
+inequívocamente el índice**: una sola columna de fechas, sin faltantes y sin
+repetidas. Las tres condiciones no son cautela de más. Con fechas repetidas lo
+que suele haber es un panel — provincia por mes —, y ordenar solo por fecha
+mezcla las unidades y arruina cualquier rezago; con más de una columna de
+fechas no se sabe cuál es el índice, y `fecha_alta` es tan fecha como
+`fecha_baja`. Fuera de esos casos ordenar es lo correcto, y va **antes de
+imputar**: el arrastre de faltantes copia el último valor anterior, y sobre
+filas desordenadas "anterior" es el renglón de arriba, que puede ser de seis
+meses después.
+
+Cuando no se puede ordenar, se dice. Es la diferencia entre un motor que falla
+y uno que devuelve un número: un ADF sobre filas en orden alfabético de
+provincia no da error, da un estadístico.
+
+**Los huecos se cuentan por calendario, no por días.** Un trimestre no son 90
+días ni un año 365, y contarlos así inventa huecos en febrero y en cada
+bisiesto. Las frecuencias de calendario —mensual, trimestral, semestral,
+anual— se cuentan en meses; las de días —diaria, hábiles, semanal, quincenal—
+en días. Y una serie de días hábiles no es una diaria con huecos: son los
+mismos saltos de tres días, pero caen todos en fin de semana, así que se
+reconocen por dónde caen y no por su tamaño. Sin esa distinción una serie
+financiera reportaría un tercio de sus períodos como faltantes.
+
+**Una categoría escrita de dos formas es una sola, y el nivel que queda es la
+escritura más frecuente del archivo.** "Buenos Aires", "buenos aires" y
+"BUENOS  AIRES" se comparan por una clave con minúsculas, sin acentos y con los
+espacios colapsados, pero esa clave no se muestra nunca: el nivel se lee como lo
+escribe el archivo casi siempre. Los empates los rompe el orden de aparición,
+que es lo que hace que el resultado no dependa del orden de iteración de un
+`unordered_map` — si dependiera, el WASM y el binario nativo darían distinto.
+
+El costo real de no hacerlo no son las mayúsculas: **son las escrituras
+repetidas las que inflan el conteo de únicos**, y con eso la columna cruza el
+umbral de cardinalidad y se tipa como texto libre. Diez provincias escritas de
+dos formas dan veinte valores distintos sobre sesenta filas, y esa columna
+—que es la variable categórica más importante del archivo— deja de generar
+dummies y no entra a ningún modelo, sin que nada diga por qué.
+
+Es la única parte de la limpieza que **cambia lo que el archivo dice**, así que
+cada fusión va al reporte con las dos escrituras a la vista y el diagnóstico
+ofrece revertirla. `ñ` pliega a `n`: quien escribe sin teclado en castellano
+pone "Nunez" donde el resto del archivo dice "Nuñez", y eso pasa mucho más
+seguido de lo que "año" y "ano" son dos categorías distintas — pero si lo son,
+la fusión se ve en el reporte.
+
+**El preámbulo solo se saltea si abajo hay un encabezado.** Un título encima de
+una tabla y el nombre de una variable encima de una columna sola tienen
+exactamente la misma forma: una fila angosta sobre filas anchas. Por eso no
+alcanza con ver que las filas de abajo son consistentes — hace falta evidencia
+positiva de que la primera de ellas es una fila de nombres. Sin ese requisito,
+`tasa / 12,5 / 3,25` se leería como dos columnas separadas por coma, con "tasa"
+de título.
+
+**Una fila de totales es un dato de otra escala, no un dato de más.** En un
+archivo de cien filas de ~1500, la fila `TOTAL` lleva la media de 1537 a 3068 y
+el desvío de 290 a 15296, y siendo una sola fila no hay nada en el perfil que lo
+delate salvo el máximo. Se reconoce por la etiqueta, por la aritmética — el
+valor es exactamente la suma de lo que tiene encima, que no depende del idioma
+ni de que haya etiqueta — o por la forma, cuando es una nota suelta al pie. Se
+mira solo la ventana de las últimas tres filas y se frena en la primera que no
+lo parece, así que una observación legítima llamada "Total" solo se pierde si
+además está al final del archivo. El motivo siempre queda escrito en el reporte,
+y `--keep-footer-rows` la devuelve.
+
+Las dos cosas pasan **antes de que se voten los tipos**, no después. En un
+archivo chico la fila `TOTAL` no solo mueve la media: baja a 5/6 = 0,83 la
+proporción de celdas que parsean como fecha, por debajo del umbral de 0,9, y la
+columna de fechas entera terminaba tipada como texto por culpa del pie.
 
 ## Rendimiento
 
@@ -309,7 +405,22 @@ menor que estos números.
   Ver [Cuánto aguanta el navegador](#cuánto-aguanta-el-navegador).
 - **Los tipos se infieren sobre una muestra** (5000 filas por defecto). Si el
   primer tramo del archivo no representa al resto, hay que subir `--sample`.
-- **Solo UTF-8 y ASCII.** Un CSV en Latin-1 con acentos pasa los bytes tal cual;
-  no se detecta ni se convierte el encoding.
+- **El preámbulo se detecta hasta 20 filas y solo si debajo hay un encabezado.**
+  Un preámbulo encima de una tabla sin encabezado no se reconoce: preferir no
+  adivinar antes que comerse una fila de datos. `--skip N` lo fija a mano, y
+  cuenta filas del parser — las líneas en blanco no son filas.
+- **El pie de tabla se busca en las últimas tres filas** y con las columnas
+  materializadas. En modo escaneo sobre un archivo más grande que la muestra no
+  hay contra qué comparar la suma, así que ahí solo se reconoce por la etiqueta.
+- **El índice temporal necesita una única columna de fechas.** Con dos o más no
+  se elige ninguna: se informa la ambigüedad y no se ordena nada. Tampoco se
+  analiza un rango que supere los cuatro millones de períodos, que es lo que
+  pasa cuando una fecha trae el año mal tipeado.
+- **La unificación de categorías cubre Latin-1 y Windows-1252**, que es todo el
+  castellano, portugués, francés, italiano y alemán. Un alfabeto que caiga
+  afuera pasa tal cual y no se unifica: es preferible no unificar a unificar
+  mal. Tampoco corrige erratas — "Cordova" y "Córdoba" siguen siendo dos.
+- **UTF-8 y Windows-1252.** Cualquier otro encoding pasa los bytes tal cual. De
+  UTF-16 se reconoce el BOM y se avisa, pero no se convierte.
 - **Sin paralelismo.** Un solo hilo. Partir el archivo por bloques y usar
   workers es posible, pero complica la inferencia de tipos, que es global.

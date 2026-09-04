@@ -8,6 +8,88 @@ así que resumen por temas en vez de listar cada commit.
 
 ---
 
+## [Unreleased]
+
+### Agregado — el limpiador reconoce la forma de un export de planilla
+
+- **Preámbulo.** El título del reporte, la fecha de emisión y las líneas en
+  blanco que van encima del encabezado se saltean y se reportan. Antes tres
+  líneas sin punto y coma alcanzaban para que el sniffer no encontrara el
+  separador y un CSV de siete columnas se leyera como una sola columna de texto.
+  Solo se saltea si debajo hay un encabezado, para no comerse el nombre de la
+  variable en un archivo de una columna. `--skip N` y `--no-skip` en el CLI,
+  `preambleRows` y `detectPreamble` en el navegador.
+- **Pie de tabla.** La fila de totales del final se descarta, por etiqueta
+  ("TOTAL", "Suma"), por aritmética (el valor es exactamente la suma de lo que
+  tiene encima) o por forma (una nota al pie suelta). En un archivo de cien
+  filas de ~1500 esa fila llevaba la media a 3068 y el desvío a 15296. En
+  archivos chicos también tiraba abajo la proporción de celdas que parsean y
+  convertía la columna de fechas en texto, así que se descarta antes de votar
+  los tipos. El motivo queda escrito en el reporte y el diagnóstico ofrece
+  devolverla en un click; `--keep-footer-rows` en el CLI.
+
+- **Encoding.** Lo que no sea UTF-8 válido se traduce leyéndolo como
+  Windows-1252, que es lo que guarda Excel en castellano. Antes "Córdoba"
+  llegaba al CSV limpio como "C?rdoba", sin que nada lo dijera, y lo mismo
+  pasaba con los nombres de columna y los niveles de las categóricas. Un
+  archivo que ya está en UTF-8 sale idéntico al que entró — ni una copia ni un
+  byte cambiado — así que el costo medido sobre 129 MB de ASCII es 1 %. No se
+  intenta arreglar el mojibake ya cometido: "Ã³" es UTF-8 válido y adivinar ahí
+  rompería los archivos correctos. De UTF-16 se reconoce el BOM y se avisa.
+  `--no-encoding-fix` en el CLI, `fixEncoding` en el navegador.
+
+- **Categorías.** "Buenos Aires", "buenos aires" y "BUENOS  AIRES" pasan a ser
+  un solo nivel, y "Córdoba" y "Cordoba" también: se comparan sin mayúsculas,
+  sin acentos y con los espacios internos colapsados. El nivel que queda es la
+  escritura más frecuente del archivo, con el orden de aparición desempatando,
+  nunca una forma aplanada. Lo que más costaba no eran las mayúsculas sino el
+  tipado: las escrituras repetidas inflaban el conteo de únicos, y una columna
+  de diez provincias escritas de dos formas cada una se tipaba como texto libre
+  — con lo cual no generaba dummies y no entraba a ningún modelo. Es la única
+  parte de la limpieza que cambia lo que el archivo dice, así que cada fusión
+  va al reporte con las dos escrituras a la vista y el diagnóstico ofrece
+  revertirla. `--no-unify-categories` en el CLI, `unifyCategories` en el
+  navegador.
+
+- **Índice temporal.** La columna de fechas se reconoce como índice de una
+  serie: se infiere la frecuencia (diaria, días hábiles, semanal, quincenal,
+  mensual, trimestral, semestral, anual), se cuentan las fechas repetidas y los
+  períodos faltantes —con ejemplos—, y las filas se ordenan por fecha. Ordenar
+  solo ocurre cuando la columna es inequívocamente el índice: una sola columna
+  de fechas, sin faltantes y sin repetidas. Con fechas repetidas lo que suele
+  haber es un panel, y ordenar solo por fecha mezclaría las unidades y
+  arruinaría cualquier rezago, así que ahí se informa y no se toca nada. El
+  orden se resuelve antes de imputar, porque el arrastre copia el último valor
+  anterior y sobre filas desordenadas "anterior" no quiere decir nada. Los
+  huecos se cuentan por calendario y no por días, y una serie de días hábiles
+  no se confunde con una diaria incompleta. Sobre una serie ordenada de dos
+  millones de filas el análisis cuesta ~2 %. `--no-sort-by-date` y
+  `--no-time-index` en el CLI, `sortByTime` y `analyzeTimeIndex` en el
+  navegador.
+
+### Corregido
+
+- El resumen del CLI alineaba las columnas contando bytes en vez de caracteres,
+  así que un nombre con acento corría la tabla, y recortar uno largo podía
+  partir un carácter al medio.
+- El Makefile de `cleaner/` no rastreaba dependencias de headers: al agregar un
+  campo a un struct compartido, los `.o` que no se recompilaban quedaban
+  leyendo los campos en otro offset. No fallaba al linkear ni al correr. Ahora
+  usa `-MMD -MP`.
+
+
+### Cambiado — arranque y memoria de Pro
+
+- Pyodide 0.26.4 y el cierre fijado de statsmodels se sirven desde ChartBay con
+  hashes verificados; el worker Pro ya no abre jsDelivr en su CSP.
+- Elegir Pro inicia una precarga no bloqueante. El worker se reutiliza entre
+  regresión y series, se libera al volver a Lite o tras 10 minutos sin uso y
+  conserva el timeout controlado de 120 segundos.
+- OLS recibe buffers numéricos transferibles en vez de reconstruir y parsear el
+  CSV completo dentro de Python; series de tiempo también transfiere su buffer.
+
+---
+
 ## [1.0.0] — 2026-08-28
 
 Primera versión con un alcance declarado. El trabajo de este ciclo no agregó

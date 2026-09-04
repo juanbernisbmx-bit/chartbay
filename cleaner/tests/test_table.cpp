@@ -90,6 +90,355 @@ CB_TEST(table, single_column_of_comma_decimals_is_not_split) {
   CB_CHECK_NEAR(r.columns[0].values[2], -1.5, 1e-12);
 }
 
+// ── Índice temporal ──────────────────────────────────────────────────────────
+
+CB_TEST(table, sorts_a_series_that_arrived_out_of_order) {
+  const CleanResult r = clean_buffer(
+      "fecha;ipc\n2024-03;102,9\n2024-01;100,5\n2024-04;103,4\n2024-02;101,2\n");
+  const Column* fecha = col_by_name(r, "fecha");
+  CB_CHECK(fecha != nullptr && fecha->type == ColumnType::Date);
+  // Las filas salen en orden, y el resto de las columnas las acompaña.
+  const Column* ipc = col_by_name(r, "ipc");
+  CB_CHECK_NEAR(ipc->values[0], 100.5, 1e-9);
+  CB_CHECK_NEAR(ipc->values[1], 101.2, 1e-9);
+  CB_CHECK_NEAR(ipc->values[2], 102.9, 1e-9);
+  CB_CHECK_NEAR(ipc->values[3], 103.4, 1e-9);
+  CB_CHECK(has_action(r, ActionKind::SortedByTime));
+  CB_CHECK(r.time_index.found);
+  CB_CHECK(r.time_index.sorted_here);
+  CB_CHECK(!r.time_index.ordered);
+  CB_CHECK_EQ(r.time_index.frequency, TimeFrequency::Monthly);
+}
+
+CB_TEST(table, an_ordered_series_is_not_touched) {
+  const CleanResult r = clean_buffer(
+      "fecha;ipc\n2024-01;100,5\n2024-02;101,2\n2024-03;102,9\n2024-04;103,4\n");
+  CB_CHECK(!has_action(r, ActionKind::SortedByTime));
+  CB_CHECK(r.time_index.ordered);
+  CB_CHECK(!r.time_index.sorted_here);
+  CB_CHECK_EQ(r.time_index.missing_periods, static_cast<std::size_t>(0));
+}
+
+CB_TEST(table, a_panel_is_never_reordered) {
+  // Tres provincias por mes: ordenar solo por fecha mezclaría las unidades y
+  // cualquier rezago pasaría a comparar provincias distintas. Se informa y no
+  // se toca.
+  const CleanResult r = clean_buffer(
+      "fecha;provincia;v\n"
+      "2024-03;BA;1\n2024-03;CBA;2\n2024-03;SF;3\n"
+      "2024-01;BA;4\n2024-01;CBA;5\n2024-01;SF;6\n"
+      "2024-02;BA;7\n2024-02;CBA;8\n2024-02;SF;9\n");
+  CB_CHECK(!has_action(r, ActionKind::SortedByTime));
+  CB_CHECK(!r.time_index.ordered);
+  CB_CHECK_EQ(r.time_index.duplicates, static_cast<std::size_t>(6));
+  CB_CHECK_EQ(r.time_index.periods_observed, static_cast<std::size_t>(3));
+  // Y las filas quedaron donde estaban.
+  CB_CHECK_NEAR(col_by_name(r, "v")->values[0], 1.0, 1e-9);
+}
+
+CB_TEST(table, two_date_columns_leave_the_index_undecided) {
+  const CleanResult r = clean_buffer(
+      "alta;baja;v\n2024-03-01;2024-05-01;1\n2024-01-01;2024-02-01;2\n"
+      "2024-02-01;2024-04-01;3\n2024-06-01;2024-07-01;4\n");
+  CB_CHECK(!r.time_index.found);
+  CB_CHECK(r.time_index.ambiguous);
+  CB_CHECK(!has_action(r, ActionKind::SortedByTime));
+}
+
+CB_TEST(table, gaps_are_counted_by_calendar_not_by_days) {
+  // Un mes no son 30 días ni un trimestre 90: contarlos así inventa huecos en
+  // febrero y en cada bisiesto. Esta serie mensual no tiene ninguno.
+  const CleanResult r = clean_buffer(
+      "fecha;v\n2024-01-31;1\n2024-02-29;2\n2024-03-31;3\n2024-04-30;4\n2024-05-31;5\n");
+  CB_CHECK_EQ(r.time_index.frequency, TimeFrequency::Monthly);
+  CB_CHECK_EQ(r.time_index.missing_periods, static_cast<std::size_t>(0));
+  CB_CHECK_EQ(r.time_index.periods_expected, static_cast<std::size_t>(5));
+}
+
+CB_TEST(table, a_missing_period_is_found_and_named) {
+  const CleanResult r = clean_buffer(
+      "fecha;v\n2024-01;1\n2024-02;2\n2024-03;3\n2024-05;5\n2024-06;6\n");
+  CB_CHECK_EQ(r.time_index.frequency, TimeFrequency::Monthly);
+  CB_CHECK_EQ(r.time_index.missing_periods, static_cast<std::size_t>(1));
+  CB_CHECK_EQ(r.time_index.gap_examples.size(), static_cast<std::size_t>(1));
+  CB_CHECK_EQ(r.time_index.gap_examples[0], std::string("2024-04"));
+}
+
+CB_TEST(table, business_daily_is_not_a_daily_series_with_holes) {
+  // Los mismos saltos de tres días, pero todos en fin de semana: no falta
+  // nada. Sin esta distinción una serie financiera reportaría un tercio de sus
+  // períodos como faltantes.
+  std::string csv = "fecha;cierre\n";
+  // Lunes 2024-01-01 en adelante, solo días hábiles.
+  const char* habiles[] = {"2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05",
+                           "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11", "2024-01-12",
+                           "2024-01-15", "2024-01-16"};
+  for (std::size_t i = 0; i < 12; ++i) {
+    csv += std::string(habiles[i]) + ";" + std::to_string(100 + i) + "\n";
+  }
+  const CleanResult r = clean_buffer(csv);
+  CB_CHECK_EQ(r.time_index.frequency, TimeFrequency::BusinessDaily);
+  CB_CHECK_EQ(r.time_index.missing_periods, static_cast<std::size_t>(0));
+}
+
+CB_TEST(table, sorting_can_be_turned_off) {
+  CleanOptions opts;
+  opts.sort_by_time = false;
+  const CleanResult r = clean_buffer(
+      "fecha;ipc\n2024-03;102,9\n2024-01;100,5\n2024-04;103,4\n2024-02;101,2\n", opts);
+  CB_CHECK(!has_action(r, ActionKind::SortedByTime));
+  CB_CHECK(!r.time_index.ordered);
+  CB_CHECK_NEAR(col_by_name(r, "ipc")->values[0], 102.9, 1e-9);
+}
+
+CB_TEST(table, forward_fill_runs_in_time_order_not_file_order) {
+  // La razón por la que ordenar va antes de imputar: el arrastre copia el
+  // último valor *anterior*, y sobre filas desordenadas "anterior" es el
+  // renglón de arriba, que puede ser de seis meses después.
+  CleanOptions opts;
+  opts.missing = MissingPolicy::Forward;
+  const CleanResult r = clean_buffer(
+      "fecha;v\n2024-04;40\n2024-01;10\n2024-03;\n2024-02;20\n", opts);
+  const Column* v = col_by_name(r, "v");
+  CB_CHECK(v != nullptr);
+  // Ordenado: 10, 20, (arrastra 20), 40.
+  CB_CHECK_NEAR(v->values[0], 10.0, 1e-9);
+  CB_CHECK_NEAR(v->values[1], 20.0, 1e-9);
+  CB_CHECK_NEAR(v->values[2], 20.0, 1e-9);
+  CB_CHECK_NEAR(v->values[3], 40.0, 1e-9);
+}
+
+CB_TEST(table, category_spellings_are_unified_and_the_common_one_wins) {
+  const CleanResult r = clean_buffer(
+      "provincia;ventas\n"
+      "Buenos Aires;100\nBuenos Aires;110\nBuenos Aires;120\n"
+      "buenos aires;130\nBUENOS  AIRES;140\n"
+      "Córdoba;200\nCórdoba;210\nCordoba;220\n"
+      "Santa Fe;300\nSanta Fe;310\n");
+  const Column* prov = col_by_name(r, "provincia");
+  CB_CHECK(prov != nullptr && prov->type == ColumnType::Categorical);
+  CB_CHECK_EQ(prov->levels.size(), static_cast<std::size_t>(3));
+  // Gana la escritura más frecuente, no la primera ni una forma aplanada.
+  CB_CHECK_EQ(prov->levels[0], std::string("Buenos Aires"));
+  CB_CHECK_EQ(prov->levels[1], std::string("Córdoba"));
+  CB_CHECK_EQ(prov->levels[2], std::string("Santa Fe"));
+  CB_CHECK_EQ(prov->stats.unique, static_cast<std::size_t>(3));
+  CB_CHECK(has_action(r, ActionKind::UnifiedLevels));
+}
+
+CB_TEST(table, spelling_noise_was_turning_categories_into_free_text) {
+  // Lo que de verdad cuesta: son las escrituras repetidas las que inflan el
+  // conteo de únicos, y con eso la columna cruza el umbral de cardinalidad y se
+  // tipa como texto libre. Una columna de texto no genera dummies: no entra a
+  // ningún modelo, y nada en la pantalla dice por qué.
+  std::string csv = "provincia;ventas\n";
+  const char* provincias[] = {"Buenos Aires", "Córdoba", "Santa Fe",  "Mendoza",  "Tucumán",
+                              "Salta",        "Chaco",   "Misiones", "Neuquén", "Formosa"};
+  const char* sin_tilde[] = {"Buenos aires", "Cordoba", "SANTA FE",  "mendoza",  "Tucuman",
+                             "SALTA",        "chaco",   "MISIONES", "Neuquen", "formosa"};
+  int v = 100;
+  for (std::size_t i = 0; i < 10; ++i) {
+    for (int k = 0; k < 5; ++k) {
+      csv += std::string(provincias[i]) + ";" + std::to_string(v++) + "\n";
+    }
+    csv += std::string(sin_tilde[i]) + ";" + std::to_string(v++) + "\n";
+  }
+
+  CleanOptions off;
+  off.unify_categories = false;
+  const CleanResult raw = clean_buffer(csv, off);
+  CB_CHECK(col_by_name(raw, "provincia")->type == ColumnType::Text);
+  CB_CHECK_EQ(col_by_name(raw, "provincia")->stats.unique, static_cast<std::size_t>(20));
+
+  const CleanResult r = clean_buffer(csv);
+  const Column* prov = col_by_name(r, "provincia");
+  CB_CHECK(prov->type == ColumnType::Categorical);
+  CB_CHECK_EQ(prov->levels.size(), static_cast<std::size_t>(10));
+}
+
+CB_TEST(table, a_consistent_column_is_left_exactly_as_it_was) {
+  const CleanResult r = clean_buffer(
+      "region;valor\nnorte;1\nsur;2\nnorte;3\nsur;4\nnorte;5\nsur;6\n");
+  const Column* reg = col_by_name(r, "region");
+  CB_CHECK(reg != nullptr && reg->type == ColumnType::Categorical);
+  CB_CHECK_EQ(reg->levels.size(), static_cast<std::size_t>(2));
+  CB_CHECK_EQ(reg->levels[0], std::string("norte"));
+  CB_CHECK(!has_action(r, ActionKind::UnifiedLevels));
+}
+
+CB_TEST(table, unification_can_be_turned_off) {
+  CleanOptions opts;
+  opts.unify_categories = false;
+  // Doce filas y no seis: con cuatro valores distintos sobre seis, la columna no
+  // repite lo suficiente para ser categórica y el caso no probaría nada.
+  const std::string csv =
+      "provincia;v\nCórdoba;1\nCórdoba;2\nCórdoba;3\nCórdoba;4\nCordoba;5\nCordoba;6\n"
+      "Santa Fe;7\nSanta Fe;8\nSanta Fe;9\nSanta Fe;10\nsanta fe;11\nsanta fe;12\n";
+  const CleanResult r = clean_buffer(csv, opts);
+  CB_CHECK(col_by_name(r, "provincia")->type == ColumnType::Categorical);
+  CB_CHECK_EQ(col_by_name(r, "provincia")->levels.size(), static_cast<std::size_t>(4));
+  CB_CHECK(!has_action(r, ActionKind::UnifiedLevels));
+  // Y el mismo archivo con la unificación puesta: dos niveles.
+  CB_CHECK_EQ(col_by_name(clean_buffer(csv), "provincia")->levels.size(),
+              static_cast<std::size_t>(2));
+}
+
+CB_TEST(table, a_tie_keeps_the_spelling_that_appeared_first) {
+  // Con las dos escrituras empatadas el resultado no puede depender del orden
+  // en que itere un unordered_map: si dependiera, el WASM y el binario nativo
+  // darían distinto y el archivo cambiaría de una corrida a la otra.
+  const CleanResult r = clean_buffer("x;v\nCórdoba;1\nCordoba;2\nSalta;3\nSalta;4\n");
+  const Column* x = col_by_name(r, "x");
+  CB_CHECK(x != nullptr && x->type == ColumnType::Categorical);
+  CB_CHECK_EQ(x->levels[0], std::string("Córdoba"));
+}
+
+CB_TEST(table, windows_1252_survives_all_the_way_to_the_output) {
+  // El archivo que exporta Excel en castellano: acentos y ñ en los nombres de
+  // columna y en los niveles, todo en un byte.
+  const CleanResult r = clean_buffer(
+      "a\xF1o;regi\xF3n;monto\n"
+      "2024;C\xF3rdoba;100,5\n"
+      "2023;C\xF3rdoba;90,25\n"
+      "2022;Neuqu\xE9n;80,00\n"
+      "2021;Neuqu\xE9n;70,00\n");
+  CB_CHECK_EQ(types(r), std::string("año:numeric,región:categorical,monto:numeric"));
+  const Column* region = col_by_name(r, "región");
+  CB_CHECK(region != nullptr);
+  CB_CHECK_EQ(region->levels.size(), static_cast<std::size_t>(2));
+  CB_CHECK_EQ(region->levels[0], std::string("Córdoba"));
+  CB_CHECK_EQ(region->levels[1], std::string("Neuquén"));
+  CB_CHECK(has_action(r, ActionKind::ConvertedEncoding));
+  // Y el CSV que se lleva el usuario ya sale en UTF-8.
+  CB_CHECK(to_csv(r).find("Neuquén") != std::string::npos);
+}
+
+CB_TEST(table, a_utf8_file_reports_no_conversion) {
+  const CleanResult r = clean_buffer("año;región\n2024;Córdoba\n2023;Neuquén\n2022;Córdoba\n");
+  CB_CHECK(!has_action(r, ActionKind::ConvertedEncoding));
+}
+
+CB_TEST(table, encoding_fix_can_be_turned_off) {
+  CleanOptions opts;
+  opts.fix_encoding = false;
+  const CleanResult r = clean_buffer("a\xF1o;monto\n2024;100\n2023;90\n", opts);
+  CB_CHECK(!has_action(r, ActionKind::ConvertedEncoding));
+  CB_CHECK_EQ(r.columns[0].name, std::string("a\xF1o"));
+}
+
+CB_TEST(table, preamble_is_skipped_and_reported) {
+  const CleanResult r = clean_buffer(
+      "Reporte de ventas 2024\n"
+      "Generado el 03/09/2026\n"
+      "\n"
+      "fecha;provincia;monto\n"
+      "01/03/2024;Buenos Aires;1.234,50\n"
+      "02/03/2024;Cordoba;2.000,00\n"
+      "03/03/2024;Santa Fe;1.500,00\n"
+      "04/03/2024;Mendoza;900,00\n");
+  CB_CHECK_EQ(types(r), std::string("fecha:date,provincia:text,monto:numeric"));
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(4));
+  CB_CHECK(has_action(r, ActionKind::SkippedPreambleRows));
+}
+
+CB_TEST(table, preamble_detection_can_be_turned_off) {
+  CleanOptions opts;
+  opts.detect_preamble = false;
+  const CleanResult r = clean_buffer(
+      "Reporte de ventas 2024\n"
+      "Generado el 03/09/2026\n"
+      "fecha;provincia;monto\n"
+      "01/03/2024;Buenos Aires;1.234,50\n"
+      "02/03/2024;Cordoba;2.000,00\n"
+      "03/03/2024;Santa Fe;1.500,00\n",
+      opts);
+  CB_CHECK(!has_action(r, ActionKind::SkippedPreambleRows));
+}
+
+CB_TEST(table, preamble_can_be_given_by_hand) {
+  CleanOptions opts;
+  opts.dialect.preamble_rows = 1;
+  // Una sola linea de titulo sobre una tabla de dos columnas: el sniffer no
+  // tiene con que decidir, el usuario si.
+  const CleanResult r = clean_buffer("Serie mensual\nfecha,valor\n2024-01-01,10\n2024-01-02,11\n",
+                                     opts);
+  CB_CHECK_EQ(types(r), std::string("fecha:date,valor:numeric"));
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(2));
+}
+
+CB_TEST(table, footer_row_with_a_label_is_dropped) {
+  const CleanResult r = clean_buffer(
+      "concepto,monto\n"
+      "alquiler,100\n"
+      "sueldos,200\n"
+      "insumos,300\n"
+      "servicios,400\n"
+      "TOTAL,1000\n");
+  const Column* monto = col_by_name(r, "monto");
+  CB_CHECK(monto != nullptr);
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(4));
+  CB_CHECK_NEAR(monto->stats.max, 400.0, 1e-9);
+  CB_CHECK_NEAR(monto->stats.mean, 250.0, 1e-9);
+  CB_CHECK(has_action(r, ActionKind::DroppedFooterRows));
+}
+
+CB_TEST(table, footer_row_is_found_by_arithmetic_without_a_label) {
+  // La prueba dura: el valor es exactamente la suma de lo que tiene encima. No
+  // depende del idioma de la etiqueta, ni de que haya etiqueta.
+  const CleanResult r = clean_buffer("anio;ventas\n2020;100\n2021;200\n2022;300\n2023;400\n;1000\n");
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(4));
+  CB_CHECK(has_action(r, ActionKind::DroppedFooterRows));
+}
+
+CB_TEST(table, trailing_note_is_dropped) {
+  const CleanResult r = clean_buffer(
+      "fecha;monto\n01/03/2024;100\n02/03/2024;200\n03/03/2024;300\n04/03/2024;400\n"
+      "Fuente: INDEC;\n");
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(4));
+  CB_CHECK(has_action(r, ActionKind::DroppedFooterRows));
+}
+
+CB_TEST(table, a_clean_file_loses_no_footer) {
+  const CleanResult r = clean_buffer(
+      "fecha;monto\n01/03/2024;100\n02/03/2024;200\n03/03/2024;300\n04/03/2024;400\n");
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(4));
+  CB_CHECK(!has_action(r, ActionKind::DroppedFooterRows));
+}
+
+CB_TEST(table, footer_can_be_kept) {
+  CleanOptions opts;
+  opts.drop_footer_rows = false;
+  const CleanResult r = clean_buffer(
+      "concepto,monto\nalquiler,100\nsueldos,200\ninsumos,300\nservicios,400\nTOTAL,1000\n",
+      opts);
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(5));
+  CB_CHECK(!has_action(r, ActionKind::DroppedFooterRows));
+}
+
+CB_TEST(table, footer_leaves_the_date_column_typed_as_a_date) {
+  // En un archivo chico el pie no solo mueve la media: baja a 5/6 la proporcion
+  // de celdas que parsean como fecha, por debajo del umbral de 0,9, y la
+  // columna entera terminaba tipada como texto. Por eso el pie se saca antes de
+  // votar los tipos y no despues.
+  const CleanResult r = clean_buffer(
+      "fecha;provincia;monto\n"
+      "01/03/2024;Buenos Aires;1.234,50\n"
+      "02/03/2024;Cordoba;2.000,00\n"
+      "03/03/2024;Santa Fe;1.500,00\n"
+      "04/03/2024;Mendoza;900,00\n"
+      "05/03/2024;Salta;1.100,00\n"
+      "TOTAL;;6.734,50\n");
+  CB_CHECK_EQ(types(r), std::string("fecha:date,provincia:text,monto:numeric"));
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(5));
+}
+
+CB_TEST(table, a_column_of_zeros_is_not_a_footer) {
+  // 0 == suma(0,0,0) es aritmetica trivial, no evidencia.
+  const CleanResult r = clean_buffer("mes,fallas\n1,0\n2,0\n3,0\n4,0\n");
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(4));
+  CB_CHECK(!has_action(r, ActionKind::DroppedFooterRows));
+}
+
 CB_TEST(table, ambiguous_decimal_follows_the_rest_of_the_file) {
   // "45.000" alone is unreadable. The other columns settle the convention.
   const CleanResult r = clean_buffer(

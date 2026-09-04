@@ -26,15 +26,69 @@ struct Dialect {
   char delimiter = ',';
   char quote = '"';
   bool has_header = true;
+  // Filas de basura encima del encabezado: el título del reporte, la fecha de
+  // emisión, una línea en blanco. No es un detalle cosmético — el sniffer busca
+  // el delimitador en las primeras filas, y tres líneas sin punto y coma
+  // alcanzan para que un CSV de siete columnas se lea como una sola columna de
+  // texto. Se cuenta en filas del scanner, antes del encabezado.
+  std::size_t preamble_rows = 0;
 };
 
-// Infers the delimiter and whether row 0 is a header, from the first bytes of
-// the file. Pass at least a few KB; whole lines only are considered.
+// Infers the delimiter, how many junk rows sit above the table and whether the
+// first row of the table is a header, from the first bytes of the file. Pass at
+// least a few KB; whole lines only are considered.
 Dialect sniff_dialect(std::string_view sample);
 
 // Strips a UTF-8 byte order mark if present, so the first header does not come
 // back as "\xEF\xBB\xBFfecha".
 std::string_view strip_bom(std::string_view s);
+
+/**
+ * Decodificador tolerante: UTF-8 con Windows-1252 de respaldo.
+ *
+ * Excel en español guarda CSV en Windows-1252, no en UTF-8. Hasta ahora esos
+ * bytes pasaban crudos y "Córdoba" salía "C?rdoba" en el archivo limpio, sin
+ * que nada lo dijera. Acá cada secuencia UTF-8 válida se deja intacta byte a
+ * byte — un archivo ya en UTF-8 sale idéntico al que entró — y todo byte que no
+ * pueda ser UTF-8 se traduce como Windows-1252, que es la tabla que usan las
+ * planillas y los navegadores para ese caso.
+ *
+ * Windows-1252 y no ISO-8859-1: se diferencian solo en 0x80–0x9F, donde
+ * Latin-1 pone controles y Windows pone comillas tipográficas, guiones y el
+ * símbolo del euro. Un archivo real que dice ser Latin-1 casi siempre es
+ * Windows-1252, así que traducir por esa tabla acierta más seguido y nunca
+ * produce un carácter de control.
+ *
+ * Lo que **no** hace es arreglar el mojibake ya cometido: "Ã³" es UTF-8 válido
+ * y por lo tanto se respeta. Adivinar ahí rompería los archivos correctos.
+ */
+class EncodingFixer {
+ public:
+  // Convierte un bloque. La vista devuelta vale hasta la próxima llamada, y en
+  // el caso común — el bloque ya es ASCII o UTF-8 — es el mismo `data` sin
+  // copiar. Puede quedarse con los últimos bytes cuando el bloque corta una
+  // secuencia multibyte al medio; salen en la llamada siguiente.
+  std::string_view feed(const char* data, std::size_t len);
+  // Cierra el archivo: lo que haya quedado de una secuencia incompleta ya no
+  // puede completarse, así que se traduce como Windows-1252.
+  std::string_view finish();
+
+  // Bytes que no eran UTF-8 y se tradujeron. 0 = el archivo ya estaba en UTF-8.
+  std::size_t converted() const { return converted_; }
+  // El archivo empieza con un BOM de UTF-16 (FF FE o FE FF). Nada de lo que
+  // sigue va a tener sentido; esto existe para poder decirlo en vez de escupir
+  // una columna llamada "f\0e\0c\0h\0a".
+  bool utf16_bom() const { return utf16_bom_; }
+
+ private:
+  std::string_view convert(const char* data, std::size_t len);
+
+  std::string out_;      // bloque convertido, reutilizado entre llamadas
+  std::string pending_;  // prefijo de una secuencia multibyte cortada al final
+  std::size_t converted_ = 0;
+  bool first_ = true;
+  bool utf16_bom_ = false;
+};
 
 class RowSink {
  public:

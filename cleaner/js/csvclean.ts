@@ -71,6 +71,52 @@ export interface CleanOptions {
   forceDecimal?: '.' | ',';
   /** Igual, para el orden de las fechas. */
   forceDateOrder?: 'ymd' | 'dmy' | 'mdy';
+  /**
+   * Detecta y saltea las filas de basura encima del encabezado: el título del
+   * reporte, la fecha de emisión, una línea suelta. Prendido por defecto — sin
+   * esto, tres líneas sin punto y coma alcanzan para que un CSV de siete
+   * columnas se lea como una sola columna de texto.
+   */
+  detectPreamble?: boolean;
+  /**
+   * Cuántas filas saltear antes del encabezado, a mano. Gana sobre la
+   * detección. Ojo: son filas del parser, y las líneas en blanco no cuentan.
+   */
+  preambleRows?: number;
+  /**
+   * Descarta la fila de totales del final. Prendido por defecto: un subtotal
+   * adentro de la columna arrastra la media, el desvío y el máximo de toda la
+   * variable, y siendo una sola fila no hay nada en el perfil que lo delate.
+   */
+  dropFooterRows?: boolean;
+  /**
+   * Traduce a UTF-8 lo que no sea UTF-8 válido, leyéndolo como Windows-1252,
+   * que es lo que guarda Excel en español. Prendido por defecto: un archivo que
+   * ya está en UTF-8 pasa byte a byte idéntico, así que no cuesta nada, y sin
+   * esto "Córdoba" llega al navegador como "C?rdoba".
+   */
+  fixEncoding?: boolean;
+  /**
+   * Unifica las escrituras de una misma categoría: "Buenos Aires", "buenos
+   * aires" y "BUENOS AIRES" son un solo nivel, igual que "Córdoba" y
+   * "Cordoba". Queda la escritura más frecuente del archivo, y el reporte dice
+   * qué se fusionó con qué. Prendido por defecto: las escrituras repetidas
+   * inflan el conteo de únicos y hacen que una columna de categorías se tipe
+   * como texto libre.
+   */
+  unifyCategories?: boolean;
+  /**
+   * Analiza la columna de fechas como índice temporal: frecuencia, fechas
+   * repetidas y períodos faltantes.
+   */
+  analyzeTimeIndex?: boolean;
+  /**
+   * Ordena las filas por fecha cuando la columna de fechas es inequívocamente
+   * el índice — una sola, sin faltantes y sin repetidas. Con fechas repetidas
+   * lo que suele haber es un panel, y ordenar solo por fecha mezcla las
+   * unidades y arruina cualquier rezago, así que ahí no se toca nada.
+   */
+  sortByTime?: boolean;
   sampleRows?: number;
   maxCategoricalLevels?: number;
   percentAsFraction?: boolean; // "12,5%" → 0.125 instead of 12.5
@@ -209,11 +255,43 @@ export interface CleanAction {
   detail: string;
 }
 
+/** Ver `TimeIndex` en table.hpp: qué columna es el índice y qué le pasa. */
+export interface TimeIndexReport {
+  found: boolean;
+  /** Hay más de una columna de fechas, así que no se eligió ninguna. */
+  ambiguous: boolean;
+  column: string;
+  frequency:
+    | 'unknown'
+    | 'daily'
+    | 'business_daily'
+    | 'weekly'
+    | 'fortnightly'
+    | 'monthly'
+    | 'quarterly'
+    | 'semiannual'
+    | 'annual';
+  /** Las fechas venían en orden no decreciente. */
+  ordered: boolean;
+  /** Se reordenaron las filas. */
+  sorted: boolean;
+  observations: number;
+  periodsObserved: number;
+  periodsExpected: number;
+  duplicates: number;
+  missingPeriods: number;
+  first: string;
+  last: string;
+  gapExamples: string[];
+}
+
 export interface CleanReport {
   rowsIn: number;
   rowsOut: number;
   columnsOut: number;
   dialect: { delimiter: string; quote: string; hasHeader: boolean };
+  /** Ausente cuando la tabla no tiene ninguna columna de fechas. */
+  timeIndex?: TimeIndexReport;
   quoteAnomalies: number;
   unterminatedQuote: boolean;
   columns: ColumnReport[];
@@ -244,7 +322,7 @@ export interface CleanedTable {
 // ── Option encoding ───────────────────────────────────────────────────────────
 
 // Mirrors the Ints/Reals enums in wasm/bindings.cpp. Keep the two in step.
-const INT_SLOTS = 19;
+const INT_SLOTS = 26;
 const REAL_SLOTS = 5;
 
 const MISSING_CODES: Record<MissingPolicy, number> = {
@@ -301,6 +379,13 @@ function encodeOptions(
   ints[16] = flag(options.scanOnly, 0);
   ints[17] = options.forceDecimal ? options.forceDecimal.charCodeAt(0) : 0;
   ints[18] = options.forceDateOrder ? ORDER_CODES[options.forceDateOrder] : 0;
+  ints[19] = flag(options.detectPreamble, 1);
+  ints[20] = options.preambleRows ?? 0;
+  ints[21] = flag(options.dropFooterRows, 1);
+  ints[22] = flag(options.fixEncoding, 1);
+  ints[23] = flag(options.unifyCategories, 1);
+  ints[24] = flag(options.analyzeTimeIndex, 1);
+  ints[25] = flag(options.sortByTime, 1);
 
   reals[0] = options.numericThreshold ?? 0.8;
   reals[1] = options.dateThreshold ?? 0.9;

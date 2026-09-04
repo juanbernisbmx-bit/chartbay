@@ -13,10 +13,19 @@ CXX      ?= c++
 # Determinism across the two targets is worth more here than the last ulp.
 CXXFLAGS ?= -std=c++17 -O2 -ffp-contract=off -Wall -Wextra -Wpedantic -Iinclude
 LDFLAGS  ?=
+# -MMD -MP: que cada .o declare de qué headers depende. Sin esto, tocar un
+# header no recompila nada, y la mitad de los .o queda contra el layout viejo de
+# los structs. No falla al linkear ni al correr: simplemente cada objeto lee los
+# campos en un offset distinto. Agregarle un campo a Dialect (que va por valor
+# adentro de CleanResult) hizo que report.o imprimiera preamble_rows en el lugar
+# de quote_anomalies, y el unico sintoma fue que el WASM — que se compila entero
+# de una — dejo de coincidir con el binario nativo.
+DEPFLAGS := -MMD -MP
 
 BUILD    := build
 CORE_SRC := $(wildcard src/*.cpp)
 CORE_OBJ := $(patsubst src/%.cpp,$(BUILD)/%.o,$(CORE_SRC))
+HEADERS  := $(wildcard include/chartbay/*.hpp)
 TEST_SRC := $(wildcard tests/*.cpp)
 
 .PHONY: all test wasm wasm-check bench clean
@@ -27,13 +36,17 @@ $(BUILD):
 	@mkdir -p $(BUILD)
 
 $(BUILD)/%.o: src/%.cpp | $(BUILD)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< -o $@
 
-$(BUILD)/csvclean: $(CORE_OBJ) cli/main.cpp | $(BUILD)
+$(BUILD)/csvclean: $(CORE_OBJ) cli/main.cpp $(HEADERS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(CORE_OBJ) cli/main.cpp -o $@ $(LDFLAGS)
 
-$(BUILD)/tests: $(CORE_OBJ) $(TEST_SRC) | $(BUILD)
+$(BUILD)/tests: $(CORE_OBJ) $(TEST_SRC) $(HEADERS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) -Itests $(CORE_OBJ) $(TEST_SRC) -o $@ $(LDFLAGS)
+
+# cli/main.cpp y tests/*.cpp se compilan en el mismo comando que linkea, asi que
+# no dejan .d atras: para esos dos la dependencia va escrita a mano.
+-include $(CORE_OBJ:.o=.d)
 
 test: $(BUILD)/tests wasm-check
 	@./$(BUILD)/tests $(FILTER)

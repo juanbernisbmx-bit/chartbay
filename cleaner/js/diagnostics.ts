@@ -30,6 +30,18 @@ export interface Issue {
 
 const SEVERITY_ORDER: Record<IssueSeverity, number> = { alta: 0, media: 1, baja: 2 };
 
+const FREQUENCY_LABEL: Record<string, string> = {
+  daily: 'diaria',
+  business_daily: 'de días hábiles',
+  weekly: 'semanal',
+  fortnightly: 'quincenal',
+  monthly: 'mensual',
+  quarterly: 'trimestral',
+  semiannual: 'semestral',
+  annual: 'anual',
+  unknown: 'irregular',
+};
+
 function plural(n: number, uno: string, varios: string): string {
   return `${n.toLocaleString('es-AR')} ${n === 1 ? uno : varios}`;
 }
@@ -47,6 +59,38 @@ export function diagnose(report: CleanReport): Issue[] {
       detail:
         'Se cerró el último campo al final del archivo, pero es probable que falte ' +
         'contenido o que haya una comilla de más en algún lado. Revisá el final del CSV.',
+    });
+  }
+
+  const utf16 = report.actions.find(a => a.kind === 'unsupported_encoding');
+  if (utf16) {
+    issues.push({
+      id: 'unsupported-encoding',
+      severity: 'alta',
+      title: 'El archivo no está en UTF-8 ni en Windows-1252',
+      detail:
+        `${utf16.detail} Mientras tanto, todo lo que veas abajo — nombres de columna, ` +
+        'categorías, tipos — sale de bytes mal interpretados.',
+    });
+  }
+
+  const t = report.timeIndex;
+  if (t?.found && !t.ordered && !t.sorted) {
+    issues.push({
+      id: 'unsorted-time-index',
+      severity: 'alta',
+      title: 'La serie no está ordenada por fecha',
+      columns: [t.column],
+      detail:
+        `Las filas no vienen en orden cronológico por "${t.column}", y no se reordenaron ` +
+        `solas porque ${
+          t.duplicates > 0
+            ? 'hay fechas repetidas: si esto es un panel, ordenar solo por fecha mezclaría ' +
+              'las unidades y arruinaría cualquier rezago'
+            : 'la columna de fechas tiene faltantes'
+        }. Todo lo que mira el pasado — el arrastre, los rezagos, la autocorrelación, las ` +
+        'raíces unitarias — depende de ese orden, y sobre filas desordenadas devuelve un ' +
+        'número, no un error.',
     });
   }
 
@@ -145,6 +189,89 @@ export function diagnose(report: CleanReport): Issue[] {
         'carga o el dato más interesante del conjunto, y esa diferencia no la puede ' +
         'decidir el programa. Revisalos antes de winsorizar.',
       fix: { label: 'Recortarlos al borde (winsorizar)', options: { outliers: 'winsorize' } },
+    });
+  }
+
+  const encoding = report.actions.find(a => a.kind === 'converted_encoding');
+  if (encoding) {
+    issues.push({
+      id: 'converted-encoding',
+      severity: 'media',
+      title: 'El archivo estaba en Windows-1252, no en UTF-8',
+      detail:
+        `${encoding.detail} Revisá que los nombres de columna y las categorías se lean ` +
+        'bien; si alguno quedó raro, el archivo puede estar en otro encoding.',
+    });
+  }
+
+  if (t?.found && t.duplicates > 0) {
+    issues.push({
+      id: 'duplicate-periods',
+      severity: 'media',
+      title: `${plural(t.duplicates, 'fecha repetida', 'fechas repetidas')} en el índice`,
+      columns: [t.column],
+      detail:
+        `"${t.column}" tiene ${plural(t.observations, 'observación', 'observaciones')} en ` +
+        `${plural(t.periodsObserved, 'período distinto', 'períodos distintos')}. O el archivo ` +
+        'es un panel — varias unidades por fecha, y entonces no es una serie de tiempo y hay ' +
+        'que filtrarlo antes de estimar —, o hay filas cargadas dos veces.',
+    });
+  }
+
+  if (t?.found && t.missingPeriods > 0) {
+    const ejemplos = t.gapExamples.length > 0 ? ` Faltan, por ejemplo: ${t.gapExamples.join(', ')}.` : '';
+    issues.push({
+      id: 'time-gaps',
+      severity: 'media',
+      title: `Faltan ${plural(t.missingPeriods, 'período', 'períodos')} en la serie`,
+      columns: [t.column],
+      detail:
+        `Entre ${t.first} y ${t.last} la serie avanza de forma ${FREQUENCY_LABEL[t.frequency]}, ` +
+        `así que debería tener ${plural(t.periodsExpected, 'período', 'períodos')} y tiene ` +
+        `${t.periodsObserved}.${ejemplos} Un hueco no es un faltante marcado: la fila no existe, ` +
+        'así que nada lo cuenta como dato ausente y los rezagos saltean el hueco como si los ' +
+        'dos extremos fueran consecutivos.',
+    });
+  }
+
+  const unified = report.actions.filter(a => a.kind === 'unified_levels');
+  if (unified.length > 0) {
+    const total = unified.reduce((sum, a) => sum + a.count, 0);
+    issues.push({
+      id: 'unified-levels',
+      severity: 'media',
+      title: `Se unificaron ${plural(total, 'escritura', 'escrituras')} de las mismas categorías`,
+      columns: unified.map(a => a.column),
+      detail:
+        `${unified.map(a => a.detail).join(' ')} Es la única parte de la limpieza que cambia ` +
+        'lo que dice el archivo, así que mirá la lista: si dos de esas eran categorías ' +
+        'distintas de verdad, conviene apagarlo.',
+      fix: { label: 'Tratarlas como categorías distintas', options: { unifyCategories: false } },
+    });
+  }
+
+  const preamble = report.actions.find(a => a.kind === 'skipped_preamble_rows');
+  if (preamble) {
+    issues.push({
+      id: 'skipped-preamble',
+      severity: 'media',
+      title: `Se saltearon ${plural(preamble.count, 'fila', 'filas')} arriba del encabezado`,
+      detail:
+        `${preamble.detail} Si el encabezado no es ese, el archivo entero quedó corrido ` +
+        'una fila y todos los nombres de columna están mal.',
+    });
+  }
+
+  const footer = report.actions.find(a => a.kind === 'dropped_footer_rows');
+  if (footer) {
+    issues.push({
+      id: 'dropped-footer',
+      severity: 'media',
+      title: `Se descartó el pie de tabla (${plural(footer.count, 'fila', 'filas')})`,
+      detail:
+        `${footer.detail} Si esa fila era un dato de verdad y no un subtotal, traela de ` +
+        'vuelta.',
+      fix: { label: 'Conservar la fila del final', options: { dropFooterRows: false } },
     });
   }
 
