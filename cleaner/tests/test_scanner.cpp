@@ -237,6 +237,29 @@ CB_TEST(encoding, utf16_is_flagged_not_guessed) {
   CB_CHECK(!plain.utf16_bom());
 }
 
+CB_TEST(encoding, the_utf16_bom_is_seen_across_a_chunk_boundary) {
+  // El BOM son dos bytes y nada garantiza que lleguen en la misma llamada: el
+  // CLI lee de a 1 MiB, pero el navegador pasa Blob.slice del tamaño que se le
+  // ocurra. Mirando solo el primer feed(), con un byte por llamada se veía el
+  // 0xFF, nunca el 0xFE que llegaba después, y el archivo UTF-16 se colaba
+  // como Windows-1252 sin que nada lo dijera — justo lo que este aviso existe
+  // para evitar. Es el mismo invariante que el resto del archivo: dónde cae el
+  // corte no puede cambiar el resultado.
+  const char bytes[] = {'\xFF', '\xFE', 'f', '\0', 'e', '\0'};
+  for (std::size_t chunk = 1; chunk <= sizeof bytes; ++chunk) {
+    EncodingFixer fixer;
+    for (std::size_t i = 0; i < sizeof bytes; i += chunk) {
+      fixer.feed(bytes + i, std::min(chunk, sizeof bytes - i));
+    }
+    CB_CHECK(fixer.utf16_bom());
+  }
+  // Un archivo de un solo byte no puede ser un BOM, y no se lo inventa.
+  EncodingFixer lone;
+  lone.feed("\xFF", 1);
+  lone.finish();
+  CB_CHECK(!lone.utf16_bom());
+}
+
 CB_TEST(sniff, preamble_above_the_table) {
   // Lo que exporta cualquier planilla: titulo, fecha de emision, linea en
   // blanco, y recien ahi la tabla. Sin saltearlo el sniffer busca el separador

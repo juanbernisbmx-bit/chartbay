@@ -35,6 +35,42 @@ std::uint64_t fnv1a(std::uint64_t h, std::string_view s) {
   return h;
 }
 
+/**
+ * Un campo dentro de un hash de fila o de columna, con su largo en la mezcla.
+ *
+ * Separar los campos con un byte no alcanza. Se usaba \x1f — el mismo que el
+ * scanner toma como "acá no hay delimitador", elegido porque no aparece en un
+ * CSV de texto — y cuando aparece igual, el dato y el marco se confunden:
+ * ("ab\x1f", "c") y ("ab", "\x1fc") dan la misma secuencia de bytes, así que
+ * dos filas distintas hashean idéntico y una se descarta como duplicada. No es
+ * la colisión de 1 en 2⁶⁴ que el README admite: pasa siempre que el byte caiga
+ * en el lugar justo, y no deja rastro.
+ *
+ * El largo entra como paso de mezcla y no como bytes, que sale lo mismo que
+ * hashear el separador que reemplaza: un xor y una multiplicación por campo.
+ * Dos particiones distintas de los mismos bytes divergen en el primer campo
+ * donde difieren, sin importar qué haya adentro.
+ */
+std::uint64_t fnv1a_field(std::uint64_t h, std::string_view s) {
+  h = fnv1a(h, s);
+  h ^= s.size();
+  h *= 1099511628211ULL;
+  return h;
+}
+
+/**
+ * El faltante, con un largo que ninguna cadena real puede tener.
+ *
+ * Con un centinela de texto ("\x01NA\x1f") una celda que contuviera justo esos
+ * bytes se hashearía igual que una vacía, que es el mismo defecto una vuelta
+ * más adentro.
+ */
+std::uint64_t fnv1a_missing(std::uint64_t h) {
+  h ^= ~std::uint64_t{0};
+  h *= 1099511628211ULL;
+  return h;
+}
+
 bool has_non_digit(std::string_view s) {
   for (char c : s) {
     if (c < '0' || c > '9') return true;
@@ -235,7 +271,10 @@ std::size_t Column::size() const { return mask.size(); }
 
 std::string format_number(double v) {
   if (!std::isfinite(v)) return "";
-  if (v == static_cast<double>(static_cast<long long>(v)) && std::fabs(v) < 1e15) {
+  // El rango va primero y no al revés: && corta por la derecha, así que con el
+  // cast a la izquierda del == se ejecutaba siempre, incluso sobre un valor
+  // finito pero enorme donde convertir a long long es undefined behavior.
+  if (std::fabs(v) < 1e15 && v == static_cast<double>(static_cast<long long>(v))) {
     char buf[32];
     std::snprintf(buf, sizeof buf, "%lld", static_cast<long long>(v));
     return buf;
@@ -689,8 +728,7 @@ class Cleaner::Sink : public RowSink {
     if (opts_.drop_duplicate_rows) {
       std::uint64_t h = 1469598103934665603ULL;
       for (std::size_t j = 0; j < n; ++j) {
-        h = fnv1a(h, trim(fields[j]));
-        h = fnv1a(h, "\x1f");
+        h = fnv1a_field(h, trim(fields[j]));
       }
       if (!row_hashes_.insert(h)) {
         ++dup_rows_;
@@ -1854,13 +1892,13 @@ class Cleaner::Sink : public RowSink {
     std::uint64_t h = fnv1a(1469598103934665603ULL, type_name(col.type));
     for (std::size_t i = 0; i < col.mask.size(); ++i) {
       if (!col.mask[i]) {
-        h = fnv1a(h, "\x01NA\x1f");
+        h = fnv1a_missing(h);
         continue;
       }
       if (col.type == ColumnType::Text) {
-        h = fnv1a(h, col.text[i]);
+        h = fnv1a_field(h, col.text[i]);
       } else if (col.type == ColumnType::Categorical) {
-        h = fnv1a(h, col.levels[static_cast<std::size_t>(col.codes[i])]);
+        h = fnv1a_field(h, col.levels[static_cast<std::size_t>(col.codes[i])]);
       } else {
         // Hash the bits, not a rendering of them. Formatting each value to
         // decimal here cost more than parsing the whole file did — and the
@@ -1868,9 +1906,8 @@ class Cleaner::Sink : public RowSink {
         // construction; the only quirk to fold away is -0.0.
         double v = col.values[i];
         if (v == 0.0) v = 0.0;
-        h = fnv1a(h, std::string_view(reinterpret_cast<const char*>(&v), sizeof v));
+        h = fnv1a_field(h, std::string_view(reinterpret_cast<const char*>(&v), sizeof v));
       }
-      h = fnv1a(h, "\x1f");
     }
     return h;
   }
