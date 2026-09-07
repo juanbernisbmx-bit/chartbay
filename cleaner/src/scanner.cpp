@@ -209,13 +209,24 @@ void append_utf8(std::string& out, std::uint32_t cp) {
 }  // namespace
 
 std::string_view EncodingFixer::feed(const char* data, std::size_t len) {
-  if (first_ && len > 0) {
-    first_ = false;
-    // El BOM de UTF-16 se mira sobre el byte crudo, antes de tocar nada: 0xFF
-    // no es UTF-8 valido y el propio arreglo lo convertiria en "ÿ".
-    const auto b0 = static_cast<unsigned char>(data[0]);
-    const auto b1 = len > 1 ? static_cast<unsigned char>(data[1]) : 0;
-    utf16_bom_ = (b0 == 0xFF && b1 == 0xFE) || (b0 == 0xFE && b1 == 0xFF);
+  // El BOM de UTF-16 se mira sobre los bytes crudos, antes de tocar nada: 0xFF
+  // no es UTF-8 valido y el propio arreglo lo convertiria en "ÿ".
+  //
+  // Son dos bytes, y nada garantiza que lleguen en la misma llamada: el CLI lee
+  // de a 1 MiB, pero el navegador pasa Blob.slice del tamaño que quiera. Antes
+  // esto miraba solo el primer feed(), asi que con un byte por llamada veia el
+  // 0xFF, nunca el 0xFE de la llamada siguiente, y el archivo UTF-16 se colaba
+  // como Windows-1252 en silencio. Por eso el prefijo se junta entre llamadas,
+  // igual que pending_ con las secuencias multibyte cortadas: donde cae el
+  // corte no puede cambiar el resultado.
+  if (prefix_len_ < sizeof prefix_ && len > 0) {
+    for (std::size_t i = 0; i < len && prefix_len_ < sizeof prefix_; ++i) {
+      prefix_[prefix_len_++] = static_cast<unsigned char>(data[i]);
+    }
+    if (prefix_len_ == sizeof prefix_) {
+      utf16_bom_ = (prefix_[0] == 0xFF && prefix_[1] == 0xFE) ||
+                   (prefix_[0] == 0xFE && prefix_[1] == 0xFF);
+    }
   }
   if (len == 0) return {};
   if (pending_.empty() && first_high_byte(data, len) == len) {

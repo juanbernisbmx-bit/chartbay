@@ -86,7 +86,10 @@ class EncodingFixer {
   std::string out_;      // bloque convertido, reutilizado entre llamadas
   std::string pending_;  // prefijo de una secuencia multibyte cortada al final
   std::size_t converted_ = 0;
-  bool first_ = true;
+  // Los primeros bytes del archivo, juntados entre llamadas: el BOM de UTF-16
+  // son dos, y pueden llegar en feed() distintos.
+  unsigned char prefix_[2] = {0, 0};
+  std::size_t prefix_len_ = 0;
   bool utf16_bom_ = false;
 };
 
