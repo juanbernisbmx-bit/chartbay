@@ -952,12 +952,13 @@ def guia():
 
 @app.route("/limpiador")
 def limpiador():
-    """Limpiador de CSV: sección propia, sin relación con econometría.
-
-    Sirve su propio bundle (quantbay.cleaner.js, ~21 kB) en vez del motor
-    econométrico completo, porque no usa nada de él.
-    """
-    return render_template("limpiador.html")
+    """Data Cleaner local para CSV/XLSX; conserva acceso al motor estadístico."""
+    template = (
+        "limpiador-clasico.html"
+        if request.args.get("motor") == "estadistico"
+        else "limpiador.html"
+    )
+    return render_template(template)
 
 
 @app.route("/econometria")

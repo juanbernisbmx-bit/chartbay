@@ -1,349 +1,225 @@
-/**
- * La sección Limpiador: subir un CSV, ver qué se le hizo y por qué, y llevarse
- * el resultado.
- *
- * Bundle propio y no parte de quantbay.bundle.js: esta página no necesita nada
- * del motor econométrico, y arrastrar 375 kB para limpiar un archivo sería
- * pagar por algo que no se usa.
- */
-
-import {
-  cleanCsv,
-  loadCleaner,
-  setCleanerBaseUrl,
-  type CleanedTable,
-  type MissingPolicy,
-} from '../../cleaner/js/csvclean';
-import { calculateMemoryBudget, detectDeviceProfile } from '../../cleaner/js/deviceProfiler';
-import { preflight } from '../../cleaner/js/preflight';
-import { renderDeviceProfile } from '../../cleaner/js/deviceProfileView';
-import { diagnose, type Issue } from '../../cleaner/js/diagnostics';
+import './cleaner.legacy';
+import { AdvancedView, type ExportFormat } from './dataCleaner/advancedView';
+import { DEFAULT_RULES, type ColumnType, type Review, type Rules, type Source } from './dataCleaner/model';
+import type { Request } from './dataCleaner/worker';
+import { deleteStorage } from './dataCleaner/storage';
 import { putHandoff } from './services/datasetHandoff';
-
-setCleanerBaseUrl('/static/wasm/');
-
-const $ = (id: string) => document.getElementById(id);
-
-let current: CleanedTable | null = null;
-let currentName = 'limpio.csv';
-/** Se guarda para poder re-limpiar cuando cambia la política de faltantes. */
-let currentFile: File | null = null;
-/** Correcciones aplicadas desde el diagnóstico, sobre la política elegida. */
-let overrides: Partial<Parameters<typeof cleanCsv>[1]> = {};
-
-/**
- * Qué le pasa a los datos con cada política, en una línea.
- *
- * Ninguna de estas opciones es gratis y el texto lo dice. Completar con una
- * constante achica la varianza de la variable y con eso sus errores estándar;
- * eliminar filas es honesto pero descarta información y sesga si lo que falta
- * no falta al azar. Que la interfaz elija el default silencioso y no lo
- * explique es cómo se terminan publicando modelos que nadie puede auditar.
- */
-const FRECUENCIA: Record<string, string> = {
-  daily: 'diaria',
-  business_daily: 'días hábiles',
-  weekly: 'semanal',
-  fortnightly: 'quincenal',
-  monthly: 'mensual',
-  quarterly: 'trimestral',
-  semiannual: 'semestral',
-  annual: 'anual',
-  unknown: 'irregular',
-};
-
-const MISSING_HELP: Record<MissingPolicy, string> = {
-  keep: 'Los faltantes quedan marcados y no se inventa nada. Es el default. Ojo: Econometría se niega a estimar si las columnas elegidas tienen huecos, así que para calcular vas a tener que elegir otra opción o filtrar a mano.',
-  drop: 'Se elimina toda fila con al menos un dato faltante (casos completos). Es el criterio más transparente y el que usa la mayoría del software estadístico, pero descarta información y sesga los resultados si lo que falta no falta al azar.',
-  mean: 'Cada hueco se rellena con la media de su columna. Conserva el n, pero reduce artificialmente la varianza de la variable y con eso achica sus errores estándar: los coeficientes van a parecer más precisos de lo que son.',
-  median: 'Igual que la media, pero con la mediana. Más resistente a valores extremos, con el mismo costo sobre la varianza.',
-  zero: 'Los huecos pasan a valer cero. Solo tiene sentido cuando la ausencia significa realmente cero — una venta que no ocurrió, por ejemplo. Si no, distorsiona la escala de la variable.',
-  ffill: 'Cada hueco toma el último valor observado. Es lo habitual en series de tiempo con lagunas, pero achata la varianza: los tramos rellenados no aportan información nueva.',
-};
-
-function missingPolicy(): MissingPolicy {
-  const value = ($('cl-missing') as HTMLSelectElement | null)?.value;
-  return (value as MissingPolicy) || 'keep';
+type Command = Request extends infer T ? T extends Request ? Omit<T, 'id'> : never : never;
+type Reply = { review: Review | null; source?: Source; undo?: number };
+const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(`dc-${id}`) as T;
+let advanced: AdvancedView | null = null;
+let worker: Worker | null = null, selected: File | null = null, database = '', busy = false, working = false;
+let review: Review | null = null, source: Source | null = null, applied = false, dirty = false, undoCount = 0, sequence = 0;
+let pending: { id: number; resolve: (value: unknown) => void; reject: (e: Error) => void } | null = null;
+const types: Rules['types'] = {};
+const number = (n: number) => n.toLocaleString('es-AR', { maximumFractionDigits: 3 });
+function status(text: string): void { $('status').textContent = text; }
+function controls(): void {
+  const locked = busy || working;
+  document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>('[data-data-cleaner] input, [data-data-cleaner] select, [data-data-cleaner] button').forEach(el => { el.disabled = locked; });
+  $<HTMLSelectElement>('sheet').disabled = locked || !selected || !/\.xlsx$/i.test(selected.name);
+  $<HTMLButtonElement>('import').disabled = locked || !selected;
+  $<HTMLButtonElement>('apply').disabled = locked || !review || dirty || applied;
+  $<HTMLButtonElement>('undo').disabled = locked || !undoCount;
+  for (const id of ['download', 'audit', 'handoff']) $<HTMLButtonElement>(id).disabled = locked || !applied || dirty;
+  $('cancel').hidden = !busy; $<HTMLButtonElement>('cancel').disabled = false;
+  $('progress').hidden = !busy;
+  advanced?.controls(locked, dirty);
+  $('state').textContent = dirty ? 'Opciones modificadas · actualizá la vista previa' : applied ? 'Cambios aplicados' : 'Vista previa · sin aplicar';
 }
-
-function updateMissingHelp(): void {
-  const node = $('cl-missing-help');
-  if (node) node.textContent = MISSING_HELP[missingPolicy()];
+function startWorker(): Worker {
+  if (worker) return worker;
+  worker = new Worker('/static/js/quantbay.data-cleaner.worker.js');
+  worker.onmessage = ({ data }) => {
+    if (data.id !== pending?.id) return;
+    if (data.kind === 'progress') { status(`${data.stage}… ${Math.round(data.fraction * 100)} %`); $<HTMLProgressElement>('progress').value = data.fraction; return; }
+    const active = pending!; pending = null;
+    if (data.kind === 'done') active.resolve(data.result);
+    else active.reject(new Error(data.message));
+  };
+  worker.onerror = event => {
+    pending?.reject(new Error(event.message || 'El proceso falló. Volvé a importar el archivo.'));
+    pending = null; worker?.terminate(); worker = null;
+    review = null; applied = false; undoCount = 0;
+  };
+  return worker;
 }
-
-function show(id: string, visible: boolean): void {
-  const node = $(id);
-  if (node) node.style.display = visible ? '' : 'none';
-}
-
-function setStatus(text: string): void {
-  const node = $('cl-status');
-  if (node) node.textContent = text;
-}
-
-function renderReport(table: CleanedTable): void {
-  const report = table.report;
-
-  const resumen = $('cl-summary');
-  if (resumen) {
-    resumen.innerHTML = '';
-    const filas = [
-      ['Filas leídas', report.rowsIn.toLocaleString('es-AR')],
-      ['Filas resultantes', report.rowsOut.toLocaleString('es-AR')],
-      ['Columnas', String(report.columnsOut)],
-      // Lo que hace visible el efecto de la política: con "dejarlos como
-      // están" este número queda, con cualquier imputación se va a cero.
-      [
-        'Celdas faltantes',
-        report.columns.reduce((sum, c) => sum + c.missing, 0).toLocaleString('es-AR'),
-      ],
-      ['Separador', report.dialect.delimiter === '\t' ? 'tabulación' : report.dialect.delimiter],
-    ];
-
-    // El índice temporal solo aparece si la tabla tiene uno. Es la línea que
-    // contesta la pregunta que nadie hace antes de estimar: de qué a qué va la
-    // serie, cada cuánto, y si está completa.
-    const t = report.timeIndex;
-    if (t?.found) {
-      filas.push(['Índice temporal', `${t.column} (${FRECUENCIA[t.frequency] ?? 'irregular'})`]);
-      filas.push(['Período', `${t.first} → ${t.last}`]);
-      if (t.periodsExpected > 0) {
-        const huecos = t.missingPeriods > 0 ? `, faltan ${t.missingPeriods}` : ', completa';
-        filas.push(['Observaciones', `${t.periodsObserved} de ${t.periodsExpected}${huecos}`]);
-      }
-      if (t.duplicates > 0) {
-        filas.push(['Fechas repetidas', t.duplicates.toLocaleString('es-AR')]);
-      }
-    }
-    for (const [k, v] of filas) {
-      const row = document.createElement('div');
-      row.className = 'cl-row';
-      const label = document.createElement('span');
-      label.textContent = k;
-      const value = document.createElement('strong');
-      value.textContent = v;
-      row.append(label, value);
-      resumen.append(row);
-    }
-  }
-
-  // Perfil por columna.
-  const tbody = $('cl-columns');
-  if (tbody) {
-    tbody.innerHTML = '';
-    for (const col of report.columns) {
-      const tr = document.createElement('tr');
-      const celdas = [
-        col.name,
-        col.type,
-        col.present.toLocaleString('es-AR'),
-        col.missing.toLocaleString('es-AR'),
-        col.invalid.toLocaleString('es-AR'),
-        col.unique.toLocaleString('es-AR'),
-        col.outliers.toLocaleString('es-AR'),
-      ];
-      for (const texto of celdas) {
-        const td = document.createElement('td');
-        td.textContent = texto;
-        tr.append(td);
-      }
-      tbody.append(tr);
-    }
-  }
-
-  // El log de acciones, que es lo que hace auditable la limpieza: cada cosa
-  // que se tocó viene con su justificación escrita.
-  const acciones = $('cl-actions');
-  if (acciones) {
-    acciones.innerHTML = '';
-    if (report.actions.length === 0) {
-      const li = document.createElement('li');
-      li.textContent = 'No hubo nada que corregir.';
-      acciones.append(li);
-    }
-    for (const action of report.actions) {
-      const li = document.createElement('li');
-      li.textContent = action.detail;
-      acciones.append(li);
-    }
-  }
-}
-
-async function onFile(event: Event): Promise<void> {
-  const file = (event.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-  currentFile = file;
-  overrides = {};  // las correcciones eran para el archivo anterior
-  await run(file);
-}
-
-/** Re-limpia el mismo archivo cuando cambia la política. */
-async function onMissingChange(): Promise<void> {
-  updateMissingHelp();
-  // Elegir la política a mano pisa lo que hubiera sugerido el diagnóstico.
-  delete (overrides as { missing?: unknown }).missing;
-  if (currentFile) await run(currentFile);
-}
-
-const SEVERITY_LABEL: Record<Issue['severity'], string> = {
-  alta: 'REVISAR',
-  media: 'DECIDIR',
-  baja: 'AVISO',
-};
-
-/**
- * El diagnóstico: qué salió mal y qué hacer.
- *
- * Ordenado por cuán silencioso es el error, no por cuántas celdas afecta. Un
- * separador decimal ambiguo va primero aunque no rompa nada, porque el archivo
- * se lee igual y los números quedan mil veces mal sin que nada avise.
- */
-function renderDiagnostics(report: CleanedTable['report']): void {
-  const cont = $('cl-issues');
-  if (!cont) return;
-  cont.innerHTML = '';
-
-  const issues = diagnose(report);
-  if (issues.length === 0) {
-    const ok = document.createElement('p');
-    ok.className = 'muted qb-help';
-    ok.textContent = 'No se detectó nada que revisar. El archivo está limpio.';
-    cont.append(ok);
-    return;
-  }
-
-  for (const issue of issues) {
-    const card = document.createElement('div');
-    card.className = 'cl-issue';
-    card.dataset.severity = issue.severity;
-
-    const head = document.createElement('div');
-    head.className = 'cl-issue__head';
-    const badge = document.createElement('span');
-    badge.className = `cl-issue__badge cl-issue__badge--${issue.severity}`;
-    badge.textContent = SEVERITY_LABEL[issue.severity];
-    const title = document.createElement('strong');
-    title.textContent = issue.title;
-    head.append(badge, title);
-    card.append(head);
-
-    if (issue.columns?.length) {
-      const cols = document.createElement('p');
-      cols.className = 'cl-issue__cols';
-      cols.textContent = issue.columns.join(' · ');
-      card.append(cols);
-    }
-
-    const detail = document.createElement('p');
-    detail.className = 'cl-issue__detail';
-    detail.textContent = issue.detail;
-    card.append(detail);
-
-    if (issue.fix) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'btn-ink cl-issue__fix';
-      button.textContent = issue.fix.label;
-      button.addEventListener('click', () => {
-        overrides = { ...overrides, ...issue.fix!.options };
-        // Si la corrección es una política de faltantes, el desplegable tiene
-        // que reflejarlo: si no, la pantalla diría una cosa y el archivo otra.
-        const missing = (issue.fix!.options as { missing?: string }).missing;
-        const select = $('cl-missing') as HTMLSelectElement | null;
-        if (missing && select) {
-          select.value = missing;
-          updateMissingHelp();
-        }
-        if (currentFile) void run(currentFile);
-      });
-      card.append(button);
-    }
-    cont.append(card);
-  }
-}
-
-async function run(file: File): Promise<void> {
-  current?.dispose();
-  current = null;
-  show('cl-results', false);
-  setStatus('Analizando...');
-
-  const nombre = $('cl-filename');
-  if (nombre) nombre.textContent = file.name;
-  currentName = file.name.replace(/\.csv$/i, '') + '-limpio.csv';
-
+async function call<T>(command: Command): Promise<T> {
+  if (pending) throw new Error('Esperá a que termine la operación actual.');
+  busy = true; controls();
   try {
-    const budget = calculateMemoryBudget(detectDeviceProfile());
-    const plan = await preflight(file, budget);
-
-    const panel = $('cl-profile');
-    if (panel) {
-      renderDeviceProfile(panel, { profile: detectDeviceProfile(), budget, preflight: plan });
-    }
-
-    setStatus('Limpiando...');
-    await loadCleaner();
-    const table = await cleanCsv(file, {
-      budget,
-      estimatedMemoryBytes: plan.recommendations['standard-clean'].estimatedMemoryBytes,
-      copy: true,
-      missing: missingPolicy(),
-      ...overrides,
-      // Esta página exporta sí o sí — descarga o traspaso —, así que el handle
-      // tiene que sobrevivir a la copia. Lo libera el dispose() del próximo
-      // archivo.
-      retainForCsv: true,
-      onProgress: fraction => setStatus(`Limpiando... ${Math.round(fraction * 100)} %`),
+    return await new Promise<T>((resolve, reject) => {
+      const active = startWorker();
+      pending = { id: ++sequence, resolve: value => resolve(value as T), reject };
+      try { active.postMessage({ ...command, id: sequence }); }
+      catch (error) { pending = null; reject(error); }
     });
-
-    current = table;
-    renderReport(table);
-    renderDiagnostics(table.report);
-    show('cl-results', true);
-    setStatus(`Listo: ${table.report.rowsOut.toLocaleString('es-AR')} filas.`);
-  } catch (err) {
-    setStatus(`Error: ${(err as Error).message}`);
+  } finally { busy = false; controls(); }
+}
+async function cleanup(): Promise<void> {
+  worker?.terminate(); worker = null;
+  if (database) {
+    const previous = database; database = '';
+    await deleteStorage(previous).catch(() => undefined);
+    await deleteStorage(previous + '-reference').catch(() => undefined);
+    if (navigator.storage?.getDirectory) {
+      const root = await navigator.storage.getDirectory().catch(() => null);
+      await root?.removeEntry(previous, { recursive: true }).catch(() => undefined);
+    }
   }
 }
-
-function download(): void {
-  const csv = current?.toCsv();
-  if (!csv) {
-    setStatus('No hay nada para descargar.');
-    return;
-  }
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = currentName;
-  a.click();
-  URL.revokeObjectURL(url);
+function getRules(): Rules {
+  return {
+    ...advanced?.getRules(),
+    normalizeHeaders: $<HTMLInputElement>('headers').checked,
+    trimText: $<HTMLInputElement>('trim').checked,
+    normalizeIdentifiers: $<HTMLInputElement>('tax').checked,
+    dropDuplicates: $<HTMLInputElement>('duplicates').checked,
+    missing: $<HTMLSelectElement>('missing').value as Rules['missing'],
+    invalid: $<HTMLSelectElement>('invalid').value as Rules['invalid'], types: { ...types },
+  };
 }
-
-async function sendToEconometria(): Promise<void> {
-  const csv = current?.toCsv();
-  if (!csv) {
-    setStatus('Primero limpiá un archivo.');
-    return;
+function setRules(rules: Rules): void {
+  advanced?.setRules(rules);
+  $<HTMLInputElement>('headers').checked = rules.normalizeHeaders;
+  $<HTMLInputElement>('trim').checked = rules.trimText;
+  $<HTMLInputElement>('tax').checked = rules.normalizeIdentifiers;
+  $<HTMLInputElement>('duplicates').checked = rules.dropDuplicates;
+  $<HTMLSelectElement>('missing').value = rules.missing;
+  $<HTMLSelectElement>('invalid').value = rules.invalid;
+  Object.keys(types).forEach(key => delete types[Number(key)]);
+  Object.assign(types, rules.types);
+}
+function markDirty(): void { advanced?.invalidateComparison(); dirty = true; controls(); }
+function render(value: Review): void {
+  review = value;
+  $('results').hidden = false;
+  $('summary').textContent = `${source?.name ?? ''}${source?.sheet ? ' · ' + source.sheet : ''} · ${number(value.rowsIn)} filas · ${number(value.profiles.length)} columnas · ${number(value.duplicates)} duplicados exactos.`;
+  $('warnings').textContent = [...(source?.warnings ?? []), ...value.profiles.filter(p => p.ambiguous).map(p => `${p.name}: separador decimal ambiguo; se conserva la escritura original. Estadísticas calculadas con decimal ${p.decimal === '.' ? 'punto' : 'coma'}.`)].join('\n');
+  $('columns').replaceChildren();
+  value.profiles.forEach((p, index) => {
+    const row = document.createElement('tr');
+    cell(row, p.name);
+    const td = document.createElement('td'), select = document.createElement('select');
+    select.setAttribute('aria-label', `Tipo esperado de ${p.name}`);
+    (['texto', 'número', 'fecha', 'identificador', 'CUIT/CUIL'] as ColumnType[]).forEach(type => {
+      const option = document.createElement('option'); option.value = type; option.textContent = type; option.selected = type === p.type; select.append(option);
+    });
+    select.addEventListener('change', () => { types[index] = select.value as ColumnType; markDirty(); });
+    td.append(select); row.append(td);
+    [p.present, p.missing].forEach(n => cell(row, number(n)));
+    cell(row, number(p.invalid) + (p.invalidExamples.length ? '\n' + p.invalidExamples.map(e => `Fila ${e.row}: ${e.value}`).join('\n') : ''));
+    cell(row, number(p.dirty));
+    cell(row, (p.uniqueCapped ? '≥ ' : '') + number(p.unique));
+    cell(row, p.min === null ? '—' : `${number(p.min)} / ${number(p.max!)} / ${number(p.mean!)}`);
+    $('columns').append(row);
+  });
+  $('proposal').textContent = `${number(value.changedCells)} celdas cambiarían · ${number(value.removedRows)} filas se eliminarían · ${number(value.rowsOut)} filas de salida. ${value.preview.length ? 'Primeros cambios:' : 'No hay cambios propuestos.'}`;
+  $('preview-rows').replaceChildren();
+  for (const c of value.preview) {
+    const row = document.createElement('tr');
+    [String(c.row), c.column, c.before || '(vacío)', c.after || '(vacío)', c.reason].forEach(text => cell(row, text));
+    $('preview-rows').append(row);
   }
+  advanced?.render(value);
+  controls();
+}
+function cell(row: HTMLTableRowElement, text: string): void { const td = document.createElement('td'); td.textContent = text; row.append(td); }
+async function chooseFile(): Promise<void> {
+  const file = $<HTMLInputElement>('file').files?.[0];
+  if (!file) return;
+  await cleanup(); advanced?.reset();
+  selected = file; review = null; source = null; applied = false; dirty = false; undoCount = 0;
+  $('results').hidden = true; setRules(structuredClone(DEFAULT_RULES));
+  $<HTMLSelectElement>('sheet').replaceChildren();
+  if (/\.csv$/i.test(file.name)) { const option = document.createElement('option'); option.textContent = 'Solo para Excel'; $('sheet').append(option); }
+  if (!/\.(csv|xlsx)$/i.test(file.name)) { selected = null; throw new Error('Elegí un CSV o Excel .xlsx.'); }
+  if (/\.xlsx$/i.test(file.name)) {
+    status('Leyendo hojas de Excel…');
+    const sheets = await call<{ name: string }[]>({ kind: 'sheets', file });
+    for (const sheet of sheets) { const option = document.createElement('option'); option.textContent = sheet.name; option.value = sheet.name; $('sheet').append(option); }
+  }
+  status(`${file.name} · ${number(file.size / 1024 / 1024)} MiB. Listo para importar.`); controls();
+}
+async function importFile(): Promise<void> {
+  if (!selected) return;
+  await cleanup(); advanced?.reset();
+  review = null; applied = false; undoCount = 0; dirty = false; $('results').hidden = true;
+  database = 'chartbay-cleaner-' + crypto.randomUUID();
+  try { sessionStorage.setItem('chartbay-cleaner-session', database); } catch { /* privacy mode */ }
+  const estimate = await navigator.storage?.estimate?.();
+  if (estimate?.quota) $('storage').textContent = `Espacio temporal estimado disponible: ${number(Math.max(0, estimate.quota - (estimate.usage ?? 0)) / 1024 ** 3)} GiB. Se usan bloques de hasta 256 filas o 512 KiB, muestras acotadas y disco para datos y duplicados. Máximo 4 MiB por fila y 4096 columnas.`;
+  status('Importando…');
   try {
-    await putHandoff(currentName, csv);
-    window.location.href = '/econometria';
-  } catch (err) {
-    setStatus(`No se pudo pasar el archivo: ${(err as Error).message}`);
+    const reply = await call<Reply>({ kind: 'import', file: selected, database,
+      options: { sheet: /\.xlsx$/i.test(selected.name) ? $<HTMLSelectElement>('sheet').value : undefined,
+        encoding: $<HTMLSelectElement>('encoding').value, delimiter: $<HTMLSelectElement>('delimiter').value.replace('tab', '\t') }, rules: getRules() });
+    source = reply.source!; render(reply.review!); status('Perfil completo. Revisá la propuesta antes de aplicar.');
+  } catch (error) { await cleanup(); throw error; }
+}
+async function preview(): Promise<void> {
+  dirty = true; advanced?.invalidateComparison(); controls();
+  const reply = await call<Reply>({ kind: 'review', rules: getRules() });
+  applied = false; dirty = false; render(reply.review!); status('Vista previa actualizada. Los cambios todavía no se aplicaron.');
+}
+async function apply(): Promise<void> {
+  const reply = await call<Reply>({ kind: 'apply' });
+  applied = true; undoCount = reply.undo!; render(reply.review!); status('Cambios aplicados. Podés exportar o deshacer.');
+}
+async function undo(): Promise<void> {
+  advanced?.invalidateComparison();
+  const reply = await call<Reply>({ kind: 'undo' });
+  undoCount = reply.undo!; dirty = false; applied = !!reply.review;
+  if (reply.review) { setRules(reply.review.rules); render(reply.review); }
+  else {
+    setRules({ ...DEFAULT_RULES, normalizeHeaders: false, trimText: false, normalizeIdentifiers: false, types: {} });
+    const original = await call<Reply>({ kind: 'review', rules: getRules() });
+    render(original.review!);
   }
+  status(applied ? 'Se restauró la aplicación anterior.' : 'Se restauraron los valores originales.'); controls();
 }
-
-function init(): void {
-  updateMissingHelp();
-  $('cl-file')?.addEventListener('change', event => void onFile(event));
-  $('cl-missing')?.addEventListener('change', () => void onMissingChange());
-  $('cl-download')?.addEventListener('click', download);
-  $('cl-to-econometria')?.addEventListener('click', () => void sendToEconometria());
+function download(file: Blob, name: string): void {
+  const url = URL.createObjectURL(file), a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
 }
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
+async function exportFile(format: ExportFormat, handoff = false): Promise<void> {
+  const name = (source?.name ?? 'datos').replace(/\.[^.]+$/, '') + (format === 'csv' ? '-limpio.csv' : format === 'comparison' ? '-cruce.json' : format === 'quality' ? '-antes-despues.json' : '-auditoria.json');
+  let target: FileSystemFileHandle | undefined;
+  const picker = (window as unknown as { showSaveFilePicker?: (options: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
+  if (picker && !handoff) {
+    try { target = await picker({ suggestedName: name, types: [{ description: format === 'csv' ? 'CSV limpio' : 'Auditoría JSON', accept: { [format === 'csv' ? 'text/csv' : 'application/json']: [format === 'csv' ? '.csv' : '.json'] } }] }); }
+    catch (error) { if ((error as Error).name === 'AbortError') return; throw error; }
+  }
+  const reply = await call<{ saved?: boolean; file?: File }>({ kind: 'export', format, target, directory: database, safeForExcel: handoff ? false : $<HTMLInputElement>('safe').checked });
+  if (handoff && reply.file) { await putHandoff(name, reply.file); window.location.href = '/econometria'; }
+  else if (reply.file) download(reply.file, name);
+  status(format === 'csv' ? 'CSV limpio exportado.' : 'Reporte completo exportado.');
 }
+function action(run: () => Promise<void>): () => void {
+  return () => {
+    if (busy || working) return;
+    working = true; controls();
+    void run().catch(error => status(`Error: ${(error as Error).message}`))
+      .finally(() => { working = false; controls(); });
+  };
+}
+async function init(): Promise<void> {
+  if (!document.querySelector('[data-data-cleaner]')) return;
+  try { database = sessionStorage.getItem('chartbay-cleaner-session') ?? ''; await cleanup(); sessionStorage.removeItem('chartbay-cleaner-session'); } catch { /* best effort cleanup after interrupted sessions */ }
+  advanced = new AdvancedView({call, run: action, dirty: markDirty, status, getRules, setRules, database: () => database, export: format => exportFile(format)});
+  $('file').addEventListener('change', action(chooseFile));
+  $('import').addEventListener('click', action(importFile));
+  $('preview').addEventListener('click', action(preview));
+  $('apply').addEventListener('click', action(apply));
+  $('undo').addEventListener('click', action(undo));
+  $('rules').addEventListener('change', markDirty);
+  $('download').addEventListener('click', action(() => exportFile('csv')));
+  $('audit').addEventListener('click', action(() => exportFile('audit')));
+  $('handoff').addEventListener('click', action(() => exportFile('csv', true)));
+  $('cancel').addEventListener('click', () => { worker?.postMessage({ kind: 'cancel', id: 0 }); status('Cancelando…'); });
+  window.addEventListener('pagehide', () => { worker?.terminate(); worker = null; void cleanup(); });
+  controls();
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => void init());
+else void init();

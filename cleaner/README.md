@@ -459,3 +459,13 @@ menor que estos números.
   UTF-16 se reconoce el BOM y se avisa, pero no se convierte.
 - **Sin paralelismo.** Un solo hilo. Partir el archivo por bloques y usar
   workers es posible, pero complica la inferencia de tipos, que es global.
+
+## Data Cleaner avanzado de la web
+
+La página `/limpiador` incorpora además cruce CSV/Excel por clave, comparación
+histórica, reglas personalizadas y entre columnas, outliers IQR/z-score/percentiles
+solo como banderas, categorías aprobadas, perfiles exactos mediante índices en disco,
+severidad, recetas locales y reportes antes/después. Esta capa está implementada en
+[`quantbay/src/dataCleaner/`](../quantbay/src/dataCleaner/README.md), usa el importador
+local por bloques y conserva vista previa, aplicar y deshacer. El motor estadístico
+C++ documentado arriba sigue accesible en `/limpiador?motor=estadistico`.

@@ -408,6 +408,25 @@ def test_csp_del_laboratorio_permite_wasm_sin_abrir_cdn():
     assert "'unsafe-eval'" not in script
 
 
+def test_data_cleaner_excel_csv_y_motor_estadistico_disponibles():
+    mod = _cargar_app()
+    client = mod.app.test_client()
+    modern = client.get("/limpiador")
+    assert modern.status_code == 200
+    assert b'accept=".csv,.xlsx"' in modern.data
+    assert b'id="dc-apply"' in modern.data
+    assert b'id="dc-undo"' in modern.data
+    assert b'id="dc-audit"' in modern.data
+    for control in ("dc-rule-add", "dc-outlier-method", "dc-category-add", "dc-recipe-save",
+                    "dc-quality-export", "dc-reference-import", "dc-compare-run", "dc-compare-export"):
+        assert ('id="' + control + '"').encode() in modern.data
+    assert client.get("/static/js/quantbay.data-cleaner.worker.js").status_code == 200
+    classic = client.get("/limpiador?motor=estadistico")
+    assert classic.status_code == 200
+    assert b'data-cleaner-classic' in classic.data
+    assert b'id="cl-missing"' in classic.data
+
+
 def test_csp_del_limpiador_permite_wasm_pero_ningun_cdn():
     """El limpiador sirve sus dos scripts en local: no necesita salir a ningún lado."""
     _, c = _cliente(**SIN_SESION)
