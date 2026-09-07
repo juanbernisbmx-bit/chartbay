@@ -6,6 +6,7 @@ const bundles = [
   'quantbay.bundle.js',
   'quantbay.worker.js',
   'quantbay.cleaner.js',
+  'quantbay.data-cleaner.worker.js',
   'quantbay.pro.worker.js',
 ];
 

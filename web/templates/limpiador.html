@@ -3,102 +3,155 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ChartBay - Limpiador de CSV</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <title>ChartBay · Data Cleaner</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/chartbay-logo.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='redesign.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='data-cleaner.css') }}">
 </head>
 <body>
   {% set active = 'limpiador' %}
   {% include '_topbar_v2.html' with context %}
-  <div class="wrap qb-wrap" data-qb-module="limpiador">
+  <main class="wrap qb-wrap" data-qb-module="limpiador" data-data-cleaner>
     <section class="qb-shell-head">
-      <div>
-        <p class="qb-kicker">Chart Bay / Limpiador</p>
-        <h2>Limpiador de CSV</h2>
-        <p>Subí un CSV y mirá qué tiene: tipos por columna, faltantes, duplicados, atípicos y separador decimal. Todo corre en tu navegador con un motor en C++ compilado a WebAssembly; el archivo no sale de tu computadora.</p>
-      </div>
-      <div class="qb-terminal-chip">C++ / WebAssembly</div>
+      <div><p class="qb-kicker">Chart Bay / Data Cleaner</p><h2>De archivo sucio a datos confiables</h2>
+      <p>Importá Excel o CSV, revisá los problemas y decidí qué corregir. Tus datos se procesan en este navegador y no se suben a un servidor.</p></div>
+      <div class="qb-terminal-chip">Excel + CSV</div>
     </section>
-
     <section class="qb-section qb-econometria-section">
-      <div class="qb-panel-head">
-        <p class="qb-subtitle">1. Cargar</p>
-        <span>CSV</span>
+      <div class="qb-panel-head"><h3 class="qb-subtitle">1. Importar archivo</h3><span>Procesamiento por bloques</span></div>
+      <div class="dc-controls">
+        <label>Archivo <input type="file" id="dc-file" accept=".csv,.xlsx"></label>
+        <label>Hoja <select id="dc-sheet" disabled><option>Solo para Excel</option></select></label>
+        <button id="dc-import" class="btn-ink" disabled>Importar y perfilar</button>
       </div>
-      <div class="qb-upload-row">
-        <label for="cl-file" class="btn-ink">Subir CSV</label>
-        <input type="file" id="cl-file" accept=".csv" style="display:none">
-        <span id="cl-filename" class="muted">Todavía no subiste un archivo</span>
+      <div class="dc-controls">
+        <label>Separador CSV <select id="dc-delimiter"><option value="">Detectar</option><option value=",">Coma</option><option value=";">Punto y coma</option><option value="tab">Tabulación</option><option value="|">Barra vertical</option></select></label>
+        <label>Codificación CSV <select id="dc-encoding"><option value="">UTF-8 / BOM automático</option><option value="windows-1252">Windows-1252</option><option value="utf-16le">UTF-16 LE</option></select></label>
       </div>
-      <p class="muted qb-help" id="cl-status">Esperando un archivo.</p>
-
-      <label for="cl-missing" class="qb-label" style="margin-top:12px">Qué hacer con los datos faltantes</label>
-      <select id="cl-missing" style="width:100%;max-width:340px">
-        <option value="keep">Dejarlos como están</option>
-        <option value="drop">Eliminar las filas incompletas</option>
-        <option value="mean">Completar con la media</option>
-        <option value="median">Completar con la mediana</option>
-        <option value="zero">Completar con cero</option>
-        <option value="ffill">Arrastrar el último valor</option>
-      </select>
-      <p class="muted qb-help" id="cl-missing-help"></p>
+      <p class="muted qb-help">La primera fila no vacía contiene los encabezados. Excel .xlsx: elegí una hoja; se importan valores guardados, sin estilos ni fórmulas. Para .xls, guardá primero como .xlsx.</p>
+      <p id="dc-status" role="status" aria-live="polite">Esperando un archivo.</p>
+      <progress id="dc-progress" max="1" value="0" hidden></progress>
+      <button id="dc-cancel" class="btn-ink" hidden>Cancelar operación</button>
+      <p id="dc-storage" class="muted qb-help">Los registros y el índice de duplicados usan almacenamiento temporal del navegador. La RAM se limita a bloques y muestras; el espacio en disco depende del archivo.</p>
     </section>
-
-    <section class="qb-section qb-econometria-section" id="cl-profile" style="display:none"></section>
-
-    <div id="cl-results" style="display:none">
+    <div id="dc-results" hidden>
       <section class="qb-section qb-econometria-section">
-        <div class="qb-panel-head">
-          <p class="qb-subtitle">2. Diagnóstico</p>
-          <span>Qué revisar</span>
-        </div>
-        <div id="cl-issues"></div>
+        <div class="qb-panel-head"><h3 class="qb-subtitle">2. Diagnóstico y perfil de columnas</h3><span>Archivo original</span></div>
+        <p id="dc-summary" class="dc-number"></p><p id="dc-warnings" class="muted qb-help"></p>
+        <p class="muted qb-help">Tipos inferidos sobre hasta 200 filas; podés corregirlos. Los conteos, únicos, medianas y percentiles revisan todas las filas usando disco. Fechas: AAAA-MM-DD o DD/MM/AAAA. CUIT/CUIL: formato, prefijo y dígito verificador; no verifica inscripción ni titularidad.</p>
+        <div class="dc-table"><table class="qb-table"><thead><tr><th>Columna</th><th>Tipo esperado</th><th>Con dato</th><th>Faltantes</th><th>Inválidos</th><th>Texto sucio</th><th>Únicos</th><th>Mín. / Máx. / Media</th></tr></thead><tbody id="dc-columns"></tbody></table></div>
+        <details class="dc-details" open>
+          <summary>Ficha avanzada de columna</summary>
+          <label>Columna <select id="dc-profile-column"></select></label>
+          <div id="dc-profile-card"></div>
+          <p class="muted qb-help">Mediana y cuartiles exactos con interpolación lineal; desvío estándar muestral. Las categorías principales excluyen faltantes. Las banderas no eliminan datos.</p>
+        </details>
       </section>
-
       <section class="qb-section qb-econometria-section">
-        <div class="qb-panel-head">
-          <p class="qb-subtitle">3. Resumen</p>
-          <span>Resultado</span>
+        <div class="qb-panel-head"><h3 class="qb-subtitle">Calidad antes y después</h3><span>Crítico · Advertencia · Informativo</span></div>
+        <p id="dc-quality-summary" class="dc-number"></p>
+        <p class="muted qb-help">“Después” valida la propuesta; hasta aplicar, es una proyección. Errores = críticos + advertencias. Una fila puede incumplir varias reglas. Texto sucio es informativo; CUIT inválido en al menos 20% de valores presentes es crítico. Se informa por separado cuántas filas se eliminarían.</p>
+        <div class="dc-table"><table class="qb-table"><thead><tr><th>Estado</th><th>Filas con errores</th><th>Críticos</th><th>Advertencias</th><th>Informativos</th></tr></thead><tbody id="dc-quality-counts"></tbody></table></div>
+        <div class="dc-controls">
+          <label>Ver <select id="dc-issue-phase"><option value="before">Antes</option><option value="after">Después de la propuesta</option></select></label>
+          <label>Severidad <select id="dc-issue-severity"><option value="">Todas</option><option value="critico">Crítico</option><option value="advertencia">Advertencia</option><option value="informativo">Informativo</option></select></label>
+          <button id="dc-quality-export" class="btn-ink">Descargar reporte antes / después</button>
         </div>
-        <div id="cl-summary" class="qb-runlog"></div>
-        <div class="qb-upload-row" style="margin-top:12px">
-          <button type="button" id="cl-download" class="btn-ink">Descargar CSV limpio</button>
-          <button type="button" id="cl-to-econometria" class="btn-ink">Usar en Econometría</button>
+        <div id="dc-quality-issues" class="dc-issue-list"></div>
+      </section>
+      <section class="qb-section qb-econometria-section">
+        <div class="qb-panel-head"><h3 class="qb-subtitle">3. Elegir cambios y revisar</h3><span id="dc-state">Vista previa · sin aplicar</span></div>
+        <div id="dc-rules">
+          <div class="dc-controls">
+            <label><input id="dc-headers" type="checkbox" checked> Dar nombres únicos a encabezados vacíos o repetidos</label>
+            <label><input id="dc-trim" type="checkbox" checked> Limpiar espacios y caracteres invisibles</label>
+            <label><input id="dc-tax" type="checkbox" checked> CUIT/CUIL válidos sin guiones</label>
+            <label><input id="dc-duplicates" type="checkbox"> Eliminar filas duplicadas exactas</label>
+          </div>
+          <div class="dc-controls">
+            <label>Faltantes <select id="dc-missing"><option value="keep">Conservar</option><option value="blank">Convertir marcadores a vacío</option><option value="drop">Eliminar filas con faltantes</option></select></label>
+            <label>Tipos / CUIT inválidos <select id="dc-invalid"><option value="keep">Conservar y señalar</option><option value="blank">Convertir a vacío</option></select></label>
+          </div>
+        </div>
+        <p class="muted qb-help">Duplicados: filas originales exactamente iguales, conservando la primera. Los números se perfilan sin reescribir sus separadores. Los identificadores conservan ceros iniciales.</p>
+        <details class="dc-details" open>
+          <summary>Reglas personalizadas y validaciones entre columnas</summary>
+          <div class="dc-controls">
+            <label>Columna <select id="dc-rule-column"></select></label>
+            <label>Condición <select id="dc-rule-kind"><option value="number-range">Rango numérico</option><option value="date-range">Fecha entre dos límites</option><option value="digits">Cantidad exacta de dígitos</option><option value="allowed">Valores permitidos</option><option value="required">Dato obligatorio</option><option value="date-order">Fecha ≥ otra columna</option><option value="sum">Total = suma de componentes</option><option value="age">Edad según nacimiento</option></select></label>
+            <label>Severidad <select id="dc-rule-severity"><option value="critico">Crítico</option><option value="advertencia" selected>Advertencia</option><option value="informativo">Informativo</option></select></label>
+          </div>
+          <div class="dc-controls" data-rule-kinds="number-range"><label>Mínimo <input id="dc-rule-min" type="number" step="any" value="0"></label><label>Máximo (opcional) <input id="dc-rule-max" type="number" step="any"></label></div>
+          <div class="dc-controls" data-rule-kinds="date-range" hidden><label>Desde <input id="dc-rule-from" type="date" value="2020-01-01"></label><label>Hasta <input id="dc-rule-to" type="date" value="2026-12-31"></label></div>
+          <div class="dc-controls" data-rule-kinds="digits" hidden><label>Dígitos <input id="dc-rule-length" type="number" min="1" max="1000" value="11"></label><span class="muted qb-help">Sin guiones ni espacios; el formato puede corregirse con la regla CUIT/CUIL.</span></div>
+          <div data-rule-kinds="allowed" hidden><label>Valores permitidos, uno por línea<textarea id="dc-rule-values" rows="5"></textarea></label><button id="dc-rule-provinces" class="btn-ink">Cargar catálogo: 23 provincias + CABA</button><p class="muted qb-help">Comparación literal: podés ajustar el catálogo a tu base o agrupar variantes de categorías.</p></div>
+          <div class="dc-controls" data-rule-kinds="date-order age" hidden><label>Columna de referencia / nacimiento <select id="dc-rule-other"></select></label></div>
+          <div data-rule-kinds="sum" hidden><label>Componentes (selección múltiple) <select id="dc-rule-components" multiple size="5"></select></label></div>
+          <div class="dc-controls" data-rule-kinds="sum age" hidden><label>Tolerancia absoluta (suma) / años (edad) <input id="dc-rule-tolerance" type="number" min="0" step="any" value="0"></label></div>
+          <div class="dc-controls" data-rule-kinds="age" hidden><label>Fecha de referencia <input id="dc-rule-asof" type="date"></label></div>
+          <div class="dc-controls"><label>Nombre opcional <input id="dc-rule-label" maxlength="200" placeholder="Monto no puede ser negativo"></label><button id="dc-rule-add" class="btn-ink">Agregar regla</button></div>
+          <p class="muted qb-help">Las reglas señalan incumplimientos; no corrigen ni eliminan datos automáticamente. Faltantes o tipos incompatibles también incumplen la condición. Límites numéricos y fechas inclusivos. Sumas usan tolerancia absoluta; edad se calcula en años cumplidos a la fecha indicada.</p>
+          <ul id="dc-custom-list" class="dc-plain-list"></ul>
+        </details>
+        <details class="dc-details" open>
+          <summary>Outliers · solo bandera 🚩</summary>
+          <div class="dc-controls">
+            <label>Método <select id="dc-outlier-method"><option value="none">Desactivado</option><option value="iqr">IQR</option><option value="zscore">Z-score</option><option value="percentile">Percentiles</option></select></label>
+            <label>Columnas (selección múltiple) <select id="dc-outlier-column" multiple size="3"><option value="" selected>Todas las numéricas</option></select></label>
+            <label>Factor IQR / umbral z <input id="dc-outlier-factor" type="number" min="0.01" step="0.1" value="1.5"></label>
+            <label>Percentil inferior <input id="dc-outlier-lower" type="number" min="0" max="99" step="0.1" value="1"></label>
+            <label>Percentil superior <input id="dc-outlier-upper" type="number" min="1" max="100" step="0.1" value="99"></label>
+          </div>
+          <p class="muted qb-help">Sólo se evalúan columnas de tipo numérico. Si se selecciona “Todas las numéricas”, se incluyen todas. IQR: fuera de Q1 − factor × IQR o Q3 + factor × IQR. Z-score usa desvío muestral. Percentiles: fuera del intervalo elegido. IQR/percentiles requieren 4 valores, z-score 3 y desvío positivo. Los umbrales del original se mantienen al comparar la propuesta.</p>
+        </details>
+        <details class="dc-details">
+          <summary>Normalización de categorías</summary>
+          <div id="dc-category-suggestions"></div>
+          <div class="dc-controls"><label>Columna <select id="dc-category-column"></select></label><label>Nombre del grupo <input id="dc-category-to" maxlength="500" placeholder="Buenos Aires"></label></div>
+          <label>Variantes exactas, una por línea<textarea id="dc-category-from" rows="4" placeholder="Bs As&#10;Buenos Aires&#10;BUENOS AIRES&#10;Pcia. Bs. As."></textarea></label>
+          <button id="dc-category-add" class="btn-ink">Proponer agrupación</button>
+          <p class="muted qb-help">Las sugerencias requieren tu decisión. Los grupos se comparan con valores originales, se muestran en la vista previa y se pueden deshacer. No se encadenan agrupaciones.</p>
+          <ul id="dc-category-list"></ul>
+        </details>
+        <details class="dc-details">
+          <summary>Recetas reutilizables</summary>
+          <div class="dc-controls"><label>Nombre <input id="dc-recipe-name" maxlength="100" placeholder="Limpieza base impuestos mensual"></label><button id="dc-recipe-save" class="btn-ink">Guardar / actualizar receta</button></div>
+          <div class="dc-controls"><label>Receta guardada <select id="dc-recipe-list"></select></label><button id="dc-recipe-load" class="btn-ink">Cargar reglas</button><button id="dc-recipe-export" class="btn-ink">Exportar receta JSON</button><button id="dc-recipe-delete" class="btn-ink">Eliminar receta</button></div>
+          <label>Importar receta JSON <input id="dc-recipe-import" type="file" accept=".json,application/json"></label>
+          <p class="muted qb-help">Se guardan en este navegador, sin incluir filas del archivo. Guardar con el mismo nombre actualiza esa receta. Las columnas se vinculan por nombre aunque cambien de orden. Cargar una receta requiere revisar la vista previa antes de aplicar; una columna requerida ausente produce un aviso.</p>
+        </details>
+        <div class="dc-controls"><button id="dc-preview" class="btn-ink">Actualizar vista previa</button><button id="dc-apply" class="btn-ink">Aplicar cambios</button><button id="dc-undo" class="btn-ink" disabled>Deshacer</button></div>
+        <p id="dc-proposal"></p>
+        <div class="dc-table"><table class="qb-table"><thead><tr><th>Fila de origen</th><th>Columna</th><th>Antes</th><th>Después</th><th>Motivo</th></tr></thead><tbody id="dc-preview-rows"></tbody></table></div>
+        <p class="muted qb-help">Se muestran los primeros 100 cambios, con textos abreviados. La auditoría incluye todos los cambios completos. Deshacer restaura hasta 50 aplicaciones durante esta sesión; el archivo original permanece intacto.</p>
+      </section>
+      <section class="qb-section qb-econometria-section">
+        <div class="qb-panel-head"><h3 class="qb-subtitle">Cruce entre archivos y comparación histórica</h3><span>Actual ↔ referencia / mes anterior</span></div>
+        <div class="dc-controls"><label>Referencia CSV / Excel <input id="dc-reference-file" type="file" accept=".csv,.xlsx"></label><label>Hoja <select id="dc-reference-sheet" disabled></select></label><button id="dc-reference-import" class="btn-ink" disabled>Importar referencia</button></div>
+        <div class="dc-controls"><label>Separador CSV <select id="dc-reference-delimiter"><option value="">Detectar</option><option value=",">Coma</option><option value=";">Punto y coma</option><option value="tab">Tabulación</option><option value="|">Barra vertical</option></select></label><label>Codificación <select id="dc-reference-encoding"><option value="">UTF-8 / BOM automático</option><option value="windows-1252">Windows-1252</option><option value="utf-16le">UTF-16 LE</option></select></label></div>
+        <p id="dc-reference-info" class="muted qb-help">Sin archivo de referencia.</p>
+        <div class="dc-controls"><label>Clave en actual <select id="dc-compare-current-key"></select></label><label>Clave en referencia <select id="dc-compare-reference-key"></select></label><label>Comparar claves <select id="dc-compare-normalization"><option value="exact">Literalmente</option><option value="text">Ignorar espacios y mayúsculas</option><option value="tax-id">CUIT/CUIL válido sin guiones</option></select></label><label>Cambio brusco desde (%) <input id="dc-compare-jump" type="number" value="25" min="0" max="100000" step="any"></label></div>
+        <div class="dc-controls"><button id="dc-compare-run" class="btn-ink" disabled>Cruzar archivos</button><button id="dc-compare-export" class="btn-ink" disabled>Descargar cruce completo JSON</button></div>
+        <p class="muted qb-help">Se cruzan los archivos originales. El archivo principal es el actual; la referencia es el anterior. Campos comparados literalmente por encabezados comunes. Las claves vacías no coinciden entre sí y las repetidas se marcan como ambiguas, sin elegir una fila arbitraria. Los identificadores conservan ceros iniciales.</p>
+        <div id="dc-comparison-results" hidden>
+          <p id="dc-compare-summary" class="dc-number"></p><p id="dc-compare-duplicates"></p><p id="dc-compare-schema"></p>
+          <div class="dc-table"><table class="qb-table"><thead><tr><th>Columna</th><th>Valores modificados</th><th>Cambios bruscos por clave</th><th>Media anterior → actual</th><th>Mediana anterior → actual</th><th>Variación media</th><th>Cambio de nulos</th><th>Alerta</th></tr></thead><tbody id="dc-compare-drift"></tbody></table></div>
+          <p class="muted qb-help">Distribuciones de ambos archivos completos; cambios por campo solo en claves únicas compartidas. Con media anterior cero, un valor actual distinto de cero se marca sin inventar un porcentaje.</p>
+          <label>Detalle <select id="dc-compare-filter"><option value="">Todos</option><option value="matched">En ambos (todos)</option><option value="modified">Modificados</option><option value="both">En ambos sin cambios</option><option value="new">Nuevos / solo actual</option><option value="removed">Eliminados / solo referencia</option><option value="ambiguous">Ambiguos</option><option value="duplicates">Claves duplicadas</option><option value="missing-key">Claves faltantes</option></select></label>
+          <div class="dc-table"><table class="qb-table"><thead><tr><th>Estado</th><th>Clave</th><th>Archivo</th><th>Fila de origen</th><th>Campos / cambios</th></tr></thead><tbody id="dc-compare-rows"></tbody></table></div>
+          <p class="muted qb-help">Vista acotada a 20 ejemplos por estado y hasta 20 ejemplos adicionales de claves duplicadas, con hasta 8 campos por fila. El JSON contiene todos los registros y diferencias completos.</p>
         </div>
       </section>
-
       <section class="qb-section qb-econometria-section">
-        <div class="qb-panel-head">
-          <p class="qb-subtitle">4. Columnas</p>
-          <span>Perfil</span>
-        </div>
-        <div style="overflow-x:auto">
-          <table class="qb-table">
-            <thead>
-              <tr><th>Columna</th><th>Tipo</th><th>Con dato</th><th>Faltantes</th><th>Inválidos</th><th>Únicos</th><th>Atípicos</th></tr>
-            </thead>
-            <tbody id="cl-columns"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="qb-section qb-econometria-section">
-        <div class="qb-panel-head">
-          <p class="qb-subtitle">5. Qué se hizo</p>
-          <span>Y por qué</span>
-        </div>
-        <ul id="cl-actions" class="qb-flow-list"></ul>
+        <div class="qb-panel-head"><h3 class="qb-subtitle">4. Exportar</h3><span>Disponible después de aplicar</span></div>
+        <div class="dc-controls"><label><input id="dc-safe" type="checkbox" checked> Proteger CSV frente a fórmulas de planilla</label></div>
+        <p class="muted qb-help">La protección antepone un apóstrofo a valores que empiezan con =, +, - o @, incluidos números negativos; queda registrada en la auditoría. Desactivala para conservar esos valores literalmente. La auditoría usa la protección del último CSV exportado de esta versión; si todavía no exportaste, usa la opción actual.</p>
+        <div class="dc-controls"><button id="dc-download" class="btn-ink" disabled>Descargar CSV limpio</button><button id="dc-audit" class="btn-ink" disabled>Descargar auditoría JSON</button><button id="dc-handoff" class="btn-ink" disabled>Usar en Econometría</button></div>
       </section>
     </div>
-
-  </div>
-
-  <!-- El limpiador en C++/WebAssembly, servido desde el propio dominio. -->
-  <script src="{{ url_for('static', filename='wasm/csvclean.js') }}"></script>
+    <p class="muted qb-help"><a href="/limpiador?motor=estadistico">Abrir limpiador estadístico CSV</a> para imputación con media/mediana, atípicos, categorías e índices temporales.</p>
+  </main>
   <script src="{{ url_for('static', filename='js/quantbay.cleaner.js') }}"></script>
 </body>
 </html>

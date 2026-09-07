@@ -37,18 +37,23 @@ function openDb(): Promise<IDBDatabase> {
 }
 
 function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  return openDb().then(
-    db =>
-      new Promise<T>((resolve, reject) => {
-        const request = run(db.transaction(STORE, mode).objectStore(STORE));
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error ?? new Error('Falló IndexedDB.'));
-      })
-  );
+  return openDb().then(db => new Promise<T>((resolve, reject) => {
+    try {
+      const transaction = db.transaction(STORE, mode);
+      const request = run(transaction.objectStore(STORE));
+      // A successful put is not a committed transaction. Navigation must wait
+      // for commit, especially when the source Blob is backed by an OPFS file.
+      transaction.oncomplete = () => { db.close(); resolve(request.result); };
+      transaction.onabort = () => {
+        db.close();
+        reject(transaction.error ?? request.error ?? new Error('Falló IndexedDB.'));
+      };
+    } catch (error) { db.close(); reject(error); }
+  }));
 }
 
 /** Deja el CSV limpio listo para que lo levante la otra sección. */
-export async function putHandoff(name: string, csv: string): Promise<void> {
+export async function putHandoff(name: string, csv: string | Blob): Promise<void> {
   const record: HandoffRecord = {
     name,
     csv: new Blob([csv], { type: 'text/csv' }),
