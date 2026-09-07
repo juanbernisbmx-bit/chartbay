@@ -569,6 +569,28 @@ CB_TEST(table, ambiguous_decimal_follows_the_rest_of_the_file) {
   CB_CHECK(has_action(r, ActionKind::AmbiguousDecimal));
 }
 
+CB_TEST(table, ambiguous_decimal_is_not_reported_for_a_non_numeric_column) {
+  // v.numbers.observe() corre sobre toda celda de toda columna para juntar
+  // evidencia, sin importar en qué tipo termina la columna. Antes de esto,
+  // una columna de texto (mails) con un puñado de valores con forma de
+  // "1.234" — y nada que decida coma contra punto — se reportaba como
+  // "separador decimal ambiguo" aunque nunca se fue a leer como número. El
+  // diagnóstico solo tiene sentido para una columna que terminó siendo
+  // Numeric, igual que su vecino de InferredDecimal tres líneas más arriba.
+  const CleanResult r = clean_buffer(
+      "id;correo\n"
+      "1;juan@example.com\n"
+      "2;1.234\n"
+      "3;maria@example.com\n"
+      "4;1.234\n"
+      "5;pedro@example.com\n"
+      "6;1.234\n");
+  const Column* correo = col_by_name(r, "correo");
+  CB_CHECK(correo != nullptr);
+  CB_CHECK(correo->type != ColumnType::Numeric);
+  CB_CHECK(!has_action(r, ActionKind::AmbiguousDecimal));
+}
+
 CB_TEST(table, invalid_cells_become_missing_and_are_reported) {
   const CleanResult r = clean_buffer("x\n1\n2\n3\n4\n5\n6\n7\n8\nabc\n");
   const Column* x = col_by_name(r, "x");
