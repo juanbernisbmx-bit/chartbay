@@ -2047,7 +2047,7 @@ class Cleaner::Sink : public RowSink {
                  "\" se leyó la coma como separador decimal y el punto como separador de "
                  "miles.");
       }
-      if (col.stats.ambiguous_decimal) {
+      if (col.type == ColumnType::Numeric && col.stats.ambiguous_decimal) {
         const bool from_file = col.number_format.decimal == file_decimal_ &&
                                file_decimal_ != opts_.fallback_decimal;
         note(ActionKind::AmbiguousDecimal, col.name, 0,
