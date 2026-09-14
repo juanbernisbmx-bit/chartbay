@@ -691,11 +691,14 @@ function readTable(
           'El handle ya se liberó. Pedí la limpieza con retainForCsv: true para poder exportar.'
         );
       }
-      // El puntero apunta a un std::string vivo dentro del handle; UTF8ToString
-      // lo copia a JavaScript, que es lo que hay que hacer igual para poder
-      // descargarlo.
+      // El puntero apunta a un std::string vivo dentro del handle. UTF8ToString
+      // corta en el primer NUL, y un CSV puede traer NUL adentro de una celda de
+      // texto (el motor C++ los preserva tal cual) — así que hay que decodificar
+      // el largo exacto que reporta cbc_csv_length, no buscar el fin de cadena.
       const ptr = wasm._cbc_csv(handle);
-      return ptr ? wasm.UTF8ToString(ptr) : null;
+      if (!ptr) return null;
+      const length = wasm._cbc_csv_length(handle);
+      return new TextDecoder().decode(wasm.HEAPU8.subarray(ptr, ptr + length));
     },
     dispose() {
       if (disposed) return;

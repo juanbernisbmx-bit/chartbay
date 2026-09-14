@@ -555,6 +555,17 @@ CB_TEST(table, a_column_of_zeros_is_not_a_footer) {
   CB_CHECK(!has_action(r, ActionKind::DroppedFooterRows));
 }
 
+CB_TEST(table, an_overflowed_sum_is_not_a_footer) {
+  // La suma de las tres filas de arriba desborda a infinito. inf - v tambien es
+  // infinito, y "> tolerancia" con una tolerancia que tambien se fue a infinito
+  // daba false: la resta parecia "exacta" sin que ninguna cuenta real lo fuera,
+  // y la ultima fila se descartaba como si fuera el total.
+  const CleanResult r =
+      clean_buffer("id,x\n1,1e308\n2,1.1e308\n3,1.2e308\n4,5\n");
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(4));
+  CB_CHECK(!has_action(r, ActionKind::DroppedFooterRows));
+}
+
 CB_TEST(table, ambiguous_decimal_follows_the_rest_of_the_file) {
   // "45.000" alone is unreadable. The other columns settle the convention.
   const CleanResult r = clean_buffer(
@@ -632,6 +643,54 @@ CB_TEST(table, drops_duplicate_and_empty_rows) {
   CB_CHECK(has_action(r, ActionKind::DroppedEmptyRows));
 }
 
+CB_TEST(table, a_control_byte_in_a_cell_is_not_a_field_boundary) {
+  // El hash de fila juntaba los campos con \x1f de separador — el mismo byte
+  // que el scanner usa como "acá no hay delimitador", elegido justamente
+  // porque no aparece en un CSV de texto. Cuando aparece igual, el dato y el
+  // marco se confunden: ("ab\x1f", "c") y ("ab", "\x1fc") dan la misma
+  // secuencia de bytes, y la segunda fila se descartaba como duplicada de la
+  // primera sin serlo. No es la colisión de 1 en 2⁶⁴ que el README asume: es
+  // determinística, y silenciosa.
+  const CleanResult r = clean_buffer(
+      "c1,c2\n"
+      "ab\x1f,c\n"
+      "ab,\x1f" "c\n");
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(2));
+  CB_CHECK(!has_action(r, ActionKind::DroppedDuplicateRows));
+}
+
+CB_TEST(table, a_control_byte_does_not_make_two_columns_identical) {
+  // El mismo defecto en column_hash, que además lo afirma en el reporte: "es
+  // idéntica fila por fila a", sobre columnas que no lo son.
+  const CleanResult r = clean_buffer(
+      "id,a,b\n"
+      "1,ab\x1f,ab\n"
+      "2,c,\x1f" "c\n"
+      "3,zz,zz\n");
+  CB_CHECK_EQ(r.columns.size(), static_cast<std::size_t>(3));
+  CB_CHECK(!has_action(r, ActionKind::DroppedDuplicateColumn));
+}
+
+CB_TEST(table, identical_rows_and_columns_are_still_caught) {
+  // Y el contrapunto: enmarcar los campos no puede costar la detección real.
+  const CleanResult r = clean_buffer("a,b\n1,1\n2,2\n1,1\n3,3\n");
+  CB_CHECK(has_action(r, ActionKind::DroppedDuplicateRows));
+  CB_CHECK(has_action(r, ActionKind::DroppedDuplicateColumn));
+}
+
+CB_TEST(table, format_number_does_not_cast_out_of_range_doubles) {
+  // El atajo de imprimir como entero evaluaba el cast a long long *antes* de
+  // mirar el rango: && corta por la derecha, y el cast está a la izquierda del
+  // ==. Con un valor finito pero enorme eso es undefined behavior — lo cazó
+  // UBSan, no los tests, porque el resultado salía bien igual por casualidad.
+  CB_CHECK_EQ(format_number(1.2345678901234567e+59), std::string("1.2345678901234567e+59"));
+  CB_CHECK_EQ(format_number(1e300), std::string("1e+300"));
+  CB_CHECK_EQ(format_number(-1e300), std::string("-1e+300"));
+  // Y el atajo sigue andando donde sí corresponde.
+  CB_CHECK_EQ(format_number(42.0), std::string("42"));
+  CB_CHECK_EQ(format_number(-7.0), std::string("-7"));
+}
+
 CB_TEST(table, duplicate_column_names_are_disambiguated) {
   const CleanResult r = clean_buffer("x,x,\n1,9,5\n2,8,6\n3,7,4\n");
   CB_CHECK_EQ(r.columns.size(), static_cast<std::size_t>(3));
@@ -662,6 +721,23 @@ CB_TEST(table, missing_policy_drop_row) {
   const CleanResult r = clean_buffer("a,b\n1,1\n2,\n3,3\n4,4\n", opts);
   CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(3));
   CB_CHECK(has_action(r, ActionKind::DroppedMissingRows));
+}
+
+CB_TEST(table, dropping_a_row_does_not_erase_text_kept_before_it) {
+  // compact() corria col.text[w] = std::move(col.text[i]) incluso cuando
+  // w == i, que es el caso de toda fila conservada antes del primer descarte.
+  // Mover un std::string sobre si mismo lo deja vacio (libstdc++ y libc++ las
+  // dos), asi que "alfa" y "beta" desaparecian aunque sus filas seguian
+  // presentes en la mascara.
+  CleanOptions opts;
+  opts.missing = MissingPolicy::DropRow;
+  const CleanResult r = clean_buffer("txt,v\nalfa,1\nbeta,2\ngamma,\ndelta,4\n", opts);
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(3));
+  const Column* txt = col_by_name(r, "txt");
+  CB_CHECK(txt != nullptr);
+  CB_CHECK_EQ(txt->text[0], std::string("alfa"));
+  CB_CHECK_EQ(txt->text[1], std::string("beta"));
+  CB_CHECK_EQ(txt->text[2], std::string("delta"));
 }
 
 CB_TEST(table, missing_policy_median) {
