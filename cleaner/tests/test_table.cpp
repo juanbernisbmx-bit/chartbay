@@ -555,6 +555,17 @@ CB_TEST(table, a_column_of_zeros_is_not_a_footer) {
   CB_CHECK(!has_action(r, ActionKind::DroppedFooterRows));
 }
 
+CB_TEST(table, an_overflowed_sum_is_not_a_footer) {
+  // La suma de las tres filas de arriba desborda a infinito. inf - v tambien es
+  // infinito, y "> tolerancia" con una tolerancia que tambien se fue a infinito
+  // daba false: la resta parecia "exacta" sin que ninguna cuenta real lo fuera,
+  // y la ultima fila se descartaba como si fuera el total.
+  const CleanResult r =
+      clean_buffer("id,x\n1,1e308\n2,1.1e308\n3,1.2e308\n4,5\n");
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(4));
+  CB_CHECK(!has_action(r, ActionKind::DroppedFooterRows));
+}
+
 CB_TEST(table, ambiguous_decimal_follows_the_rest_of_the_file) {
   // "45.000" alone is unreadable. The other columns settle the convention.
   const CleanResult r = clean_buffer(
@@ -710,6 +721,23 @@ CB_TEST(table, missing_policy_drop_row) {
   const CleanResult r = clean_buffer("a,b\n1,1\n2,\n3,3\n4,4\n", opts);
   CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(3));
   CB_CHECK(has_action(r, ActionKind::DroppedMissingRows));
+}
+
+CB_TEST(table, dropping_a_row_does_not_erase_text_kept_before_it) {
+  // compact() corria col.text[w] = std::move(col.text[i]) incluso cuando
+  // w == i, que es el caso de toda fila conservada antes del primer descarte.
+  // Mover un std::string sobre si mismo lo deja vacio (libstdc++ y libc++ las
+  // dos), asi que "alfa" y "beta" desaparecian aunque sus filas seguian
+  // presentes en la mascara.
+  CleanOptions opts;
+  opts.missing = MissingPolicy::DropRow;
+  const CleanResult r = clean_buffer("txt,v\nalfa,1\nbeta,2\ngamma,\ndelta,4\n", opts);
+  CB_CHECK_EQ(r.rows_out, static_cast<std::size_t>(3));
+  const Column* txt = col_by_name(r, "txt");
+  CB_CHECK(txt != nullptr);
+  CB_CHECK_EQ(txt->text[0], std::string("alfa"));
+  CB_CHECK_EQ(txt->text[1], std::string("beta"));
+  CB_CHECK_EQ(txt->text[2], std::string("delta"));
 }
 
 CB_TEST(table, missing_policy_median) {

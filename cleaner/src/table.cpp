@@ -1031,6 +1031,11 @@ class Cleaner::Sink : public RowSink {
       if (slot >= terms[j].size() || terms[j][slot] < kMinFooterTerms) continue;
       const double sum = prefix[j][slot];
       const double v = col.values[row];
+      // Una suma que desbordo a infinito no es una coincidencia: es la misma
+      // resta, inf - inf, que en cualquier otro lado da NaN. Aca daba inf, que
+      // no es mayor que la tolerancia (tambien inf), y la fila se descartaba
+      // por "sumar" algo que ninguna cuenta real dio.
+      if (!std::isfinite(sum) || !std::isfinite(v)) continue;
       // Una columna de ceros cumple la igualdad sin decir nada.
       if (std::fabs(v) < 1e-12) continue;
       if (std::fabs(v - sum) > 1e-6 * std::max(1.0, std::fabs(sum))) continue;
@@ -1875,7 +1880,11 @@ class Cleaner::Sink : public RowSink {
         if (i < keep.size() && !keep[i]) continue;
         if (!col.values.empty()) col.values[w] = col.values[i];
         if (!col.codes.empty()) col.codes[w] = col.codes[i];
-        if (!col.text.empty()) col.text[w] = std::move(col.text[i]);
+        // w == i para toda fila conservada antes del primer descarte: mover un
+        // std::string sobre si mismo en ese tramo lo deja vacio (lo vimos en
+        // libc++ y libstdc++ los dos), asi que las primeras filas mantenidas se
+        // quedaban sin texto aunque su mascara siguiera diciendo "presente".
+        if (!col.text.empty() && w != i) col.text[w] = std::move(col.text[i]);
         col.mask[w] = col.mask[i];
         ++w;
       }
