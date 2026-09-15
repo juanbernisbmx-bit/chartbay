@@ -10,6 +10,16 @@ así que resumen por temas en vez de listar cada commit.
 
 ## [Unreleased]
 
+### Seguridad — la clave de Anthropic no puede llegar al cliente
+
+- Nunca estuvo en el historial de git (sólo el placeholder de `.env.example`),
+  `render.yaml` no la declara y el único código que la leía se borró con
+  Mercados.
+- Dos tests lo fijan: ningún archivo versionado lee `ANTHROPIC_API_KEY` ni
+  contiene algo con forma de clave, y con una clave falsa en el entorno
+  ninguna respuesta la devuelve (páginas, 404, `/version`, bundles, cabeceras
+  y el contenido de `/source.tar.gz`).
+
 ### Eliminado — código muerto
 
 - 390 reglas de CSS de pantallas que ya no existen —el hub y la terminal de

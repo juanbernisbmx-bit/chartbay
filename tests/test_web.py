@@ -12,11 +12,13 @@ Parte del arranque se resuelve en el import de `web.app` a partir del entorno
 (qué proveedores de Datos quedan disponibles, por ejemplo), así que los tests
 reimportan el módulo con el entorno que necesitan (`_cargar_app`).
 """
+import gzip
 import importlib
 import io
 import json
 import os
 import re
+import subprocess
 import sys
 import tarfile
 from pathlib import Path
@@ -440,6 +442,60 @@ def test_formato_de_descarga_no_soportado():
     r = c.get("/api/data/download/us_cpi?format=exe")
     # 400 por formato, o 404 si ese id no está en el catálogo actual.
     assert r.status_code in (400, 404)
+
+
+# ── secretos ─────────────────────────────────────────────────────────────────
+
+# Con forma de clave real para que un filtro por patrón también la vea.
+_CLAVE_FALSA = "sk-ant-api03-" + "x" * 40 + "-FALSA"
+
+
+def test_ningun_archivo_versionado_lee_ni_contiene_una_clave_de_anthropic():
+    """El código que leía ANTHROPIC_API_KEY se borró con Mercados; que no vuelva."""
+    patron = re.compile(r"sk-ant-[A-Za-z0-9_-]{20,}")
+    salida = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True).stdout
+    for crudo in filter(None, salida.split(b"\0")):
+        rel = crudo.decode("utf-8")
+        ruta = ROOT / rel
+        if rel.startswith("web/static/vendor/") or not ruta.is_file():
+            continue
+        if ruta.suffix in {".whl", ".wasm", ".png", ".jpg", ".zip", ".gz"}:
+            continue
+        texto = ruta.read_text(encoding="utf-8", errors="ignore")
+        assert not patron.search(texto), f"{rel} contiene algo con forma de clave de Anthropic"
+        if ruta.suffix in {".py", ".ts", ".js", ".html"} and ruta.name != "test_web.py":
+            assert "ANTHROPIC_API_KEY" not in texto, rel
+            assert not re.search(r"^\s*(import|from)\s+anthropic\b", texto, re.M), rel
+
+
+def test_una_clave_en_el_entorno_no_aparece_en_ninguna_respuesta():
+    """Aunque alguien cargue ANTHROPIC_API_KEY en Render, nada la devuelve al cliente."""
+    previa = os.environ.get("ANTHROPIC_API_KEY")
+    os.environ["ANTHROPIC_API_KEY"] = _CLAVE_FALSA
+    try:
+        modulo, c = _cliente_con_datos(RENDER="true")
+        # Con debug, un error mostraría el depurador de Werkzeug y su consola.
+        assert modulo.app.debug is False
+        for ruta in ("/", "/econometria", "/guia", "/limpiador", "/data", "/version",
+                     "/api/data/catalog", "/no-existe", "/static/js/quantbay.bundle.js",
+                     "/static/js/quantbay.cleaner.js", "/static/js/quantbay.worker.js",
+                     "/static/js/quantbay.pro.worker.js",
+                     "/static/js/quantbay.data-cleaner.worker.js", "/source.tar.gz"):
+            r = c.get(ruta)
+            cuerpo = r.get_data()
+            if ruta.endswith(".gz"):
+                cuerpo = gzip.decompress(cuerpo)
+            assert _CLAVE_FALSA.encode() not in cuerpo, ruta
+            assert not any(_CLAVE_FALSA in valor for valor in r.headers.values()), ruta
+            if not ruta.endswith(".gz"):
+                # El archivo de fuente trae este mismo test, que nombra el prefijo;
+                # en el resto de las respuestas no tiene por qué aparecer ni eso.
+                assert b"sk-ant-" not in cuerpo, ruta
+    finally:
+        if previa is None:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+        else:
+            os.environ["ANTHROPIC_API_KEY"] = previa
 
 
 # ── límite de solicitudes por IP ─────────────────────────────────────────────
