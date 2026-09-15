@@ -27,7 +27,7 @@ cubiertos por tests automáticos.
 | # | Condición | Cómo se verifica |
 |---|---|---|
 | 1 | Las cinco secciones activas —Inicio, Econometría, Limpiador, Datos y Documentación— responden 200 en producción | `tests/test_web.py::test_rutas_activas_responden_200` |
-| 2 | Las secciones fuera de alcance —Agro, Mercados, comunidad, veredictos IA— devuelven 404 y no aparecen en el menú | `test_secciones_apagadas_devuelven_404`, `test_secciones_apagadas_no_aparecen_en_el_menu` |
+| 2 | Las secciones fuera de alcance —Mercados, comunidad, veredictos IA— devuelven 404 y no aparecen en el menú | `test_secciones_apagadas_devuelven_404`, `test_secciones_apagadas_no_aparecen_en_el_menu` |
 | 3 | Ninguna afirmación pública atribuye QR al motor OLS desplegado | Revisión manual + sección 4 de este documento |
 | 4 | Pro aparece identificada como beta en el laboratorio y en la documentación | Inspección de `/econometria` con Pro seleccionada |
 | 5 | Un Blueprint nuevo de Render arranca sin credenciales heredadas y con FRED configurable | `test_arranca_sin_ninguna_variable_de_entorno` + despliegue real |
@@ -85,13 +85,11 @@ Hasta que ese QA exista, la recomendación pública es Lite.
 
 ## 3. Fuera del alcance
 
-Agro sigue en el repositorio, apagado. Mercados y todo lo que colgaba de él
-—comunidad, IA y autenticación— se borró en septiembre de 2026. Nada de esto
-forma parte de lo que 1.0 promete.
+Mercados y todo lo que colgaba de él —comunidad, IA y autenticación— se borró
+en septiembre de 2026. Nada de esto forma parte de lo que 1.0 promete.
 
 | Componente | Dónde vive | Estado real |
 |---|---|---|
-| **Agro** — rindes, clima, márgenes | `SECCIONES["agro"]`, `quantbay/src/verticals/agro/` | Apagado. `/agro` devuelve 404. |
 | **Mercados, comunidad de bots, análisis con IA y autenticación** | — | **Borrados** en septiembre de 2026. |
 | **Backend FastAPI** — motor Python paralelo | `backend/chartbay_engine/` | **Experimental y no desplegado.** |
 
@@ -182,11 +180,6 @@ conservan sus propias licencias; sus excepciones y atribuciones están en
 ## 7. Reactivar algo que está apagado
 
 El apagado es un flag, no una amputación. Pero los flags no alcanzan solos.
-
-**Agro:** poner `SECCIONES["agro"] = True` en `web/app.py` **y**
-`CHARTBAY_VERTICALS.agro = true` en `quantbay/src/verticals/agro/agroFeatureFlags.ts`,
-después recompilar el bundle. Los dos tienen que coincidir: el de Python
-devuelve la ruta, el de TypeScript deja que la vista se inicialice.
 
 **Datos:** poner `SECCIONES["datos"] = True` en `web/app.py`. Vuelven la
 pestaña, la fila de Inicio y las rutas; para las 37 series FRED hace falta

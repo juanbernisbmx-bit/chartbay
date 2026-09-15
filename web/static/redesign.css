@@ -110,8 +110,7 @@
 /* A sangre solo el home y el laboratorio propiamente dicho. El limpiador
    comparte la clase .qb-wrap pero es una pagina de contenido normal. */
 [data-skin="v2"] .wrap.cb-full,
-[data-skin="v2"] .qb-wrap[data-qb-module="econometria"],
-[data-skin="v2"] .qb-wrap[data-qb-module="agro"]{
+[data-skin="v2"] .qb-wrap[data-qb-module="econometria"]{
   max-width:none;
   margin:0;
   padding:0;
@@ -1127,7 +1126,6 @@
    alinea con el contenedor de la pagina. */
 [data-skin="v2"] .cb-topbar{padding-left:max(16px,calc(50vw - 564px))}
 [data-skin="v2"] .cb-topbar:has(~ .qb-wrap[data-qb-module="econometria"]),
-[data-skin="v2"] .cb-topbar:has(~ .qb-wrap[data-qb-module="agro"]),
 [data-skin="v2"] .cb-topbar:has(~ .wrap.cb-full){padding-left:16px}
 
 /* ── Documentacion (guia) ──────────────────────────────────── */

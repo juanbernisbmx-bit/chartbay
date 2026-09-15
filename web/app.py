@@ -71,9 +71,6 @@ app = Flask(__name__)
 
 
 # ─── Secciones activas ───────────────────────────────────────────────────────
-# Espejo en Python de CHARTBAY_VERTICALS (quantbay/src/verticals/agro/
-# agroFeatureFlags.ts), que hace lo mismo del lado del navegador.
-#
 # Apagar una sección acá la desenchufa sin borrar nada: sus rutas pasan a
 # devolver 404 y sus enlaces desaparecen del menú, pero las vistas, las
 # plantillas y los tests siguen en el repo.
@@ -81,7 +78,6 @@ SECCIONES = {
     # Escondida por ahora: sin pestaña ni enlaces y con sus rutas en 404. El
     # código, la plantilla y los tests siguen (los tests la encienden).
     "datos": False,
-    "agro": False,
 }
 
 
@@ -144,7 +140,6 @@ def _csp(*, nonce: str, wasm: bool = False) -> str:
 # tenga el permiso, y el limpiador cae en silencio al lector clásico.
 _CSP_PERFIL_POR_RUTA = {
     "/econometria": {"wasm": True},
-    "/agro": {"wasm": True},
     "/limpiador": {"wasm": True},
     "/static/js/quantbay.worker.js": {"wasm": True},
     "/static/js/quantbay.pro.worker.js": {"wasm": True},
@@ -253,13 +248,7 @@ def limpiador():
 
 @app.route("/econometria")
 def econometria():
-    return render_template("quantbay.html", quantbay_module="econometria")
-
-
-@app.route("/agro")
-@seccion("agro")
-def agro():
-    return render_template("quantbay.html", quantbay_module="agro")
+    return render_template("quantbay.html")
 
 
 @app.route("/quantbay")

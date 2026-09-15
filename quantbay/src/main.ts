@@ -1,4 +1,4 @@
-import { materializeRows, parseCSVFile, parseCSVText, rowCountOf, type ParsedCSV } from './csvParser';
+import { materializeRows, parseCSVFile, rowCountOf, type ParsedCSV } from './csvParser';
 import Papa from 'papaparse';
 import Chart from 'chart.js/auto';
 import { jsPDF } from 'jspdf';
@@ -149,13 +149,6 @@ import {
   type PreparedProTimeSeries,
 } from './pro/pyodide/proTimeIndex';
 import type { PyodideTimeSeriesResult } from './pro/pyodide/proTimeSeriesResultTypes';
-import {
-  clearAgroContext,
-  hideAgroInterpretationPanels,
-  initAgroVertical,
-  presentAgroInterpretationForPro,
-  presentAgroInterpretationForRegression,
-} from './verticals/agro';
 import { beginModelComparisonDataset, initModelComparisonView } from './ui/modelComparisonView';
 import {
   initReproducibilityView,
@@ -570,7 +563,6 @@ async function loadDemoCase(id: string): Promise<void> {
   if (!demo) return;
   showError('');
   hideProPanel();
-  clearAgroContext();
   clearLoadWarnings();
   appState.activeDemoId = id;
   setEngineStatus('LEYENDO');
@@ -663,7 +655,6 @@ async function loadFile(file: File): Promise<void> {
   showError('');
   clearLoadWarnings();
   hideProPanel();
-  clearAgroContext();
   appState.activeDemoId = null;
   appState.lastResult = null;
   appState.lastCategoricalInfo = [];
@@ -836,7 +827,6 @@ async function onRun(): Promise<void> {
     setText('qb-status-obs', output.result.nObs);
     setEngineStatus('COMPLETADO');
     writeRunLog(output.logEntries);
-    presentAgroInterpretationForRegression(yName, output.result, output.functionalForm);
     const res = $('qb-results');
     if (res) { res.style.display = ''; res.scrollIntoView({ behavior: 'smooth' }); }
     updateSidebarStep(3);
@@ -849,7 +839,6 @@ async function onRun(): Promise<void> {
     renderGuided();
   } catch (err) {
     setEngineStatus('ERROR');
-    hideAgroInterpretationPanels();
     showError(formatRegressionError(err));
   }
 }
@@ -912,7 +901,6 @@ async function onRunPro(
     if (domainError) {
       if (!runStillCurrent()) return;
       renderProResult(proError(domainError));
-      hideAgroInterpretationPanels();
       setEngineStatus('ERROR');
       writeRunLog([`ChartBay Pro: error de dominio — ${domainError}`]);
       return;
@@ -928,7 +916,6 @@ async function onRunPro(
     if (!numericPayload.ok) {
       if (!runStillCurrent()) return;
       renderProResult(proError(numericPayload.error));
-      hideAgroInterpretationPanels();
       setEngineStatus('ERROR');
       writeRunLog([`ChartBay Pro: error de datos — ${numericPayload.error}`]);
       return;
@@ -967,7 +954,6 @@ async function onRunPro(
       ? buildLiteComparison(appState.csvData, yName, xNames, form, result, rlsConstraint)
       : null;
     renderProResult(result, comparison);
-    presentAgroInterpretationForPro(yName, result);
     // Sólo se guarda para exportar cuando la corrida fue exitosa; un error deja
     // el estado en null y los botones de exportación deshabilitados.
     proExportState.lastProResult = result.ok ? result : null;
@@ -1297,108 +1283,6 @@ function onTimeSeriesTransformationChange(): void {
   }
 }
 
-// ── ChartBay Agro bridge ──────────────────────────────────────────────────
-// Única puerta de entrada para que el vertical Agro cargue un dataset (CSV en
-// memoria) en el flujo existente de Econometría, reutilizando la misma
-// orquestación que onFileChange usa para un archivo subido a mano. Nunca
-// corre el modelo: sólo deja el CSV cargado y, si es seguro, las variables
-// preseleccionadas para que el usuario revise antes de calcular.
-function initialQuantbayModule(): 'econometria' | 'agro' {
-  const module = document.querySelector<HTMLElement>('[data-qb-module]')?.dataset.qbModule;
-  return module === 'agro' ? 'agro' : 'econometria';
-}
-
-function setElementsDisplay(selector: string, display: string): void {
-  document.querySelectorAll<HTMLElement>(selector).forEach(el => {
-    el.style.display = display;
-  });
-}
-
-function applyInitialModuleLayout(): void {
-  if (initialQuantbayModule() !== 'agro') return;
-  setElementsDisplay('.qb-econometria-chrome', 'none');
-  setElementsDisplay('.qb-econometria-section', 'none');
-}
-
-function revealEconometriaWorkspaceForAgro(): void {
-  if (initialQuantbayModule() !== 'agro') return;
-  document.querySelector<HTMLElement>('[data-qb-module]')?.classList.remove('qb-agro-initial');
-  setElementsDisplay('.qb-econometria-chrome', '');
-}
-
-function agroLoadDataset(params: {
-  csvText: string;
-  label: string;
-  suggestedY?: string;
-  suggestedX?: string[];
-}): { ok: boolean; numericColumns: string[]; message?: string } {
-  showError('');
-  hideProPanel();
-  appState.activeDemoId = null;
-  appState.lastResult = null;
-  appState.lastCategoricalInfo = [];
-  appState.lastTimeSeriesResult = null;
-  proExportState.lastProResult = null;
-  proExportState.lastProTimeSeriesResult = null;
-  updateExportButtonState();
-  clearDemoInfo();
-  if (isTimeSeriesMode()) setActiveMode('regression');
-
-  const fn = $('qb-filename');
-  if (fn) fn.textContent = params.label;
-  setText('qb-status-dataset', params.label);
-  setEngineStatus('LEYENDO');
-  writeRunLog([`ChartBay Agro: cargando "${params.label}"...`]);
-
-  try {
-    appState.csvText = params.csvText;
-    appState.csvData = parseCSVText(params.csvText);
-    appState.datasetName = params.label;
-    if (appState.csvData.numericColumns.length < 2) {
-      throw new Error('El dataset necesita al menos 2 columnas numéricas.');
-    }
-    beginModelComparisonDataset(params.label);
-    setText('qb-status-obs', rowCountOf(appState.csvData));
-    setText('qb-status-vars', appState.csvData.numericColumns.length);
-    setEngineStatus('LISTO');
-    writeRunLog([
-      `Dataset cargado: ${rowCountOf(appState.csvData)} observaciones`,
-      `Variables numéricas detectadas: ${appState.csvData.numericColumns.length}`,
-      'Motor de regresión listo.',
-    ]);
-
-    renderPreview(appState.csvData);
-    const categoricalCols = categoricalColumnsFor(appState.csvData);
-    renderVarSelectors([...appState.csvData.numericColumns, ...categoricalCols], categoricalCols);
-    revealEconometriaWorkspaceForAgro();
-    updateModePanels();
-
-    const preview = $('qb-preview'), vars = $('qb-vars'), results = $('qb-results'), repair = $('qb-repair-log');
-    if (preview) preview.style.display = '';
-    if (vars) vars.style.display = '';
-    if (results) results.style.display = 'none';
-    if (repair) repair.style.display = 'none';
-
-    if (params.suggestedY && appState.csvData.numericColumns.includes(params.suggestedY)) {
-      const selectable = new Set([...appState.csvData.numericColumns, ...categoricalCols]);
-      const safeX = (params.suggestedX ?? []).filter(x => selectable.has(x) && x !== params.suggestedY);
-      setVariableSelection(params.suggestedY, safeX);
-    }
-    resetForNewDataset(params.label);
-    resetReproducibilityForDataset(params.label);
-    runFormRecommendation();
-    updateSidebarStep(2);
-    renderGuided();
-
-    return { ok: true, numericColumns: appState.csvData.numericColumns };
-  } catch (err) {
-    setEngineStatus('ERROR');
-    const message = (err as Error).message;
-    showError(`Error al cargar dataset de Agro: ${message}`);
-    return { ok: false, numericColumns: [], message };
-  }
-}
-
 /**
  * Lee el checkbox de listwise. Vale para los dos motores: Lite se niega a
  * estimar con huecos y Pro los descartaba siempre, así que sin un único control
@@ -1565,9 +1449,6 @@ function init(): void {
   updateExportButtonState();
   initModelComparisonView();
   initReproducibilityView();
-  applyInitialModuleLayout();
-  // Vertical Agro: no-op si el flag está apagado o el panel no existe.
-  initAgroVertical({ loadDataset: agroLoadDataset });
   // Si el usuario llegó desde el Limpiador, el dataset ya está esperando.
   void consumeHandoff();
 }

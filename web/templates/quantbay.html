@@ -1,10 +1,9 @@
 <!doctype html>
-{% set qb_module = quantbay_module|default('econometria') %}
 <html lang="es" data-skin="v2">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% if qb_module == 'agro' %}ChartBay Agro{% else %}ChartBay - Econometria{% endif %}</title>
+  <title>ChartBay - Econometria</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20fill='%23111'/%3E%3Cpolyline%20points='6,23%2013,15%2018,18%2026,7'%20fill='none'%20stroke='%230a7a0a'%20stroke-width='3'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,9 +12,9 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='redesign.css') }}">
 </head>
 <body>
-  {% set active = 'agro' if qb_module == 'agro' else 'econometria' %}
+  {% set active = 'econometria' %}
   {% include '_topbar_v2.html' with context %}
-  <div class="wrap qb-wrap{% if qb_module == 'agro' %} qb-agro-initial{% endif %}" data-qb-module="{{ qb_module }}">
+  <div class="wrap qb-wrap" data-qb-module="econometria">
 
     {# Cinta de contexto: el mismo estado que antes vivia en su propia barra,
        ahora fijo bajo la barra superior. #}
@@ -122,29 +121,9 @@
         {# Titulo y bajada del laboratorio: venian de qb-shell-head, que el
            skin v2 reemplazo por la cinta de estado. #}
         <section class="cb-lab-head">
-          <h1>{% if qb_module == 'agro' %}ChartBay Agro{% else %}Econometría{% endif %}</h1>
-          {% if qb_module == 'agro' %}
-          <p>Laboratorio de análisis agronómico-económico para rindes, clima, precios, costos y márgenes. Agro usa el motor econométrico común de ChartBay, pero se presenta como vertical propia.</p>
-          {% else %}
+          <h1>Econometría</h1>
           <p>Elegís qué querés explicar y con qué variables; ChartBay estima el modelo, revisa los supuestos y te devuelve la lectura en castellano. Todo corre en tu navegador: tus datos no salen de tu computadora.</p>
-          {% endif %}
         </section>
-        {% if qb_module == 'agro' %}
-        <section class="qb-section qb-agro-flow-card" aria-label="Flujo de ChartBay Agro">
-          <div class="qb-panel-head">
-            <p class="qb-subtitle">Flujo Agro</p>
-            <span>VERTICAL PROPIA</span>
-          </div>
-          <ol class="qb-flow-list">
-            <li>Elegí o cargá un dataset agro.</li>
-            <li>Revisá columnas detectadas.</li>
-            <li>Usá un preset revisable.</li>
-            <li>Corré el modelo.</li>
-            <li>Leé la interpretación agropecuaria.</li>
-            <li>Simulá márgenes.</li>
-          </ol>
-        </section>
-        {% endif %}
         <section class="qb-section qb-econometria-section" id="qb-guided" style="display:none"></section>
 
         <section class="qb-section qb-econometria-section" id="qb-preview" style="display:none">
@@ -521,14 +500,6 @@
 
           <div id="qb-interpretation"></div>
 
-          <div id="qb-agro-interpretation-panel" style="display:none;margin-top:14px">
-            <div class="qb-panel-head qb-subpanel">
-              <p class="qb-subtitle">Lectura agropecuaria del modelo</p>
-              <span>CHARTBAY AGRO</span>
-            </div>
-            <div id="qb-agro-interpretation-content"></div>
-          </div>
-
           <div style="margin:14px 0 4px">
             <button class="btn-ink" id="qb-export-pdf" disabled>Exportar PDF</button>
             <button class="btn-ink" id="qb-export-csv" disabled>Exportar CSV</button>
@@ -578,14 +549,6 @@
             <div id="qb-pro-warnings"></div>
             <div id="qb-pro-comparison"></div>
 
-            <div id="qb-agro-pro-interpretation-panel" style="display:none;margin-top:14px">
-              <div class="qb-panel-head qb-subpanel">
-                <p class="qb-subtitle">Lectura agropecuaria del modelo</p>
-                <span>CHARTBAY AGRO</span>
-              </div>
-              <div id="qb-agro-pro-interpretation-content"></div>
-            </div>
-
             <div style="margin:14px 0 4px">
               <button class="btn-ink" id="qb-pro-export-md" disabled>Exportar Pro Markdown</button>
               <button class="btn-ink" id="qb-pro-export-txt" disabled>Exportar Pro TXT</button>
@@ -593,72 +556,6 @@
             </div>
           </div>
         </section>
-        {% if qb_module == 'agro' %}
-        <section class="qb-section" id="qb-agro-panel" style="display:none">
-          <div class="qb-panel-head">
-            <p class="qb-subtitle">ChartBay Agro</p>
-            <span>VERTICAL · MOTOR COMÚN</span>
-          </div>
-          <p class="muted qb-help">Modelos, márgenes y datos para el análisis agropecuario. ChartBay Agro trabaja con datasets sintéticos de demo, templates CSV y carga manual de datos reales; las regresiones las ejecuta el mismo motor econométrico de ChartBay.</p>
-          <div class="qb-vars-grid">
-            <div>
-              <label for="qb-agro-dataset">Dataset de ejemplo (sintético o real)</label>
-              <select id="qb-agro-dataset" style="width:100%"></select>
-            </div>
-          </div>
-          <div class="qb-demo-note" id="qb-agro-dataset-note"></div>
-          <div style="margin-top:10px">
-            <button class="btn-ink" id="qb-agro-use-dataset">Usar preset en el motor</button>
-            <button class="btn-ink" id="qb-agro-generate-large">Generar demo grande</button>
-            <p class="muted qb-help" id="qb-agro-use-status"></p>
-            <p class="muted qb-help" id="qb-agro-generate-status"></p>
-          </div>
-          <div id="qb-agro-detection"></div>
-          <div id="qb-agro-presets"></div>
-
-          <div class="qb-panel-head qb-subpanel" style="margin-top:14px">
-            <p class="qb-subtitle">Cargar datos reales</p>
-            <span>SIN APIs · CARGA MANUAL</span>
-          </div>
-          <p class="muted qb-help">ChartBay Agro todavía no descarga datos automáticamente. Estas son fuentes públicas de referencia (exportá el recorte que necesites como CSV desde el sitio del organismo) y templates de columnas recomendadas para empezar.</p>
-          <p class="qb-label" style="margin-top:8px">Fuentes recomendadas</p>
-          <div id="qb-agro-sources"></div>
-          <p class="qb-label" style="margin-top:12px">Templates CSV</p>
-          <div id="qb-agro-templates"></div>
-          <div class="qb-panel-head qb-subpanel" style="margin-top:14px">
-            <p class="qb-subtitle">Simulador de margen bruto</p>
-            <span>USD · POR CAMPAÑA</span>
-          </div>
-          <div class="qb-vars-grid">
-            <div><label for="qb-agro-m-crop">Cultivo</label><select id="qb-agro-m-crop" style="width:100%"></select></div>
-            <div><label for="qb-agro-m-hectares">Hectáreas</label><input id="qb-agro-m-hectares" type="number" min="0" value="100" step="1" style="width:100%"></div>
-            <div><label for="qb-agro-m-yield">Rinde esperado</label><input id="qb-agro-m-yield" type="number" min="0" value="3000" step="any" style="width:100%"></div>
-            <div><label for="qb-agro-m-unit">Unidad de rinde</label><select id="qb-agro-m-unit" style="width:100%"></select></div>
-            <div><label for="qb-agro-m-price">Precio esperado (USD/tn)</label><input id="qb-agro-m-price" type="number" min="0" value="300" step="any" style="width:100%"></div>
-            <div><label for="qb-agro-m-seed">Semilla (USD/ha)</label><input id="qb-agro-m-seed" type="number" min="0" value="80" step="any" style="width:100%"></div>
-            <div><label for="qb-agro-m-fert">Fertilizante (USD/ha)</label><input id="qb-agro-m-fert" type="number" min="0" value="120" step="any" style="width:100%"></div>
-            <div><label for="qb-agro-m-agq">Agroquímicos (USD/ha)</label><input id="qb-agro-m-agq" type="number" min="0" value="60" step="any" style="width:100%"></div>
-            <div><label for="qb-agro-m-labor">Labores (USD/ha)</label><input id="qb-agro-m-labor" type="number" min="0" value="90" step="any" style="width:100%"></div>
-            <div><label for="qb-agro-m-freight">Flete (USD/tn)</label><input id="qb-agro-m-freight" type="number" min="0" value="25" step="any" style="width:100%"></div>
-            <div><label for="qb-agro-m-rent">Alquiler (USD/ha)</label><input id="qb-agro-m-rent" type="number" min="0" value="0" step="any" style="width:100%"></div>
-            <div><label for="qb-agro-m-rent-qq">Alquiler (qq soja/ha)</label><input id="qb-agro-m-rent-qq" type="number" min="0" value="0" step="any" style="width:100%"></div>
-            <div><label for="qb-agro-m-soja-ref">Precio soja ref. (USD/tn)</label><input id="qb-agro-m-soja-ref" type="number" min="0" value="0" step="any" style="width:100%" title="Para valuar el alquiler en qq. Si el cultivo es soja y se deja en 0, se usa el precio esperado."></div>
-            <div><label for="qb-agro-m-harvest-pct">Cosecha (% ingreso)</label><input id="qb-agro-m-harvest-pct" type="number" min="0" max="100" value="9" step="any" style="width:100%"></div>
-            <div><label for="qb-agro-m-selling-pct">Comercialización (% ingreso)</label><input id="qb-agro-m-selling-pct" type="number" min="0" max="100" value="8" step="any" style="width:100%" title="Paritaria, secada, zarandeo, comisión de acopio/corredor."></div>
-            <div><label for="qb-agro-m-other">Otros (USD/ha)</label><input id="qb-agro-m-other" type="number" min="0" value="0" step="any" style="width:100%"></div>
-          </div>
-          <div style="margin-top:10px">
-            <button class="btn-ink" id="qb-agro-m-run" style="font-weight:700">Calcular margen</button>
-          </div>
-          <div id="qb-agro-margin-error" style="display:none;color:#e55;margin-top:8px"></div>
-          <div id="qb-agro-margin-result"></div>
-          <div style="margin:10px 0 4px">
-            <button class="btn-ink" id="qb-agro-m-copy" disabled>Copiar resumen</button>
-            <button class="btn-ink" id="qb-agro-m-export-txt" disabled>Exportar TXT</button>
-            <span class="muted" id="qb-agro-m-copy-status" style="margin-left:6px"></span>
-          </div>
-        </section>
-        {% endif %}
       </main>
 
       <aside class="cb-lab-right" aria-label="Reproducibilidad y glosario">

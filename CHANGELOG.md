@@ -270,7 +270,7 @@ los agujeros que tenía:
   feature flags. Cubre **las dos** configuraciones (con y sin sesión), no solo
   la que está fija hoy.
 - `CHARTBAY_SECCIONES=mercados=on` — override acotado para auditar el código
-  heredado de Mercados sin editar el diccionario. No controla Agro ni las
+  heredado de Mercados sin editar el diccionario. No controla las
   secciones activas.
 - [`docs/V1_RELEASE_SCOPE.md`](docs/V1_RELEASE_SCOPE.md) — alcance de 1.0, con
   una definición concreta y verificable de "listo", la deuda que queda abierta y
@@ -320,10 +320,9 @@ los agujeros que tenía:
 - Motor Pro sobre Pyodide: statsmodels en el navegador, errores robustos
   HC1/HC3/HAC, restricciones por Wald/F, ARIMA manual y forecast.
 
-## [0.5.0] — 2026 · Agro y reenfoque
+## [0.5.0] — 2026 · reenfoque
 
-- Vertical Agro y, más tarde, el apagado por flags de Agro y Mercados para
-  reenfocar el producto en econometría.
+- Apagado por flags de Mercados para reenfocar el producto en econometría.
 
 ## [0.1.0] — 2026 · origen
 

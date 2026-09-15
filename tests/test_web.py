@@ -144,7 +144,7 @@ def test_datasets_solo_sirve_los_casos_del_catalogo():
 
 def test_secciones_apagadas_devuelven_404():
     _, c = _cliente()
-    apagadas = ("/agro", "/data", "/api/data/catalog", "/api/data/series/us_cpi",
+    apagadas = ("/data", "/api/data/catalog", "/api/data/series/us_cpi",
                 "/api/data/meta/us_cpi", "/api/data/download/us_cpi")
     for ruta in apagadas:
         assert c.get(ruta).status_code == 404, f"{ruta} debía estar apagada"
@@ -166,7 +166,7 @@ def test_secciones_apagadas_no_aparecen_en_el_menu():
     _, c = _cliente()
     html = c.get("/").get_data(as_text=True)
     assert "Econometría" in html and "Limpiador" in html
-    for ausente in (">Datos<", 'href="/agro"', 'href="/finanzas"', 'href="/community"',
+    for ausente in (">Datos<", 'href="/finanzas"', 'href="/community"',
                     'href="/login"', ">Entrar<"):
         assert ausente not in html, ausente
 
@@ -446,7 +446,7 @@ def test_formato_de_descarga_no_soportado():
 
 def test_los_flags_por_defecto_son_el_alcance_publicado():
     modulo = _cargar_app()
-    assert modulo.SECCIONES == {"datos": False, "agro": False}
+    assert modulo.SECCIONES == {"datos": False}
 
 
 # ── runner propio (no requiere pytest) ───────────────────────────────────────

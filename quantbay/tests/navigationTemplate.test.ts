@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CHARTBAY_VERTICALS } from '../src/verticals/agro/agroFeatureFlags';
 
 const ROOT = join(__dirname, '..', '..');
 
@@ -15,20 +14,9 @@ const QUANTBAY = readRepoFile('web/templates/quantbay.html');
 const GUIA = readRepoFile('web/templates/guia.html');
 
 describe('ChartBay product navigation', () => {
-  it('keeps Agro and Datos disabled behind the current feature flags', () => {
+  it('keeps Datos hidden behind its feature flag', () => {
     expect(APP).toContain('"datos": False');
-    expect(APP).toContain('"agro": False');
     expect(APP).not.toContain('mercados');
-
-    expect(CHARTBAY_VERTICALS).toEqual({
-      econometria: true,
-      agro: false,
-      finanzas: false,
-    });
-
-    expect(APP).toContain('@app.route("/agro")');
-    expect(APP).toMatch(/@app\.route\("\/agro"\)\s*@seccion\("agro"\)/);
-    expect(APP).toContain('quantbay_module="agro"');
   });
 
   it('shows active sections and feature-gates disabled ones in the shared navbar', () => {
@@ -40,17 +28,12 @@ describe('ChartBay product navigation', () => {
     expect(TOPBAR).toContain("url_for('source_archive')");
     expect(TOPBAR).toContain('rel="source"');
     expect(TOPBAR).toContain('Código fuente');
-    expect(TOPBAR).toMatch(/\{% if secciones\.agro %\}[\s\S]*url_for\('agro'\)[\s\S]*\{% endif %\}/);
     expect(TOPBAR).not.toContain('finanzas');
     expect(TOPBAR).not.toContain('login');
   });
 
-  it('renders QuantBay as either Econometria or Agro without duplicating the Agro panel', () => {
-    expect(QUANTBAY).toContain("quantbay_module|default('econometria')");
-    expect(QUANTBAY).toContain("data-qb-module=\"{{ qb_module }}\"");
-    expect(QUANTBAY).toContain('qb-agro-initial');
-    expect(QUANTBAY).toMatch(/\{% if qb_module == 'agro' %\}\s*<section class="qb-section" id="qb-agro-panel"/);
-    expect(QUANTBAY.match(/id="qb-agro-panel"/g) ?? []).toHaveLength(1);
+  it('renders the lab as Econometria', () => {
+    expect(QUANTBAY).toContain('data-qb-module="econometria"');
     expect(QUANTBAY).toMatch(/id="qb-version-beta"[^>]*\shidden(?:\s|>)/);
     expect(QUANTBAY).not.toContain('MutationObserver');
   });

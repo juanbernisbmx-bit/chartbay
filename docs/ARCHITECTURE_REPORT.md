@@ -4,7 +4,7 @@
 > Describe el repositorio como estaba entonces, no el producto desplegado.
 > Varias cosas que dice ya no son ciertas: Mercados, la comunidad de bots, la
 > autenticación con SQLite y el pipeline de análisis técnico con IA **se
-> borraron** en septiembre de 2026; Agro y Datos están **apagados** (sus rutas
+> borraron** en septiembre de 2026; Datos está **escondida** (sus rutas
 > devuelven 404), y el motor Python con FastAPI es **experimental y no está
 > desplegado** —la app Flask no lo invoca y `render.yaml` levanta un único
 > servicio—.

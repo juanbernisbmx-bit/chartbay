@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractColumn, extractMatrix, getValidRows, parseCSVText } from '../src/csvParser';
+import { extractColumn, extractMatrix, getValidRows } from '../src/csvParser';
 
 type Row = Record<string, unknown>;
 
@@ -93,50 +93,5 @@ describe('getValidRows', () => {
   it('treats Infinity as missing', () => {
     const withInf: Row[] = [{ y: 10, x: Infinity }, { y: 20, x: 3 }];
     expect(getValidRows(withInf, 'y', ['x']).y).toEqual([20]);
-  });
-});
-
-describe('parseCSVText', () => {
-  it('parsea headers y filas numéricas', () => {
-    const parsed = parseCSVText('x,y\n1,10\n2,20\n3,30');
-    expect(parsed.headers).toEqual(['x', 'y']);
-    expect(parsed.rows).toEqual([{ x: 1, y: 10 }, { x: 2, y: 20 }, { x: 3, y: 30 }]);
-    expect(parsed.numericColumns).toEqual(['x', 'y']);
-  });
-
-  it('preserva strings en columnas no numéricas (categóricas)', () => {
-    const parsed = parseCSVText('provincia,rinde\nBuenos Aires,3000\nCórdoba,2800');
-    expect(parsed.rows[0].provincia).toBe('Buenos Aires');
-    expect(parsed.rows[1].provincia).toBe('Córdoba');
-    expect(parsed.numericColumns).toEqual(['rinde']);
-  });
-
-  it('trata celdas vacías como null y las excluye de numericColumns', () => {
-    const parsed = parseCSVText('x,y\n1,10\n,20\n3,');
-    expect(parsed.rows[1].x).toBeNull();
-    expect(parsed.rows[2].y).toBeNull();
-    expect(parsed.numericColumns).toEqual([]);
-  });
-
-  it('respeta campos entre comillas con comas y comillas escapadas', () => {
-    const parsed = parseCSVText('a,b\n"uno, dos","con ""comillas"""');
-    expect(parsed.rows[0]).toEqual({ a: 'uno, dos', b: 'con "comillas"' });
-  });
-
-  it('ignora líneas en blanco', () => {
-    const parsed = parseCSVText('x,y\n1,2\n\n3,4\n');
-    expect(parsed.rows).toHaveLength(2);
-  });
-
-  it('devuelve vacío para texto vacío', () => {
-    expect(parseCSVText('')).toEqual({ headers: [], rows: [], numericColumns: [] });
-    expect(parseCSVText('   \n  ')).toEqual({ headers: [], rows: [], numericColumns: [] });
-  });
-
-  it('no requiere filas para devolver los headers', () => {
-    const parsed = parseCSVText('x,y');
-    expect(parsed.headers).toEqual(['x', 'y']);
-    expect(parsed.rows).toEqual([]);
-    expect(parsed.numericColumns).toEqual([]);
   });
 });

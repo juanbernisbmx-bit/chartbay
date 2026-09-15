@@ -1,5 +1,5 @@
 {# Barra superior del skin v2. Espera `active` con el nombre de la seccion
-   ('inicio', 'econometria', 'agro', 'datos', 'limpiador', 'guia').
+   ('inicio', 'econometria', 'datos', 'limpiador', 'guia').
    La marca conserva el logo del barco y el wordmark Fraktur de siempre. #}
 <div class="cb-topbar">
   <a class="cb-brand" href="{{ url_for('dashboard') }}">
@@ -9,9 +9,6 @@
   <nav class="cb-nav">
     {% if active == 'inicio' %}<strong>Inicio</strong>{% else %}<a href="{{ url_for('dashboard') }}">Inicio</a>{% endif %}
     {% if active == 'econometria' %}<strong>Econometría</strong>{% else %}<a href="{{ url_for('econometria') }}">Econometría</a>{% endif %}
-    {% if secciones.agro %}
-      {% if active == 'agro' %}<strong>Agro</strong>{% else %}<a href="{{ url_for('agro') }}">Agro</a>{% endif %}
-    {% endif %}
     {% if secciones.datos %}
       {% if active == 'datos' %}<strong>Datos</strong>{% else %}<a href="{{ url_for('frequent_data') }}">Datos</a>{% endif %}
     {% endif %}

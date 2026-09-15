@@ -107,8 +107,8 @@ const lum = c => { const s = c.slice(0, 3).map(v => { v /= 255;
 
 - [ ] La barra superior muestra Inicio, Econometría, Limpiador y Documentación
 - [ ] **No** aparece "Entrar" en ninguna página
-- [ ] **No** aparecen Agro, Datos ni Finanzas Quant en el menú
-- [ ] `/agro`, `/data`, `/chartbay`, `/community`, `/login` devuelven 404
+- [ ] **No** aparecen Datos ni Finanzas Quant en el menú
+- [ ] `/data`, `/chartbay`, `/community`, `/login` devuelven 404
 - [ ] En `/guia`, el recuadro de alcance está arriba y se lee
 - [ ] En `/`, la tabla de módulos dice "Ecuaciones normales", **no** "Descomposición QR"
 

@@ -1072,8 +1072,6 @@ input:focus,select:focus,textarea:focus,.search input:focus,.compare-input:focus
 .qb-demo-note strong{color:#d8e2ee}
 .qb-demo-note code{background:rgba(255,255,255,.07);border-radius:2px;padding:1px 4px;font-size:11px}
 .qb-demo-restriction{margin-top:10px}
-.qb-agro-initial .qb-econometria-chrome,
-.qb-agro-initial .qb-econometria-section{display:none}
 .qb-flow-list{
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(180px,1fr));

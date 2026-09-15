@@ -108,18 +108,9 @@ queda fijada por SHA-256 en el script y en el manifiesto generado.
 
 ## Secciones apagadas
 
-Dos secciones están **apagadas** con flags: Agro (rindes, clima, márgenes
-agrícolas) y Datos, escondida por ahora. Sus rutas devuelven 404 y sus enlaces
-desaparecen del menú, pero el código, las plantillas y los tests siguen en el
-repo:
-
-- **Python** — `SECCIONES` en [`web/app.py`](web/app.py).
-- **TypeScript** — `CHARTBAY_VERTICALS` en
-  [`quantbay/src/verticals/agro/agroFeatureFlags.ts`](quantbay/src/verticals/agro/agroFeatureFlags.ts),
-  sólo para Agro. Al tocarlo hay que recompilar el bundle (ver más abajo).
-
-Para Agro los dos flags tienen que coincidir: el de Python saca la ruta, el de
-TypeScript evita que la vista se inicialice.
+La sección Datos está **escondida por ahora** con un flag: `SECCIONES` en
+[`web/app.py`](web/app.py). Sus rutas devuelven 404 y su enlace desaparece del
+menú, pero el código, la plantilla y los tests siguen en el repo.
 
 Mercados (panel de tickers, veredictos con IA, comparador, heatmap y comunidad
 de bots) y el pipeline de análisis técnico de la raíz **se borraron** en
@@ -175,7 +166,7 @@ cd quantbay && npm ci && npm run build
 
 ## Tests
 
-El motor de cálculo se testea desde `quantbay/` con Vitest: **1516 tests en 87
+El motor de cálculo se testea desde `quantbay/` con Vitest: **1350 tests en 77
 archivos** para el alcance actual.
 
 ```bash

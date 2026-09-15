@@ -39,11 +39,6 @@ archivo documenta las excepciones y atribuciones que deben conservarse.
 
 ## Datos
 
-- `quantbay/src/verticals/agro/data/magyp.ts` contiene un recorte transformado
-  de “Agricultura - Estimaciones agrícolas” del MAGyP, bajo CC BY 4.0. El propio
-  archivo conserva fuente, URL, fecha de descarga y transformaciones. Agro está
-  inactivo en 1.0, pero la atribución se mantiene porque los datos viajan en el
-  código fuente.
 - Las series de World Bank se consultan en tiempo de ejecución desde World
   Development Indicators. No se incluyen en el repositorio ni quedan cubiertas
   por la AGPL: cada conjunto conserva la atribución y la licencia publicada por
