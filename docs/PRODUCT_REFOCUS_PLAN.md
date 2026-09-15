@@ -5,7 +5,9 @@
 > efectivamente en ChartBay 1.0 está en
 > [`V1_RELEASE_SCOPE.md`](V1_RELEASE_SCOPE.md); varias filas de las tablas de
 > abajo marcan como "Producción" componentes que hoy están apagados o que nunca
-> se desplegaron, entre ellos el motor Python con FastAPI.
+> se desplegaron, entre ellos el motor Python con FastAPI. Lo que el plan
+> proponía desactivar de Mercados se borró del repositorio en septiembre de
+> 2026, junto con el pipeline de análisis técnico.
 
 ---
 

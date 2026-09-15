@@ -3,7 +3,7 @@ Proveedor FRED (Federal Reserve Economic Data, St. Louis Fed).
 
 Requiere una API key gratuita: https://fredaccount.stlouisfed.org/apikeys
 Se lee de la variable de entorno FRED_API_KEY. El usuario final nunca la ve:
-es un secreto de despliegue, igual que ANTHROPIC_API_KEY.
+es un secreto de despliegue y sólo viaja del servidor a la API de FRED.
 """
 from __future__ import annotations
 

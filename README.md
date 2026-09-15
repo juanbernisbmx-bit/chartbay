@@ -106,27 +106,25 @@ Los artefactos Pyodide se verifican sin red con
 publicaciones oficiales, ejecutar el mismo script sin `--check`; cada descarga
 queda fijada por SHA-256 en el script y en el manifiesto generado.
 
-## Secciones desenchufadas
+## Secciones apagadas
 
-El repo contiene dos verticales que **hoy están apagados**: Agro (rindes, clima,
-márgenes agrícolas) y Mercados (panel de tickers, veredictos IA, comparador,
-heatmap, comunidad de bots).
+Dos secciones están **apagadas** con flags: Agro (rindes, clima, márgenes
+agrícolas) y Datos, escondida por ahora. Sus rutas devuelven 404 y sus enlaces
+desaparecen del menú, pero el código, las plantillas y los tests siguen en el
+repo:
 
-No se borraron, se desenchufaron con flags. Sus rutas devuelven 404 y sus
-enlaces desaparecen del menú, pero el código, las plantillas y los tests siguen
-en el repo:
-
-- **Python** — `SECCIONES` en [`web/app.py`](web/app.py). Los valores publicados
-  mantienen Agro y Mercados en `False`.
+- **Python** — `SECCIONES` en [`web/app.py`](web/app.py).
 - **TypeScript** — `CHARTBAY_VERTICALS` en
-  [`quantbay/src/verticals/agro/agroFeatureFlags.ts`](quantbay/src/verticals/agro/agroFeatureFlags.ts).
-  Al tocarlo hay que recompilar el bundle (ver más abajo).
+  [`quantbay/src/verticals/agro/agroFeatureFlags.ts`](quantbay/src/verticals/agro/agroFeatureFlags.ts),
+  sólo para Agro. Al tocarlo hay que recompilar el bundle (ver más abajo).
 
-Los dos flags tienen que coincidir: el de Python saca la ruta, el de TypeScript
-evita que la vista se inicialice. Existe
-`CHARTBAY_SECCIONES=mercados=on` exclusivamente para auditar el código heredado
-en local. Ese override no habilita Agro y **no constituye una reactivación de
-Mercados**: faltan persistencia, credenciales, configuración de IA y QA integral.
+Para Agro los dos flags tienen que coincidir: el de Python saca la ruta, el de
+TypeScript evita que la vista se inicialice.
+
+Mercados (panel de tickers, veredictos con IA, comparador, heatmap y comunidad
+de bots) y el pipeline de análisis técnico de la raíz **se borraron** en
+septiembre de 2026: estaban apagados desde 1.0 y eran el único código con
+login, SQLite o una clave de Anthropic.
 
 ## Estructura
 
@@ -160,11 +158,9 @@ Variables del `.env`:
 
 | Variable | Para qué | ¿Obligatoria? |
 |---|---|---|
-| `SECRET_KEY` | firma de cookies y CSRF si se audita la autenticación heredada | Render la genera; en desarrollo hay fallback |
-| `FRED_API_KEY` | descargas FRED de Datos ([clave gratuita](https://fredaccount.stlouisfed.org/apikeys)) | opcional; sin ella World Bank y el catálogo siguen disponibles |
-| `APP_USERNAME` / `APP_PASSWORD` | login heredado de Mercados | fuera del despliegue 1.0 |
-| `ANTHROPIC_API_KEY` | pipeline CLI y veredictos heredados de Mercados | fuera del despliegue 1.0 |
-| `CHARTBAY_SECCIONES` | override local `mercados=on` para QA | no configurar en Render 1.0 |
+| `FRED_API_KEY` | descargas FRED de Datos ([clave gratuita](https://fredaccount.stlouisfed.org/apikeys)) | opcional, y hoy Datos está escondida; sin ella World Bank y el catálogo siguen disponibles |
+
+La app no lee ninguna otra variable: no hay login, sesión ni clave de IA.
 
 ## Compilar el motor
 
@@ -221,9 +217,9 @@ automático.
 
 1. Entrá a <https://render.com> e iniciá sesión con GitHub.
 2. New → **Blueprint** y elegí el repo (Render detecta el `render.yaml`).
-3. Completá `FRED_API_KEY` si querés habilitar las 37 series FRED.
-   `SECRET_KEY` se genera sola. No agregues credenciales de login ni Anthropic
-   al servicio 1.0.
+3. Completá `FRED_API_KEY` si vas a volver a mostrar Datos. No hace falta
+   ninguna otra variable: no agregues credenciales ni claves de Anthropic,
+   que nada las lee.
 4. Deploy. En 1-2 minutos te da una URL tipo `https://chartbay.onrender.com`.
 
 Para un dominio propio: en Render, servicio → **Settings → Custom Domains**,
@@ -231,14 +227,10 @@ añadí el dominio y creá en tu registrador los registros que te indique
 (normalmente un `CNAME` para `www` y un `A`/`ALIAS` para el raíz). El
 certificado HTTPS lo emite Render solo.
 
-Gunicorn corre con **1 worker y 8 hilos**. La carga es I/O-bound (FRED y World
-Bank), así que los hilos evitan que una llamada lenta bloquee toda la web;
-un segundo worker duplicaría NumPy en RAM y el plan gratuito tiene 512 MB.
-
-> **SQLite no participa de ChartBay 1.0.** Sólo lo usa la autenticación y la
-> comunidad heredada de Mercados; con el vertical apagado la app ni siquiera
-> abre la base. Una eventual reactivación necesitaría almacenamiento persistente
-> (disco o base externa) antes de considerarse operativa.
+Gunicorn corre con **1 worker y 8 hilos**. Los hilos evitan que una request
+lenta (armar el archivo de código fuente o, con Datos encendida, una llamada a
+FRED o World Bank) bloquee toda la web; un segundo worker duplicaría la app en
+RAM y el plan gratuito tiene 512 MB.
 
 ### Comprobar qué versión está desplegada
 
@@ -266,7 +258,7 @@ y despertarla tarda 40-50 segundos. Quien entre en ese momento se come la espera
 (y, si se cruza con el arranque, algún 520 esporádico de Cloudflare).
 
 La solución es un ping periódico desde fuera. Conviene apuntar a `/version`, que
-es la ruta más barata del sitio: no toca la base ni renderiza plantillas, y
+es la ruta más barata del sitio: no renderiza plantillas y
 responde menos de 200 bytes.
 
 Configuración en [cron-job.org](https://cron-job.org) (gratis):
@@ -294,33 +286,10 @@ No pongas credenciales ni cabeceras de autenticación en el cron: `/version` es
 público a propósito, justamente para poder monitorizarlo sin secretos de por
 medio.
 
-## Pipeline de análisis técnico con IA
-
-En la raíz del repo sobrevive el proyecto original: un pipeline en Python que
-baja datos de mercado, calcula indicadores técnicos y le pide a Claude un
-análisis frío y con base estadística. **Ya no se expone en la web** —la sección
-Mercados está desenchufada— pero sigue funcionando desde la línea de comandos.
-
-1. **Datos** (`data.py`) — OHLCV diario vía Yahoo Finance, sin API key.
-2. **Indicadores** (`indicators.py`) — EMAs 20/50/200, RSI, MACD y cruces, ATR,
-   Bollinger, soportes/resistencias y volumen relativo.
-3. **IA** (`analyze.py`) — manda esa "foto" a Claude, que devuelve lectura por
-   indicador, escenarios y un veredicto con niveles clave.
-4. **Informe** (`main.py`) — guarda todo en un `.md` dentro de `informes/`.
-
-```bash
-python main.py                 # analiza los tickers de config.py
-python main.py AAPL NVDA       # analiza solo esos
-```
-
-Los activos y el perfil de riesgo se configuran en `config.py`. Necesita
-`ANTHROPIC_API_KEY` en el `.env`.
-
 ## Coste
 
-El hosting tiene plan gratuito en Render y los datos de FRED y Yahoo Finance son
-gratis. La web 1.0 no consume la API de Anthropic; esa clave sólo genera coste
-si el propietario ejecuta voluntariamente el pipeline CLI heredado.
+El hosting tiene plan gratuito en Render y los datos de FRED y World Bank son
+gratis. ChartBay no consume ninguna API de pago.
 
 ## Licencia
 

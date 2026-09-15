@@ -2,11 +2,12 @@
 
 > **Documento histórico — auditoría del 30 de junio de 2026.**
 > Describe el repositorio como estaba entonces, no el producto desplegado.
-> Tres cosas que dice ya no son ciertas para ChartBay 1.0: Agro y Mercados
-> están **apagados** (sus rutas devuelven 404), el motor Python con FastAPI es
-> **experimental y no está desplegado** —la app Flask no lo invoca y
-> `render.yaml` levanta un único servicio—, y las secciones activas ya no
-> dependen de SQLite ni de la autenticación.
+> Varias cosas que dice ya no son ciertas: Mercados, la comunidad de bots, la
+> autenticación con SQLite y el pipeline de análisis técnico con IA **se
+> borraron** en septiembre de 2026; Agro y Datos están **apagados** (sus rutas
+> devuelven 404), y el motor Python con FastAPI es **experimental y no está
+> desplegado** —la app Flask no lo invoca y `render.yaml` levanta un único
+> servicio—.
 > El alcance vigente está en [`V1_RELEASE_SCOPE.md`](V1_RELEASE_SCOPE.md).
 
 Fecha de auditoría: 2026-06-30  

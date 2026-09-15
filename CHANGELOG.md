@@ -17,6 +17,21 @@ así que resumen por temas en vez de listar cada commit.
   se borró nada: la plantilla, `providers/` y sus tests siguen, y los tests la
   encienden para que ese código no quede sin probar.
 
+### Eliminado — Mercados y el pipeline de análisis técnico
+
+Estaban apagados desde 1.0 y eran lo único que necesitaba login, SQLite o una
+clave de Anthropic.
+
+- Rutas y plantillas de Mercados: panel de tickers, comparador, heatmap,
+  informes, comunidad de bots y veredictos con IA (`/api/verdict*`).
+- Autenticación completa: `/login`, `/register`, `/logout`, CSRF, cookie de
+  sesión, `web/db.py` y la siembra de bots. La app ya no pide `SECRET_KEY`.
+- El pipeline de la raíz (`main.py`, `analyze.py`, `data.py`,
+  `indicators.py`, `config.py`) y el override `CHARTBAY_SECCIONES`.
+- `yfinance`, `anthropic`, `pandas` y `numpy` salen de `requirements.txt`:
+  nada de lo que queda los importa. El build de Render instala cuatro
+  paquetes en vez de ocho.
+
 ### Agregado — el limpiador reconoce la forma de un export de planilla
 
 - **Preámbulo.** El título del reporte, la fecha de emisión y las líneas en
@@ -313,5 +328,4 @@ los agujeros que tenía:
 ## [0.1.0] — 2026 · origen
 
 - Pipeline de análisis técnico en Python: Yahoo Finance, indicadores y veredicto
-  de Claude. Sigue en la raíz del repositorio y se corre desde la línea de
-  comandos; ya no se expone en la web.
+  de Claude. Se borró en septiembre de 2026, junto con Mercados.

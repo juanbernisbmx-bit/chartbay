@@ -2,6 +2,11 @@
 
 Fecha de cierre de alcance: 28 de agosto de 2026.
 
+> **Actualización de septiembre de 2026.** Mercados, la comunidad de bots, la
+> autenticación y el pipeline de análisis técnico con IA **se borraron** del
+> repositorio, y la sección Datos quedó **escondida** (sus rutas devuelven 404).
+> El resto del documento describe el cierre de 1.0.
+
 Este documento define **qué es ChartBay 1.0** y, sobre todo, qué no es. Existe
 porque el repositorio contiene bastante más código del que la versión promete:
 dos verticales apagados, un motor Python paralelo y un pipeline de línea de
@@ -25,8 +30,8 @@ cubiertos por tests automáticos.
 | 2 | Las secciones fuera de alcance —Agro, Mercados, comunidad, veredictos IA— devuelven 404 y no aparecen en el menú | `test_secciones_apagadas_devuelven_404`, `test_secciones_apagadas_no_aparecen_en_el_menu` |
 | 3 | Ninguna afirmación pública atribuye QR al motor OLS desplegado | Revisión manual + sección 4 de este documento |
 | 4 | Pro aparece identificada como beta en el laboratorio y en la documentación | Inspección de `/econometria` con Pro seleccionada |
-| 5 | Un Blueprint nuevo de Render arranca sin credenciales heredadas y con FRED configurable | `test_arranca_sin_credenciales_cuando_no_hay_sesion` + despliegue real |
-| 6 | Ninguna sección activa depende de SQLite, de bots ni de Anthropic | `test_sin_sesion_no_se_abre_la_base` |
+| 5 | Un Blueprint nuevo de Render arranca sin credenciales heredadas y con FRED configurable | `test_arranca_sin_ninguna_variable_de_entorno` + despliegue real |
+| 6 | Ninguna sección activa depende de SQLite, de bots ni de Anthropic | Ese código se borró; `test_rutas_de_mercados_ya_no_existen` |
 | 7 | No hay recursos bloqueados por CSP ni permisos heredados innecesarios | `test_csp_*` + consola del navegador sin errores |
 | 8 | Las dependencias críticas del laboratorio están fijadas y viajan en el bundle local | `package-lock.json`, build reproducible e inspección de `quantbay.html` |
 | 9 | Las tres suites pasan: Vitest, providers y Flask | `npm test`, `python tests/test_providers.py`, `python tests/test_web.py` |
@@ -80,18 +85,14 @@ Hasta que ese QA exista, la recomendación pública es Lite.
 
 ## 3. Fuera del alcance
 
-Nada de esto se borró. Todo sigue en el repositorio, apagado. Los mecanismos de
-QA permiten inspeccionar parte del código, pero **no equivalen a reactivar una
-sección funcional**. No forma parte de lo que 1.0 promete ni se mantiene con la
-misma exigencia.
+Agro sigue en el repositorio, apagado. Mercados y todo lo que colgaba de él
+—comunidad, IA y autenticación— se borró en septiembre de 2026. Nada de esto
+forma parte de lo que 1.0 promete.
 
 | Componente | Dónde vive | Estado real |
 |---|---|---|
 | **Agro** — rindes, clima, márgenes | `SECCIONES["agro"]`, `quantbay/src/verticals/agro/` | Apagado. `/agro` devuelve 404. |
-| **Mercados** — tickers, comparador, heatmap | `SECCIONES["mercados"]` | Apagado. Seis rutas y cuatro APIs en 404. |
-| **Comunidad de bots** — publicar, reseñar | `web/db.py`, plantillas `bot_*.html`, `community.html` | Apagado con Mercados. |
-| **Análisis con IA** — veredictos de Claude | `/api/verdict`, `/api/verdict_one`, `analyze.py` | Apagado en la web. El pipeline CLI sigue corriendo a mano. |
-| **Autenticación** — login de un usuario | `/login`, `/register`, `/logout` | Apagada: ninguna sección activa la necesita. |
+| **Mercados, comunidad de bots, análisis con IA y autenticación** | — | **Borrados** en septiembre de 2026. |
 | **Backend FastAPI** — motor Python paralelo | `backend/chartbay_engine/` | **Experimental y no desplegado.** |
 
 ### El backend FastAPI, explícitamente
@@ -119,10 +120,8 @@ abría SQLite en el import para sembrar un usuario y unos bots inalcanzables,
 exponía un formulario de acceso que no desbloqueaba nada, y ofrecía un botón
 "Entrar" que no llevaba a ningún lado.
 
-Todo eso ahora cuelga de `AUTH_ENABLED = SECCIONES["mercados"]` en
-`web/app.py`. El override de QA vuelve a exponer esas superficies para poder
-auditarlas; no asegura persistencia, credenciales de producción ni un flujo
-completo de Mercados.
+En 1.0 todo eso quedó colgado de un flag; en septiembre de 2026 se borró junto
+con Mercados.
 
 ---
 
@@ -156,9 +155,7 @@ Ninguno amplía lo que ChartBay 1.0 promete:
    scripts inline llevan nonce, los manejadores HTML están bloqueados y ni
    `script-src` ni `style-src` aceptan inline global. El permiso restante sólo
    cubre atributos de presentación existentes.
-4. **SQLite sobre disco efímero sólo afecta a Mercados**, que está apagado.
-   Reactivarlo exige almacenamiento persistente y un release separado.
-5. **Producción se verifica después del deploy.** El commit de `/version`, las
+4. **Producción se verifica después del deploy.** El commit de `/version`, las
    cabeceras reales y la clave FRED no pueden certificarse desde el árbol local.
 
 ---
@@ -191,21 +188,6 @@ El apagado es un flag, no una amputación. Pero los flags no alcanzan solos.
 después recompilar el bundle. Los dos tienen que coincidir: el de Python
 devuelve la ruta, el de TypeScript deja que la vista se inicialice.
 
-**Mercados:** el override `mercados=on` vuelve a exponer rutas, login, SQLite y
-el permiso de TradingView del comparador exclusivamente para inspección local.
-No devuelve una sección funcional por sí solo. Antes de una reactivación real
-hay que volver a declarar `APP_USERNAME`, `APP_PASSWORD` y
-`ANTHROPIC_API_KEY` en el entorno (la app **no arranca** sin `APP_PASSWORD` con
-Mercados encendido), montar almacenamiento persistente para SQLite y revisar de
-punta a punta los flujos heredados. El único `fetch` POST que queda en una
-plantilla (`dashboard.html` hacia `/api/verdict_one`) ya envía
-`X-CSRF-Token`; `/api/verdict` no tiene un consumidor activo en las plantillas.
-
-Para **auditar** el código heredado en local sin tocar nada:
-
-```bash
-CHARTBAY_SECCIONES=mercados=on APP_PASSWORD=local SECRET_KEY=local python web/app.py
-```
-
-Eso no es una reactivación: es un modo de inspección. Esa variable **no debe
-configurarse en Render** mientras 1.0 esté vigente.
+**Datos:** poner `SECCIONES["datos"] = True` en `web/app.py`. Vuelven la
+pestaña, la fila de Inicio y las rutas; para las 37 series FRED hace falta
+`FRED_API_KEY` en Render.

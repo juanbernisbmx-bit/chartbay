@@ -15,12 +15,10 @@ const QUANTBAY = readRepoFile('web/templates/quantbay.html');
 const GUIA = readRepoFile('web/templates/guia.html');
 
 describe('ChartBay product navigation', () => {
-  it('keeps Agro and Mercados disabled behind the current feature flags', () => {
-    expect(APP).toContain('"econometria": True');
-    expect(APP).toContain('"limpiador": True');
+  it('keeps Agro and Datos disabled behind the current feature flags', () => {
     expect(APP).toContain('"datos": False');
     expect(APP).toContain('"agro": False');
-    expect(APP).toContain('"mercados": False');
+    expect(APP).not.toContain('mercados');
 
     expect(CHARTBAY_VERTICALS).toEqual({
       econometria: true,
@@ -31,7 +29,6 @@ describe('ChartBay product navigation', () => {
     expect(APP).toContain('@app.route("/agro")');
     expect(APP).toMatch(/@app\.route\("\/agro"\)\s*@seccion\("agro"\)/);
     expect(APP).toContain('quantbay_module="agro"');
-    expect(APP).toMatch(/@app\.route\("\/chartbay"\)\s*@seccion\("mercados"\)/);
   });
 
   it('shows active sections and feature-gates disabled ones in the shared navbar', () => {
@@ -44,7 +41,8 @@ describe('ChartBay product navigation', () => {
     expect(TOPBAR).toContain('rel="source"');
     expect(TOPBAR).toContain('Código fuente');
     expect(TOPBAR).toMatch(/\{% if secciones\.agro %\}[\s\S]*url_for\('agro'\)[\s\S]*\{% endif %\}/);
-    expect(TOPBAR).toMatch(/\{% if secciones\.mercados %\}[\s\S]*url_for\('finanzas'\)[\s\S]*\{% endif %\}/);
+    expect(TOPBAR).not.toContain('finanzas');
+    expect(TOPBAR).not.toContain('login');
   });
 
   it('renders QuantBay as either Econometria or Agro without duplicating the Agro panel', () => {

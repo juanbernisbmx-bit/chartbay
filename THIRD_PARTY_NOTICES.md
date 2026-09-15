@@ -36,9 +36,6 @@ archivo documenta las excepciones y atribuciones que deben conservarse.
 - Las páginas usan IBM Plex Sans e IBM Plex Mono desde Google Fonts. Las fuentes
   IBM Plex se ofrecen bajo SIL Open Font License 1.1 y no se incorporan al
   repositorio.
-- El código heredado e inactivo de Mercados referencia Marked, DOMPurify y el
-  widget de TradingView. No forma parte de las páginas activas de ChartBay 1.0;
-  si se reactiva, deben revisarse nuevamente sus versiones y términos.
 
 ## Datos
 
@@ -62,8 +59,6 @@ archivo documenta las excepciones y atribuciones que deben conservarse.
   revisión de sus notas ni una autorización que el titular pueda exigir.
 - Los cinco CSV de `datasets/` son casos educativos propios del repositorio, no
   copias de una base externa.
-- El código inactivo de Mercados puede consultar Yahoo Finance. ChartBay 1.0 no
-  incorpora ni redistribuye un dataset de Yahoo Finance.
 
 ## Identidad visual
 

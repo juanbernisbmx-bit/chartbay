@@ -55,12 +55,12 @@ y ningún assert sobre el HTML los ve.
 Levantar el sitio y **mirar** las cinco páginas activas:
 
 ```bash
-SECRET_KEY=dev APP_ENV=development python web/app.py
+python web/app.py
 ```
 
 ### B.1 — Las cinco páginas
 
-Para cada una de `/`, `/econometria`, `/limpiador`, `/data` y `/guia`:
+Para cada una de `/`, `/econometria`, `/limpiador` y `/guia`:
 
 - [ ] La página se lee: sin texto ilegible por contraste ni cajas de un carácter de ancho
 - [ ] Sin fondo oscuro asomando al scrollear
@@ -105,10 +105,10 @@ const lum = c => { const s = c.slice(0, 3).map(v => { v /= 255;
 
 ### B.2 — Lo que 1.0 promete
 
-- [ ] La barra superior muestra Inicio, Econometría, Datos, Limpiador y Documentación
+- [ ] La barra superior muestra Inicio, Econometría, Limpiador y Documentación
 - [ ] **No** aparece "Entrar" en ninguna página
-- [ ] **No** aparecen Agro ni Finanzas Quant en el menú
-- [ ] `/agro`, `/chartbay`, `/community`, `/login` devuelven 404
+- [ ] **No** aparecen Agro, Datos ni Finanzas Quant en el menú
+- [ ] `/agro`, `/data`, `/chartbay`, `/community`, `/login` devuelven 404
 - [ ] En `/guia`, el recuadro de alcance está arriba y se lee
 - [ ] En `/`, la tabla de módulos dice "Ecuaciones normales", **no** "Descomposición QR"
 
@@ -151,7 +151,7 @@ En `/econometria`, consola:
 - [ ] Exportar a PDF y a CSV produce archivos abribles
 - [ ] El código reproducible se genera para R, Python, Stata y notebook
 
-### B.6 — Limpiador y Datos
+### B.6 — Limpiador (y Datos, si se vuelve a encender)
 
 - [ ] `/limpiador` acepta un CSV y muestra el informe de limpieza
 - [ ] El worker WebAssembly arranca (sin caída silenciosa al lector clásico)
@@ -166,10 +166,10 @@ En `/econometria`, consola:
 
 Contra la URL real. Nada de esto se puede comprobar en local.
 
-- [ ] El Blueprint arranca **sin** `APP_USERNAME`, `APP_PASSWORD` ni `ANTHROPIC_API_KEY`
+- [ ] El Blueprint arranca sin ninguna variable salvo la opcional `FRED_API_KEY`
 - [ ] El health check de Render queda verde (apunta a `/version`)
 - [ ] `curl -s https://chartbay.onrender.com/version` devuelve el commit esperado
-- [ ] Cargar `FRED_API_KEY` en el panel y confirmar que las 37 series FRED se habilitan
+- [ ] Con Datos encendida: cargar `FRED_API_KEY` en el panel y confirmar que las 37 series FRED se habilitan
 - [ ] Las cabeceras de seguridad viajan en producción:
 
 ```bash
