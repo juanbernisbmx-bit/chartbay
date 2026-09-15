@@ -8,6 +8,8 @@ const bundles = [
   'quantbay.cleaner.js',
   'quantbay.data-cleaner.worker.js',
   'quantbay.pro.worker.js',
+  'chartpython.js',
+  'chartpython.worker.js',
 ];
 
 for (const name of bundles) {

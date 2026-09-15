@@ -1,0 +1,91 @@
+/* ChartPython: notebook dentro del skin v2. Los colores salen de las variables
+   de redesign.css para que la página no invente una paleta propia. */
+
+.cp-app { display: grid; gap: 14px; }
+
+.cp-barra { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.cp-barra select { max-width: 320px; }
+.cp-archivo { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); }
+.cp-archivo input { max-width: 190px; font-size: 12px; }
+
+.cp-aviso {
+  margin: 0; padding: 8px 12px; border: 1px solid var(--line-2); border-radius: 4px;
+  background: var(--panel); color: var(--ink-2); font-size: 12.5px;
+}
+
+.cp-celdas { display: grid; gap: 10px; }
+
+.cp-celda {
+  display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 0 10px;
+  border: 1px solid transparent; border-left: 3px solid transparent;
+  border-radius: 4px; padding: 6px 8px 6px 5px; background: var(--paper);
+}
+.cp-celda[data-seleccionada="true"] { border-color: var(--line); border-left-color: var(--accent); background: var(--panel); }
+.cp-celda[data-corriendo="true"] { border-left-color: var(--warn); }
+.cp-celda[data-tipo="markdown"] { grid-template-columns: 5.5rem minmax(0, 1fr); }
+
+.cp-prompt {
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-3);
+  padding-top: 8px; text-align: right; white-space: nowrap;
+}
+.cp-prompt-out { display: block; padding: 0 0 2px; text-align: left; }
+
+.cp-cuerpo { min-width: 0; display: grid; gap: 6px; }
+
+.cp-codigo {
+  width: 100%; box-sizing: border-box; min-height: 42px; resize: vertical;
+  padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 4px;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.55; tab-size: 4;
+}
+.cp-codigo:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.cp-markdown { padding: 2px 2px 6px; color: var(--ink); }
+.cp-markdown h1, .cp-markdown h2, .cp-markdown h3 { margin: 10px 0 6px; }
+.cp-markdown p { margin: 0 0 8px; }
+.cp-markdown pre { background: var(--panel); padding: 8px 10px; border-radius: 4px; overflow-x: auto; }
+
+.cp-salidas { display: grid; gap: 6px; }
+.cp-salida { min-width: 0; overflow-x: auto; }
+.cp-flujo {
+  margin: 0; padding: 6px 10px; border-radius: 4px; background: var(--panel);
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+}
+.cp-stderr { background: var(--warn-100); color: var(--warn); }
+.cp-error {
+  margin: 0; padding: 8px 10px; border-radius: 4px; background: var(--err-100); color: var(--err);
+  font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; word-break: break-word;
+}
+.cp-valor { font-size: 13px; }
+.cp-imagen { max-width: 100%; }
+
+.cp-tabla { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.cp-tabla th, .cp-tabla td { border-bottom: 1px solid var(--line); padding: 4px 10px 4px 0; text-align: right; }
+.cp-tabla th:first-child, .cp-tabla td:first-child { text-align: left; }
+.cp-tabla thead th { color: var(--ink-3); font-weight: 600; }
+
+.cp-archivos { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.cp-lista-archivos { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.cp-lista-archivos li { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+.cp-lista-archivos button { padding: 2px 8px; font-size: 11.5px; }
+
+.cp-estado {
+  display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline;
+  border-top: 1px solid var(--line); padding-top: 10px;
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-3);
+}
+.cp-kernel { color: var(--ink-2); }
+.cp-kernel[data-estado="listo"] { color: var(--ok); }
+.cp-kernel[data-estado="ocupado"] { color: var(--warn); }
+.cp-kernel[data-estado="muerto"] { color: var(--err); }
+.cp-detalle { color: var(--ink-3); }
+.cp-nombre { margin-left: auto; }
+
+.cp-ayuda { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.cp-ayuda h4 { margin: 0 0 6px; font-size: 13px; }
+.cp-ayuda ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); }
+
+@media (max-width: 720px) {
+  .cp-celda { grid-template-columns: 1fr; }
+  .cp-prompt { text-align: left; padding-top: 0; }
+}

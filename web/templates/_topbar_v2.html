@@ -13,6 +13,9 @@
       {% if active == 'datos' %}<strong>Datos</strong>{% else %}<a href="{{ url_for('frequent_data') }}">Datos</a>{% endif %}
     {% endif %}
     {% if active == 'limpiador' %}<strong>Limpiador</strong>{% else %}<a href="{{ url_for('limpiador') }}">Limpiador</a>{% endif %}
+    {% if secciones.chartpython %}
+      {% if active == 'chartpython' %}<strong>ChartPython</strong>{% else %}<a href="{{ url_for('chartpython') }}">ChartPython</a>{% endif %}
+    {% endif %}
     {% if active == 'guia' %}<strong>Documentación</strong>{% else %}<a href="{{ url_for('guia') }}">Documentación</a>{% endif %}
     <a href="{{ url_for('source_archive') }}" rel="source" download>Código fuente</a>
   </nav>

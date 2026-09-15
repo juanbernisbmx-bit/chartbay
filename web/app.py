@@ -79,6 +79,9 @@ SECCIONES = {
     # Escondida por ahora: sin pestaña ni enlaces y con sus rutas en 404. El
     # código, la plantilla y los tests siguen (los tests la encienden).
     "datos": False,
+    # ChartPython sale en beta: se puede apagar sin tocar nada más si su
+    # intérprete da problemas en algún navegador.
+    "chartpython": True,
 }
 
 
@@ -142,8 +145,10 @@ def _csp(*, nonce: str, wasm: bool = False) -> str:
 _CSP_PERFIL_POR_RUTA = {
     "/econometria": {"wasm": True},
     "/limpiador": {"wasm": True},
+    "/chartpython": {"wasm": True},
     "/static/js/quantbay.worker.js": {"wasm": True},
     "/static/js/quantbay.pro.worker.js": {"wasm": True},
+    "/static/js/chartpython.worker.js": {"wasm": True},
 }
 
 
@@ -284,6 +289,13 @@ def limpiador():
         else "limpiador.html"
     )
     return render_template(template)
+
+
+@app.route("/chartpython")
+@seccion("chartpython")
+def chartpython():
+    """Notebook de Python en el navegador: el intérprete es Pyodide, no el servidor."""
+    return render_template("chartpython.html")
 
 
 @app.route("/econometria")

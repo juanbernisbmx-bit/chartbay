@@ -10,6 +10,25 @@ así que resumen por temas en vez de listar cada commit.
 
 ## [Unreleased]
 
+### Agregado — ChartPython, un notebook de Python en el navegador
+
+- Sección nueva en `/chartpython`, en beta y apagable con
+  `SECCIONES["chartpython"]`: celdas de código y de texto con el estado
+  compartido entre ellas, prompts `In [n]` / `Out[n]`, los atajos de Jupyter en
+  modo comando y edición, y salidas en formato nbformat (`stream`,
+  `execute_result`, `display_data`, `error`).
+- El intérprete corre en un worker propio sobre el Pyodide 0.26.4 que ya estaba
+  vendorizado, con pandas, NumPy, SciPy y statsmodels. Sin red y sin `pip`.
+- Los notebooks y los archivos subidos se guardan en IndexedDB de ese navegador;
+  los archivos van a `/mnt/data` y se reponen cuando el kernel se reinicia.
+  Import y export `.ipynb` (nbformat 4), compatible con el notebook que genera
+  el laboratorio.
+- Cada notebook tiene su propio intérprete: abrir o importar otro reinicia
+  Python, y lo que llegue tarde de la ejecución anterior se descarta.
+- El HTML de las salidas y el markdown de las celdas se arman con nodos propios
+  desde una lista blanca de etiquetas —nunca `innerHTML`—, así que un `.ipynb`
+  de otra persona no puede ejecutar nada al abrirse.
+
 ### Seguridad — la clave de Anthropic no puede llegar al cliente
 
 - Nunca estuvo en el historial de git (sólo el placeholder de `.env.example`),

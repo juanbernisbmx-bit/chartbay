@@ -83,6 +83,7 @@ a ningún servidor.
 | Inicio | `/` | Presentación, acceso al laboratorio y recorrido de módulos activos |
 | Econometría | `/econometria` | OLS, RLS con test de Wald, inferencia t/F, intervalos al 95%, diagnósticos de residuos y colinealidad (VIF), series de tiempo (ADF, ACF, PACF, Ljung-Box) |
 | Limpiador | `/limpiador` | Inspección y limpieza de CSV con motor C++/WebAssembly |
+| ChartPython | `/chartpython` | Notebook de Python en el navegador: celdas de código y de texto, estado compartido, archivos en `/mnt/data`, import y export `.ipynb`. En beta, apagable con `SECCIONES["chartpython"]` |
 | Datos | `/data` | **Escondida por ahora** (`SECCIONES["datos"]` en `web/app.py`): sin pestaña y con sus rutas en 404. El código sigue: 49 indicadores macro (37 de FRED, 12 de World Bank), con caché diaria y descarga en CSV o JSON con atribución de origen |
 | Documentación | `/guia` | Conceptos, ejemplos guiados y un curso de econometría |
 
@@ -100,6 +101,28 @@ el mismo origen. Pro empieza a preparar Python al elegirlo, reutiliza el worker
 entre regresión y series, transfiere matrices numéricas sin serializar otra vez
 el CSV y cancela una ejecución que supere 120 segundos. El worker se libera al
 volver a Lite o después de 10 minutos sin uso.
+
+### ChartPython
+
+`/chartpython` es un notebook parecido a Jupyter que corre dentro de la página:
+celdas de código y de texto, estado compartido entre ellas, prompts `In [n]` y
+`Out[n]`, los atajos de siempre (Shift+Enter, A, B, D D, M, Y, 0 0) e import y
+export en `.ipynb`, el mismo formato que Jupyter de escritorio y que el notebook
+que ya genera el laboratorio.
+
+El intérprete es el mismo Pyodide 0.26.4 vendorizado que usa Pro, en un worker
+propio (`chartpython.worker.js`), con pandas, NumPy, SciPy y statsmodels
+disponibles. No hay red ni `pip`: los paquetes son los que viajan con ChartBay.
+La primera ejecución descarga unos 115 MB y después queda en caché.
+
+Los notebooks y los archivos que se suben viven en IndexedDB de ese navegador y
+nunca llegan al servidor. Los archivos van a `/mnt/data`, el directorio donde
+arranca Python, y se reponen solos cuando el kernel se reinicia. Interrumpir
+reinicia el intérprete —es la única forma de cortar un bucle infinito sin
+`SharedArrayBuffer`—, así que la página avisa que se pierden las variables;
+cambiar de notebook también lo reinicia, para que uno no herede el estado del
+otro. El HTML que devuelve Python, como la tabla de un DataFrame, se vuelve a
+construir con una lista blanca de etiquetas en vez de inyectarse.
 
 Los artefactos Pyodide se verifican sin red con
 `python scripts/vendor_pyodide.py --check`. Para reproducirlos desde las

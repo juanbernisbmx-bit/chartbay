@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es" data-skin="v2">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay · ChartPython</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/chartbay-logo.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='redesign.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='chartpython.css') }}">
+</head>
+<body>
+  {% set active = 'chartpython' %}
+  {% include '_topbar_v2.html' with context %}
+  <main class="wrap qb-wrap" data-qb-module="chartpython">
+    <section class="qb-shell-head">
+      <div>
+        <p class="qb-kicker">Chart Bay / ChartPython</p>
+        <h2>Un notebook de Python en tu navegador</h2>
+        <p>Celdas de código y de texto, con el estado compartido entre ellas, como en Jupyter. Python corre acá dentro con pandas, NumPy, SciPy y statsmodels: no se instala nada y tus datos no salen de esta computadora.</p>
+      </div>
+      <div class="qb-terminal-chip">Beta</div>
+    </section>
+
+    <section class="qb-section qb-econometria-section">
+      <div class="qb-panel-head"><h3 class="qb-subtitle">Notebook</h3><span>Se guarda en este navegador</span></div>
+      <div data-chartpython class="cp-app"></div>
+      <noscript><p class="qb-help">ChartPython necesita JavaScript: todo el intérprete corre en tu navegador.</p></noscript>
+    </section>
+
+    <section class="qb-section qb-econometria-section">
+      <div class="qb-panel-head"><h3 class="qb-subtitle">Cómo se usa</h3><span>Atajos de Jupyter</span></div>
+      <div class="cp-ayuda">
+        <div>
+          <h4>Ejecutar</h4>
+          <ul>
+            <li><b>Shift+Enter</b>: ejecuta y pasa a la siguiente.</li>
+            <li><b>Ctrl/Cmd+Enter</b>: ejecuta y se queda.</li>
+            <li><b>Alt+Enter</b>: ejecuta e inserta una celda debajo.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Modo comando (Esc)</h4>
+          <ul>
+            <li><b>A</b> / <b>B</b>: celda arriba o abajo. <b>D D</b>: borrar. <b>Z</b>: deshacer.</li>
+            <li><b>M</b> / <b>Y</b>: texto o código. <b>Enter</b>: editar.</li>
+            <li><b>I I</b>: interrumpir. <b>0 0</b>: reiniciar Python.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Qué hay adentro</h4>
+          <ul>
+            <li>pandas, NumPy, SciPy y statsmodels ya instalados.</li>
+            <li>No hay internet ni <code>pip</code>: los paquetes son los que trae ChartBay.</li>
+            <li>La primera ejecución descarga Python (unos 115 MB) y después queda en caché.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="qb-help">Interrumpir reinicia el intérprete: se detiene lo que esté corriendo y se pierden las variables, pero las celdas y sus salidas quedan. Los notebooks se descargan y se abren en formato <code>.ipynb</code>, el mismo de Jupyter.</p>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='js/chartpython.js') }}"></script>
+</body>
+</html>

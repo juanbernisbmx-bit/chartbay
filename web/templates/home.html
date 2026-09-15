@@ -136,6 +136,9 @@
                 <tr><td><a href="{{ url_for('frequent_data') }}">Datos macro</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">49 indicadores: 37 de FRED y 12 de World Bank, con caché diario.</td></tr>
                 {% endif %}
                 <tr><td><a href="{{ url_for('limpiador') }}">Limpiador</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">Revisión y corrección de CSV antes de estimar.</td></tr>
+                {% if secciones.chartpython %}
+                <tr><td><a href="{{ url_for('chartpython') }}">ChartPython</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">Notebook de Python en el navegador, con celdas, pandas y statsmodels. En beta.</td></tr>
+                {% endif %}
                 <tr><td><a href="{{ url_for('guia') }}">Documentación</a></td><td style="font-size:12.5px;white-space:normal;color:var(--ink-2)">Conceptos, ejemplos guiados y guía de uso del laboratorio.</td></tr>
               </tbody>
             </table>

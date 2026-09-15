@@ -101,6 +101,10 @@ def test_archivo_de_fuente_incluye_licencia_y_excluye_estado_local():
         "quantbay/src/pro.worker.entry.ts",
         "quantbay/src/pro/pyodide/proWorkerClient.ts",
         "web/static/js/quantbay.pro.worker.js",
+        "quantbay/src/chartpython/kernel.ts",
+        "quantbay/src/chartpython/ui/app.ts",
+        "web/static/js/chartpython.js",
+        "web/static/js/chartpython.worker.js",
     ):
         assert f"chartbay-source/{requerido}" in names
     assert not any("/.git/" in name or name.endswith("/.env") for name in names)
@@ -617,7 +621,47 @@ def test_la_memoria_del_limitador_esta_acotada():
 
 def test_los_flags_por_defecto_son_el_alcance_publicado():
     modulo = _cargar_app()
-    assert modulo.SECCIONES == {"datos": False}
+    assert modulo.SECCIONES == {"datos": False, "chartpython": True}
+
+
+# ── ChartPython ──────────────────────────────────────────────────────────────
+
+def test_chartpython_sirve_su_pagina_y_sus_artefactos():
+    _, c = _cliente()
+    html = c.get("/chartpython").get_data(as_text=True)
+    assert "data-chartpython" in html
+    assert "/static/js/chartpython.js" in html
+    for archivo in ("/static/js/chartpython.js", "/static/js/chartpython.worker.js", "/static/chartpython.css"):
+        assert c.get(archivo).status_code == 200, archivo
+
+
+def test_csp_de_chartpython_permite_wasm_sin_abrir_cdn():
+    """La página y el worker compilan WebAssembly; el worker usa su propia CSP."""
+    _, c = _cliente()
+    for ruta in ("/chartpython", "/static/js/chartpython.worker.js"):
+        politica = _csp(c, ruta)
+        script = politica.split("script-src")[1].split(";")[0]
+        assert "'wasm-unsafe-eval'" in script, ruta
+        assert "jsdelivr" not in politica and "cdnjs" not in politica, ruta
+        assert "'self'" in politica.split("connect-src")[1].split(";")[0], ruta
+
+
+def test_chartpython_aparece_en_el_menu_y_en_inicio():
+    _, c = _cliente()
+    assert 'href="/chartpython"' in c.get("/").get_data(as_text=True)
+    assert 'href="/chartpython"' in c.get("/limpiador").get_data(as_text=True)
+    assert "<strong>ChartPython</strong>" in c.get("/chartpython").get_data(as_text=True)
+
+
+def test_chartpython_se_puede_apagar_sin_borrar_nada():
+    modulo, c = _cliente()
+    modulo.SECCIONES["chartpython"] = False
+    try:
+        assert c.get("/chartpython").status_code == 404
+        for ruta in ("/", "/limpiador"):
+            assert 'href="/chartpython"' not in c.get(ruta).get_data(as_text=True), ruta
+    finally:
+        modulo.SECCIONES["chartpython"] = True
 
 
 # ── runner propio (no requiere pytest) ───────────────────────────────────────
