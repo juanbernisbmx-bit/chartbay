@@ -442,6 +442,121 @@ def test_formato_de_descarga_no_soportado():
     assert r.status_code in (400, 404)
 
 
+# ── límite de solicitudes por IP ─────────────────────────────────────────────
+
+class _Reloj:
+    """Reloj que avanza sólo cuando el test lo mueve."""
+
+    def __init__(self, t: float = 1000.0):
+        self.t = t
+
+    def __call__(self) -> float:
+        return self.t
+
+
+def _cliente_con_limite(limite=3, ventana_s=60, **overrides):
+    """Cliente con un limitador chico, para no tener que hacer 120 requests."""
+    from rate_limit import Limitador, Regla
+    modulo, c = _cliente(**overrides)
+    reloj = _Reloj()
+    modulo.LIMITADOR = Limitador(
+        (Regla("general", limite=limite, ventana_s=ventana_s),
+         Regla("fuente", limite=1, ventana_s=ventana_s, rutas=("/source.tar.gz",))),
+        reloj=reloj,
+    )
+    return modulo, c, reloj
+
+
+def test_los_limites_por_defecto_cubren_una_visita_real():
+    modulo = _cargar_app()
+    limitador = modulo.LIMITADOR
+    assert limitador.regla_para("/econometria").limite == 120
+    assert limitador.regla_para("/static/vendor/pyodide/0.26.4/pyodide.js").limite == 600
+    assert limitador.regla_para("/source.tar.gz").limite == 10
+    assert limitador.regla_para("/api/data/catalog").limite == 30
+    # /datasets empieza como /data pero son los casos de práctica: regla general.
+    assert limitador.regla_para("/datasets/01_simple_linear.csv").nombre == "general"
+
+
+def test_pasado_el_limite_responde_429_con_retry_after():
+    _, c, _ = _cliente_con_limite(limite=3)
+    for _ in range(3):
+        assert c.get("/version").status_code == 200
+    r = c.get("/version")
+    assert r.status_code == 429
+    assert int(r.headers["Retry-After"]) >= 1
+    # El rechazo también lleva las cabeceras de seguridad.
+    assert r.headers["X-Content-Type-Options"] == "nosniff"
+    assert "Content-Security-Policy" in r.headers
+
+
+def test_el_limite_en_la_api_responde_json():
+    _, c, _ = _cliente_con_limite(limite=1)
+    c.get("/api/data/catalog")
+    r = c.get("/api/data/catalog")
+    assert r.status_code == 429 and r.is_json and r.get_json()["ok"] is False
+
+
+def test_el_limite_es_por_ip():
+    _, c, _ = _cliente_con_limite(limite=1)
+    uno, otro = {"REMOTE_ADDR": "203.0.113.1"}, {"REMOTE_ADDR": "203.0.113.2"}
+    assert c.get("/version", environ_base=uno).status_code == 200
+    assert c.get("/version", environ_base=uno).status_code == 429
+    assert c.get("/version", environ_base=otro).status_code == 200
+
+
+def test_la_ventana_se_desliza_y_vuelve_a_dejar_pasar():
+    _, c, reloj = _cliente_con_limite(limite=2, ventana_s=60)
+    assert c.get("/version").status_code == 200
+    assert c.get("/version").status_code == 200
+    assert c.get("/version").status_code == 429
+    reloj.t += 120  # dos ventanas después no queda rastro de las anteriores
+    assert c.get("/version").status_code == 200
+
+
+def test_el_archivo_de_fuente_tiene_un_limite_propio():
+    _, c, _ = _cliente_con_limite(limite=100)
+    assert c.get("/source.tar.gz").status_code == 200
+    assert c.get("/source.tar.gz").status_code == 429
+    # Agotar esa regla no le cierra el resto del sitio a la misma IP.
+    assert c.get("/version").status_code == 200
+
+
+def test_sin_render_no_se_confia_en_cabeceras_de_ip():
+    """Fuera de Render, inventar un CF-Connecting-IP no sirve para esquivar el límite."""
+    _, c, _ = _cliente_con_limite(limite=1, RENDER=None)
+    assert c.get("/version", headers={"CF-Connecting-IP": "198.51.100.1"}).status_code == 200
+    assert c.get("/version", headers={"CF-Connecting-IP": "198.51.100.2"}).status_code == 429
+
+
+def test_en_render_cuenta_la_ip_que_escribe_cloudflare():
+    _, c, _ = _cliente_con_limite(limite=1, RENDER="true")
+    assert c.get("/version", headers={"CF-Connecting-IP": "198.51.100.1"}).status_code == 200
+    assert c.get("/version", headers={"CF-Connecting-IP": "198.51.100.2"}).status_code == 200
+    assert c.get("/version", headers={"CF-Connecting-IP": "198.51.100.1"}).status_code == 429
+
+
+def test_cabecera_de_ip_invalida_cae_a_la_siguiente():
+    from rate_limit import ip_del_cliente
+    cabeceras = {"CF-Connecting-IP": "no-es-una-ip", "X-Forwarded-For": "198.51.100.7, 10.0.0.1"}
+    assert ip_del_cliente(cabeceras, "10.0.0.1", detras_de_render=True) == "198.51.100.7"
+
+
+def test_ipv6_cuenta_por_prefijo_64():
+    from rate_limit import ip_del_cliente
+    a = ip_del_cliente({}, "2001:db8:1:2::1", detras_de_render=False)
+    b = ip_del_cliente({}, "2001:db8:1:2:ffff::9", detras_de_render=False)
+    assert a == b == "2001:db8:1:2::/64"
+
+
+def test_la_memoria_del_limitador_esta_acotada():
+    from rate_limit import Limitador, Regla
+    limitador = Limitador((Regla("general", limite=5, ventana_s=60),), max_claves=100)
+    for i in range(1000):
+        limitador.registrar("/", f"10.0.{i // 256}.{i % 256}")
+    assert len(limitador) == 100
+
+
 # ── feature flags ────────────────────────────────────────────────────────────
 
 def test_los_flags_por_defecto_son_el_alcance_publicado():

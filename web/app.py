@@ -36,6 +36,7 @@ sys.path.insert(0, str(HERE))  # permite 'import source_archive' bajo gunicorn (
 load_dotenv(ROOT / ".env")
 
 import providers        # noqa: E402
+from rate_limit import Limitador, Regla, ip_del_cliente  # noqa: E402
 from source_archive import build_source_archive  # noqa: E402
 
 CACHE_DIR = HERE / "cache"
@@ -149,6 +150,45 @@ _CSP_PERFIL_POR_RUTA = {
 @app.before_request
 def preparar_csp_nonce():
     g.csp_nonce = secrets.token_urlsafe(18)
+
+
+# ─── Límite de solicitudes por IP ────────────────────────────────────────────
+# Los números salen de lo que pide una visita real. Abrir el laboratorio y
+# elegir Pro baja unos veinte archivos de /static (bundle, hojas, Pyodide y sus
+# paquetes), así que los estáticos tienen un techo propio y amplio. Una clase
+# entera detrás del NAT de la facultad comparte IP: 120 páginas por minuto le
+# dan al grupo dos por segundo sostenidas.
+#
+# Se registra después de preparar_csp_nonce porque el 429 también pasa por
+# add_security_headers, que necesita el nonce.
+_REGLAS_DE_LIMITE = (
+    Regla("general", limite=120, ventana_s=60),
+    Regla("estaticos", limite=600, ventana_s=60, rutas=("/static/",)),
+    # Cada descarga es el repositorio entero.
+    Regla("fuente", limite=10, ventana_s=60, rutas=("/source.tar.gz",)),
+    # Con Datos encendida, cada serie fuera de caché es una llamada a FRED o a
+    # World Bank hecha con nuestra IP y nuestra clave.
+    Regla("datos", limite=30, ventana_s=60, rutas=("/data", "/api/data/")),
+)
+LIMITADOR = Limitador(_REGLAS_DE_LIMITE)
+# Render define RENDER=true en el entorno de sus servicios.
+_DETRAS_DE_RENDER = os.environ.get("RENDER", "").lower() == "true"
+
+
+@app.before_request
+def limitar_por_ip():
+    ip = ip_del_cliente(request.headers, request.remote_addr, detras_de_render=_DETRAS_DE_RENDER)
+    espera = LIMITADOR.registrar(request.path, ip)
+    if espera is None:
+        return None
+    mensaje = "Demasiadas solicitudes. Probá de nuevo en unos segundos."
+    if request.path.startswith("/api/"):
+        respuesta = jsonify({"ok": False, "error": mensaje})
+    else:
+        respuesta = Response(mensaje + "\n", mimetype="text/plain")
+    respuesta.status_code = 429
+    respuesta.headers["Retry-After"] = str(espera)
+    return respuesta
 
 
 @app.after_request

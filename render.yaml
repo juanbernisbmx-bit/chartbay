@@ -29,8 +29,10 @@ services:
     # Un solo worker con hilos: los --threads son los que evitan que una request
     # lenta (armar /source.tar.gz o, con Datos encendida, una llamada a FRED o a
     # World Bank) bloquee al resto. Un segundo worker duplicaría la app en RAM y
-    # el plan free tiene 512 MB. Tampoco usamos --preload: forkear después de
-    # importar la app no gana nada con un único worker.
+    # el plan free tiene 512 MB, y además partiría en dos el límite de
+    # solicitudes por IP (web/rate_limit.py), que cuenta en la memoria del
+    # proceso. Tampoco usamos --preload: forkear después de importar la app no
+    # gana nada con un único worker.
     startCommand: gunicorn web.app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120
     # /version es la ruta mas barata del sitio: no renderiza plantillas y
     # responde menos de 200 bytes. Es ademas la unica que prueba algo util

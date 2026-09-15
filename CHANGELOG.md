@@ -10,6 +10,19 @@ así que resumen por temas en vez de listar cada commit.
 
 ## [Unreleased]
 
+### Seguridad — límite de solicitudes por IP
+
+- Toda request pasa por un limitador en memoria (`web/rate_limit.py`) con
+  ventana deslizante: 120 páginas por minuto por IP, 600 archivos de
+  `/static`, 10 descargas de `/source.tar.gz` y 30 consultas a Datos. Pasado
+  el límite responde 429 con `Retry-After` y las mismas cabeceras de
+  seguridad.
+- En Render la IP sale de `CF-Connecting-IP`. El único límite que había, el
+  del login ya borrado, usaba `request.remote_addr`: detrás del proxy es la
+  IP del proxy, así que todos los visitantes compartían un contador.
+- IPv6 se cuenta por /64 y el limitador guarda como mucho 50.000 claves:
+  rotar de dirección no esquiva el límite ni hace crecer la memoria.
+
 ### Cambiado — la sección Datos queda escondida
 
 - `SECCIONES["datos"]` pasa a `False`: la pestaña desaparece de la barra, la

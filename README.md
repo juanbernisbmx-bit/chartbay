@@ -223,6 +223,19 @@ lenta (armar el archivo de código fuente o, con Datos encendida, una llamada a
 FRED o World Bank) bloquee toda la web; un segundo worker duplicaría la app en
 RAM y el plan gratuito tiene 512 MB.
 
+### Límite de solicitudes por IP
+
+`web/rate_limit.py` corta con **429** y `Retry-After` a una IP que pide de
+más, con ventana deslizante: 120 páginas por minuto, 600 archivos estáticos,
+10 descargas del código fuente y 30 consultas a la sección Datos. Detrás de
+Render la IP sale de `CF-Connecting-IP`, que escribe Cloudflare; en cualquier
+otro entorno se usa la del socket, porque esas cabeceras las puede inventar el
+cliente. IPv6 se cuenta por /64.
+
+El contador vive en la memoria del proceso: alcanza con el worker único de
+Render y frena a una IP que martilla el sitio, pero no pretende parar un ataque
+distribuido. Ese lo absorbe Cloudflare antes de llegar a Flask.
+
 ### Comprobar qué versión está desplegada
 
 `GET /version` (sin login) devuelve el commit que está corriendo y hace cuánto
