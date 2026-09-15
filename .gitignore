@@ -16,3 +16,6 @@ web/chartbay.db
 node_modules/
 .vite/
 dist/
+
+# Permisos locales de Claude Code: cada máquina tiene los suyos.
+.claude/settings.local.json
