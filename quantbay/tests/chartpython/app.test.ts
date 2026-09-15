@@ -82,7 +82,9 @@ afterEach(() => {
   for (const app of apps.splice(0)) app.destruir();
   for (const db of bases.splice(0)) db.close();
   document.body.replaceChildren();
-  localStorage.clear();
+  // La suite entera corre en un proceso solo y otro archivo puede haber dejado
+  // un localStorage de mentira; por eso se borra sólo la clave propia y con red.
+  try { globalThis.localStorage?.removeItem('chartpython-ultimo-notebook'); } catch { /* stub ajeno */ }
 });
 
 describe('la página de ChartPython', () => {
