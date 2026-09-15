@@ -95,7 +95,9 @@ app = Flask(__name__)
 SECCIONES = {
     "econometria": True,
     "limpiador": True,
-    "datos": True,
+    # Escondida por ahora: sin pestaña ni enlaces y con sus rutas en 404. El
+    # código, la plantilla y los tests siguen (los tests la encienden).
+    "datos": False,
     "agro": False,
     "mercados": False,
 }
@@ -1032,6 +1034,7 @@ def _fred_ready() -> bool:
 
 
 @app.route("/data")
+@seccion("datos")
 def frequent_data():
     available_providers = {
         source["code"] for source in providers.provider_status() if source["available"]
@@ -1056,6 +1059,7 @@ def frequent_data():
 
 
 @app.route("/api/data/catalog")
+@seccion("datos")
 def api_data_catalog():
     return jsonify({
         "ok": True,
@@ -1066,6 +1070,7 @@ def api_data_catalog():
 
 
 @app.route("/api/data/series/<indicator_id>")
+@seccion("datos")
 def api_data_series(indicator_id):
     if not _valid_indicator(indicator_id):
         return jsonify({"ok": False, "error": "Indicador desconocido"}), 404
@@ -1078,6 +1083,7 @@ def api_data_series(indicator_id):
 
 
 @app.route("/api/data/meta/<indicator_id>")
+@seccion("datos")
 def api_data_meta(indicator_id):
     ind = _valid_indicator(indicator_id)
     if not ind:
@@ -1107,6 +1113,7 @@ def api_data_meta(indicator_id):
 
 
 @app.route("/api/data/download/<indicator_id>")
+@seccion("datos")
 def api_data_download(indicator_id):
     if not _valid_indicator(indicator_id):
         abort(404)

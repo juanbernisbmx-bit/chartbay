@@ -18,7 +18,7 @@ describe('ChartBay product navigation', () => {
   it('keeps Agro and Mercados disabled behind the current feature flags', () => {
     expect(APP).toContain('"econometria": True');
     expect(APP).toContain('"limpiador": True');
-    expect(APP).toContain('"datos": True');
+    expect(APP).toContain('"datos": False');
     expect(APP).toContain('"agro": False');
     expect(APP).toContain('"mercados": False');
 
@@ -37,7 +37,7 @@ describe('ChartBay product navigation', () => {
   it('shows active sections and feature-gates disabled ones in the shared navbar', () => {
     expect(TOPBAR).toContain("url_for('dashboard')");
     expect(TOPBAR).toContain("url_for('econometria')");
-    expect(TOPBAR).toContain("url_for('frequent_data')");
+    expect(TOPBAR).toMatch(/\{% if secciones\.datos %\}[\s\S]*url_for\('frequent_data'\)[\s\S]*\{% endif %\}/);
     expect(TOPBAR).toContain("url_for('limpiador')");
     expect(TOPBAR).toContain("url_for('guia')");
     expect(TOPBAR).toContain("url_for('source_archive')");

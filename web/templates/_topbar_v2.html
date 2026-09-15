@@ -15,7 +15,9 @@
     {% if secciones.mercados %}
       {% if active == 'mercados' %}<strong>Finanzas Quant</strong>{% else %}<a href="{{ url_for('finanzas') }}">Finanzas Quant</a>{% endif %}
     {% endif %}
-    {% if active == 'datos' %}<strong>Datos</strong>{% else %}<a href="{{ url_for('frequent_data') }}">Datos</a>{% endif %}
+    {% if secciones.datos %}
+      {% if active == 'datos' %}<strong>Datos</strong>{% else %}<a href="{{ url_for('frequent_data') }}">Datos</a>{% endif %}
+    {% endif %}
     {% if active == 'limpiador' %}<strong>Limpiador</strong>{% else %}<a href="{{ url_for('limpiador') }}">Limpiador</a>{% endif %}
     {% if active == 'guia' %}<strong>Documentación</strong>{% else %}<a href="{{ url_for('guia') }}">Documentación</a>{% endif %}
     <a href="{{ url_for('source_archive') }}" rel="source" download>Código fuente</a>

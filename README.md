@@ -83,7 +83,7 @@ a ningún servidor.
 | Inicio | `/` | Presentación, acceso al laboratorio y recorrido de módulos activos |
 | Econometría | `/econometria` | OLS, RLS con test de Wald, inferencia t/F, intervalos al 95%, diagnósticos de residuos y colinealidad (VIF), series de tiempo (ADF, ACF, PACF, Ljung-Box) |
 | Limpiador | `/limpiador` | Inspección y limpieza de CSV con motor C++/WebAssembly |
-| Datos | `/data` | 49 indicadores macro (37 de FRED, 12 de World Bank), con caché diaria y descarga en CSV o JSON con atribución de origen |
+| Datos | `/data` | **Escondida por ahora** (`SECCIONES["datos"]` en `web/app.py`): sin pestaña y con sus rutas en 404. El código sigue: 49 indicadores macro (37 de FRED, 12 de World Bank), con caché diaria y descarga en CSV o JSON con atribución de origen |
 | Documentación | `/guia` | Conceptos, ejemplos guiados y un curso de econometría |
 
 ### Versiones del laboratorio

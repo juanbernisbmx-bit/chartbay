@@ -107,6 +107,19 @@ def _cliente(**overrides):
     return modulo, modulo.app.test_client()
 
 
+def _cliente_con_datos(**overrides):
+    """Cliente con la sección Datos encendida.
+
+    Datos está escondida (`SECCIONES["datos"] = False`) pero no borrada: estos
+    tests la encienden para que su código no se pudra mientras tanto. Alcanza
+    con tocar el diccionario después del import porque `seccion()` lo lee en
+    cada request.
+    """
+    modulo, c = _cliente(**overrides)
+    modulo.SECCIONES["datos"] = True
+    return modulo, c
+
+
 # Las dos configuraciones que importan. La primera es la de ChartBay 1.0.
 SIN_SESION = {}
 CON_SESION = {"CHARTBAY_SECCIONES": "mercados=on", "APP_PASSWORD": "clave-de-test"}
@@ -117,15 +130,14 @@ CON_SESION = {"CHARTBAY_SECCIONES": "mercados=on", "APP_PASSWORD": "clave-de-tes
 def test_rutas_activas_responden_200():
     _, c = _cliente(**SIN_SESION)
     for ruta in (
-        "/", "/version", "/guia", "/econometria", "/limpiador", "/data",
-        "/api/data/catalog",
+        "/", "/version", "/guia", "/econometria", "/limpiador",
     ):
         assert c.get(ruta).status_code == 200, f"{ruta} no devolvió 200"
 
 
 def test_paginas_activas_ofrecen_el_codigo_fuente():
     _, c = _cliente(**SIN_SESION)
-    for ruta in ("/", "/guia", "/econometria", "/limpiador", "/data"):
+    for ruta in ("/", "/guia", "/econometria", "/limpiador"):
         html = c.get(ruta).get_data(as_text=True)
         assert 'href="/source.tar.gz"' in html, ruta
         assert 'rel="source"' in html and "Código fuente" in html, ruta
@@ -192,7 +204,9 @@ def test_datasets_solo_sirve_los_casos_del_catalogo():
 def test_secciones_apagadas_devuelven_404():
     _, c = _cliente(**SIN_SESION)
     apagadas = ("/agro", "/chartbay", "/finanzas", "/community", "/heatmap",
-                "/compare", "/reports", "/api/snapshot", "/api/lookup", "/api/news")
+                "/compare", "/reports", "/api/snapshot", "/api/lookup", "/api/news",
+                "/data", "/api/data/catalog", "/api/data/series/us_cpi",
+                "/api/data/meta/us_cpi", "/api/data/download/us_cpi")
     for ruta in apagadas:
         assert c.get(ruta).status_code == 404, f"{ruta} debía estar apagada"
 
@@ -200,10 +214,19 @@ def test_secciones_apagadas_devuelven_404():
 def test_secciones_apagadas_no_aparecen_en_el_menu():
     _, c = _cliente(**SIN_SESION)
     html = c.get("/").get_data(as_text=True)
-    assert "Econometría" in html and "Limpiador" in html and "Datos" in html
+    assert "Econometría" in html and "Limpiador" in html
+    assert ">Datos<" not in html
     assert 'href="/agro"' not in html
     assert 'href="/finanzas"' not in html
     assert 'href="/community"' not in html
+
+
+def test_datos_escondida_no_se_enlaza_desde_ninguna_pagina():
+    """Ni la pestaña ni la fila de Inicio: nada tiene que llevar a una ruta 404."""
+    _, c = _cliente(**SIN_SESION)
+    for ruta in ("/", "/guia", "/econometria", "/limpiador"):
+        html = c.get(ruta).get_data(as_text=True)
+        assert 'href="/data"' not in html, ruta
 
 
 def test_override_de_mercados_expone_rutas_para_auditoria():
@@ -226,7 +249,7 @@ def test_sin_secciones_con_sesion_no_hay_login():
 
 def test_sin_login_la_barra_no_ofrece_entrar():
     _, c = _cliente(**SIN_SESION)
-    for ruta in ("/", "/econometria", "/guia", "/data", "/limpiador"):
+    for ruta in ("/", "/econometria", "/guia", "/limpiador"):
         html = c.get(ruta).get_data(as_text=True)
         assert ">Entrar<" not in html, f"{ruta} sigue ofreciendo Entrar"
         assert "/login" not in html, f"{ruta} sigue enlazando a /login"
@@ -340,7 +363,7 @@ def test_sin_sesion_no_se_exige_csrf():
 # ── headers de seguridad ─────────────────────────────────────────────────────
 
 def test_headers_de_seguridad_en_todas_las_rutas():
-    _, c = _cliente(**SIN_SESION)
+    _, c = _cliente_con_datos(**SIN_SESION)
     for ruta in ("/", "/econometria", "/guia", "/data", "/limpiador", "/version"):
         h = c.get(ruta).headers
         assert h["X-Content-Type-Options"] == "nosniff"
@@ -376,7 +399,7 @@ def test_csp_permite_las_fuentes_que_las_paginas_cargan():
     fonts.googleapis.com (style-src) y los .woff2 de fonts.gstatic.com
     (font-src). Nombrar solo uno deja el sitio con la fuente de sistema.
     """
-    _, c = _cliente(**SIN_SESION)
+    _, c = _cliente_con_datos(**SIN_SESION)
     for ruta in ("/", "/econometria", "/guia", "/data", "/limpiador"):
         politica = _csp(c, ruta)
         assert "fonts.googleapis.com" in politica.split("style-src")[1].split(";")[0]
@@ -384,7 +407,7 @@ def test_csp_permite_las_fuentes_que_las_paginas_cargan():
 
 
 def test_csp_sin_tradingview_en_paginas_activas():
-    _, c = _cliente(**SIN_SESION)
+    _, c = _cliente_con_datos(**SIN_SESION)
     for ruta in ("/", "/econometria", "/guia", "/data", "/limpiador"):
         assert "tradingview" not in _csp(c, ruta).lower(), ruta
 
@@ -392,7 +415,7 @@ def test_csp_sin_tradingview_en_paginas_activas():
 def test_csp_limita_tradingview_al_comparador_en_override_de_mercados():
     _, c = _cliente(**CON_SESION)
     assert "s3.tradingview.com" in _csp(c, "/compare")
-    for ruta in ("/", "/chartbay", "/econometria", "/limpiador", "/data"):
+    for ruta in ("/", "/chartbay", "/econometria", "/limpiador"):
         assert "tradingview" not in _csp(c, ruta).lower(), ruta
 
 
@@ -457,7 +480,7 @@ def test_pyodide_vendorizado_se_sirve_con_cache_inmutable():
 
 
 def test_csp_de_paginas_simples_no_hereda_permisos_del_laboratorio():
-    _, c = _cliente(**SIN_SESION)
+    _, c = _cliente_con_datos(**SIN_SESION)
     for ruta in ("/", "/guia", "/data"):
         script = _csp(c, ruta).split("script-src")[1].split(";")[0]
         assert "wasm" not in script, ruta
@@ -473,7 +496,7 @@ def test_csp_trae_las_directivas_de_endurecimiento():
 
 
 def test_csp_usa_nonce_y_no_permite_scripts_inline_globalmente():
-    _, c = _cliente(**SIN_SESION)
+    _, c = _cliente_con_datos(**SIN_SESION)
     for ruta in ("/data", "/guia"):
         respuesta = c.get(ruta)
         politica = respuesta.headers["Content-Security-Policy"]
@@ -506,7 +529,7 @@ def test_dependencias_del_laboratorio_viajan_en_el_bundle_local():
 
 
 def test_data_no_dispara_consultas_meta_masivas_al_renderizar():
-    _, c = _cliente(FRED_API_KEY="clave-invalida", **SIN_SESION)
+    _, c = _cliente_con_datos(FRED_API_KEY="clave-invalida", **SIN_SESION)
     html = c.get("/data").get_data(as_text=True)
     assert 'fetch("/api/data/meta/' not in html
 
@@ -538,7 +561,7 @@ def test_version_es_barata():
 
 def test_data_se_ve_sin_clave_de_fred():
     """Sin FRED_API_KEY, World Bank sigue descargable y solo FRED se apaga."""
-    modulo, c = _cliente(FRED_API_KEY=None, **SIN_SESION)
+    modulo, c = _cliente_con_datos(FRED_API_KEY=None, **SIN_SESION)
     r = c.get("/data")
     assert r.status_code == 200
     assert modulo._fred_ready() is False
@@ -575,7 +598,7 @@ def test_error_del_laboratorio_usa_paleta_accesible_del_skin_v2():
 
 
 def test_catalogo_de_data_sin_red():
-    _, c = _cliente(**SIN_SESION)
+    _, c = _cliente_con_datos(**SIN_SESION)
     r = c.get("/api/data/catalog")
     assert r.status_code == 200 and r.get_json()["ok"] is True
     cuerpo = r.get_json()
@@ -584,7 +607,7 @@ def test_catalogo_de_data_sin_red():
 
 
 def test_indicador_desconocido_es_404_y_no_error_de_servidor():
-    _, c = _cliente(**SIN_SESION)
+    _, c = _cliente_con_datos(**SIN_SESION)
     for ruta in ("/api/data/series/no_existe", "/api/data/meta/no_existe"):
         r = c.get(ruta)
         assert r.status_code == 404 and r.get_json()["ok"] is False
@@ -593,13 +616,13 @@ def test_indicador_desconocido_es_404_y_no_error_de_servidor():
 
 def test_id_de_indicador_invalido_no_llega_al_proveedor():
     """El regex corta traversal e inyección antes de resolver el catálogo."""
-    _, c = _cliente(**SIN_SESION)
+    _, c = _cliente_con_datos(**SIN_SESION)
     for malo in ("../../etc/passwd", "MAYUSCULAS", "con espacio", "a" * 41):
         assert c.get(f"/api/data/series/{malo}").status_code in (404, 400)
 
 
 def test_formato_de_descarga_no_soportado():
-    _, c = _cliente(**SIN_SESION)
+    _, c = _cliente_con_datos(**SIN_SESION)
     r = c.get("/api/data/download/us_cpi?format=exe")
     # 400 por formato, o 404 si ese id no está en el catálogo actual.
     assert r.status_code in (400, 404)
@@ -612,7 +635,7 @@ def test_los_flags_por_defecto_son_el_alcance_de_1_0():
     assert modulo.SECCIONES == {
         "econometria": True,
         "limpiador": True,
-        "datos": True,
+        "datos": False,
         "agro": False,
         "mercados": False,
     }

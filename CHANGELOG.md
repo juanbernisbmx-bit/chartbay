@@ -10,6 +10,13 @@ así que resumen por temas en vez de listar cada commit.
 
 ## [Unreleased]
 
+### Cambiado — la sección Datos queda escondida
+
+- `SECCIONES["datos"]` pasa a `False`: la pestaña desaparece de la barra, la
+  fila "Datos macro" sale de Inicio y `/data` y `/api/data/*` devuelven 404. No
+  se borró nada: la plantilla, `providers/` y sus tests siguen, y los tests la
+  encienden para que ese código no quede sin probar.
+
 ### Agregado — el limpiador reconoce la forma de un export de planilla
 
 - **Preámbulo.** El título del reporte, la fecha de emisión y las líneas en
