@@ -126,24 +126,31 @@ export class PythonRuntime {
     if (new TextEncoder().encode(code).byteLength > MAX_CODE_BYTES) throw new ChartPythonKernelError('too-large', 'La celda supera 100 KiB de código. Dividila en varias celdas.');
     const outputs: NotebookOutput[] = [];
     const count = ++this.executionCount;
+    // Reserve room for the truncation notice and a subsequent Python error.
+    const outputBudget = MAX_OUTPUT_BYTES - 4096;
     let bytes = 0, events = 0, truncated = false;
     const emit = (json: string) => {
-      if (truncated) return;
       const output = JSON.parse(json) as NotebookOutput;
+      const preserveError = () => {
+        if (output.output_type !== 'error') return;
+        const summary: NotebookOutput = { output_type: 'error', ename: output.ename.slice(0, 100), evalue: output.evalue.slice(0, 256), traceback: [] };
+        outputs.push(summary); onOutput?.(structuredClone(summary));
+      };
+      if (truncated) { preserveError(); return; }
       let size = new TextEncoder().encode(json).byteLength;
-      if (bytes + size > MAX_OUTPUT_BYTES && (output.output_type === 'display_data' || output.output_type === 'execute_result')) {
+      if (bytes + size > outputBudget && (output.output_type === 'display_data' || output.output_type === 'execute_result')) {
         output.data = { 'text/plain': output.data['text/plain'] ?? '' };
         size = new TextEncoder().encode(JSON.stringify(output)).byteLength;
       }
-      if (bytes + size > MAX_OUTPUT_BYTES || ++events > 2000) {
+      if (bytes + size > outputBudget || ++events > 2000) {
         // Keep a bounded prefix when a single print exceeds the budget.
-        if (output.output_type === 'stream' && bytes < MAX_OUTPUT_BYTES && events <= 2000) {
-          const prefix = output.text.slice(0, Math.max(0, Math.floor((MAX_OUTPUT_BYTES - bytes - 256) / 6)));
+        if (output.output_type === 'stream' && bytes < outputBudget && events <= 2000) {
+          const prefix = output.text.slice(0, Math.max(0, Math.floor((outputBudget - bytes - 256) / 6)));
           if (prefix) { const partial = { ...output, text: prefix }; outputs.push(partial); onOutput?.({ ...partial }); }
         }
         truncated = true;
         const notice: NotebookOutput = { output_type: 'stream', name: 'stderr', text: '\n[Salida truncada: se alcanzó el límite de 1 MiB o 2000 fragmentos.]\n' };
-        outputs.push(notice); onOutput?.(notice); return;
+        outputs.push(notice); onOutput?.(notice); preserveError(); return;
       }
       bytes += size;
       // Merge successive writes (print calls write twice), while streaming each

@@ -126,4 +126,16 @@ describe('ChartPython with the vendored CPython/WASM', () => {
     expect(text((await runtime.execute('finished')).outputs)).toBe('True');
     await expect(runtime.execute('#' + 'x'.repeat(MAX_CODE_BYTES))).rejects.toThrow('100 KiB');
   });
+  it('shows Python failures even after the output budget is exhausted', async () => {
+    for (const code of ['print("z" * 2000000)\n1 / 0', 'for i in range(3000):\n    print("x")\n1 / 0']) {
+      const fragments: NotebookOutput[] = [];
+      const result = await runtime.execute(code, output => fragments.push(output));
+      expect(result.status).toBe('error');
+      expect(text(result.outputs)).toContain('Salida truncada');
+      const last = result.outputs[result.outputs.length - 1];
+      expect(last).toMatchObject({ output_type: 'error', ename: 'ZeroDivisionError', evalue: 'division by zero' });
+      expect(fragments[fragments.length - 1]).toEqual(last);
+      expect(new TextEncoder().encode(JSON.stringify(result.outputs)).byteLength).toBeLessThan(1024 * 1024);
+    }
+  });
 });
