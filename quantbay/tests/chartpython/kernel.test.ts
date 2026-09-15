@@ -1,4 +1,5 @@
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
+import { generateNotebook } from '../../src/reproducibility/generator';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { PythonRuntime, filePath, type PythonEngine } from '../../src/chartpython/pythonRuntime';
@@ -76,6 +77,22 @@ describe('ChartPython with the vendored CPython/WASM', () => {
     expect(text(result.outputs)).toBe("'001'");
     expect(runtime.listFiles().map(f => f.name)).toContain('salida.csv');
     expect(new TextDecoder().decode(runtime.download('salida.csv'))).toBe(new TextDecoder().decode(bytes));
+  });
+  it('runs a notebook exported by the existing econometrics lab', async () => {
+    const csv = 'x,y\n' + Array.from({ length: 24 }, (_, i) => `${i},${3 + 2 * i + (i % 3 - 1) * .2}`).join('\n') + '\n';
+    runtime.upload('modelo.csv', new TextEncoder().encode(csv));
+    const notebook = JSON.parse(generateNotebook({
+      schemaVersion: 1, generatedAt: '2026-09-15T00:00:00Z', datasetName: 'modelo.csv', mode: 'regression', engine: 'pro',
+      regression: { yName: 'y', xNames: ['x'], expandedXNames: ['x'], functionalForm: 'lin-lin', dropIncompleteRows: true,
+        standardErrorType: 'HC3', hacMaxLags: null, categoricalEncodings: [], restriction: null, autoRepair: false },
+      timeSeries: { dateColumn: null, valueColumn: 'y', transformation: 'original', movingAverageWindow: 3, maxLag: 4,
+        adfRegression: 'c', runArima: false, arimaOrder: { p: 1, d: 0, q: 0 }, forecastSteps: 3 },
+    }));
+    const result = await runtime.execute(notebook.cells[1].source.join(''));
+    expect(result.status).toBe('ok');
+    expect(text(result.outputs)).toContain('OLS Regression Results');
+    expect(text(result.outputs)).toContain('HC3');
+    expect(text((await runtime.execute('int(results.nobs)')).outputs)).toBe('24');
   });
   it('rejects invalid paths, oversized files and symlinks', async () => {
     for (const name of ['../passwords', '/tmp/a', 'x/y', 'x\\y', '.', '..', 'bad\0.csv']) expect(() => filePath(name)).toThrow();
