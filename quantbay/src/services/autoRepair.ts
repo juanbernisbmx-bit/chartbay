@@ -188,7 +188,7 @@ export function autoRepairAndAnalyze(
   let vifClean = false;
 
   while (!vifClean && xNames.length > 1) {
-    const { X, y } = getData();
+    const { X } = getData();
     const vifs = computeVIF(X);
     const maxVif = Math.max(...vifs);
     if (maxVif <= VIF_THRESHOLD) { vifClean = true; break; }

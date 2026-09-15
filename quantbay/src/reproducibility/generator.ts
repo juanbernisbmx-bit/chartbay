@@ -1,7 +1,6 @@
 import type {
   ReproducibilityAction,
   ReproducibilityLanguage,
-  ReproducibilityRegressionSpec,
   ReproducibilitySpec,
   ReproducibilityTimeSeriesSpec,
 } from './types';

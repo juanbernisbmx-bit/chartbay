@@ -88,11 +88,7 @@
 [data-skin="v2"] a:visited{color:var(--accent);text-decoration:none}
 [data-skin="v2"] a:hover{color:var(--accent-700);text-decoration:underline}
 [data-skin="v2"] :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-[data-skin="v2"] .boot,
-[data-skin="v2"] .alfa-banner{display:none!important}
 
-/* El wrap clasico limita a 760px y centra; el skin nuevo usa el ancho
-   completo y deja que cada seccion ponga su propio maximo. */
 /* El .wrap clasico centraba a 760px. Las paginas de contenido siguen
    necesitando un contenedor — solo el laboratorio y el home, que arman sus
    propias bandas a sangre, van a ancho completo (.cb-full / .qb-wrap). */
@@ -228,22 +224,6 @@
 }
 [data-skin="v2"] details[open]>.sum:before{transform:rotate(90deg)}
 
-[data-skin="v2"] .vrow{
-  display:flex;
-  align-items:center;
-  gap:9px;
-  padding:6px 14px;
-  border-bottom:1px solid var(--line);
-}
-[data-skin="v2"] .vrole{
-  width:15px;
-  font-family:var(--mono);
-  font-size:11px;
-  text-align:center;
-}
-[data-skin="v2"] .vrole-y{color:var(--accent);font-weight:500}
-[data-skin="v2"] .vrole-x{color:var(--ok);font-weight:500}
-
 /* ── Barra superior ────────────────────────────────────────── */
 [data-skin="v2"] .cb-topbar{
   display:flex;
@@ -294,41 +274,6 @@
 }
 [data-skin="v2"] .cb-nav a:hover{color:#e9edf3;background:#1f3050;text-decoration:none}
 [data-skin="v2"] .cb-nav strong{color:#fff;box-shadow:inset 0 -2px 0 var(--accent)}
-[data-skin="v2"] .cb-topbar-end{
-  margin-left:auto;
-  display:flex;
-  align-items:center;
-  gap:14px;
-}
-[data-skin="v2"] .cb-seg{
-  display:flex;
-  border:1px solid var(--navy-line);
-  border-radius:3px;
-  overflow:hidden;
-}
-[data-skin="v2"] .cb-seg button{
-  font-family:var(--sans);
-  font-size:12px;
-  padding:5px 11px;
-  border:0;
-  background:transparent;
-  color:#9aa7ba;
-  cursor:pointer;
-}
-[data-skin="v2"] .cb-seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
-
-/* ── Cinta de contexto del dataset ─────────────────────────── */
-[data-skin="v2"] .cb-databar{
-  display:flex;
-  align-items:center;
-  gap:16px;
-  flex-wrap:wrap;
-  padding:9px 16px;
-  border-bottom:1px solid var(--line);
-  background:var(--panel);
-  font-size:12.5px;
-}
-[data-skin="v2"] .cb-databar-end{margin-left:auto;color:var(--ink-3)}
 
 /* ── Laboratorio: rejilla de tres columnas ─────────────────── */
 [data-skin="v2"] .cb-lab{
@@ -1007,109 +952,7 @@
   background:var(--accent-100);
 }
 
-/* ── Paginas que todavia usan el markup .classic-* ─────────── */
-/* chartbay.html y finanzas.html se construyeron con estas clases; en vez
-   de reescribir su markup se las reexpresa en el sistema nuevo. */
-[data-skin="v2"] .classic-page{background:var(--paper)}
-[data-skin="v2"] .classic-container{
-  max-width:1280px;
-  margin:0 auto;
-  padding:0 26px;
-}
-[data-skin="v2"] .classic-intro{
-  max-width:760px;
-  margin:0;
-  padding:32px 0 22px;
-  text-align:left;
-}
-[data-skin="v2"] .classic-intro h1{
-  margin:0 0 10px;
-  font-size:30px;
-  font-weight:600;
-  letter-spacing:-.02em;
-  color:var(--ink);
-  font-family:var(--sans);
-}
-[data-skin="v2"] .classic-intro p{
-  margin:0;
-  max-width:60ch;
-  font-size:14px;
-  line-height:1.7;
-  color:var(--ink-2);
-}
-[data-skin="v2"] .classic-panel{
-  margin:0 0 26px;
-  padding:0;
-  background:transparent;
-  border:0;
-  border-top:1px solid var(--line);
-}
-[data-skin="v2"] .classic-panel h2{
-  margin:0;
-  padding:18px 0 12px;
-  font-family:var(--sans);
-  font-size:12px;
-  font-weight:500;
-  color:var(--ink-3);
-  text-transform:uppercase;
-  letter-spacing:.06em;
-}
-[data-skin="v2"] .classic-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
-  gap:0;
-  border-top:1px solid var(--line);
-  border-left:1px solid var(--line);
-}
-[data-skin="v2"] .classic-grid-two{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
-[data-skin="v2"] .classic-card{
-  display:block;
-  min-height:0;
-  padding:16px 18px 18px;
-  background:var(--paper);
-  border:0;
-  border-right:1px solid var(--line);
-  border-bottom:1px solid var(--line);
-  color:var(--ink);
-  text-decoration:none;
-}
-[data-skin="v2"] .classic-card:hover{background:var(--panel);text-decoration:none}
-[data-skin="v2"] .classic-card h3{
-  margin:0 0 6px;
-  font-family:var(--sans);
-  font-size:15px;
-  font-weight:600;
-  line-height:1.25;
-  color:var(--ink);
-}
-[data-skin="v2"] .classic-card:hover h3{color:var(--accent)}
-[data-skin="v2"] .classic-card p{
-  margin:0;
-  font-size:13px;
-  line-height:1.6;
-  color:var(--ink-2);
-}
-[data-skin="v2"] .classic-card-large{min-height:0}
-[data-skin="v2"] .classic-card-large h3{font-size:17px}
-[data-skin="v2"] .classic-list{
-  margin:0;
-  padding:0 0 18px;
-  list-style:none;
-}
-[data-skin="v2"] .classic-list li{
-  padding:6px 0 6px 15px;
-  font-size:13px;
-  line-height:1.6;
-  color:var(--ink-2);
-  border-left:2px solid var(--line-2);
-  margin-bottom:2px;
-}
-[data-skin="v2"] .classic-columns{
-  columns:2;
-  column-gap:32px;
-}
-[data-skin="v2"] .classic-columns li{break-inside:avoid}
-[data-skin="v2"] .classic-modules{margin:0}
+/* ── Pie de pagina ─────────────────────────────────────────── */
 [data-skin="v2"] .colophon{
   max-width:1280px;
   margin:0 auto;
@@ -1118,10 +961,8 @@
   color:var(--ink-3);
   text-align:left;
 }
-@media (max-width:700px){
-  [data-skin="v2"] .classic-columns{columns:1}
-}
 
+/* ── Alineacion de la barra superior ───────────────────────── */
 /* La barra vive fuera de .wrap, asi que ya va a sangre; su contenido se
    alinea con el contenedor de la pagina. */
 [data-skin="v2"] .cb-topbar{padding-left:max(16px,calc(50vw - 564px))}
@@ -1156,7 +997,7 @@
   color:var(--ink-2);
 }
 
-/* ── Comunidad y acceso ────────────────────────────────────── */
+/* ── Avisos ────────────────────────────────────────────────── */
 [data-skin="v2"] .alfa-warn{
   background:var(--warn-100);
   border:1px solid var(--warn-line);
@@ -1164,14 +1005,3 @@
   border-radius:4px;
   color:#6c4a08;
 }
-[data-skin="v2"] .botdesc{color:var(--ink-2)}
-/* En login y registro el envio es la accion principal de la pagina. */
-[data-skin="v2"] form button[type="submit"]{
-  color:#fff;
-  background:var(--accent);
-  border-color:var(--accent-700);
-  font-size:13.5px;
-  font-weight:500;
-  padding:9px 16px;
-}
-[data-skin="v2"] form button[type="submit"]:hover{background:var(--accent-700);color:#fff}

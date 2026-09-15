@@ -5,7 +5,7 @@ import { ZipWriter, BlobWriter, TextReader } from '@zip.js/zip.js';
 import { CleanerStorage, deleteStorage } from '../../src/dataCleaner/storage';
 import { CleanerSession } from '../../src/dataCleaner/session';
 import { importCsv, listSheets } from '../../src/dataCleaner/importers';
-import { DEFAULT_RULES, csvLine, validDate, validTaxId, parseNumeric, type Rules } from '../../src/dataCleaner/model';
+import { DEFAULT_RULES, csvLine, validDate, validTaxId, parseNumeric } from '../../src/dataCleaner/model';
 import { exportSession } from '../../src/dataCleaner/exporter';
 import { putHandoff, takeHandoff } from '../../src/services/datasetHandoff';
 const sessions: CleanerSession[] = [];

@@ -10,6 +10,17 @@ así que resumen por temas en vez de listar cada commit.
 
 ## [Unreleased]
 
+### Eliminado — código muerto
+
+- 390 reglas de CSS de pantallas que ya no existen —el hub y la terminal de
+  finanzas, Mercados, la vieja guía de indicadores, restos del mockup del
+  rediseño— y las cabeceras de comentario que quedaron sin reglas debajo. Se
+  verificó comparando el estilo computado de cada elemento con las hojas
+  anteriores y las nuevas en Inicio, Econometría, Documentación, los dos
+  limpiadores y Datos: cero diferencias.
+- Diez imports y variables que TypeScript marcaba sin uso;
+  `tsc --noUnusedLocals --noUnusedParameters` queda en cero.
+
 ### Seguridad — límite de solicitudes por IP
 
 - Toda request pasa por un limitador en memoria (`web/rate_limit.py`) con

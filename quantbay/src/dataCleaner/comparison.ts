@@ -1,4 +1,4 @@
-import { cleanText, isMissing, parseNumeric, validTaxId, type Profile, type Row, type Source } from './model';
+import { cleanText, isMissing, parseNumeric, validTaxId, type Row, type Source } from './model';
 import { request } from './storage';
 import type { CleanerSession } from './session';
 import type { TextSink } from './exporter';

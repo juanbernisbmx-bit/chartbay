@@ -1,4 +1,4 @@
-import { materializeRows, parseCSVFile, rowCountOf, type ParsedCSV } from './csvParser';
+import { materializeRows, rowCountOf, type ParsedCSV } from './csvParser';
 import Papa from 'papaparse';
 import Chart from 'chart.js/auto';
 import { jsPDF } from 'jspdf';
@@ -90,7 +90,7 @@ import { renderRepairLog } from './ui/diagnosticsView';
 import { renderRegressionResults } from './ui/regressionView';
 import { recommendFunctionalForm } from './services/formRecommender';
 import { renderFormRecommendation, showFormRecommendationPending } from './ui/formRecommendView';
-import { detectCategoricalColumns, encodeCategoricalX, encodeForRegression, dummyBaseName, type CategoricalVariableInfo } from './categoricalEncoding';
+import { detectCategoricalColumns, encodeCategoricalX, encodeForRegression } from './categoricalEncoding';
 import { isTimeSeriesAnalysisExportable, runTimeSeriesAnalysis } from './timeseries/service';
 import {
   getACFMaxLag,

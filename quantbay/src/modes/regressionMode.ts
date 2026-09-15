@@ -1,6 +1,6 @@
 import { runQuantAnalysis, type AnalysisOptions, type LeakageSignal, type LogisticResult } from '../services/analysisService';
 import { runRLS, validateRLSConstraint, type RLSConstraint } from '../rls';
-import { getValidRowsFrom, materializeRows, type ParsedCSV } from '../csvParser';
+import { getValidRowsFrom, type ParsedCSV } from '../csvParser';
 import { autoRepairAndAnalyze, type AutoRepairResult } from '../services/autoRepair';
 import { runOLS, type RegressionResult } from '../regression';
 import { applyFunctionalTransform, type FunctionalForm } from '../functionalForms';

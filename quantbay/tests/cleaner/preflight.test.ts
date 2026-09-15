@@ -7,7 +7,6 @@ import {
   estimateFile,
   estimateModeMemory,
   preflight,
-  recommendForMode,
   type ProcessingMode,
 } from '../../../cleaner/js/preflight';
 import {

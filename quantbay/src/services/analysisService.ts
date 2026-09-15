@@ -1,4 +1,4 @@
-import { forEachCellOf, getValidRows, getValidRowsFrom, type ParsedCSV } from '../csvParser';
+import { forEachCellOf, getValidRowsFrom, type ParsedCSV } from '../csvParser';
 import { computeVIF, runOLS, type RegressionResult } from '../regression';
 import { pearsonMatrix } from '../statistics';
 
