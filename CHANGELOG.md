@@ -29,6 +29,24 @@ así que resumen por temas en vez de listar cada commit.
   desde una lista blanca de etiquetas —nunca `innerHTML`—, así que un `.ipynb`
   de otra persona no puede ejecutar nada al abrirse.
 
+### Agregado — Manual de ChartPython
+
+- Página nueva en `/chartpython/manual`, enlazada desde ChartPython y desde la
+  Documentación: uso del notebook (celdas, atajos, archivos, exportar,
+  reiniciar), qué paquetes trae y en qué se diferencia de Jupyter, Python básico,
+  leer y explorar un CSV, limpiarlo paso a paso (nombres, duplicados, texto,
+  números con formato argentino, fechas, atípicos, faltantes, tipos, validación)
+  y analizarlo (filtros, `groupby`, tablas dinámicas, `merge`, series de tiempo,
+  pruebas de SciPy, regresión con statsmodels y gráficos SVG sin matplotlib).
+  Cierra con una tabla de errores frecuentes y una chuleta de comandos.
+- `/chartpython/manual.ipynb` descarga los 132 ejemplos ejecutables como
+  notebook para abrir con "Abrir .ipynb".
+- Los 143 ejemplos se ejecutan en las pruebas con el mismo Pyodide que usa la
+  página, y las 124 salidas que muestra el manual se comparan con las reales.
+- Advierte que en ChartPython `astype(int)` y `np.array` usan enteros de 32 bits
+  (Pyodide es WebAssembly de 32 bits) y desbordan sin aviso pasado
+  2.147.483.647; el manual usa `"int64"`.
+
 ### Seguridad — la clave de Anthropic no puede llegar al cliente
 
 - Nunca estuvo en el historial de git (sólo el placeholder de `.env.example`),

@@ -83,7 +83,7 @@ a ningún servidor.
 | Inicio | `/` | Presentación, acceso al laboratorio y recorrido de módulos activos |
 | Econometría | `/econometria` | OLS, RLS con test de Wald, inferencia t/F, intervalos al 95%, diagnósticos de residuos y colinealidad (VIF), series de tiempo (ADF, ACF, PACF, Ljung-Box) |
 | Limpiador | `/limpiador` | Inspección y limpieza de CSV con motor C++/WebAssembly |
-| ChartPython | `/chartpython` | Notebook de Python en el navegador: celdas de código y de texto, estado compartido, archivos en `/mnt/data`, import y export `.ipynb`. En beta, apagable con `SECCIONES["chartpython"]` |
+| ChartPython | `/chartpython` | Notebook de Python en el navegador: celdas de código y de texto, estado compartido, archivos en `/mnt/data`, import y export `.ipynb`. Manual de uso en `/chartpython/manual`. En beta, apagable con `SECCIONES["chartpython"]` |
 | Datos | `/data` | **Escondida por ahora** (`SECCIONES["datos"]` en `web/app.py`): sin pestaña y con sus rutas en 404. El código sigue: 49 indicadores macro (37 de FRED, 12 de World Bank), con caché diaria y descarga en CSV o JSON con atribución de origen |
 | Documentación | `/guia` | Conceptos, ejemplos guiados y un curso de econometría |
 
@@ -123,6 +123,23 @@ reinicia el intérprete —es la única forma de cortar un bucle infinito sin
 cambiar de notebook también lo reinicia, para que uno no herede el estado del
 otro. El HTML que devuelve Python, como la tabla de un DataFrame, se vuelve a
 construir con una lista blanca de etiquetas en vez de inyectarse.
+
+El manual (`/chartpython/manual`) explica el notebook y reúne los comandos de
+Python y pandas para leer, limpiar y analizar un CSV, con un CSV de práctica que
+arrastra los problemas típicos (punto y coma, `$ 3.450,00`, fechas imposibles,
+duplicados). Cada ejemplo se escribe una sola vez, en un bloque `call py()` de
+`web/templates/chartpython_manual.html`, y de ahí salen tres cosas:
+
+- la página;
+- el notebook de práctica, `/chartpython/manual.ipynb`, que arma
+  `web/chartpython_manual.py` sin los ejemplos que fallan a propósito;
+- la prueba `quantbay/tests/chartpython/manual.test.ts`, que ejecuta los
+  bloques en el Pyodide vendorizado, compara sus salidas con las que muestra la
+  página y corre aparte la secuencia del notebook, con Python recién iniciado.
+
+Si un ejemplo cambia de resultado, la prueba lo marca con la línea de la
+plantilla. `MANUAL_SALIDAS=/ruta/salidas.json` guarda lo que devolvió cada
+bloque para actualizar las salidas sin copiarlas a mano.
 
 Los artefactos Pyodide se verifican sin red con
 `python scripts/vendor_pyodide.py --check`. Para reproducirlos desde las
