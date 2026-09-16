@@ -17,7 +17,7 @@
       <div>
         <p class="qb-kicker">Chart Bay / ChartPython</p>
         <h2>Un notebook de Python en tu navegador</h2>
-        <p>Celdas de código y de texto, con el estado compartido entre ellas, como en Jupyter. Python corre acá dentro con pandas, NumPy, SciPy y statsmodels: no se instala nada y tus datos no salen de esta computadora.</p>
+        <p>Celdas de código y de texto, con el estado compartido entre ellas, como en Jupyter. Python corre acá dentro con pandas, NumPy, SciPy y statsmodels: no se instala nada y tus datos no salen de esta computadora. ¿Primera vez? Empezá por el <a href="{{ url_for('chartpython_manual') }}">manual de uso</a>.</p>
       </div>
       <div class="qb-terminal-chip">Beta</div>
     </section>
@@ -29,7 +29,7 @@
     </section>
 
     <section class="qb-section qb-econometria-section">
-      <div class="qb-panel-head"><h3 class="qb-subtitle">Cómo se usa</h3><span>Atajos de Jupyter</span></div>
+      <div class="qb-panel-head"><h3 class="qb-subtitle">Cómo se usa</h3><span><a href="{{ url_for('chartpython_manual') }}">Manual completo</a></span></div>
       <div class="cp-ayuda">
         <div>
           <h4>Ejecutar</h4>
@@ -57,6 +57,7 @@
         </div>
       </div>
       <p class="qb-help">Interrumpir reinicia el intérprete: se detiene lo que esté corriendo y se pierden las variables, pero las celdas y sus salidas quedan. Los notebooks se descargan y se abren en formato <code>.ipynb</code>, el mismo de Jupyter.</p>
+      <p class="qb-help">El <a href="{{ url_for('chartpython_manual') }}">manual de ChartPython</a> explica todo esto paso a paso y reúne los comandos de pandas para limpiar un CSV y analizar datos, con ejemplos que se pueden abrir acá mismo.</p>
     </section>
   </main>
   <script src="{{ url_for('static', filename='js/chartpython.js') }}"></script>

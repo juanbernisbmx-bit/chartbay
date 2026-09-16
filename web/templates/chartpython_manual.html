@@ -1,0 +1,2772 @@
+{#
+  Manual de ChartPython.
+
+  Cada ejemplo va en un bloque "call py()" y es la única copia de ese código: de
+  acá salen la página, el notebook de práctica (/chartpython/manual.ipynb, ver
+  web/chartpython_manual.py) y la prueba que ejecuta todos los bloques en orden
+  con el mismo Pyodide que usa ChartPython
+  (quantbay/tests/chartpython/manual.test.ts). Si un ejemplo deja de andar o su
+  salida cambia, esa prueba falla.
+
+  Reglas de los bloques:
+  - El código va pegado al margen izquierdo, sin la sangría del HTML.
+  - Los bloques se ejecutan de arriba hacia abajo en un mismo intérprete: un
+    ejemplo puede usar variables de los anteriores.
+  - Un "call salida()" justo después de un bloque es su salida esperada: lo que
+    imprime y el valor de la última línea, en texto.
+  - py(error="KeyError") marca un ejemplo que falla a propósito; su salida va en
+    "call salida_error()". py(aviso="FutureWarning") espera ese aviso.
+  - py(ejecutar=false) no se ejecuta ni va al notebook (un bucle infinito).
+  - Nada de llaves dobles ni llave con porcentaje dentro del código: Jinja las
+    interpretaría.
+#}
+{# forceescape: el texto de un bloque "call" llega como Markup y escape no lo
+   tocaría. La salida conserva los espacios del principio de su primera línea
+   (el encabezado de una tabla de pandas empieza con espacios). #}
+{% macro py(error=none, aviso=none, ejecutar=true) -%}
+<figure class="cpm-bloque"{% if error %} data-error="{{ error }}"{% endif %}>
+{%- if error %}<figcaption class="cpm-bloque-etiqueta">Este ejemplo da error a propósito</figcaption>{% endif -%}
+<pre class="cpm-code"><code>{{ caller().strip()|forceescape }}</code></pre></figure>
+{%- endmacro %}
+{% macro salida() -%}
+<div class="cpm-salida"><span class="cpm-salida-etiqueta">Salida</span><pre><code>{{ caller().lstrip("\n").rstrip()|forceescape }}</code></pre></div>
+{%- endmacro %}
+{% macro salida_error() -%}
+<div class="cpm-salida" data-error><span class="cpm-salida-etiqueta">Error</span><pre><code>{{ caller().lstrip("\n").rstrip()|forceescape }}</code></pre></div>
+{%- endmacro %}
+{% macro ancla(id) %}<a class="cpm-ancla" href="#{{ id }}" aria-label="Enlace a esta sección">#</a>{% endmacro %}
+<!doctype html>
+<html lang="es" data-skin="v2">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay · Manual de ChartPython</title>
+  <meta name="description" content="Cómo usar ChartPython y los comandos de Python y pandas para limpiar CSV y analizar datos, con ejemplos que se pueden ejecutar.">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/chartbay-logo.png') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='redesign.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='chartpython-manual.css') }}">
+</head>
+<body>
+  {% set active = 'chartpython' %}
+  {% include '_topbar_v2.html' with context %}
+  <main class="wrap cpm" data-manual="chartpython">
+
+    <header class="cpm-hero">
+      <p class="cpm-kicker">ChartPython · Manual de uso</p>
+      <h1>Manual de ChartPython</h1>
+      <p class="cpm-lead">Cómo usar el notebook y los comandos de Python que más se usan para limpiar un CSV y analizar datos. Cada ejemplo de esta página se ejecuta en las pruebas de ChartBay con el mismo Python que corre en tu navegador, así que lo que ves acá funciona allá.</p>
+      <div class="cpm-acciones">
+        <a class="btnp" href="{{ url_for('chartpython') }}">Abrir ChartPython</a>
+        <a class="btns" href="{{ url_for('chartpython_manual_notebook') }}" download>Descargar los ejemplos (.ipynb)</a>
+      </div>
+      <ul class="cpm-hechos" aria-label="Qué trae ChartPython">
+        <li>Python 3.12</li>
+        <li>pandas 2.2</li>
+        <li>NumPy 1.26</li>
+        <li>SciPy 1.12</li>
+        <li>statsmodels 0.14</li>
+        <li>Sin instalar nada</li>
+        <li>Tus datos no salen del navegador</li>
+      </ul>
+    </header>
+
+    <div class="cpm-grid">
+      <nav class="cpm-indice" aria-label="Índice del manual">
+        <details open>
+          <summary>Índice del manual</summary>
+          <ol>
+            <li><span class="cpm-indice-parte">1 · Usar ChartPython</span>
+              <ol>
+                <li><a href="#primeros-pasos">Primeros pasos</a></li>
+                <li><a href="#celdas">Celdas y atajos</a></li>
+                <li><a href="#archivos">Archivos</a></li>
+                <li><a href="#notebooks">Guardar y exportar</a></li>
+                <li><a href="#reiniciar">Interrumpir y reiniciar</a></li>
+                <li><a href="#instalado">Qué trae instalado</a></li>
+                <li><a href="#diferencias">Diferencias con Jupyter</a></li>
+              </ol>
+            </li>
+            <li><span class="cpm-indice-parte">2 · Python básico</span>
+              <ol>
+                <li><a href="#variables">Variables, números y texto</a></li>
+                <li><a href="#colecciones">Listas y diccionarios</a></li>
+                <li><a href="#control">Condiciones y bucles</a></li>
+                <li><a href="#funciones">Funciones y errores</a></li>
+              </ol>
+            </li>
+            <li><span class="cpm-indice-parte">3 · Leer y explorar</span>
+              <ol>
+                <li><a href="#csv-practica">El CSV de práctica</a></li>
+                <li><a href="#leer-csv">Leer un CSV</a></li>
+                <li><a href="#explorar">Explorar un DataFrame</a></li>
+              </ol>
+            </li>
+            <li><span class="cpm-indice-parte">4 · Limpiar un CSV</span>
+              <ol>
+                <li><a href="#nombres">Nombres de columnas</a></li>
+                <li><a href="#vacias-duplicadas">Filas vacías y duplicadas</a></li>
+                <li><a href="#texto">Texto y categorías</a></li>
+                <li><a href="#numeros">Números con formato argentino</a></li>
+                <li><a href="#fechas">Fechas</a></li>
+                <li><a href="#atipicos">Valores atípicos</a></li>
+                <li><a href="#faltantes">Valores faltantes</a></li>
+                <li><a href="#tipos">Tipos de datos</a></li>
+                <li><a href="#validar">Validar</a></li>
+                <li><a href="#guardar">Guardar el CSV limpio</a></li>
+                <li><a href="#receta">Receta completa</a></li>
+              </ol>
+            </li>
+            <li><span class="cpm-indice-parte">5 · Transformar y analizar</span>
+              <ol>
+                <li><a href="#seleccionar">Seleccionar y filtrar</a></li>
+                <li><a href="#columnas">Crear y ordenar columnas</a></li>
+                <li><a href="#descriptiva">Estadística descriptiva</a></li>
+                <li><a href="#agrupar">Agrupar y resumir</a></li>
+                <li><a href="#combinar">Combinar tablas</a></li>
+                <li><a href="#reestructurar">Formato ancho y largo</a></li>
+                <li><a href="#series">Series de tiempo</a></li>
+                <li><a href="#numpy">NumPy esencial</a></li>
+                <li><a href="#pruebas">Pruebas estadísticas</a></li>
+                <li><a href="#regresion">Regresión</a></li>
+                <li><a href="#graficos">Gráficos sin matplotlib</a></li>
+              </ol>
+            </li>
+            <li><span class="cpm-indice-parte">6 · Referencia</span>
+              <ol>
+                <li><a href="#errores">Errores frecuentes</a></li>
+                <li><a href="#chuleta">Chuleta de comandos</a></li>
+              </ol>
+            </li>
+          </ol>
+        </details>
+      </nav>
+
+      <article class="cpm-contenido">
+        <section class="cpm-parte" id="usar" aria-labelledby="usar-titulo">
+          <p class="cpm-parte-num">Parte 1</p>
+          <h2 id="usar-titulo">Usar ChartPython</h2>
+          <p>ChartPython es un notebook parecido a Jupyter que corre entero en tu navegador. Escribís código en celdas, lo ejecutás y el resultado aparece debajo. Python y sus paquetes viven en la página: no hay que instalar nada y los archivos que subís no llegan a ningún servidor.</p>
+
+          <section class="cpm-tema" id="primeros-pasos">
+            <h3>Primeros pasos{{ ancla('primeros-pasos') }}</h3>
+            <ol>
+              <li>Entrá a <a href="{{ url_for('chartpython') }}">ChartPython</a>. Arranca con un notebook que tiene una celda vacía.</li>
+              <li>Hacé clic en la celda, escribí <code>2 + 2</code> y apretá <kbd>Shift</kbd>+<kbd>Enter</kbd>.</li>
+              <li>La primera vez tarda: el navegador descarga Python y sus paquetes, unos 115 MB. Quedan en la caché, así que las próximas veces arranca en pocos segundos.</li>
+              <li>El resultado aparece debajo de la celda, marcado con <code>Out[1]:</code>.</li>
+            </ol>
+            {% call py() %}
+2 + 2
+            {% endcall %}
+            {% call salida() %}
+4
+            {% endcall %}
+            <p>Debajo del notebook, la barra de estado cuenta qué está haciendo Python: <em>Python apagado</em> (todavía no arrancó), <em>Preparando Python…</em>, <em>Python listo</em>, <em>Ejecutando…</em> con los segundos que lleva, y <em>Python se detuvo</em> si algo lo cortó. También muestra la memoria que usa y la hora del último guardado.</p>
+            <aside class="cpm-nota">
+              <p><strong>Todo queda en esta computadora.</strong> Python, los notebooks y los archivos que subís se guardan en este navegador. Si borrás los datos del sitio o abrís ChartPython en otro navegador, no van a estar: descargá el <code>.ipynb</code> de lo que quieras conservar.</p>
+            </aside>
+          </section>
+
+          <section class="cpm-tema" id="celdas">
+            <h3>Celdas y atajos de teclado{{ ancla('celdas') }}</h3>
+            <p>Hay dos tipos de celda: de <strong>código</strong>, que ejecuta Python, y de <strong>texto</strong>, para escribir notas con formato. Se agregan con los botones <em>+ Código</em> y <em>+ Texto</em>.</p>
+            <p>Las celdas comparten las variables: lo que definís en una se puede usar en las demás. Lo que importa es el <strong>orden en que las ejecutaste</strong>, no dónde están en la página. El número de <code>In [3]:</code> dice cuándo corrió cada una, y <code>In [*]:</code> que está esperando o corriendo.</p>
+            {% call py() %}
+precio = 3450
+cantidad = 2
+            {% endcall %}
+            {% call py() %}
+precio * cantidad
+            {% endcall %}
+            {% call salida() %}
+6900
+            {% endcall %}
+            <p>Debajo de la celda se ve el valor de la <strong>última línea</strong>. Para ver algo del medio usá <code>print()</code>, y para mostrar varias tablas en una misma celda, <code>display()</code>, que ya está disponible sin importar nada. Un punto y coma al final de la última línea oculta su valor.</p>
+            {% call py() %}
+subtotal = precio * cantidad
+print("Subtotal:", subtotal)
+print("Con IVA:", subtotal * 1.21)
+subtotal > 5000
+            {% endcall %}
+            {% call salida() %}
+Subtotal: 6900
+Con IVA: 8349.0
+True
+            {% endcall %}
+            {% call py() %}
+display(precio, cantidad)
+precio * cantidad;
+            {% endcall %}
+            {% call salida() %}
+3450
+2
+            {% endcall %}
+
+            <h4>Los dos modos</h4>
+            <p>Como en Jupyter, hay un <strong>modo edición</strong> (estás escribiendo dentro de una celda) y un <strong>modo comando</strong> (la celda está seleccionada pero no escribís). <kbd>Esc</kbd> pasa a modo comando y <kbd>Enter</kbd> vuelve a editar.</p>
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">Teclas</th><th scope="col">Modo</th><th scope="col">Qué hace</th></tr></thead>
+                <tbody>
+                  <tr><td><kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>los dos</td><td>Ejecuta la celda y pasa a la siguiente. Si es la última, crea una nueva.</td></tr>
+                  <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd> (<kbd>Cmd</kbd> en Mac)</td><td>los dos</td><td>Ejecuta y se queda en la celda.</td></tr>
+                  <tr><td><kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>los dos</td><td>Ejecuta e inserta una celda de código debajo.</td></tr>
+                  <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>los dos</td><td>Guarda el notebook ya (igual se guarda solo).</td></tr>
+                  <tr><td><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>edición</td><td>Agrega o saca un nivel de sangría (4 espacios).</td></tr>
+                  <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td><td>edición</td><td>Comenta o descomenta las líneas elegidas.</td></tr>
+                  <tr><td><kbd>Esc</kbd></td><td>edición</td><td>Pasa a modo comando.</td></tr>
+                  <tr><td><kbd>Enter</kbd></td><td>comando</td><td>Edita la celda seleccionada.</td></tr>
+                  <tr><td><kbd>A</kbd> / <kbd>B</kbd></td><td>comando</td><td>Inserta una celda arriba o abajo.</td></tr>
+                  <tr><td><kbd>D</kbd> <kbd>D</kbd></td><td>comando</td><td>Borra la celda (D dos veces).</td></tr>
+                  <tr><td><kbd>Z</kbd></td><td>comando</td><td>Recupera la última celda borrada.</td></tr>
+                  <tr><td><kbd>M</kbd> / <kbd>Y</kbd></td><td>comando</td><td>Convierte la celda en texto o en código.</td></tr>
+                  <tr><td><kbd>↑</kbd> <kbd>↓</kbd> o <kbd>K</kbd> <kbd>J</kbd></td><td>comando</td><td>Selecciona la celda anterior o la siguiente.</td></tr>
+                  <tr><td><kbd>Shift</kbd>+<kbd>↑</kbd> / <kbd>Shift</kbd>+<kbd>↓</kbd></td><td>comando</td><td>Mueve la celda hacia arriba o hacia abajo.</td></tr>
+                  <tr><td><kbd>I</kbd> <kbd>I</kbd></td><td>comando</td><td>Interrumpe lo que se está ejecutando (reinicia Python).</td></tr>
+                  <tr><td><kbd>0</kbd> <kbd>0</kbd></td><td>comando</td><td>Reinicia Python.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Al escribir, <kbd>Enter</kbd> mantiene la sangría de la línea y agrega un nivel después de <code>:</code>, que es lo que pide Python en un <code>if</code>, un <code>for</code> o una función. La barra de arriba de las celdas tiene lo mismo en botones: <em>▶ Ejecutar</em>, <em>⏭ Ejecutar todo</em>, <em>■ Interrumpir</em>, <em>↻ Reiniciar</em>, <em>+ Código</em>, <em>+ Texto</em> y <em>Borrar salidas</em>.</p>
+
+            <h4>Celdas de texto</h4>
+            <p>Usan Markdown. Con doble clic (o <kbd>Enter</kbd>) se editan y con <kbd>Shift</kbd>+<kbd>Enter</kbd> se ven con formato. Se puede usar:</p>
+            <ul>
+              <li><code># Título</code>, <code>## Subtítulo</code> y así hasta seis niveles.</li>
+              <li><code>**negrita**</code>, <code>*cursiva*</code> y <code>`código`</code>.</li>
+              <li>Listas con <code>-</code> o con <code>1.</code>, citas con <code>&gt;</code> y líneas horizontales con <code>---</code>.</li>
+              <li>Tablas con <code>|</code> y una fila de guiones debajo del encabezado.</li>
+              <li>Bloques de código entre tres comillas invertidas y enlaces <code>[texto](https://…)</code>.</li>
+            </ul>
+            <p>No se muestran imágenes ni fórmulas de LaTeX.</p>
+          </section>
+
+          <section class="cpm-tema" id="archivos">
+            <h3>Archivos: subir, leer y descargar{{ ancla('archivos') }}</h3>
+            <p>Debajo de las celdas está el panel <em>Archivos del notebook</em>. Con <em>Subir archivo</em> elegís un CSV (o un <code>.tsv</code>, <code>.txt</code> o <code>.json</code>) y queda en <code>/mnt/data</code>, la carpeta donde arranca Python. Por eso alcanza con el nombre para abrirlo: <code>pd.read_csv("ventas.csv")</code>, sin ruta.</p>
+            {% call py() %}
+import os
+
+os.getcwd()
+            {% endcall %}
+            {% call salida() %}
+'/mnt/data'
+            {% endcall %}
+            <p>Lo que escribe Python también queda ahí y aparece en el panel como <em>creado por Python</em>, con un botón <em>Descargar</em>. <code>os.listdir()</code> muestra los nombres exactos de todo lo que hay.</p>
+            {% call py() %}
+with open("notas.txt", "w", encoding="utf-8") as archivo:
+    archivo.write("Primera prueba con ChartPython\n")
+
+sorted(os.listdir())
+            {% endcall %}
+            {% call salida() %}
+['notas.txt']
+            {% endcall %}
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">En el panel dice</th><th scope="col">Qué significa</th></tr></thead>
+                <tbody>
+                  <tr><td><em>subido</em></td><td>Lo subiste vos. Queda guardado en el navegador con ese notebook y se vuelve a poner en <code>/mnt/data</code> cada vez que Python se reinicia. <em>Quitar</em> lo saca.</td></tr>
+                  <tr><td><em>creado por Python</em></td><td>Lo escribió una celda. Vive sólo mientras Python está prendido: al interrumpir o reiniciar se pierde, así que descargalo antes.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <aside class="cpm-cuidado">
+              <p><strong>Límites.</strong> Cada archivo puede pesar hasta 10 MiB y todos juntos hasta 20 MiB. Guardá lo que generes en la carpeta principal: lo que quede dentro de una subcarpeta no aparece en el panel ni se puede descargar.</p>
+              <p><strong>Excel.</strong> El panel acepta <code>.xlsx</code>, pero pandas no lo puede abrir porque ChartPython no trae <code>openpyxl</code>. Guardalo como CSV desde Excel o Google Sheets, o abrilo en el <a href="{{ url_for('limpiador') }}">Limpiador</a> de ChartBay y descargalo como CSV.</p>
+            </aside>
+          </section>
+
+          <section class="cpm-tema" id="notebooks">
+            <h3>Guardar, abrir y exportar notebooks{{ ancla('notebooks') }}</h3>
+            <ul>
+              <li><strong>Se guarda solo</strong> mientras escribís; la barra de estado muestra la hora del último guardado. <kbd>Ctrl</kbd>+<kbd>S</kbd> lo guarda en el momento.</li>
+              <li>El selector de arriba lista los notebooks de este navegador. <em>Nuevo</em>, <em>Renombrar</em> y <em>Borrar</em> hacen lo que dicen; borrar pide confirmación.</li>
+              <li><strong>Cada notebook tiene su propio Python.</strong> Cambiar de notebook reinicia Python: las variables y los archivos creados por el anterior no pasan al nuevo.</li>
+              <li><em>Descargar .ipynb</em> baja el notebook en el formato de Jupyter, que también abren VS Code y Google Colab.</li>
+              <li><em>Abrir .ipynb</em> importa un notebook. Muestra las salidas que traía sin ejecutar nada; para regenerarlas, ejecutá las celdas.</li>
+              <li>El notebook que exporta el <a href="{{ url_for('econometria') }}">laboratorio de Econometría</a> también se abre acá. Subí el CSV con el nombre que indica el notebook en <em>Dataset esperado</em> y ejecutalo.</li>
+            </ul>
+            <p>Si el navegador no deja guardar (pasa en algunas ventanas privadas), ChartPython lo avisa y hay que descargar el <code>.ipynb</code> para no perder el trabajo.</p>
+          </section>
+
+          <section class="cpm-tema" id="reiniciar">
+            <h3>Interrumpir y reiniciar Python{{ ancla('reiniciar') }}</h3>
+            <p>En un navegador la única forma de frenar un código que no termina es apagar Python y volver a prenderlo. Por eso <em>■ Interrumpir</em> (<kbd>I</kbd> <kbd>I</kbd>) y <em>↻ Reiniciar</em> (<kbd>0</kbd> <kbd>0</kbd>) tienen el mismo efecto:</p>
+            <ul>
+              <li><strong>Se pierden</strong> las variables, los <code>import</code> y los archivos creados por Python.</li>
+              <li><strong>Se conservan</strong> las celdas, sus salidas y los archivos que subiste, que vuelven a <code>/mnt/data</code> antes de la próxima ejecución.</li>
+            </ul>
+            <p>Después de reiniciar, <em>⏭ Ejecutar todo</em> corre las celdas de código en orden y recupera todo. Si la barra dice <em>Python se detuvo</em> (por ejemplo, porque se quedó sin memoria), es lo mismo: volvé a ejecutar.</p>
+            {% call py(ejecutar=false) %}
+# No lo ejecutes: este bucle no termina nunca y hay que interrumpirlo
+while True:
+    pass
+            {% endcall %}
+            <aside class="cpm-nota">
+              <p><strong>Antes de compartir un notebook</strong>, reinicialo y usá <em>Ejecutar todo</em>. Si corre de arriba a abajo sin errores, cualquiera que lo abra va a llegar al mismo resultado.</p>
+            </aside>
+          </section>
+
+          <section class="cpm-tema" id="instalado">
+            <h3>Qué trae instalado (y qué no){{ ancla('instalado') }}</h3>
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">Paquete</th><th scope="col">Versión</th><th scope="col">Para qué</th></tr></thead>
+                <tbody>
+                  <tr><td>Python</td><td>3.12</td><td>El lenguaje, con casi toda su biblioteca estándar.</td></tr>
+                  <tr><td>pandas</td><td>2.2.0</td><td>Tablas: leer CSV, limpiar, agrupar, combinar.</td></tr>
+                  <tr><td>NumPy</td><td>1.26.4</td><td>Cálculo numérico y números al azar.</td></tr>
+                  <tr><td>SciPy</td><td>1.12.0</td><td>Pruebas estadísticas y distribuciones.</td></tr>
+                  <tr><td>statsmodels</td><td>0.14.2</td><td>Regresiones, pruebas de diagnóstico y series de tiempo.</td></tr>
+                  <tr><td>patsy</td><td>0.5.6</td><td>Las fórmulas del estilo <code>y ~ x1 + x2</code>.</td></tr>
+                  <tr><td>python-dateutil, pytz</td><td></td><td>Fechas y zonas horarias (los usa pandas).</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>De la biblioteca estándar están, entre otros, <code>csv</code>, <code>json</code>, <code>re</code>, <code>math</code>, <code>statistics</code>, <code>datetime</code>, <code>collections</code>, <code>itertools</code>, <code>unicodedata</code>, <code>pathlib</code>, <code>glob</code>, <code>io</code>, <code>zipfile</code>, <code>random</code> y <code>decimal</code>.</p>
+            {% call py() %}
+import sys
+import numpy as np
+import pandas as pd
+import scipy
+import statsmodels
+
+print("Python", sys.version.split()[0])
+print("pandas", pd.__version__)
+print("NumPy", np.__version__)
+print("SciPy", scipy.__version__)
+print("statsmodels", statsmodels.__version__)
+            {% endcall %}
+            {% call salida() %}
+Python 3.12.1
+pandas 2.2.0
+NumPy 1.26.4
+SciPy 1.12.0
+statsmodels 0.14.2
+            {% endcall %}
+            <p><strong>No hay internet ni <code>pip</code>:</strong> no se pueden instalar paquetes ni leer archivos desde una URL. Estos, que son comunes en otros tutoriales, no están:</p>
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">No está</th><th scope="col">Qué deja de andar</th><th scope="col">Qué usar</th></tr></thead>
+                <tbody>
+                  <tr><td>matplotlib, seaborn, plotly</td><td>Gráficos, <code>df.plot()</code></td><td><a href="#graficos">Gráficos sin matplotlib</a></td></tr>
+                  <tr><td>openpyxl, xlrd</td><td><code>pd.read_excel()</code>, <code>df.to_excel()</code></td><td>Trabajar con CSV</td></tr>
+                  <tr><td>pyarrow</td><td>Parquet y Feather</td><td>CSV o JSON</td></tr>
+                  <tr><td>Jinja2</td><td><code>df.style</code> (colores y formatos de tabla)</td><td><code>round()</code> y <code>pd.set_option("display.float_format", …)</code></td></tr>
+                  <tr><td>tabulate</td><td><code>df.to_markdown()</code></td><td><code>print(df.to_string())</code></td></tr>
+                  <tr><td>scikit-learn</td><td>Modelos de machine learning</td><td>statsmodels para regresión y clasificación con logit</td></tr>
+                  <tr><td>requests</td><td>Descargar datos de internet</td><td>Bajar el archivo y subirlo al panel</td></tr>
+                </tbody>
+              </table>
+            </div>
+            {% call py(error="ModuleNotFoundError") %}
+import matplotlib.pyplot as plt
+            {% endcall %}
+            {% call salida_error() %}
+ModuleNotFoundError: No module named 'matplotlib'
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="diferencias">
+            <h3>Diferencias con Jupyter{{ ancla('diferencias') }}</h3>
+            <p>Si venís de Jupyter o de Colab casi todo funciona igual. Estas son las diferencias que se notan:</p>
+
+            <h4>No hay comandos mágicos</h4>
+            <p><code>%timeit</code>, <code>%matplotlib inline</code>, <code>!pip install</code> y <code>pd.read_csv?</code> dan <code>SyntaxError</code>: no son Python, son de IPython. Para la ayuda de una función usá <code>help()</code>, y para medir cuánto tarda algo, <code>time</code>:</p>
+            {% call py() %}
+import time
+
+inicio = time.perf_counter()
+suma = sum(range(1_000_000))
+print(f"Tardó {time.perf_counter() - inicio:.3f} segundos")
+            {% endcall %}
+            <p><code>display()</code> ya viene incluido. Si copiás código que hace <code>from IPython.display import display</code>, borrá esa línea:</p>
+            {% call py(error="ModuleNotFoundError") %}
+from IPython.display import display
+            {% endcall %}
+            {% call salida_error() %}
+ModuleNotFoundError: No module named 'IPython'
+            {% endcall %}
+
+            <h4>No se pueden pedir datos con <code>input()</code></h4>
+            {% call py(error="RuntimeError") %}
+nombre = input("¿Cómo te llamás? ")
+            {% endcall %}
+            {% call salida_error() %}
+RuntimeError: input() no está disponible en ChartPython. Asigná el valor en una celda o cargá un archivo.
+            {% endcall %}
+
+            <h4>Los enteros de NumPy son de 32 bits</h4>
+            <p>Python corre en WebAssembly de 32 bits, y ahí el entero por defecto de NumPy es <code>int32</code>: llega hasta 2.147.483.647. Pasado ese número <strong>la cuenta da mal sin avisar</strong>, algo fácil de cruzar con montos en pesos.</p>
+            {% call py() %}
+import numpy as np
+
+np.array([2_000_000_000, 2_000_000_000]).sum()
+            {% endcall %}
+            {% call salida() %}
+-294967296
+            {% endcall %}
+            {% call py() %}
+np.array([2_000_000_000, 2_000_000_000], dtype="int64").sum()
+            {% endcall %}
+            {% call salida() %}
+4000000000
+            {% endcall %}
+            <aside class="cpm-cuidado">
+              <p><strong>Regla práctica:</strong> escribí <code>"int64"</code> en lugar de <code>int</code>. <code>pd.read_csv()</code> y <code>pd.to_numeric()</code> ya usan 64 bits, pero <code>astype(int)</code>, <code>np.array([...])</code> y <code>np.arange()</code> usan 32. Más detalles en <a href="#tipos">Tipos de datos</a>.</p>
+            </aside>
+
+            <h4>Límites de una celda</h4>
+            <ul>
+              <li>Una celda muestra hasta 1 MiB de salida o unos 1000 <code>print</code>. Lo que pase de ahí se corta con un aviso, pero el código sigue corriendo hasta el final.</li>
+              <li>El código de una celda puede ocupar hasta 100 KiB.</li>
+              <li>Para mirar datos grandes, preferí <code>head()</code>, <code>sample()</code> o un resumen antes que imprimir fila por fila.</li>
+            </ul>
+          </section>
+        </section>
+
+        <section class="cpm-parte" id="python" aria-labelledby="python-titulo">
+          <p class="cpm-parte-num">Parte 2</p>
+          <h2 id="python-titulo">Python básico para datos</h2>
+          <p>Lo mínimo de Python que aparece todo el tiempo al trabajar con tablas. Si ya lo conocés, saltá a <a href="#leer">Leer y explorar</a>.</p>
+
+          <section class="cpm-tema" id="variables">
+            <h3>Variables, números y texto{{ ancla('variables') }}</h3>
+            <p>Una variable es un nombre para un valor. Se crea con <code>=</code> y no hace falta declarar el tipo. Lo que va después de <code>#</code> es un comentario: Python lo ignora.</p>
+            {% call py() %}
+edad = 34            # entero (int)
+altura = 1.72        # decimal (float): siempre con punto, nunca con coma
+nombre = "Lucía"     # texto (str), entre comillas simples o dobles
+socio = True         # verdadero o falso (bool)
+sin_dato = None      # "no hay valor"
+type(altura)
+            {% endcall %}
+            {% call salida() %}
+<class 'float'>
+            {% endcall %}
+            {% call py() %}
+print(7 + 2, 7 - 2, 7 * 2)
+print(7 / 2)     # división
+print(7 // 2)    # división entera
+print(7 % 2)     # resto
+print(7 ** 2)    # potencia
+print(round(3.14159, 2), abs(-5), max(3, 8, 1), min(3, 8, 1))
+            {% endcall %}
+            {% call salida() %}
+9 5 14
+3.5
+3
+1
+49
+3.14 5 8 1
+            {% endcall %}
+
+            <h4>Texto</h4>
+            {% call py() %}
+cliente = "  ana PÉREZ  "
+print(cliente.strip())                 # sin espacios en los bordes
+print(cliente.strip().title())         # Mayúscula Inicial
+print(cliente.strip().upper())         # TODO EN MAYÚSCULAS
+print("yerba;café;azúcar".split(";"))  # cortar en una lista
+print("$ 3.450".replace("$", "").strip())
+print(len("Córdoba"), "Cór" in "Córdoba")
+            {% endcall %}
+            {% call salida() %}
+ana PÉREZ
+Ana Pérez
+ANA PÉREZ
+['yerba', 'café', 'azúcar']
+3.450
+7 True
+            {% endcall %}
+            <p>Las <strong>f-strings</strong> arman texto con valores adentro. Después de <code>:</code> va el formato: <code>,.2f</code> es separador de miles y dos decimales, <code>.0%</code> es porcentaje sin decimales.</p>
+            {% call py() %}
+total = 1234567.891
+descuento = 0.15
+print(f"Total: {total:,.2f}")
+print(f"Descuento: {descuento:.0%}")
+# Con punto de miles y coma decimal, como se escribe en Argentina:
+print(f"{total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            {% endcall %}
+            {% call salida() %}
+Total: 1,234,567.89
+Descuento: 15%
+1.234.567,89
+            {% endcall %}
+            <p>Para pasar de un tipo a otro están <code>int()</code>, <code>float()</code> y <code>str()</code>. Python sólo entiende el punto decimal:</p>
+            {% call py() %}
+print(int("42") + 1, float("3.5") * 2, str(10) + " unidades")
+print(float("3,5".replace(",", ".")))
+            {% endcall %}
+            {% call salida() %}
+43 7.0 10 unidades
+3.5
+            {% endcall %}
+            {% call py(error="ValueError") %}
+float("3,5")
+            {% endcall %}
+            {% call salida_error() %}
+ValueError: could not convert string to float: '3,5'
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="colecciones">
+            <h3>Listas y diccionarios{{ ancla('colecciones') }}</h3>
+            <p>Una <strong>lista</strong> guarda valores en orden. Las posiciones se cuentan desde 0 y los números negativos cuentan desde el final.</p>
+            {% call py() %}
+precios = [3450, 5200.5, 1100, 2890]
+print(precios[0])      # el primero
+print(precios[-1])     # el último
+print(precios[1:3])    # posiciones 1 y 2: el 3 no entra
+precios.append(990)    # agregar al final
+print(len(precios), sum(precios), max(precios))
+print(sorted(precios))
+            {% endcall %}
+            {% call salida() %}
+3450
+2890
+[5200.5, 1100]
+5 13630.5 5200.5
+[990, 1100, 2890, 3450, 5200.5]
+            {% endcall %}
+            <p>Un <strong>diccionario</strong> guarda pares clave → valor. Sirve, por ejemplo, para tablas de equivalencias.</p>
+            {% call py() %}
+producto = {"nombre": "Yerba 1kg", "precio": 3450, "stock": 12}
+print(producto["precio"])
+print(producto.get("marca", "sin marca"))   # valor por defecto si la clave no está
+producto["stock"] = 10                       # cambiar o agregar un valor
+for clave, valor in producto.items():
+    print(clave, "→", valor)
+            {% endcall %}
+            {% call salida() %}
+3450
+sin marca
+nombre → Yerba 1kg
+precio → 3450
+stock → 10
+            {% endcall %}
+            <p>Dos cosas más que aparecen seguido: asignar varios valores a la vez y quedarse con los valores sin repetir (<code>set</code>).</p>
+            {% call py() %}
+minimo, maximo = min(precios), max(precios)
+print(minimo, maximo)
+
+provincias = ["CABA", "Córdoba", "CABA", "Mendoza"]
+sorted(set(provincias))
+            {% endcall %}
+            {% call salida() %}
+990 5200.5
+['CABA', 'Córdoba', 'Mendoza']
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="control">
+            <h3>Condiciones y bucles{{ ancla('control') }}</h3>
+            <p>Python usa la <strong>sangría</strong> para saber qué líneas van dentro de un <code>if</code> o de un <code>for</code>: cuatro espacios después de la línea que termina en <code>:</code>.</p>
+            {% call py() %}
+stock = 3
+if stock == 0:
+    print("Sin stock")
+elif stock < 5:
+    print("Quedan pocas unidades")
+else:
+    print("Hay stock")
+            {% endcall %}
+            {% call salida() %}
+Quedan pocas unidades
+            {% endcall %}
+            <p>Para comparar: <code>==</code> (igual), <code>!=</code> (distinto), <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>. Para combinar condiciones: <code>and</code>, <code>or</code> y <code>not</code>; <code>in</code> pregunta si un valor está en una lista o en un texto.</p>
+            {% call py() %}
+for provincia in ["CABA", "Córdoba", "Mendoza"]:
+    print(provincia.upper())
+
+for numero, precio in enumerate([3450, 1100], start=1):
+    print(numero, precio)
+
+for producto, precio in zip(["Yerba", "Azúcar"], [3450, 1100]):
+    print(f"{producto}: $ {precio}")
+
+for mes in range(1, 4):   # 1, 2 y 3: el 4 no entra
+    print("Mes", mes)
+            {% endcall %}
+            {% call salida() %}
+CABA
+CÓRDOBA
+MENDOZA
+1 3450
+2 1100
+Yerba: $ 3450
+Azúcar: $ 1100
+Mes 1
+Mes 2
+Mes 3
+            {% endcall %}
+            <p>Una <strong>comprensión de lista</strong> arma una lista nueva en una línea, transformando o filtrando otra:</p>
+            {% call py() %}
+precios = [3450, 5200.5, 1100, 2890]
+con_iva = [round(p * 1.21, 2) for p in precios]
+caros = [p for p in precios if p > 3000]
+print(con_iva)
+print(caros)
+            {% endcall %}
+            {% call salida() %}
+[4174.5, 6292.6, 1331.0, 3496.9]
+[3450, 5200.5]
+            {% endcall %}
+            <aside class="cpm-nota">
+              <p>Con pandas casi nunca hace falta recorrer una tabla fila por fila con <code>for</code>: las operaciones se aplican a la columna entera y son mucho más rápidas. Lo vas a ver en las partes siguientes.</p>
+            </aside>
+          </section>
+
+          <section class="cpm-tema" id="funciones">
+            <h3>Funciones, módulos y errores{{ ancla('funciones') }}</h3>
+            <p>Una función guarda pasos para reusarlos. Los parámetros con <code>=</code> tienen un valor por defecto, y <code>return</code> devuelve el resultado.</p>
+            {% call py() %}
+def precio_final(precio, descuento=0.0, iva=0.21):
+    """Aplica el descuento y después el IVA."""
+    con_descuento = precio * (1 - descuento)
+    return round(con_descuento * (1 + iva), 2)
+
+print(precio_final(1000))
+print(precio_final(1000, descuento=0.1))
+            {% endcall %}
+            {% call salida() %}
+1210.0
+1089.0
+            {% endcall %}
+            <p><code>try</code> / <code>except</code> atrapa un error esperado para decidir qué hacer en lugar de que se corte todo:</p>
+            {% call py() %}
+def a_numero(texto):
+    try:
+        return float(texto.replace(".", "").replace(",", "."))
+    except ValueError:
+        return None
+
+print(a_numero("3.450,50"), a_numero("s/d"))
+            {% endcall %}
+            {% call salida() %}
+3450.5 None
+            {% endcall %}
+            <p>Los <strong>módulos</strong> se cargan con <code>import</code>. Los alias <code>pd</code> y <code>np</code> son una convención que vas a ver en todos lados.</p>
+            {% call py() %}
+import math
+from statistics import mean, median
+import numpy as np
+import pandas as pd
+
+print(math.sqrt(16), math.log(100, 10))
+print(mean([3, 5, 10]), median([3, 5, 10]))
+            {% endcall %}
+            {% call salida() %}
+4.0 2.0
+6 5
+            {% endcall %}
+            <p><code>help()</code> muestra la documentación de cualquier función, en inglés. Con <code>help(pd.read_csv)</code> ves todos sus parámetros.</p>
+            {% call py() %}
+help(round)
+            {% endcall %}
+            {% call salida() %}
+Help on built-in function round in module builtins:
+
+round(number, ndigits=None)
+    Round a number to a given precision in decimal digits.
+
+    The return value is an integer if ndigits is omitted or None.  Otherwise
+    the return value has the same type as the number.  ndigits may be negative.
+            {% endcall %}
+            <p>Cuando algo falla, Python muestra el <strong>traceback</strong>: la última línea dice el tipo de error y por qué, y las de arriba, en qué línea de la celda pasó. En <a href="#errores">Errores frecuentes</a> están los más comunes con su solución.</p>
+          </section>
+        </section>
+
+        <section class="cpm-parte" id="leer" aria-labelledby="leer-titulo">
+          <p class="cpm-parte-num">Parte 3</p>
+          <h2 id="leer-titulo">Leer y explorar un CSV</h2>
+          <p>pandas guarda una tabla en un <strong>DataFrame</strong>: filas, columnas con nombre y un <strong>índice</strong> que identifica cada fila (al leer un CSV son los números 0, 1, 2…). Cada columna, por separado, es una <strong>Series</strong>.</p>
+
+          <section class="cpm-tema" id="csv-practica">
+            <h3>El CSV de práctica{{ ancla('csv-practica') }}</h3>
+            <p>Para practicar sin depender de un archivo tuyo, esta celda crea <code>ventas.csv</code> en <code>/mnt/data</code>. Tiene los problemas típicos de un CSV exportado de una planilla o de un sistema de facturación: punto y coma como separador, precios con <code>$</code> y coma decimal, espacios de más, provincias escritas de varias formas, un <code>s/d</code>, una fila vacía, un pedido repetido, una fecha imposible y una cantidad que no tiene sentido.</p>
+            {% call py() %}
+texto = """Sucursal;Fecha;Cliente ;Provincia;Producto;Cantidad;Precio Unitario;Descuento;Pagado
+001;03/01/2026; Ana Pérez ;Buenos Aires;Yerba 1kg;2;$ 3.450,00;10%;Sí
+001;03/01/2026;JUAN GÓMEZ;bs. as.;Café 500g;1;$ 5.200,50;0%;si
+002;04/01/2026;María López;Córdoba;Yerba 1kg;;$ 3.450,00;5%;No
+002;04/01/2026;María López;Córdoba;Yerba 1kg;;$ 3.450,00;5%;No
+001;05/01/2026;Pedro Ruiz;CABA;Azúcar 1kg;3;$ 1.100,00;;SI
+;;;;;;;;
+002;06/01/2026;lucía  fernández;cordoba;Aceite 900ml;s/d;$ 2.890,00;0%;no
+003;07/01/2026;Ana Pérez;Santa Fe ;Café 500g;250;$ 5.200,50;15%;Sí
+001;31/02/2026;Juan Gómez;Capital Federal;Yerba 1kg;4;$ 3.450,00;0%;Sí
+003;08/01/2026;Sofía Díaz;Mendoza;Aceite 900ml;1;$ 2.890,00;0%;No
+001;09/01/2026;Pedro Ruiz;caba;Azúcar 1kg;6;$ 1.100,00;5%;Sí
+002;10/01/2026;Lucía Fernández;Córdoba;Café 500g;2;$ 5.200,50;0%;No
+"""
+
+with open("ventas.csv", "w", encoding="utf-8") as archivo:
+    archivo.write(texto)
+
+print("Listo: ventas.csv quedó en /mnt/data")
+            {% endcall %}
+            {% call salida() %}
+Listo: ventas.csv quedó en /mnt/data
+            {% endcall %}
+            <p>Si preferís trabajar con tu propio archivo, subilo desde el panel y cambiá el nombre en los ejemplos.</p>
+          </section>
+
+          <section class="cpm-tema" id="leer-csv">
+            <h3>Leer un CSV{{ ancla('leer-csv') }}</h3>
+            <p><code>pd.read_csv()</code> lee el archivo y devuelve un DataFrame. <code>shape</code> dice cuántas filas y columnas quedaron.</p>
+            {% call py() %}
+import pandas as pd
+
+ventas = pd.read_csv("ventas.csv")
+ventas.shape
+            {% endcall %}
+            {% call salida() %}
+(12, 1)
+            {% endcall %}
+            <p>Una sola columna: pandas espera comas y este archivo separa con punto y coma, así que cada fila entera quedó como un único texto. Es lo primero que hay que revisar cuando algo se ve raro. El parámetro <code>sep</code> lo arregla:</p>
+            {% call py() %}
+ventas = pd.read_csv("ventas.csv", sep=";")
+ventas.shape
+            {% endcall %}
+            {% call salida() %}
+(12, 9)
+            {% endcall %}
+            <p>Otra trampa clásica: los códigos con <strong>ceros a la izquierda</strong>. pandas ve números, los convierte y el <code>001</code> pasa a ser <code>1.0</code>. Con <code>dtype</code> se le indica que esa columna es texto.</p>
+            {% call py() %}
+ventas["Sucursal"].head(3)
+            {% endcall %}
+            {% call salida() %}
+0    1.0
+1    1.0
+2    2.0
+Name: Sucursal, dtype: float64
+            {% endcall %}
+            {% call py() %}
+ventas = pd.read_csv("ventas.csv", sep=";", dtype={"Sucursal": str})
+ventas["Sucursal"].head(3)
+            {% endcall %}
+            {% call salida() %}
+0    001
+1    001
+2    002
+Name: Sucursal, dtype: object
+            {% endcall %}
+
+            <h4>Los parámetros que más se usan</h4>
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">Parámetro</th><th scope="col">Cuándo</th><th scope="col">Ejemplo</th></tr></thead>
+                <tbody>
+                  <tr><td><code>sep</code></td><td>Separador distinto de la coma. Con <code>sep=None</code> pandas intenta adivinarlo.</td><td><code>sep=";"</code>, <code>sep="\t"</code>, <code>sep=None, engine="python"</code></td></tr>
+                  <tr><td><code>decimal</code>, <code>thousands</code></td><td>Números escritos como <code>1.234,56</code>.</td><td><code>decimal=",", thousands="."</code></td></tr>
+                  <tr><td><code>encoding</code></td><td>Acentos rotos o <code>UnicodeDecodeError</code>.</td><td><code>encoding="latin-1"</code>, <code>encoding="utf-8-sig"</code></td></tr>
+                  <tr><td><code>dtype</code></td><td>Columnas que tienen que quedar como texto: códigos, DNI, CUIT, códigos postales.</td><td><code>dtype={"cuit": str}</code></td></tr>
+                  <tr><td><code>na_values</code></td><td>Textos que en tu archivo significan “sin dato”.</td><td><code>na_values=["s/d", "-", "N/A"]</code></td></tr>
+                  <tr><td><code>usecols</code></td><td>Leer sólo algunas columnas.</td><td><code>usecols=["Fecha", "Cantidad"]</code></td></tr>
+                  <tr><td><code>nrows</code>, <code>skiprows</code></td><td>Leer una parte, o saltear renglones de título antes del encabezado.</td><td><code>nrows=1000</code>, <code>skiprows=3</code></td></tr>
+                  <tr><td><code>header</code>, <code>names</code></td><td>El archivo no tiene fila de encabezado.</td><td><code>header=None, names=["fecha", "valor"]</code></td></tr>
+                  <tr><td><code>parse_dates</code></td><td>Leer columnas como fecha (conviene cuando ya vienen en formato <code>2026-01-31</code>).</td><td><code>parse_dates=["fecha"]</code></td></tr>
+                  <tr><td><code>on_bad_lines</code></td><td>Descartar filas mal formadas (con cuidado: se pierden datos).</td><td><code>on_bad_lines="skip"</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+            {% call py() %}
+pd.read_csv("ventas.csv", sep=";", usecols=["Fecha", "Producto", "Cantidad"], nrows=3)
+            {% endcall %}
+            {% call salida() %}
+        Fecha   Producto  Cantidad
+0  03/01/2026  Yerba 1kg       2.0
+1  03/01/2026  Café 500g       1.0
+2  04/01/2026  Yerba 1kg       NaN
+            {% endcall %}
+            <p><code>NaN</code> es como pandas marca un valor faltante. Con <code>na_values</code>, el <code>s/d</code> también pasa a ser faltante y la columna queda numérica:</p>
+            {% call py() %}
+pd.read_csv("ventas.csv", sep=";", na_values=["s/d"])["Cantidad"].tolist()
+            {% endcall %}
+            {% call salida() %}
+[2.0, 1.0, nan, nan, 3.0, nan, nan, 250.0, 4.0, 1.0, 6.0, 2.0]
+            {% endcall %}
+
+            <h4>Números con coma decimal</h4>
+            <p><code>io.StringIO</code> deja leer un texto como si fuera un archivo, útil para probar un parámetro sin crear nada:</p>
+            {% call py() %}
+import io
+
+texto = "producto;precio\nYerba;3.450,50\nCafé;5.200,00\n"
+pd.read_csv(io.StringIO(texto), sep=";", decimal=",", thousands=".")
+            {% endcall %}
+            {% call salida() %}
+  producto  precio
+0    Yerba  3450.5
+1     Café  5200.0
+            {% endcall %}
+
+            <h4>Acentos y codificación</h4>
+            <p>Excel en Windows suele guardar los CSV en <em>latin-1</em> (también llamado <em>cp1252</em>) y pandas espera UTF-8. Esta celda crea un archivo así, para ver qué pasa:</p>
+            {% call py() %}
+with open("clientes_windows.csv", "w", encoding="latin-1") as archivo:
+    archivo.write("nombre;ciudad\nJosé;Córdoba\n")
+            {% endcall %}
+            <p>El síntoma es un <code>UnicodeDecodeError</code>:</p>
+            {% call py(error="UnicodeDecodeError") %}
+pd.read_csv("clientes_windows.csv", sep=";")
+            {% endcall %}
+            {% call salida_error() %}
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe9 in position 17: invalid continuation byte
+            {% endcall %}
+            {% call py() %}
+pd.read_csv("clientes_windows.csv", sep=";", encoding="latin-1")
+            {% endcall %}
+            {% call salida() %}
+  nombre   ciudad
+0   José  Córdoba
+            {% endcall %}
+            <p>Al revés: si ves <code>CÃ³rdoba</code> en lugar de <code>Córdoba</code>, el archivo era UTF-8 y se leyó como latin-1. Y si el primer nombre de columna empieza con <code>ï»¿</code>, usá <code>encoding="utf-8-sig"</code>.</p>
+            <aside class="cpm-nota">
+              <p><strong>Otros formatos.</strong> Un <code>.tsv</code> se lee con <code>pd.read_csv("archivo.tsv", sep="\t")</code> y un JSON con <code>pd.read_json("archivo.json")</code>. Si el JSON tiene objetos anidados, <code>pd.json_normalize()</code> los convierte en columnas.</p>
+            </aside>
+          </section>
+
+          <section class="cpm-tema" id="explorar">
+            <h3>Explorar un DataFrame{{ ancla('explorar') }}</h3>
+            <p>Antes de limpiar hay que mirar. Estos comandos responden las preguntas de siempre: qué columnas hay, de qué tipo, cuántos faltantes y qué valores aparecen.</p>
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">Comando</th><th scope="col">Muestra</th></tr></thead>
+                <tbody>
+                  <tr><td><code>df.head()</code>, <code>df.head(10)</code></td><td>Las primeras filas (5 si no decís cuántas).</td></tr>
+                  <tr><td><code>df.tail(3)</code></td><td>Las últimas filas.</td></tr>
+                  <tr><td><code>df.sample(5, random_state=1)</code></td><td>Filas al azar; <code>random_state</code> hace que salgan siempre las mismas.</td></tr>
+                  <tr><td><code>df.shape</code></td><td>(filas, columnas).</td></tr>
+                  <tr><td><code>df.columns.tolist()</code></td><td>Los nombres exactos de las columnas.</td></tr>
+                  <tr><td><code>df.dtypes</code></td><td>El tipo de cada columna.</td></tr>
+                  <tr><td><code>df.info()</code></td><td>Tipos, valores no vacíos y memoria, todo junto.</td></tr>
+                  <tr><td><code>df.describe()</code></td><td>Resumen estadístico de las columnas numéricas; con <code>include="all"</code>, de todas.</td></tr>
+                  <tr><td><code>df.isna().sum()</code></td><td>Cantidad de faltantes por columna.</td></tr>
+                  <tr><td><code>df["col"].value_counts()</code></td><td>Cuántas veces aparece cada valor.</td></tr>
+                  <tr><td><code>df["col"].unique()</code>, <code>df["col"].nunique()</code></td><td>Los valores distintos y cuántos son.</td></tr>
+                  <tr><td><code>df.duplicated().sum()</code></td><td>Cuántas filas repiten a una anterior.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            {% call py() %}
+display(ventas.head(3), ventas.tail(2))
+            {% endcall %}
+            <p>En ChartPython los DataFrames se ven como tablas. De acá en adelante, las salidas del manual los muestran en texto, que es lo mismo que imprime <code>print(df)</code>.</p>
+            {% call py() %}
+ventas.columns.tolist()
+            {% endcall %}
+            {% call salida() %}
+['Sucursal', 'Fecha', 'Cliente ', 'Provincia', 'Producto', 'Cantidad', 'Precio Unitario', 'Descuento', 'Pagado']
+            {% endcall %}
+            {% call py() %}
+ventas.info()
+            {% endcall %}
+            {% call salida() %}
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 12 entries, 0 to 11
+Data columns (total 9 columns):
+ #   Column           Non-Null Count  Dtype
+---  ------           --------------  -----
+ 0   Sucursal         11 non-null     object
+ 1   Fecha            11 non-null     object
+ 2   Cliente          11 non-null     object
+ 3   Provincia        11 non-null     object
+ 4   Producto         11 non-null     object
+ 5   Cantidad         9 non-null      object
+ 6   Precio Unitario  11 non-null     object
+ 7   Descuento        10 non-null     object
+ 8   Pagado           11 non-null     object
+dtypes: object(9)
+memory usage: 504.0+ bytes
+            {% endcall %}
+            {% call py() %}
+ventas["Provincia"].value_counts(dropna=False)
+            {% endcall %}
+            {% call salida() %}
+Provincia
+Córdoba            3
+Buenos Aires       1
+bs. as.            1
+CABA               1
+NaN                1
+cordoba            1
+Santa Fe           1
+Capital Federal    1
+Mendoza            1
+caba               1
+Name: count, dtype: int64
+            {% endcall %}
+            {% call py() %}
+print(ventas["Pagado"].unique())
+print("Filas repetidas:", ventas.duplicated().sum())
+            {% endcall %}
+            {% call salida() %}
+['Sí' 'si' 'No' 'SI' nan 'no']
+Filas repetidas: 1
+            {% endcall %}
+            <p>Si una tabla tiene muchas columnas o filas, pandas muestra <code>…</code> en el medio. Estas opciones cambian cuánto se ve:</p>
+            {% call py() %}
+pd.set_option("display.max_columns", 50)   # columnas antes de cortar
+pd.set_option("display.max_rows", 100)     # filas antes de mostrar sólo el principio y el final
+            {% endcall %}
+            <aside class="cpm-nota">
+              <p><strong>Lo que encontramos.</strong> Todas las columnas son <code>object</code> (texto), aunque haya cantidades, precios y fechas. <code>"Cliente "</code> tiene un espacio al final. Cinco provincias aparecen escritas de nueve formas y <em>Pagado</em> de cinco; hay una fila vacía y otra repetida. Todo eso se arregla en la parte siguiente.</p>
+            </aside>
+          </section>
+        </section>
+
+        <section class="cpm-parte" id="limpiar" aria-labelledby="limpiar-titulo">
+          <p class="cpm-parte-num">Parte 4</p>
+          <h2 id="limpiar-titulo">Limpiar un CSV</h2>
+          <p>Paso a paso, sobre el CSV de práctica. Al final hay una <a href="#receta">receta completa</a> que junta todo en una función para reusar con el próximo archivo.</p>
+          <p>Se trabaja sobre una copia, así <code>ventas</code> queda como vino del archivo y se puede comparar:</p>
+          {% call py() %}
+df = ventas.copy()
+          {% endcall %}
+          <aside class="cpm-nota">
+            <p><strong>Un patrón que se repite:</strong> casi ninguna operación de pandas cambia el DataFrame original, sino que devuelve uno nuevo. Por eso se asigna el resultado: <code>df = df.drop_duplicates()</code> o <code>df["col"] = df["col"].str.strip()</code>.</p>
+          </aside>
+
+          <section class="cpm-tema" id="nombres">
+            <h3>Nombres de columnas{{ ancla('nombres') }}</h3>
+            <p>Nombres en minúscula, sin acentos, sin espacios y sin símbolos evitan errores de tipeo y dejan escribir <code>df["precio_unitario"]</code> sin dudar. Los métodos de texto de pandas (<code>.str</code>) funcionan también sobre los nombres de las columnas:</p>
+            {% call py() %}
+df.columns = (
+    df.columns.str.strip()                     # espacios en los bordes
+    .str.lower()                               # minúsculas
+    .str.normalize("NFKD")                     # separa cada letra de su acento...
+    .str.encode("ascii", "ignore")             # ...descarta los acentos...
+    .str.decode("ascii")                       # ...y vuelve a texto
+    .str.replace(r"\W+", "_", regex=True)      # espacios y símbolos → _
+)
+df.columns.tolist()
+            {% endcall %}
+            {% call salida() %}
+['sucursal', 'fecha', 'cliente', 'provincia', 'producto', 'cantidad', 'precio_unitario', 'descuento', 'pagado']
+            {% endcall %}
+            <p>Para cambiar sólo algunos nombres, <code>rename</code> con un diccionario de viejo → nuevo: <code>df = df.rename(columns={"precio_unitario": "precio"})</code>.</p>
+          </section>
+
+          <section class="cpm-tema" id="vacias-duplicadas">
+            <h3>Filas vacías y duplicadas{{ ancla('vacias-duplicadas') }}</h3>
+            {% call py() %}
+df = df.dropna(how="all")   # borra las filas que están completamente vacías
+df[df.duplicated(keep=False)][["fecha", "cliente", "producto"]]
+            {% endcall %}
+            {% call salida() %}
+        fecha      cliente   producto
+2  04/01/2026  María López  Yerba 1kg
+3  04/01/2026  María López  Yerba 1kg
+            {% endcall %}
+            <p><code>duplicated()</code> marca las filas que repiten una anterior; con <code>keep=False</code> marca todas las copias, para verlas juntas. <code>drop_duplicates()</code> deja una sola:</p>
+            {% call py() %}
+df = df.drop_duplicates()
+df = df.reset_index(drop=True)   # vuelve a numerar las filas 0, 1, 2…
+len(df)
+            {% endcall %}
+            {% call salida() %}
+10
+            {% endcall %}
+            <p>Si dos filas son el mismo registro aunque difieran en alguna columna (por ejemplo, una carga corregida), compará sólo las columnas que lo identifican y elegí cuál conservar: <code>df.drop_duplicates(subset=["fecha", "cliente", "producto"], keep="last")</code>.</p>
+          </section>
+
+          <section class="cpm-tema" id="texto">
+            <h3>Texto y categorías{{ ancla('texto') }}</h3>
+            <p>Con <code>.str</code> se aplica un método de texto a toda la columna. Los faltantes quedan como faltantes, sin error.</p>
+            {% call py() %}
+df["cliente"] = (
+    df["cliente"].str.strip()                   # espacios en los bordes
+    .str.replace(r"\s+", " ", regex=True)       # espacios repetidos en el medio
+    .str.title()                                # Mayúscula Inicial
+)
+df["cliente"].unique().tolist()
+            {% endcall %}
+            {% call salida() %}
+['Ana Pérez', 'Juan Gómez', 'María López', 'Pedro Ruiz', 'Lucía Fernández', 'Sofía Díaz']
+            {% endcall %}
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">Método</th><th scope="col">Hace</th></tr></thead>
+                <tbody>
+                  <tr><td><code>.str.strip()</code>, <code>.str.lower()</code>, <code>.str.upper()</code>, <code>.str.title()</code></td><td>Espacios y mayúsculas.</td></tr>
+                  <tr><td><code>.str.replace("viejo", "nuevo", regex=False)</code></td><td>Reemplaza texto literal. Con <code>regex=True</code>, un patrón.</td></tr>
+                  <tr><td><code>.str.contains("yerba", case=False, na=False)</code></td><td><code>True</code> donde aparece el texto. Sirve para filtrar.</td></tr>
+                  <tr><td><code>.str.startswith("0")</code>, <code>.str.endswith("kg")</code></td><td>Empieza o termina con…</td></tr>
+                  <tr><td><code>.str.len()</code></td><td>Largo de cada texto.</td></tr>
+                  <tr><td><code>.str.split(" ", expand=True)</code></td><td>Parte el texto en varias columnas.</td></tr>
+                  <tr><td><code>.str.extract(r"(\d+)")</code></td><td>Saca la parte que coincide con un patrón.</td></tr>
+                  <tr><td><code>.str.zfill(5)</code></td><td>Completa con ceros a la izquierda.</td></tr>
+                  <tr><td><code>.str[:3]</code></td><td>Los primeros tres caracteres.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p><code>str.extract</code> usa <strong>expresiones regulares</strong>: <code>\d+</code> es “uno o más dígitos” y cada paréntesis es una columna del resultado. Por ejemplo, para separar el tamaño y la unidad del nombre del producto:</p>
+            {% call py() %}
+df["producto"].str.extract(r"(\d+)\s*(kg|g|ml)").drop_duplicates()
+            {% endcall %}
+            {% call salida() %}
+     0   1
+0    1  kg
+1  500   g
+4  900  ml
+            {% endcall %}
+
+            <h4>Unificar categorías</h4>
+            <p>La provincia está escrita de muchas formas. Primero se arma una <strong>clave</strong> normalizada (minúsculas, sin acentos, sin puntos) para que las variantes se parezcan, y después un diccionario dice a qué valor corresponde cada una:</p>
+            {% call py() %}
+clave = (
+    df["provincia"].str.strip().str.lower()
+    .str.normalize("NFKD").str.encode("ascii", "ignore").str.decode("ascii")
+    .str.replace(".", "", regex=False)
+)
+clave.unique().tolist()
+            {% endcall %}
+            {% call salida() %}
+['buenos aires', 'bs as', 'cordoba', 'caba', 'santa fe', 'capital federal', 'mendoza']
+            {% endcall %}
+            {% call py() %}
+equivalencias = {
+    "buenos aires": "Buenos Aires",
+    "bs as": "Buenos Aires",
+    "caba": "CABA",
+    "capital federal": "CABA",
+    "cordoba": "Córdoba",
+    "santa fe": "Santa Fe",
+    "mendoza": "Mendoza",
+}
+df["provincia"] = clave.map(equivalencias)
+df["provincia"].value_counts(dropna=False)
+            {% endcall %}
+            {% call salida() %}
+provincia
+Córdoba         3
+CABA            3
+Buenos Aires    2
+Santa Fe        1
+Mendoza         1
+Name: count, dtype: int64
+            {% endcall %}
+            <aside class="cpm-cuidado">
+              <p><code>map</code> deja <code>NaN</code> todo lo que no está en el diccionario: revisá <code>df["provincia"].isna().sum()</code> para encontrar variantes que te olvidaste. <code>replace</code>, en cambio, deja sin tocar lo que no conoce.</p>
+            </aside>
+          </section>
+
+          <section class="cpm-tema" id="numeros">
+            <h3>Números con formato argentino{{ ancla('numeros') }}</h3>
+            <p><code>$ 3.450,00</code> es texto para Python. Hay que sacar el signo y el punto de miles, cambiar la coma decimal por punto y recién ahí convertir con <code>pd.to_numeric</code>. Con <code>errors="coerce"</code>, lo que no se puede convertir queda <code>NaN</code> en lugar de cortar con un error.</p>
+            {% call py() %}
+df["precio_unitario"] = pd.to_numeric(
+    df["precio_unitario"]
+    .str.replace("$", "", regex=False)    # el signo
+    .str.replace(".", "", regex=False)    # el punto de miles
+    .str.replace(",", ".", regex=False)   # la coma decimal
+    .str.strip(),
+    errors="coerce",
+)
+df["precio_unitario"].head(3)
+            {% endcall %}
+            {% call salida() %}
+0    3450.0
+1    5200.5
+2    3450.0
+Name: precio_unitario, dtype: float64
+            {% endcall %}
+            <aside class="cpm-cuidado">
+              <p>El orden importa: si primero cambiás la coma por punto y después borrás los puntos, <code>3.450,50</code> termina en <code>345050</code>. Y si el archivo mezcla formatos (<code>3,450.50</code> en unas filas y <code>3.450,50</code> en otras), separalos antes con <code>.str.contains</code>.</p>
+            </aside>
+            <p>Los porcentajes se tratan igual, dividiendo por 100 al final:</p>
+            {% call py() %}
+df["descuento"] = pd.to_numeric(df["descuento"].str.replace("%", "", regex=False).str.strip(), errors="coerce") / 100
+df["descuento"].tolist()
+            {% endcall %}
+            {% call salida() %}
+[0.1, 0.0, 0.05, nan, 0.0, 0.15, 0.0, 0.0, 0.05, 0.0]
+            {% endcall %}
+            <p>Antes de convertir una columna conviene ver <strong>qué valores no se van a poder leer</strong>, para no perder datos en silencio. La idea: convertir, y mostrar lo que era un valor pero quedó <code>NaN</code>.</p>
+            {% call py() %}
+convertida = pd.to_numeric(df["cantidad"], errors="coerce")
+df.loc[convertida.isna() & df["cantidad"].notna(), ["cliente", "cantidad"]]
+            {% endcall %}
+            {% call salida() %}
+           cliente cantidad
+4  Lucía Fernández      s/d
+            {% endcall %}
+            {% call py() %}
+df["cantidad"] = convertida
+df["cantidad"].tolist()
+            {% endcall %}
+            {% call salida() %}
+[2.0, 1.0, nan, 3.0, nan, 250.0, 4.0, 1.0, 6.0, 2.0]
+            {% endcall %}
+
+            <h4>Sí y no</h4>
+            <p>Para columnas de dos valores, un diccionario con todas las variantes y <code>map</code>:</p>
+            {% call py() %}
+df["pagado"] = df["pagado"].str.strip().str.lower().map({"sí": True, "si": True, "no": False})
+df["pagado"].value_counts(dropna=False)
+            {% endcall %}
+            {% call salida() %}
+pagado
+True     6
+False    4
+Name: count, dtype: int64
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="fechas">
+            <h3>Fechas{{ ancla('fechas') }}</h3>
+            <p><code>pd.to_datetime</code> convierte texto en fechas. Pasale siempre el <strong>formato</strong>: sin él, pandas puede leer <code>03/01/2026</code> como 1 de marzo. Con <code>errors="coerce"</code>, las fechas imposibles quedan <code>NaT</code> (el faltante de las fechas).</p>
+            {% call py() %}
+df["fecha"] = pd.to_datetime(df["fecha"], format="%d/%m/%Y", errors="coerce")
+df.loc[df["fecha"].isna(), ["cliente", "fecha"]]
+            {% endcall %}
+            {% call salida() %}
+      cliente fecha
+6  Juan Gómez   NaT
+            {% endcall %}
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">En el archivo</th><th scope="col">Formato</th></tr></thead>
+                <tbody>
+                  <tr><td><code>31/12/2026</code></td><td><code>format="%d/%m/%Y"</code></td></tr>
+                  <tr><td><code>31-12-26</code></td><td><code>format="%d-%m-%y"</code></td></tr>
+                  <tr><td><code>2026-12-31</code></td><td><code>format="%Y-%m-%d"</code></td></tr>
+                  <tr><td><code>31/12/2026 18:45</code></td><td><code>format="%d/%m/%Y %H:%M"</code></td></tr>
+                  <tr><td>Mezclados</td><td><code>format="mixed", dayfirst=True</code> (revisá el resultado)</td></tr>
+                  <tr><td><code>46022</code> (número de serie de Excel)</td><td><code>pd.to_datetime(col, unit="D", origin="1899-12-30")</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Una vez convertida, <code>.dt</code> da acceso a las partes de la fecha. Los nombres de los días vienen en inglés; para tenerlos en castellano se usa el número del día (lunes es 0):</p>
+            {% call py() %}
+dias = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+pd.DataFrame({
+    "fecha": df["fecha"],
+    "mes": df["fecha"].dt.to_period("M"),
+    "dia": df["fecha"].dt.dayofweek.map(dict(enumerate(dias))),
+    "hace_dias": (pd.Timestamp("2026-01-31") - df["fecha"]).dt.days,
+}).head(4)
+            {% endcall %}
+            {% call salida() %}
+       fecha      mes      dia  hace_dias
+0 2026-01-03  2026-01   sábado       28.0
+1 2026-01-03  2026-01   sábado       28.0
+2 2026-01-04  2026-01  domingo       27.0
+3 2026-01-05  2026-01    lunes       26.0
+            {% endcall %}
+            <p>Otras que se usan: <code>.dt.year</code>, <code>.dt.month</code>, <code>.dt.day</code>, <code>.dt.quarter</code> y <code>.dt.strftime("%d/%m/%Y")</code> para volver a texto. Para filtrar por fecha se compara con un texto en formato año-mes-día: <code>df[df["fecha"] &gt;= "2026-01-05"]</code>.</p>
+          </section>
+
+          <section class="cpm-tema" id="atipicos">
+            <h3>Valores atípicos{{ ancla('atipicos') }}</h3>
+            <p>Un valor atípico no siempre es un error, pero siempre hay que mirarlo. La regla del <strong>rango intercuartílico</strong> (IQR) marca lo que se aleja más de 1,5 veces la distancia entre el cuartil 1 y el 3:</p>
+            {% call py() %}
+q1 = df["cantidad"].quantile(0.25)
+q3 = df["cantidad"].quantile(0.75)
+iqr = q3 - q1
+fuera = (df["cantidad"] < q1 - 1.5 * iqr) | (df["cantidad"] > q3 + 1.5 * iqr)
+df.loc[fuera, ["fecha", "cliente", "producto", "cantidad"]]
+            {% endcall %}
+            {% call salida() %}
+       fecha    cliente   producto  cantidad
+5 2026-01-07  Ana Pérez  Café 500g     250.0
+            {% endcall %}
+            <p>250 paquetes de café en un pedido de almacén parece un error de carga (¿eran 2?). Qué hacer depende del caso; estas son las opciones habituales:</p>
+            <ul>
+              <li><strong>Tratarlo como faltante</strong> y completarlo después: <code>df.loc[fuera, "cantidad"] = np.nan</code>.</li>
+              <li><strong>Borrar la fila</strong>: <code>df = df[~fuera]</code> (el <code>~</code> invierte la condición).</li>
+              <li><strong>Recortarlo</strong> a un máximo razonable: <code>df["cantidad"].clip(upper=20)</code>.</li>
+              <li><strong>Dejarlo</strong> y anotarlo, si es un dato real.</li>
+            </ul>
+            {% call py() %}
+import numpy as np
+
+df.loc[fuera, "cantidad"] = np.nan
+            {% endcall %}
+            <p>Otra forma de medir qué tan lejos está un valor es el <strong>puntaje z</strong>: cuántos desvíos estándar se aleja de la media. <code>(col - col.mean()) / col.std()</code>; suele marcarse lo que supera 3 en valor absoluto. Con pocos datos, como acá, el IQR es más confiable.</p>
+          </section>
+
+          <section class="cpm-tema" id="faltantes">
+            <h3>Valores faltantes{{ ancla('faltantes') }}</h3>
+            {% call py() %}
+df.isna().sum()
+            {% endcall %}
+            {% call salida() %}
+sucursal           0
+fecha              1
+cliente            0
+provincia          0
+producto           0
+cantidad           3
+precio_unitario    0
+descuento          1
+pagado             0
+dtype: int64
+            {% endcall %}
+            <p>No hay una única respuesta: depende de qué significa el faltante. Acá, un descuento vacío es “sin descuento”, y para la cantidad usamos la mediana, que no se deja arrastrar por valores extremos.</p>
+            {% call py() %}
+df["descuento"] = df["descuento"].fillna(0)
+df["cantidad"] = df["cantidad"].fillna(df["cantidad"].median())
+df["cantidad"].tolist()
+            {% endcall %}
+            {% call salida() %}
+[2.0, 1.0, 2.0, 3.0, 2.0, 2.0, 4.0, 1.0, 6.0, 2.0]
+            {% endcall %}
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">Para</th><th scope="col">Comando</th></tr></thead>
+                <tbody>
+                  <tr><td>Porcentaje de faltantes por columna</td><td><code>df.isna().mean().round(3)</code></td></tr>
+                  <tr><td>Ver las filas con algún faltante</td><td><code>df[df.isna().any(axis=1)]</code></td></tr>
+                  <tr><td>Borrar filas sin fecha</td><td><code>df = df.dropna(subset=["fecha"])</code></td></tr>
+                  <tr><td>Completar con un valor fijo</td><td><code>df["col"] = df["col"].fillna(0)</code></td></tr>
+                  <tr><td>Completar texto</td><td><code>df["col"] = df["col"].fillna("Sin dato")</code></td></tr>
+                  <tr><td>Media o mediana</td><td><code>df["col"].fillna(df["col"].median())</code></td></tr>
+                  <tr><td>Mediana de su grupo</td><td><code>df["col"].fillna(df.groupby("grupo")["col"].transform("median"))</code></td></tr>
+                  <tr><td>El valor anterior (series de tiempo)</td><td><code>df["col"].ffill()</code></td></tr>
+                  <tr><td>Interpolar entre vecinos</td><td><code>df["col"].interpolate()</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>La fecha imposible la dejamos como <code>NaT</code>: el pedido existió y sus montos sirven, aunque no se sepa el día. Si vas a analizar por fecha, esas filas quedan afuera solas.</p>
+          </section>
+
+          <section class="cpm-tema" id="tipos">
+            <h3>Tipos de datos{{ ancla('tipos') }}</h3>
+            <p>Con los faltantes resueltos, cada columna puede tener su tipo definitivo. <code>astype</code> convierte:</p>
+            {% call py() %}
+df["cantidad"] = df["cantidad"].astype("int64")
+df["pagado"] = df["pagado"].astype(bool)
+df.dtypes
+            {% endcall %}
+            {% call salida() %}
+sucursal                   object
+fecha              datetime64[ns]
+cliente                    object
+provincia                  object
+producto                   object
+cantidad                    int64
+precio_unitario           float64
+descuento                 float64
+pagado                       bool
+dtype: object
+            {% endcall %}
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">Tipo</th><th scope="col">Para</th></tr></thead>
+                <tbody>
+                  <tr><td><code>"int64"</code></td><td>Enteros. No admite faltantes.</td></tr>
+                  <tr><td><code>"Int64"</code> (con mayúscula)</td><td>Enteros con faltantes, que se ven como <code>&lt;NA&gt;</code>.</td></tr>
+                  <tr><td><code>"float64"</code> o <code>float</code></td><td>Decimales; admite <code>NaN</code>.</td></tr>
+                  <tr><td><code>str</code> (queda como <code>object</code>)</td><td>Texto, códigos, DNI, CUIT.</td></tr>
+                  <tr><td><code>bool</code></td><td>Verdadero o falso.</td></tr>
+                  <tr><td><code>"category"</code></td><td>Texto con pocos valores que se repiten mucho (provincia, sexo): ocupa menos memoria.</td></tr>
+                  <tr><td><code>datetime64[ns]</code></td><td>Fechas, con <code>pd.to_datetime</code>.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <aside class="cpm-cuidado">
+              <p><strong>En ChartPython, nunca <code>astype(int)</code>.</strong> Como Python corre en 32 bits, <code>int</code> significa <code>int32</code> y los números de más de 2.147.483.647 se dan vuelta sin ningún aviso:</p>
+            </aside>
+            {% call py() %}
+montos = pd.Series([3_000_000_000.0, 150_000.0])
+print(montos.astype(int).tolist())
+print(montos.astype("int64").tolist())
+            {% endcall %}
+            {% call salida() %}
+[-2147483648, 150000]
+[3000000000, 150000]
+            {% endcall %}
+            <p>Un error de tipo muy común: una columna de números que en realidad es texto. No falla, pero hace otra cosa:</p>
+            {% call py() %}
+pd.Series(["10", "20", "30"]).sum()
+            {% endcall %}
+            {% call salida() %}
+'102030'
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="validar">
+            <h3>Validar antes de guardar{{ ancla('validar') }}</h3>
+            <p><code>assert</code> corta con un error si una condición no se cumple. Escribir las reglas del negocio así evita guardar un archivo roto sin darse cuenta, sobre todo cuando la limpieza se repite con cada archivo nuevo.</p>
+            {% call py() %}
+assert df["precio_unitario"].notna().all(), "Hay precios que no se pudieron leer"
+assert df["cantidad"].between(1, 100).all(), "Hay cantidades fuera de rango"
+assert df["provincia"].notna().all(), "Hay provincias sin equivalencia"
+assert not df.duplicated().any(), "Quedaron filas repetidas"
+print("Validación OK:", len(df), "filas")
+            {% endcall %}
+            {% call salida() %}
+Validación OK: 10 filas
+            {% endcall %}
+            {% call py(error="AssertionError") %}
+assert df["fecha"].notna().all(), "Hay fechas vacías o imposibles"
+            {% endcall %}
+            {% call salida_error() %}
+AssertionError: Hay fechas vacías o imposibles
+            {% endcall %}
+            <p>Un resumen de calidad por columna también ayuda a ver todo de un vistazo:</p>
+            {% call py() %}
+pd.DataFrame({
+    "tipo": df.dtypes.astype(str),
+    "faltantes": df.isna().sum(),
+    "distintos": df.nunique(),
+})
+            {% endcall %}
+            {% call salida() %}
+                           tipo  faltantes  distintos
+sucursal                 object          0          3
+fecha            datetime64[ns]          1          8
+cliente                  object          0          6
+provincia                object          0          5
+producto                 object          0          4
+cantidad                  int64          0          5
+precio_unitario         float64          0          4
+descuento               float64          0          4
+pagado                     bool          0          2
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="guardar">
+            <h3>Guardar el CSV limpio{{ ancla('guardar') }}</h3>
+            <p>Antes de guardar, una columna calculada: el total de cada pedido. Las operaciones entre columnas se hacen fila a fila, sin bucles.</p>
+            {% call py() %}
+df["total"] = (df["cantidad"] * df["precio_unitario"] * (1 - df["descuento"])).round(2)
+df.to_csv("ventas_limpio.csv", index=False)
+            {% endcall %}
+            <p><code>index=False</code> evita que el índice se guarde como una columna sin nombre. El archivo aparece en el panel como <em>creado por Python</em>: descargalo antes de reiniciar.</p>
+            <p>Si el archivo lo va a abrir alguien con <strong>Excel en castellano</strong>, conviene punto y coma, coma decimal y <code>utf-8-sig</code> (sin esa marca, Excel muestra mal los acentos):</p>
+            {% call py() %}
+df.to_csv(
+    "ventas_para_excel.csv",
+    index=False,
+    sep=";",
+    decimal=",",
+    encoding="utf-8-sig",
+    date_format="%d/%m/%Y",
+)
+with open("ventas_para_excel.csv", encoding="utf-8-sig") as archivo:
+    print("".join(archivo.readlines()[:3]))
+            {% endcall %}
+            {% call salida() %}
+sucursal;fecha;cliente;provincia;producto;cantidad;precio_unitario;descuento;pagado;total
+001;03/01/2026;Ana Pérez;Buenos Aires;Yerba 1kg;2;3450,0;0,1;True;6210,0
+001;03/01/2026;Juan Gómez;Buenos Aires;Café 500g;1;5200,5;0,0;True;5200,5
+            {% endcall %}
+            <p>Otros formatos: <code>df.to_json("ventas.json", orient="records", force_ascii=False, date_format="iso")</code> para JSON, y <code>sep="\t"</code> en <code>to_csv</code> para un <code>.tsv</code>. No se puede guardar <code>.xlsx</code> porque falta <code>openpyxl</code>; el CSV para Excel de arriba se abre con doble clic.</p>
+          </section>
+
+          <section class="cpm-tema" id="receta">
+            <h3>Receta completa{{ ancla('receta') }}</h3>
+            <p>Los pasos anteriores, en una función. Cuando llegue el archivo del mes que viene, se sube y se ejecuta la misma celda. Las funciones chicas de arriba se pueden copiar a cualquier notebook.</p>
+            {% call py() %}
+import numpy as np
+import pandas as pd
+
+EQUIVALENCIAS = {
+    "buenos aires": "Buenos Aires", "bs as": "Buenos Aires",
+    "caba": "CABA", "capital federal": "CABA",
+    "cordoba": "Córdoba", "santa fe": "Santa Fe", "mendoza": "Mendoza",
+}
+
+
+def sin_acentos(textos):
+    """Sirve para una columna (Series) o para los nombres de columnas."""
+    return textos.str.normalize("NFKD").str.encode("ascii", "ignore").str.decode("ascii")
+
+
+def a_numero(textos):
+    """'$ 3.450,50' → 3450.5. Lo que no se puede leer queda NaN."""
+    limpio = (
+        textos.str.replace("$", "", regex=False)
+        .str.replace("%", "", regex=False)
+        .str.replace(".", "", regex=False)
+        .str.replace(",", ".", regex=False)
+        .str.strip()
+    )
+    return pd.to_numeric(limpio, errors="coerce")
+
+
+def limpiar_ventas(ruta):
+    df = pd.read_csv(ruta, sep=";", dtype={"Sucursal": str})
+
+    # Nombres de columnas y filas vacías o repetidas
+    df.columns = sin_acentos(df.columns.str.strip().str.lower()).str.replace(r"\W+", "_", regex=True)
+    df = df.dropna(how="all").drop_duplicates().reset_index(drop=True)
+
+    # Texto y categorías
+    df["cliente"] = df["cliente"].str.strip().str.replace(r"\s+", " ", regex=True).str.title()
+    clave = sin_acentos(df["provincia"].str.strip().str.lower()).str.replace(".", "", regex=False)
+    df["provincia"] = clave.map(EQUIVALENCIAS)
+    df["pagado"] = df["pagado"].str.strip().str.lower().map({"sí": True, "si": True, "no": False})
+
+    # Números y fechas
+    df["precio_unitario"] = a_numero(df["precio_unitario"])
+    df["descuento"] = a_numero(df["descuento"]).fillna(0) / 100
+    df["cantidad"] = pd.to_numeric(df["cantidad"], errors="coerce")
+    df["fecha"] = pd.to_datetime(df["fecha"], format="%d/%m/%Y", errors="coerce")
+
+    # Atípicos: fuera de 1,5 IQR se toman como error de carga
+    q1, q3 = df["cantidad"].quantile([0.25, 0.75])
+    fuera = (df["cantidad"] < q1 - 1.5 * (q3 - q1)) | (df["cantidad"] > q3 + 1.5 * (q3 - q1))
+    df.loc[fuera, "cantidad"] = np.nan
+
+    # Faltantes, tipos y columnas calculadas
+    df["cantidad"] = df["cantidad"].fillna(df["cantidad"].median()).astype("int64")
+    df["pagado"] = df["pagado"].astype(bool)
+    df["total"] = (df["cantidad"] * df["precio_unitario"] * (1 - df["descuento"])).round(2)
+
+    # Validaciones
+    assert df["precio_unitario"].notna().all(), "Hay precios que no se pudieron leer"
+    assert df["provincia"].notna().all(), "Hay provincias sin equivalencia"
+    return df
+
+
+limpio = limpiar_ventas("ventas.csv")
+limpio.to_csv("ventas_limpio.csv", index=False)
+limpio[["fecha", "cliente", "provincia", "producto", "cantidad", "total"]]
+            {% endcall %}
+            {% call salida() %}
+       fecha          cliente     provincia      producto  cantidad     total
+0 2026-01-03        Ana Pérez  Buenos Aires     Yerba 1kg         2   6210.00
+1 2026-01-03       Juan Gómez  Buenos Aires     Café 500g         1   5200.50
+2 2026-01-04      María López       Córdoba     Yerba 1kg         2   6555.00
+3 2026-01-05       Pedro Ruiz          CABA    Azúcar 1kg         3   3300.00
+4 2026-01-06  Lucía Fernández       Córdoba  Aceite 900ml         2   5780.00
+5 2026-01-07        Ana Pérez      Santa Fe     Café 500g         2   8840.85
+6        NaT       Juan Gómez          CABA     Yerba 1kg         4  13800.00
+7 2026-01-08       Sofía Díaz       Mendoza  Aceite 900ml         1   2890.00
+8 2026-01-09       Pedro Ruiz          CABA    Azúcar 1kg         6   6270.00
+9 2026-01-10  Lucía Fernández       Córdoba     Café 500g         2  10401.00
+            {% endcall %}
+            {% call py() %}
+limpio.equals(df)
+            {% endcall %}
+            {% call salida() %}
+True
+            {% endcall %}
+            <p>La función da exactamente lo mismo que los pasos uno por uno. Desde acá, <code>ventas_limpio.csv</code> es el punto de partida del análisis.</p>
+          </section>
+        </section>
+
+        <section class="cpm-parte" id="analizar" aria-labelledby="analizar-titulo">
+          <p class="cpm-parte-num">Parte 5</p>
+          <h2 id="analizar-titulo">Transformar y analizar</h2>
+          <p>Se parte del archivo limpio. Al volver a leerlo, <code>parse_dates</code> recupera las fechas y <code>dtype</code> los ceros de la sucursal; el resto de los tipos pandas los reconoce solo.</p>
+          {% call py() %}
+import numpy as np
+import pandas as pd
+
+ventas = pd.read_csv("ventas_limpio.csv", parse_dates=["fecha"], dtype={"sucursal": str})
+ventas.dtypes
+          {% endcall %}
+          {% call salida() %}
+sucursal                   object
+fecha              datetime64[ns]
+cliente                    object
+provincia                  object
+producto                   object
+cantidad                    int64
+precio_unitario           float64
+descuento                 float64
+pagado                       bool
+total                     float64
+dtype: object
+          {% endcall %}
+
+          <section class="cpm-tema" id="seleccionar">
+            <h3>Seleccionar y filtrar{{ ancla('seleccionar') }}</h3>
+            <p>Una columna se pide con su nombre entre corchetes y devuelve una Series. Varias columnas van en una <strong>lista</strong>, por eso los corchetes dobles, y devuelven un DataFrame.</p>
+            {% call py() %}
+ventas["cliente"].head(3)
+            {% endcall %}
+            {% call salida() %}
+0      Ana Pérez
+1     Juan Gómez
+2    María López
+Name: cliente, dtype: object
+            {% endcall %}
+            {% call py() %}
+ventas[["cliente", "producto", "total"]].head(3)
+            {% endcall %}
+            {% call salida() %}
+       cliente   producto   total
+0    Ana Pérez  Yerba 1kg  6210.0
+1   Juan Gómez  Café 500g  5200.5
+2  María López  Yerba 1kg  6555.0
+            {% endcall %}
+            <p>Para elegir filas y columnas a la vez hay dos herramientas:</p>
+            <ul>
+              <li><code>loc</code> usa <strong>etiquetas</strong>: el valor del índice y el nombre de la columna. Los rangos incluyen el final: <code>loc[0:2]</code> son tres filas.</li>
+              <li><code>iloc</code> usa <strong>posiciones</strong>, como una lista: <code>iloc[0:2]</code> son dos filas.</li>
+            </ul>
+            {% call py() %}
+print(ventas.loc[2, "cliente"])     # fila con índice 2, columna "cliente"
+print(ventas.iloc[0, 2])            # primera fila, tercera columna
+ventas.loc[0:2, ["cliente", "total"]]
+            {% endcall %}
+            {% call salida() %}
+María López
+Ana Pérez
+       cliente   total
+0    Ana Pérez  6210.0
+1   Juan Gómez  5200.5
+2  María López  6555.0
+            {% endcall %}
+
+            <h4>Filtrar filas</h4>
+            <p>Un filtro es una Series de <code>True</code> y <code>False</code>: se quedan las filas con <code>True</code>. La forma más clara es darle nombre a la condición y usarla en <code>loc</code>:</p>
+            {% call py() %}
+de_caba = ventas["provincia"] == "CABA"
+ventas.loc[de_caba, ["cliente", "producto", "total"]]
+            {% endcall %}
+            {% call salida() %}
+      cliente    producto    total
+3  Pedro Ruiz  Azúcar 1kg   3300.0
+6  Juan Gómez   Yerba 1kg  13800.0
+8  Pedro Ruiz  Azúcar 1kg   6270.0
+            {% endcall %}
+            <p>Para combinar condiciones se usan <code>&amp;</code> (y), <code>|</code> (o) y <code>~</code> (no), con <strong>cada condición entre paréntesis</strong>:</p>
+            {% call py() %}
+grandes_de_caba = (ventas["provincia"] == "CABA") & (ventas["total"] > 5000)
+ventas.loc[grandes_de_caba, ["cliente", "total"]]
+            {% endcall %}
+            {% call salida() %}
+      cliente    total
+6  Juan Gómez  13800.0
+8  Pedro Ruiz   6270.0
+            {% endcall %}
+            {% call py(error="ValueError") %}
+ventas[ventas["provincia"] == "CABA" and ventas["total"] > 5000]
+            {% endcall %}
+            {% call salida_error() %}
+ValueError: The truth value of a Series is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+            {% endcall %}
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">Condición</th><th scope="col">Se escribe</th></tr></thead>
+                <tbody>
+                  <tr><td>Igual, distinto, mayor…</td><td><code>df["provincia"] == "CABA"</code>, <code>!=</code>, <code>&gt;</code>, <code>&gt;=</code></td></tr>
+                  <tr><td>Y, o, no</td><td><code>(cond1) &amp; (cond2)</code>, <code>(cond1) | (cond2)</code>, <code>~cond</code></td></tr>
+                  <tr><td>Está en una lista</td><td><code>df["provincia"].isin(["CABA", "Córdoba"])</code></td></tr>
+                  <tr><td>Entre dos valores (incluidos)</td><td><code>df["total"].between(3000, 7000)</code></td></tr>
+                  <tr><td>Contiene un texto</td><td><code>df["producto"].str.contains("café", case=False, na=False)</code></td></tr>
+                  <tr><td>Es o no es faltante</td><td><code>df["fecha"].isna()</code>, <code>df["fecha"].notna()</code></td></tr>
+                  <tr><td>Desde una fecha</td><td><code>df["fecha"] &gt;= "2026-01-05"</code></td></tr>
+                  <tr><td>Los N más grandes o más chicos</td><td><code>df.nlargest(3, "total")</code>, <code>df.nsmallest(3, "total")</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p><code>query</code> escribe el filtro como texto, que se lee más fácil cuando hay muchas condiciones. Las variables de Python se usan con <code>@</code>:</p>
+            {% call py() %}
+minimo = 5000
+ventas.query("provincia in ['CABA', 'Córdoba'] and total > @minimo")[["cliente", "provincia", "total"]]
+            {% endcall %}
+            {% call salida() %}
+           cliente provincia    total
+2      María López   Córdoba   6555.0
+4  Lucía Fernández   Córdoba   5780.0
+6       Juan Gómez      CABA  13800.0
+8       Pedro Ruiz      CABA   6270.0
+9  Lucía Fernández   Córdoba  10401.0
+            {% endcall %}
+
+            <h4>Modificar lo filtrado</h4>
+            <p>Si guardás un filtro en una variable y después le cambiás algo, pandas avisa con un <code>SettingWithCopyWarning</code>: no sabe si querés cambiar la tabla original o sólo el pedazo.</p>
+            {% call py(aviso="SettingWithCopyWarning") %}
+caba = ventas[ventas["provincia"] == "CABA"]
+caba["total_con_iva"] = caba["total"] * 1.21
+            {% endcall %}
+            <p>Si querés una tabla aparte, pedí una copia con <code>.copy()</code>. Si querés cambiar la original, hacelo en un solo paso con <code>loc</code>: <code>ventas.loc[condicion, "columna"] = valor</code>.</p>
+            {% call py() %}
+caba = ventas[ventas["provincia"] == "CABA"].copy()
+caba["total_con_iva"] = caba["total"] * 1.21
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="columnas">
+            <h3>Crear, renombrar y ordenar columnas{{ ancla('columnas') }}</h3>
+            <p>Una columna nueva se crea asignándole un valor. Las cuentas entre columnas se hacen fila por fila. Para asignar según una condición, <code>np.where</code> (dos opciones) o <code>np.select</code> (varias):</p>
+            {% call py() %}
+ventas["region"] = np.where(ventas["provincia"].isin(["CABA", "Buenos Aires"]), "AMBA", "Interior")
+
+condiciones = [ventas["total"] < 4000, ventas["total"] < 8000]
+ventas["tamano"] = np.select(condiciones, ["chico", "mediano"], default="grande")
+
+ventas[["provincia", "region", "total", "tamano"]].head(4)
+            {% endcall %}
+            {% call salida() %}
+      provincia    region   total   tamano
+0  Buenos Aires      AMBA  6210.0  mediano
+1  Buenos Aires      AMBA  5200.5  mediano
+2       Córdoba  Interior  6555.0  mediano
+3          CABA      AMBA  3300.0    chico
+            {% endcall %}
+            <p><code>pd.cut</code> arma tramos con límites que elegís vos; <code>pd.qcut</code>, tramos con la misma cantidad de filas cada uno (cuartiles, quintiles…):</p>
+            {% call py() %}
+ventas["tramo"] = pd.cut(ventas["total"], bins=[0, 4000, 8000, np.inf], labels=["bajo", "medio", "alto"])
+ventas["quintil"] = pd.qcut(ventas["total"], q=5, labels=[1, 2, 3, 4, 5])
+ventas[["total", "tramo", "quintil"]].head(4)
+            {% endcall %}
+            {% call salida() %}
+    total  tramo quintil
+0  6210.0  medio       3
+1  5200.5  medio       2
+2  6555.0  medio       4
+3  3300.0   bajo       1
+            {% endcall %}
+            <p>Para una transformación que no existe como método, se escribe una función y se aplica a cada valor con <code>apply</code>. Para traducir valores con un diccionario, <code>map</code>:</p>
+            {% call py() %}
+def rubro(producto):
+    return "Infusiones" if producto.startswith(("Yerba", "Café")) else "Almacén"
+
+ventas["rubro"] = ventas["producto"].apply(rubro)
+ventas["envase"] = ventas["producto"].map({
+    "Yerba 1kg": "paquete", "Café 500g": "paquete", "Azúcar 1kg": "paquete", "Aceite 900ml": "botella",
+})
+ventas[["producto", "rubro", "envase"]].drop_duplicates()
+            {% endcall %}
+            {% call salida() %}
+       producto       rubro   envase
+0     Yerba 1kg  Infusiones  paquete
+1     Café 500g  Infusiones  paquete
+3    Azúcar 1kg     Almacén  paquete
+4  Aceite 900ml     Almacén  botella
+            {% endcall %}
+            <p>Ordenar, renombrar y borrar. <code>ascending=False</code> ordena de mayor a menor, y con una lista se ordena por varias columnas:</p>
+            {% call py() %}
+ventas = ventas.drop(columns=["tamano", "envase"])
+ventas.sort_values(["provincia", "total"], ascending=[True, False])[["provincia", "cliente", "total"]].head(5)
+            {% endcall %}
+            {% call salida() %}
+      provincia     cliente    total
+0  Buenos Aires   Ana Pérez   6210.0
+1  Buenos Aires  Juan Gómez   5200.5
+6          CABA  Juan Gómez  13800.0
+8          CABA  Pedro Ruiz   6270.0
+3          CABA  Pedro Ruiz   3300.0
+            {% endcall %}
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">Para</th><th scope="col">Comando</th></tr></thead>
+                <tbody>
+                  <tr><td>Renombrar columnas</td><td><code>df = df.rename(columns={"precio_unitario": "precio"})</code></td></tr>
+                  <tr><td>Borrar columnas</td><td><code>df = df.drop(columns=["a", "b"])</code></td></tr>
+                  <tr><td>Borrar filas por índice</td><td><code>df = df.drop(index=[0, 5])</code></td></tr>
+                  <tr><td>Elegir y reordenar columnas</td><td><code>df = df[["fecha", "cliente", "total"]]</code></td></tr>
+                  <tr><td>Insertar una columna en una posición</td><td><code>df.insert(0, "id", range(1, len(df) + 1))</code></td></tr>
+                  <tr><td>Ordenar por el índice</td><td><code>df.sort_index()</code></td></tr>
+                  <tr><td>Usar una columna como índice, y volver atrás</td><td><code>df.set_index("fecha")</code>, <code>df.reset_index()</code></td></tr>
+                  <tr><td>Redondear</td><td><code>df["total"].round(2)</code>, <code>df.round(1)</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Los métodos se pueden <strong>encadenar</strong> entre paréntesis, un paso por línea. <code>assign</code> crea columnas dentro de la cadena; el <code>lambda d:</code> recibe la tabla tal como viene en ese paso:</p>
+            {% call py() %}
+(
+    ventas
+    .assign(total_miles=lambda d: (d["total"] / 1000).round(1))
+    .sort_values("total_miles", ascending=False)
+    .head(3)
+    [["cliente", "producto", "total_miles"]]
+)
+            {% endcall %}
+            {% call salida() %}
+           cliente   producto  total_miles
+6       Juan Gómez  Yerba 1kg         13.8
+9  Lucía Fernández  Café 500g         10.4
+5        Ana Pérez  Café 500g          8.8
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="descriptiva">
+            <h3>Estadística descriptiva{{ ancla('descriptiva') }}</h3>
+            <p>Diez ventas alcanzan para aprender a limpiar, pero no para hacer estadística. Esta celda arma una <strong>encuesta simulada</strong> de 300 personas; la semilla hace que los números sean siempre los mismos. Con datos tuyos, reemplazala por un <code>pd.read_csv</code>.</p>
+            {% call py() %}
+rng = np.random.default_rng(2026)
+n = 300
+encuesta = pd.DataFrame({
+    "edad": rng.integers(18, 66, n),
+    "sexo": rng.choice(["mujer", "varón"], n),
+    "region": rng.choice(["AMBA", "Centro", "Cuyo", "NEA", "NOA", "Patagonia"], n),
+    "educacion": rng.integers(7, 19, n),   # años de estudio
+})
+encuesta["experiencia"] = (encuesta["edad"] - encuesta["educacion"] - 6).clip(lower=0)
+encuesta["horas"] = rng.normal(40, 8, n).round().clip(10, 70)
+log_salario = (
+    13
+    + 0.07 * encuesta["educacion"]
+    + 0.03 * encuesta["experiencia"]
+    - 0.0005 * encuesta["experiencia"] ** 2
+    - 0.12 * (encuesta["sexo"] == "mujer")
+    + rng.normal(0, 0.35, n)
+)
+encuesta["salario"] = np.exp(log_salario).round(-3)
+encuesta.to_csv("encuesta.csv", index=False)
+encuesta.head()
+            {% endcall %}
+            {% call salida() %}
+   edad   sexo     region  educacion  experiencia  horas    salario
+0    58  mujer  Patagonia         11           41   38.0   892000.0
+1    26  varón        NOA         18            2   40.0  1770000.0
+2    19  mujer       Cuyo         10            3   41.0  1071000.0
+3    48  mujer       Cuyo          8           34   38.0   835000.0
+4    35  mujer  Patagonia         17           12   46.0  1588000.0
+            {% endcall %}
+            {% call py() %}
+salario = encuesta["salario"]
+print("Media:", round(salario.mean()))
+print("Mediana:", salario.median())
+print("Desvío estándar:", round(salario.std()))
+print("Mínimo y máximo:", salario.min(), salario.max())
+print("Percentil 90:", salario.quantile(0.9))
+            {% endcall %}
+            {% call salida() %}
+Media: 1470643
+Mediana: 1351000.0
+Desvío estándar: 641413
+Mínimo y máximo: 373000.0 4577000.0
+Percentil 90: 2341500.0
+            {% endcall %}
+            {% call py() %}
+encuesta.describe().round(1)
+            {% endcall %}
+            {% call salida() %}
+        edad  educacion  experiencia  horas    salario
+count  300.0      300.0        300.0  300.0      300.0
+mean    41.5       12.5         23.2   40.0  1470643.3
+std     13.6        3.5         13.9    7.9   641413.2
+min     18.0        7.0          0.0   17.0   373000.0
+25%     31.0        9.0         11.0   35.0   964500.0
+50%     41.0       12.0         24.0   40.0  1351000.0
+75%     53.0       16.0         34.0   46.0  1826250.0
+max     65.0       18.0         52.0   59.0  4577000.0
+            {% endcall %}
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">Medida</th><th scope="col">Método</th></tr></thead>
+                <tbody>
+                  <tr><td>Cantidad de valores no vacíos</td><td><code>.count()</code></td></tr>
+                  <tr><td>Suma, media, mediana</td><td><code>.sum()</code>, <code>.mean()</code>, <code>.median()</code></td></tr>
+                  <tr><td>Moda</td><td><code>.mode()</code> (puede haber más de una)</td></tr>
+                  <tr><td>Desvío estándar y varianza</td><td><code>.std()</code>, <code>.var()</code> (muestrales)</td></tr>
+                  <tr><td>Mínimo, máximo, rango</td><td><code>.min()</code>, <code>.max()</code>, <code>.max() - .min()</code></td></tr>
+                  <tr><td>Percentiles y cuartiles</td><td><code>.quantile(0.9)</code>, <code>.quantile([0.25, 0.5, 0.75])</code></td></tr>
+                  <tr><td>Asimetría y curtosis</td><td><code>.skew()</code>, <code>.kurt()</code></td></tr>
+                  <tr><td>Varias a la vez</td><td><code>.agg(["count", "mean", "median", "std"])</code></td></tr>
+                  <tr><td>Frecuencias y proporciones</td><td><code>.value_counts()</code>, <code>.value_counts(normalize=True)</code></td></tr>
+                  <tr><td>Correlación y covarianza</td><td><code>df.corr()</code>, <code>df.corr(method="spearman")</code>, <code>df.cov()</code></td></tr>
+                  <tr><td>Media ponderada</td><td><code>np.average(df["salario"], weights=df["ponderador"])</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+            {% call py() %}
+encuesta["region"].value_counts(normalize=True).round(3)
+            {% endcall %}
+            {% call salida() %}
+region
+Cuyo         0.183
+Centro       0.173
+NEA          0.170
+Patagonia    0.167
+NOA          0.153
+AMBA         0.153
+Name: proportion, dtype: float64
+            {% endcall %}
+            {% call py() %}
+encuesta[["edad", "educacion", "experiencia", "horas", "salario"]].corr().round(2)
+            {% endcall %}
+            {% call salida() %}
+             edad  educacion  experiencia  horas  salario
+edad         1.00      -0.01         0.97   0.05     0.30
+educacion   -0.01       1.00        -0.25   0.04     0.51
+experiencia  0.97      -0.25         1.00   0.04     0.16
+horas        0.05       0.04         0.04   1.00     0.00
+salario      0.30       0.51         0.16   0.00     1.00
+            {% endcall %}
+            <p>Por defecto pandas muestra los decimales que haya. Una opción cambia el formato de todos los números que se muestren (no cambia los datos):</p>
+            {% call py() %}
+pd.set_option("display.float_format", "{:,.2f}".format)
+encuesta[["horas", "salario"]].agg(["mean", "median"])
+            {% endcall %}
+            {% call salida() %}
+        horas      salario
+mean    40.00 1,470,643.33
+median  40.00 1,351,000.00
+            {% endcall %}
+            {% call py() %}
+pd.reset_option("display.float_format")   # vuelve al formato normal
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="agrupar">
+            <h3>Agrupar y resumir{{ ancla('agrupar') }}</h3>
+            <p><code>groupby</code> separa la tabla en grupos, calcula algo en cada uno y junta los resultados. Es el equivalente a una tabla dinámica.</p>
+            {% call py() %}
+ventas.groupby("provincia")["total"].sum()
+            {% endcall %}
+            {% call salida() %}
+provincia
+Buenos Aires    11410.50
+CABA            23370.00
+Córdoba         22736.00
+Mendoza          2890.00
+Santa Fe         8840.85
+Name: total, dtype: float64
+            {% endcall %}
+            <p>Para varios resultados con nombre propio, <code>agg</code> recibe <code>nombre=("columna", "función")</code>:</p>
+            {% call py() %}
+resumen = ventas.groupby("provincia").agg(
+    pedidos=("total", "size"),
+    unidades=("cantidad", "sum"),
+    facturacion=("total", "sum"),
+    ticket_promedio=("total", "mean"),
+)
+resumen.round(2).sort_values("facturacion", ascending=False)
+            {% endcall %}
+            {% call salida() %}
+              pedidos  unidades  facturacion  ticket_promedio
+provincia
+CABA                3        13     23370.00          7790.00
+Córdoba             3         6     22736.00          7578.67
+Buenos Aires        2         3     11410.50          5705.25
+Santa Fe            1         2      8840.85          8840.85
+Mendoza             1         1      2890.00          2890.00
+            {% endcall %}
+            <p>Funciones que acepta: <code>"size"</code> (filas), <code>"count"</code> (no vacíos), <code>"sum"</code>, <code>"mean"</code>, <code>"median"</code>, <code>"min"</code>, <code>"max"</code>, <code>"std"</code>, <code>"nunique"</code> (distintos), <code>"first"</code> y <code>"last"</code>.</p>
+            <p>Con dos columnas se agrupa por combinación. <code>as_index=False</code> deja los grupos como columnas comunes, cómodo para seguir trabajando o guardar:</p>
+            {% call py() %}
+ventas.groupby(["provincia", "producto"], as_index=False)["cantidad"].sum()
+            {% endcall %}
+            {% call salida() %}
+      provincia      producto  cantidad
+0  Buenos Aires     Café 500g         1
+1  Buenos Aires     Yerba 1kg         2
+2          CABA    Azúcar 1kg         9
+3          CABA     Yerba 1kg         4
+4       Córdoba  Aceite 900ml         2
+5       Córdoba     Café 500g         2
+6       Córdoba     Yerba 1kg         2
+7       Mendoza  Aceite 900ml         1
+8      Santa Fe     Café 500g         2
+            {% endcall %}
+            <p><code>transform</code> calcula por grupo pero devuelve un valor por fila, alineado con la tabla original. Sirve para participaciones y comparaciones contra el promedio del grupo:</p>
+            {% call py() %}
+ventas["participacion"] = ventas["total"] / ventas.groupby("provincia")["total"].transform("sum")
+ventas[["provincia", "cliente", "total", "participacion"]].round(3).head(4)
+            {% endcall %}
+            {% call salida() %}
+      provincia      cliente   total  participacion
+0  Buenos Aires    Ana Pérez  6210.0          0.544
+1  Buenos Aires   Juan Gómez  5200.5          0.456
+2       Córdoba  María López  6555.0          0.288
+3          CABA   Pedro Ruiz  3300.0          0.141
+            {% endcall %}
+
+            <h4>Tablas dinámicas y tablas de contingencia</h4>
+            {% call py() %}
+pd.pivot_table(
+    ventas,
+    index="provincia",
+    columns="rubro",
+    values="total",
+    aggfunc="sum",
+    fill_value=0,
+    margins=True,
+    margins_name="Total",
+)
+            {% endcall %}
+            {% call salida() %}
+rubro         Almacén  Infusiones     Total
+provincia
+Buenos Aires      0.0    11410.50  11410.50
+CABA           9570.0    13800.00  23370.00
+Córdoba        5780.0    16956.00  22736.00
+Mendoza        2890.0        0.00   2890.00
+Santa Fe          0.0     8840.85   8840.85
+Total         18240.0    51007.35  69247.35
+            {% endcall %}
+            <p><code>pd.crosstab</code> cuenta combinaciones de dos variables. Con <code>normalize="index"</code> da la proporción dentro de cada fila:</p>
+            {% call py() %}
+pd.crosstab(encuesta["region"], encuesta["sexo"], normalize="index").round(2)
+            {% endcall %}
+            {% call salida() %}
+sexo       mujer  varón
+region
+AMBA        0.52   0.48
+Centro      0.52   0.48
+Cuyo        0.51   0.49
+NEA         0.53   0.47
+NOA         0.54   0.46
+Patagonia   0.58   0.42
+            {% endcall %}
+            <aside class="cpm-cuidado">
+              <p><strong>Agrupar por una columna categórica</strong> (como <code>tramo</code>, que salió de <code>pd.cut</code>) muestra un <code>FutureWarning</code> sobre <code>observed</code>. Pasá <code>observed=True</code> para ver sólo las categorías que aparecen: <code>ventas.groupby("tramo", observed=True)["total"].sum()</code>. Lo mismo en <code>pivot_table</code>.</p>
+            </aside>
+            {% call py() %}
+ventas.groupby("tramo", observed=True)["total"].agg(["count", "sum"])
+            {% endcall %}
+            {% call salida() %}
+       count       sum
+tramo
+bajo       2   6190.00
+medio      5  30015.50
+alto       3  33041.85
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="combinar">
+            <h3>Combinar tablas{{ ancla('combinar') }}</h3>
+            <p><code>merge</code> junta dos tablas por una columna en común, como un BUSCARV. <code>validate="m:1"</code> verifica que del lado derecho cada producto aparezca una sola vez; si no, corta con un error en lugar de duplicar filas sin avisar.</p>
+            {% call py() %}
+productos = pd.DataFrame({
+    "producto": ["Yerba 1kg", "Café 500g", "Azúcar 1kg", "Aceite 900ml"],
+    "costo": [2300.0, 3600.0, 700.0, 2100.0],
+})
+con_costo = ventas.merge(productos, on="producto", how="left", validate="m:1")
+con_costo["margen"] = con_costo["total"] - con_costo["cantidad"] * con_costo["costo"]
+con_costo.groupby("producto")[["total", "margen"]].sum()
+            {% endcall %}
+            {% call salida() %}
+                 total   margen
+producto
+Aceite 900ml   8670.00  2370.00
+Azúcar 1kg     9570.00  3270.00
+Café 500g     24442.35  6442.35
+Yerba 1kg     26565.00  8165.00
+            {% endcall %}
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col"><code>how=</code></th><th scope="col">Se queda con</th></tr></thead>
+                <tbody>
+                  <tr><td><code>"left"</code></td><td>Todas las filas de la tabla de la izquierda; lo que no encuentra queda <code>NaN</code>.</td></tr>
+                  <tr><td><code>"inner"</code> (por defecto)</td><td>Sólo las filas que están en las dos.</td></tr>
+                  <tr><td><code>"right"</code></td><td>Todas las de la derecha.</td></tr>
+                  <tr><td><code>"outer"</code></td><td>Todas las de las dos.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Para saber qué no se cruzó, <code>indicator=True</code> agrega la columna <code>_merge</code>. Si la clave se llama distinto en cada tabla: <code>left_on="cliente", right_on="nombre"</code>.</p>
+            {% call py() %}
+clientes = pd.DataFrame({
+    "cliente": ["Ana Pérez", "Juan Gómez", "Marta Ríos"],
+    "segmento": ["mayorista", "minorista", "minorista"],
+})
+ventas[["cliente"]].drop_duplicates().merge(clientes, on="cliente", how="outer", indicator=True)
+            {% endcall %}
+            {% call salida() %}
+           cliente   segmento      _merge
+0        Ana Pérez  mayorista        both
+1       Juan Gómez  minorista        both
+2  Lucía Fernández        NaN   left_only
+3       Marta Ríos  minorista  right_only
+4      María López        NaN   left_only
+5       Pedro Ruiz        NaN   left_only
+6       Sofía Díaz        NaN   left_only
+            {% endcall %}
+            <p><code>pd.concat</code> apila tablas con las mismas columnas, por ejemplo un CSV por mes. <code>glob</code> busca los archivos por patrón y <code>assign</code> anota de cuál vino cada fila:</p>
+            {% call py() %}
+import glob
+
+ventas.iloc[:5].to_csv("ventas_parte1.csv", index=False)
+ventas.iloc[5:].to_csv("ventas_parte2.csv", index=False)
+
+archivos = sorted(glob.glob("ventas_parte*.csv"))
+juntas = pd.concat(
+    [pd.read_csv(nombre).assign(archivo=nombre) for nombre in archivos],
+    ignore_index=True,
+)
+juntas["archivo"].value_counts()
+            {% endcall %}
+            {% call salida() %}
+archivo
+ventas_parte1.csv    5
+ventas_parte2.csv    5
+Name: count, dtype: int64
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="reestructurar">
+            <h3>Formato ancho y largo{{ ancla('reestructurar') }}</h3>
+            <p>Muchas planillas vienen en formato <strong>ancho</strong>: una columna por mes o por año. Para agrupar, filtrar o graficar conviene el formato <strong>largo</strong>: una fila por observación. <code>melt</code> pasa de ancho a largo y <code>pivot</code>, de largo a ancho. (Los valores son inventados.)</p>
+            {% call py() %}
+ipc = pd.DataFrame({
+    "region": ["GBA", "Noreste", "Patagonia"],
+    "2026-01": [2.1, 2.4, 1.9],
+    "2026-02": [2.3, 2.2, 2.0],
+    "2026-03": [1.8, 2.0, 2.1],
+})
+largo = ipc.melt(id_vars="region", var_name="mes", value_name="variacion")
+largo.head(4)
+            {% endcall %}
+            {% call salida() %}
+      region      mes  variacion
+0        GBA  2026-01        2.1
+1    Noreste  2026-01        2.4
+2  Patagonia  2026-01        1.9
+3        GBA  2026-02        2.3
+            {% endcall %}
+            {% call py() %}
+largo.pivot(index="mes", columns="region", values="variacion")
+            {% endcall %}
+            {% call salida() %}
+region   GBA  Noreste  Patagonia
+mes
+2026-01  2.1      2.4        1.9
+2026-02  2.3      2.2        2.0
+2026-03  1.8      2.0        2.1
+            {% endcall %}
+            <p><code>pivot</code> falla si una combinación de índice y columna aparece dos veces. En ese caso usá <code>pivot_table</code>, que resume los repetidos con <code>aggfunc</code>.</p>
+          </section>
+
+          <section class="cpm-tema" id="series">
+            <h3>Series de tiempo{{ ancla('series') }}</h3>
+            <p>Con las fechas como índice, pandas entiende el tiempo: puede sumar por mes, comparar contra el período anterior o calcular promedios móviles. <code>pd.date_range</code> genera fechas; <code>"MS"</code> es el primer día de cada mes.</p>
+            {% call py() %}
+meses = pd.date_range("2024-01-01", periods=24, freq="MS")
+serie = pd.DataFrame(
+    {
+        "ventas": np.round(1000 * 1.04 ** np.arange(24) + np.tile([0.0, 40.0, -30.0], 8)),
+        "ipc": np.round(100 * 1.03 ** np.arange(24), 1),
+    },
+    index=meses,
+)
+serie.head(3)
+            {% endcall %}
+            {% call salida() %}
+            ventas    ipc
+2024-01-01  1000.0  100.0
+2024-02-01  1080.0  103.0
+2024-03-01  1052.0  106.1
+            {% endcall %}
+            {% call py() %}
+serie[["ventas"]].assign(
+    anterior=serie["ventas"].shift(1),
+    variacion=serie["ventas"].pct_change().round(3),
+    interanual=serie["ventas"].pct_change(12).round(3),
+    media_movil=serie["ventas"].rolling(3).mean().round(1),
+    acumulado=serie["ventas"].cumsum(),
+).iloc[12:15]
+            {% endcall %}
+            {% call salida() %}
+            ventas  anterior  variacion  interanual  media_movil  acumulado
+2025-01-01  1601.0    1509.0      0.061       0.601       1543.3    16667.0
+2025-02-01  1705.0    1601.0      0.065       0.579       1605.0    18372.0
+2025-03-01  1702.0    1705.0     -0.002       0.618       1669.3    20074.0
+            {% endcall %}
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">Para</th><th scope="col">Comando</th></tr></thead>
+                <tbody>
+                  <tr><td>Valor del período anterior</td><td><code>.shift(1)</code></td></tr>
+                  <tr><td>Diferencia con el anterior</td><td><code>.diff()</code></td></tr>
+                  <tr><td>Variación porcentual (mensual, interanual)</td><td><code>.pct_change()</code>, <code>.pct_change(12)</code></td></tr>
+                  <tr><td>Promedio móvil de 3 períodos</td><td><code>.rolling(3).mean()</code></td></tr>
+                  <tr><td>Acumulado</td><td><code>.cumsum()</code></td></tr>
+                  <tr><td>Un año o un rango de fechas</td><td><code>serie.loc["2025"]</code>, <code>serie.loc["2025-03":"2025-06"]</code></td></tr>
+                  <tr><td>Cambiar la frecuencia</td><td><code>.resample("QE").sum()</code>, <code>.resample("YE").mean()</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p><code>resample</code> agrupa por períodos. Los códigos más usados: <code>"D"</code> día, <code>"W"</code> semana, <code>"MS"</code> y <code>"ME"</code> inicio y fin de mes, <code>"QS"</code> y <code>"QE"</code> de trimestre, <code>"YS"</code> y <code>"YE"</code> de año.</p>
+            {% call py() %}
+serie["ventas"].resample("QE").sum().head(4)
+            {% endcall %}
+            {% call salida() %}
+2024-03-31    3132.0
+2024-06-30    3522.0
+2024-09-30    3960.0
+2024-12-31    4452.0
+Freq: QE-DEC, Name: ventas, dtype: float64
+            {% endcall %}
+            <aside class="cpm-cuidado">
+              <p>En pandas 2.2 los códigos viejos <code>"M"</code>, <code>"Q"</code> y <code>"Y"</code> siguen andando pero muestran un <code>FutureWarning</code>. Usá <code>"ME"</code>, <code>"QE"</code> y <code>"YE"</code>.</p>
+            </aside>
+            {% call py(aviso="FutureWarning") %}
+serie["ventas"].resample("Q").sum().head(1)
+            {% endcall %}
+            <p>Las ventas del CSV limpio, por semana. La fila sin fecha queda afuera sola:</p>
+            {% call py() %}
+ventas.set_index("fecha")["total"].resample("W").sum()
+            {% endcall %}
+            {% call salida() %}
+fecha
+2026-01-04    17965.50
+2026-01-11    37481.85
+Name: total, dtype: float64
+            {% endcall %}
+
+            <h4>Deflactar</h4>
+            <p>Para comparar montos de distintos meses con inflación, se dividen por un índice de precios. Multiplicar por el último valor del índice los expresa a pesos del último mes:</p>
+            {% call py() %}
+serie["ventas_reales"] = (serie["ventas"] / serie["ipc"] * serie["ipc"].iloc[-1]).round()
+serie[["ventas", "ipc", "ventas_reales"]].iloc[[0, 12, 23]]
+            {% endcall %}
+            {% call salida() %}
+            ventas    ipc  ventas_reales
+2024-01-01  1000.0  100.0         1974.0
+2025-01-01  1601.0  142.6         2216.0
+2025-12-01  2435.0  197.4         2435.0
+            {% endcall %}
+
+            <h4>Estacionariedad y pronóstico</h4>
+            <p>statsmodels trae las herramientas clásicas: la prueba de Dickey-Fuller aumentada, la autocorrelación y los modelos ARIMA. En la <a href="{{ url_for('guia') }}">Documentación</a> de ChartBay está explicado qué mide cada una.</p>
+            {% call py() %}
+from statsmodels.tsa.stattools import acf, adfuller
+
+estadistico, p_valor, *_ = adfuller(serie["ventas"])
+print(f"ADF = {estadistico:.2f}, p-valor = {p_valor:.3f}")
+print("Autocorrelación:", acf(serie["ventas"], nlags=3).round(2))
+            {% endcall %}
+            {% call salida() %}
+ADF = 2.98, p-valor = 1.000
+Autocorrelación: [1.   0.87 0.74 0.62]
+            {% endcall %}
+            <p>Un p-valor alto no permite rechazar que la serie tenga raíz unitaria: es lo esperable en una serie que crece mes a mes. Lo habitual es trabajar con sus variaciones (<code>pct_change()</code> o <code>diff()</code>) o con un modelo que la diferencie, como el ARIMA con <code>d=1</code>:</p>
+            {% call py() %}
+from statsmodels.tsa.arima.model import ARIMA
+
+ajuste = ARIMA(serie["ventas"], order=(1, 1, 0)).fit()
+ajuste.forecast(steps=3).round()
+            {% endcall %}
+            {% call salida() %}
+2026-01-01    2446.0
+2026-02-01    2450.0
+2026-03-01    2452.0
+Freq: MS, Name: predicted_mean, dtype: float64
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="numpy">
+            <h3>NumPy esencial{{ ancla('numpy') }}</h3>
+            <p>pandas está construido sobre NumPy, y muchas cuentas se escriben directo con sus funciones. <code>np.nan</code> es el valor faltante; las funciones que empiezan con <code>nan</code> lo ignoran.</p>
+            {% call py() %}
+a = np.array([1.5, 2.0, np.nan, 4.0])
+print(np.nanmean(a), np.nanmedian(a), np.isnan(a).sum())
+print(np.round(np.sqrt(a), 2))
+print(np.where(a > 1.8, "alto", "bajo"))   # ojo: NaN > 1.8 es False
+            {% endcall %}
+            {% call salida() %}
+2.5 2.0 1
+[1.22 1.41  nan 2.  ]
+['bajo' 'alto' 'bajo' 'alto']
+            {% endcall %}
+            {% call py() %}
+print(np.log(100), np.exp(1), np.log10(1000))
+print(np.arange(0, 1, 0.25), np.linspace(0, 1, 5))
+print(np.percentile([10, 20, 30, 40, 50], 90))
+            {% endcall %}
+            {% call salida() %}
+4.605170185988092 2.718281828459045 3.0
+[0.   0.25 0.5  0.75] [0.   0.25 0.5  0.75 1.  ]
+46.0
+            {% endcall %}
+            <p>Números al azar para simular o para tomar muestras. Con la misma semilla salen siempre los mismos:</p>
+            {% call py() %}
+rng = np.random.default_rng(42)
+print(rng.normal(loc=0, scale=1, size=3).round(3))
+print(rng.integers(1, 7, size=5))          # como tirar un dado: del 1 al 6
+print(rng.choice(["AMBA", "Centro", "Cuyo", "NEA", "NOA", "Patagonia"], size=3))
+print(rng.permutation(5))                  # los números del 0 al 4, mezclados
+            {% endcall %}
+            {% call salida() %}
+[ 0.305 -1.04   0.75 ]
+[1 5 2 1 4]
+['Patagonia' 'NOA' 'NOA']
+[1 4 2 3 0]
+            {% endcall %}
+            {% call py() %}
+salarios = np.array([500_000.0, 800_000.0, 1_200_000.0])
+ponderadores = np.array([120, 60, 20])   # cuántas personas representa cada caso
+np.average(salarios, weights=ponderadores)
+            {% endcall %}
+            {% call salida() %}
+660000.0
+            {% endcall %}
+            <p>La media ponderada es la que se usa con encuestas que traen un ponderador, como la EPH del INDEC.</p>
+          </section>
+
+          <section class="cpm-tema" id="pruebas">
+            <h3>Pruebas estadísticas{{ ancla('pruebas') }}</h3>
+            <p><code>scipy.stats</code> tiene las pruebas de hipótesis habituales. Todas devuelven el estadístico y el <strong>p-valor</strong>: si es menor que el nivel elegido (por ejemplo 0,05), se rechaza la hipótesis nula. El p-valor no mide el tamaño del efecto ni prueba causalidad.</p>
+            {% call py() %}
+from scipy import stats
+
+mujeres = encuesta.loc[encuesta["sexo"] == "mujer", "salario"]
+varones = encuesta.loc[encuesta["sexo"] == "varón", "salario"]
+prueba = stats.ttest_ind(mujeres, varones, equal_var=False)   # t de Welch
+print(f"t = {prueba.statistic:.2f}, p-valor = {prueba.pvalue:.4f}")
+            {% endcall %}
+            {% call salida() %}
+t = -4.06, p-valor = 0.0001
+            {% endcall %}
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">Pregunta</th><th scope="col">Prueba</th><th scope="col">Código</th></tr></thead>
+                <tbody>
+                  <tr><td>¿Dos grupos tienen distinta media?</td><td>t de Welch</td><td><code>stats.ttest_ind(a, b, equal_var=False)</code></td></tr>
+                  <tr><td>Lo mismo, sin suponer normalidad</td><td>Mann-Whitney</td><td><code>stats.mannwhitneyu(a, b)</code></td></tr>
+                  <tr><td>¿Cambió en los mismos casos (antes y después)?</td><td>t pareada</td><td><code>stats.ttest_rel(antes, despues)</code></td></tr>
+                  <tr><td>¿La media es distinta de un valor?</td><td>t de una muestra</td><td><code>stats.ttest_1samp(x, 40)</code></td></tr>
+                  <tr><td>¿Tres o más grupos tienen distinta media?</td><td>ANOVA</td><td><code>stats.f_oneway(g1, g2, g3)</code></td></tr>
+                  <tr><td>¿Dos variables categóricas están asociadas?</td><td>Chi-cuadrado</td><td><code>stats.chi2_contingency(pd.crosstab(a, b))</code></td></tr>
+                  <tr><td>¿Dos variables numéricas se mueven juntas?</td><td>Pearson, Spearman</td><td><code>stats.pearsonr(x, y)</code>, <code>stats.spearmanr(x, y)</code></td></tr>
+                  <tr><td>¿Los datos son normales?</td><td>Shapiro-Wilk</td><td><code>stats.shapiro(x)</code></td></tr>
+                  <tr><td>Valores críticos</td><td>Normal, t</td><td><code>stats.norm.ppf(0.975)</code>, <code>stats.t.ppf(0.975, df=29)</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+            {% call py() %}
+tabla = pd.crosstab(encuesta["region"], encuesta["sexo"])
+chi2, p_valor, grados, esperados = stats.chi2_contingency(tabla)
+print(f"chi2 = {chi2:.2f}, gl = {grados}, p-valor = {p_valor:.3f}")
+
+r, p_valor = stats.pearsonr(encuesta["educacion"], encuesta["salario"])
+print(f"r = {r:.2f}, p-valor = {p_valor:.2g}")
+
+grupos = [grupo["salario"] for _, grupo in encuesta.groupby("region")]
+anova = stats.f_oneway(*grupos)
+print(f"ANOVA: F = {anova.statistic:.2f}, p-valor = {anova.pvalue:.3f}")
+            {% endcall %}
+            {% call salida() %}
+chi2 = 0.66, gl = 5, p-valor = 0.985
+r = 0.51, p-valor = 3.1e-21
+ANOVA: F = 1.47, p-valor = 0.199
+            {% endcall %}
+            <p>Un intervalo de confianza del 95 % para una media, con la distribución t:</p>
+            {% call py() %}
+horas = encuesta["horas"]
+bajo, alto = stats.t.interval(0.95, df=len(horas) - 1, loc=horas.mean(), scale=stats.sem(horas))
+print(f"Horas semanales: {horas.mean():.1f} (IC 95 %: {bajo:.1f} a {alto:.1f})")
+            {% endcall %}
+            {% call salida() %}
+Horas semanales: 40.0 (IC 95 %: 39.1 a 40.9)
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="regresion">
+            <h3>Regresión con statsmodels{{ ancla('regresion') }}</h3>
+            <p>La forma más cómoda es con <strong>fórmulas</strong>: se escribe el modelo como texto y statsmodels arma las variables, agrega la constante y convierte las categóricas.</p>
+            {% call py() %}
+import statsmodels.formula.api as smf
+
+modelo = smf.ols("salario ~ educacion + experiencia", data=encuesta).fit()
+print(modelo.summary())
+            {% endcall %}
+            <p>El resumen trae todo, pero cada parte también se puede pedir por separado, por ejemplo para armar una tabla propia:</p>
+            {% call py() %}
+pd.DataFrame({
+    "coeficiente": modelo.params,
+    "error_estandar": modelo.bse,
+    "t": modelo.tvalues,
+    "p_valor": modelo.pvalues,
+}).round(4)
+            {% endcall %}
+            {% call salida() %}
+             coeficiente  error_estandar        t  p_valor
+Intercept   -185988.5478     135932.6489  -1.3682   0.1723
+educacion    106455.1145       8786.0972  12.1163   0.0000
+experiencia   14140.9223       2237.0151   6.3213   0.0000
+            {% endcall %}
+            {% call py() %}
+print(f"R² = {modelo.rsquared:.3f}, R² ajustado = {modelo.rsquared_adj:.3f}, n = {int(modelo.nobs)}")
+modelo.conf_int(alpha=0.05).round()   # intervalos de confianza del 95 %
+            {% endcall %}
+            {% call salida() %}
+R² = 0.348, R² ajustado = 0.343, n = 300
+                    0         1
+Intercept   -453502.0   81525.0
+educacion     89164.0  123746.0
+experiencia    9739.0   18543.0
+            {% endcall %}
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">En la fórmula</th><th scope="col">Significa</th></tr></thead>
+                <tbody>
+                  <tr><td><code>y ~ x1 + x2</code></td><td>y explicada por x1 y x2, con constante.</td></tr>
+                  <tr><td><code>np.log(y)</code></td><td>Logaritmo (hace falta haber hecho <code>import numpy as np</code>).</td></tr>
+                  <tr><td><code>I(x ** 2)</code></td><td>x al cuadrado: <code>I()</code> hace que la cuenta se tome literal.</td></tr>
+                  <tr><td><code>C(region)</code></td><td>Variable categórica: una dummy por categoría, menos la base.</td></tr>
+                  <tr><td><code>C(region, Treatment("NOA"))</code></td><td>Elegir la categoría base.</td></tr>
+                  <tr><td><code>x1:x2</code></td><td>Sólo la interacción.</td></tr>
+                  <tr><td><code>x1 * x2</code></td><td><code>x1 + x2 + x1:x2</code>.</td></tr>
+                  <tr><td><code>- 1</code></td><td>Sin constante.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Una ecuación de Mincer: logaritmo del salario, experiencia al cuadrado, dummies de sexo y región y errores estándar robustos a heterocedasticidad (<code>cov_type="HC1"</code>):</p>
+            {% call py() %}
+mincer = smf.ols(
+    "np.log(salario) ~ educacion + experiencia + I(experiencia ** 2) + C(sexo) + C(region)",
+    data=encuesta,
+).fit(cov_type="HC1")
+mincer.params.round(4)
+            {% endcall %}
+            {% call salida() %}
+Intercept                 12.7601
+C(sexo)[T.varón]           0.1774
+C(region)[T.Centro]        0.0115
+C(region)[T.Cuyo]         -0.1256
+C(region)[T.NEA]          -0.0174
+C(region)[T.NOA]           0.0076
+C(region)[T.Patagonia]     0.0488
+educacion                  0.0708
+experiencia                0.0337
+I(experiencia ** 2)       -0.0005
+dtype: float64
+            {% endcall %}
+            {% call py() %}
+retorno = mincer.params["educacion"] * 100
+print(f"Cada año más de educación se asocia con un salario {retorno:.1f} % más alto")
+            {% endcall %}
+            {% call salida() %}
+Cada año más de educación se asocia con un salario 7.1 % más alto
+            {% endcall %}
+            <p>Con el modelo estimado, <code>predict</code> calcula valores para casos nuevos:</p>
+            {% call py() %}
+nuevos = pd.DataFrame({"educacion": [12, 17], "experiencia": [10, 10]})
+modelo.predict(nuevos).round()
+            {% endcall %}
+            {% call salida() %}
+0    1232882.0
+1    1765158.0
+dtype: float64
+            {% endcall %}
+            <h4>Variable dependiente binaria</h4>
+            <p>Para un sí/no (0 o 1), un <strong>logit</strong>. <code>disp=0</code> evita que imprima las iteraciones; exponenciar los coeficientes da los <em>odds ratios</em>.</p>
+            {% call py() %}
+encuesta["salario_alto"] = (encuesta["salario"] > encuesta["salario"].median()).astype("int64")
+logit = smf.logit("salario_alto ~ educacion + experiencia + C(sexo)", data=encuesta).fit(disp=0)
+np.exp(logit.params).round(3)
+            {% endcall %}
+            {% call salida() %}
+Intercept           0.002
+C(sexo)[T.varón]    1.455
+educacion           1.450
+experiencia         1.059
+dtype: float64
+            {% endcall %}
+            <h4>Diagnósticos</h4>
+            {% call py() %}
+import statsmodels.api as sm
+from statsmodels.stats.diagnostic import het_breuschpagan
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+_, p_bp, _, _ = het_breuschpagan(modelo.resid, modelo.model.exog)
+print(f"Breusch-Pagan (heterocedasticidad): p-valor = {p_bp:.3f}")
+
+X = sm.add_constant(encuesta[["educacion", "experiencia", "horas"]])
+vif = pd.Series([variance_inflation_factor(X.values, i) for i in range(1, X.shape[1])], index=X.columns[1:])
+print("VIF (multicolinealidad):", vif.round(2).to_dict())
+            {% endcall %}
+            {% call salida() %}
+Breusch-Pagan (heterocedasticidad): p-valor = 0.003
+VIF (multicolinealidad): {'educacion': 1.07, 'experiencia': 1.07, 'horas': 1.0}
+            {% endcall %}
+            <aside class="cpm-nota">
+              <p>Para interpretar cada número del resumen —coeficientes, p-valores, R², errores robustos— está la <a href="{{ url_for('guia') }}">Documentación</a>. El <a href="{{ url_for('econometria') }}">laboratorio de Econometría</a> estima estos mismos modelos con explicaciones en castellano y exporta un notebook que se abre en ChartPython.</p>
+            </aside>
+          </section>
+
+          <section class="cpm-tema" id="graficos">
+            <h3>Gráficos sin matplotlib{{ ancla('graficos') }}</h3>
+            <p>ChartPython no trae matplotlib, así que <code>df.plot()</code> no funciona. Para mirar una distribución rápido alcanzan unas barras de texto:</p>
+            {% call py() %}
+por_producto = ventas.groupby("producto")["total"].sum().sort_values(ascending=False)
+largos = (por_producto / por_producto.max() * 30).round().astype("int64")
+for producto, largo in largos.items():
+    print(f"{producto:<14}{'█' * largo} {por_producto[producto]:,.0f}")
+            {% endcall %}
+            {% call salida() %}
+Yerba 1kg     ██████████████████████████████ 26,565
+Café 500g     ████████████████████████████ 24,442
+Azúcar 1kg    ███████████ 9,570
+Aceite 900ml  ██████████ 8,670
+            {% endcall %}
+            <p>Para un gráfico de verdad, ChartPython muestra cualquier objeto que sepa dibujarse como SVG (el método <code>_repr_svg_</code>, igual que en Jupyter). Estas dos funciones arman barras y líneas; copialas una vez en tu notebook y usalas con cualquier Series:</p>
+            {% call py() %}
+from html import escape
+
+
+class SVG:
+    """Muestra un dibujo SVG como salida de la celda."""
+
+    def __init__(self, codigo):
+        self.codigo = codigo
+
+    def _repr_svg_(self):
+        return self.codigo
+
+
+def grafico_barras(serie, titulo="", ancho=640, color="#1e5fa8"):
+    """Barras horizontales: una por cada valor de la serie."""
+    serie = serie.dropna()
+    fila, arriba, izquierda = 28, 36, 150
+    maximo = max(serie.max(), 0) or 1
+    partes = [
+        '<rect width="100%" height="100%" fill="#fff"/>',
+        f'<text x="0" y="20" font-size="15" font-weight="600">{escape(str(titulo))}</text>',
+    ]
+    for i, (etiqueta, valor) in enumerate(serie.items()):
+        y = arriba + i * fila
+        largo = max(valor, 0) / maximo * (ancho - izquierda - 90)
+        partes.append(
+            f'<text x="{izquierda - 8}" y="{y + 16}" font-size="12" text-anchor="end">{escape(str(etiqueta))}</text>'
+            f'<rect x="{izquierda}" y="{y + 4}" width="{largo:.1f}" height="{fila - 10}" fill="{color}"/>'
+            f'<text x="{izquierda + largo + 6:.1f}" y="{y + 16}" font-size="12">{valor:,.0f}</text>'
+        )
+    alto = arriba + fila * len(serie) + 8
+    return SVG(
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{ancho}" height="{alto}" '
+        f'font-family="sans-serif" fill="#101725">{"".join(partes)}</svg>'
+    )
+
+
+def grafico_lineas(serie, titulo="", ancho=640, alto=280, color="#1e5fa8"):
+    """Una línea para una serie ordenada, por ejemplo con fechas en el índice."""
+    serie = serie.dropna()
+    izquierda, derecha, arriba, abajo = 70, 20, 36, 40
+    minimo, maximo = serie.min(), serie.max()
+    rango = (maximo - minimo) or 1
+    paso = (ancho - izquierda - derecha) / max(len(serie) - 1, 1)
+
+    def x(i):
+        return izquierda + i * paso
+
+    def y(valor):
+        return arriba + (maximo - valor) / rango * (alto - arriba - abajo)
+
+    puntos = " ".join(f"{x(i):.1f},{y(v):.1f}" for i, v in enumerate(serie))
+    desde, hasta = (escape(str(v)[:10]) for v in (serie.index[0], serie.index[-1]))
+    return SVG(
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{ancho}" height="{alto}" '
+        f'font-family="sans-serif" fill="#101725">'
+        '<rect width="100%" height="100%" fill="#fff"/>'
+        f'<text x="0" y="20" font-size="15" font-weight="600">{escape(str(titulo))}</text>'
+        f'<line x1="{izquierda}" y1="{alto - abajo}" x2="{ancho - derecha}" y2="{alto - abajo}" stroke="#c9d0da"/>'
+        f'<text x="{izquierda - 8}" y="{y(maximo) + 4:.1f}" font-size="11" text-anchor="end">{maximo:,.0f}</text>'
+        f'<text x="{izquierda - 8}" y="{y(minimo) + 4:.1f}" font-size="11" text-anchor="end">{minimo:,.0f}</text>'
+        f'<polyline points="{puntos}" fill="none" stroke="{color}" stroke-width="2"/>'
+        f'<text x="{izquierda}" y="{alto - 14}" font-size="11">{desde}</text>'
+        f'<text x="{ancho - derecha}" y="{alto - 14}" font-size="11" text-anchor="end">{hasta}</text>'
+        "</svg>"
+    )
+            {% endcall %}
+            {% call py() %}
+grafico_barras(por_producto, "Facturación por producto")
+            {% endcall %}
+            {% call py() %}
+grafico_lineas(serie["ventas_reales"], "Ventas a precios del último mes")
+            {% endcall %}
+            <p>Un histograma es un gráfico de barras de los conteos por tramo. <code>value_counts(bins=8)</code> arma los tramos:</p>
+            {% call py() %}
+conteo = encuesta["salario"].value_counts(bins=8, sort=False)
+conteo.index = [f"{tramo.left / 1e6:.1f} a {tramo.right / 1e6:.1f} M" for tramo in conteo.index]
+grafico_barras(conteo, "Personas por tramo de salario")
+            {% endcall %}
+            <p>Para llevarte el gráfico, hacé clic derecho sobre la imagen y guardala, o escribí el SVG en un archivo y descargalo desde el panel:</p>
+            {% call py() %}
+grafico = grafico_lineas(serie["ventas"], "Ventas mensuales")
+with open("ventas_mensuales.svg", "w", encoding="utf-8") as archivo:
+    archivo.write(grafico.codigo)
+            {% endcall %}
+          </section>
+        </section>
+
+        <section class="cpm-parte" id="referencia" aria-labelledby="referencia-titulo">
+          <p class="cpm-parte-num">Parte 6</p>
+          <h2 id="referencia-titulo">Referencia</h2>
+
+          <section class="cpm-tema" id="errores">
+            <h3>Errores frecuentes{{ ancla('errores') }}</h3>
+            <p>Buscá la <strong>última línea</strong> del error en esta tabla. Casi siempre es uno de estos.</p>
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">El mensaje dice</th><th scope="col">Qué pasó</th><th scope="col">Cómo se arregla</th></tr></thead>
+                <tbody>
+                  <tr class="cpm-tabla-grupo"><td colspan="3">Al leer archivos</td></tr>
+                  <tr><td><code>FileNotFoundError: No such file or directory</code></td><td>El nombre no coincide exacto (mayúsculas, extensión) o el archivo lo había creado Python antes de reiniciarse.</td><td>Mirá los nombres con <code>os.listdir()</code>. Subilo de nuevo o volvé a ejecutar la celda que lo crea.</td></tr>
+                  <tr><td><code>UnicodeDecodeError: 'utf-8' codec can't decode</code></td><td>El CSV no está en UTF-8 (típico de Excel en Windows).</td><td><code>encoding="latin-1"</code>. <a href="#leer-csv">Ver</a>.</td></tr>
+                  <tr><td>Todo queda en una sola columna</td><td>El separador no es la coma.</td><td><code>sep=";"</code> o <code>sep=None, engine="python"</code>.</td></tr>
+                  <tr><td><code>ParserError: Error tokenizing data</code></td><td>Una fila tiene más campos que el encabezado: separador equivocado o comas decimales sin comillas.</td><td>Revisá <code>sep</code> y <code>decimal</code>. Como último recurso, <code>on_bad_lines="skip"</code>.</td></tr>
+                  <tr><td><code>ImportError: Missing optional dependency 'openpyxl'</code></td><td>Intentaste leer o escribir Excel.</td><td>Guardalo como CSV. <a href="#archivos">Ver</a>.</td></tr>
+                  <tr><td><em>Cada archivo puede ocupar hasta 10 MiB</em></td><td>El archivo supera el límite del panel.</td><td>Sacale columnas o filas antes, por ejemplo con el <a href="{{ url_for('limpiador') }}">Limpiador</a>, o partilo en varios.</td></tr>
+                  <tr class="cpm-tabla-grupo"><td colspan="3">Columnas y tipos</td></tr>
+                  <tr><td><code>KeyError: 'Cliente'</code></td><td>La columna no se llama exactamente así: espacios, mayúsculas o acentos.</td><td><code>df.columns.tolist()</code> y <a href="#nombres">limpiar los nombres</a>.</td></tr>
+                  <tr><td><code>ValueError: could not convert string to float</code></td><td>Texto con formato de número argentino, o valores como <code>s/d</code>.</td><td><a href="#numeros">Convertir con <code>pd.to_numeric(..., errors="coerce")</code></a>.</td></tr>
+                  <tr><td><code>TypeError: can't multiply sequence by non-int</code>, <code>unsupported operand type(s)</code></td><td>Una columna que parece numérica es texto.</td><td><code>pd.to_numeric</code> antes de operar; revisá <code>df.dtypes</code>.</td></tr>
+                  <tr><td>Números negativos enormes o sumas imposibles</td><td>Enteros de 32 bits que se desbordaron.</td><td><code>astype("int64")</code>, nunca <code>astype(int)</code>. <a href="#tipos">Ver</a>.</td></tr>
+                  <tr><td><code>OverflowError: Python int too large to convert to C long</code></td><td>Lo mismo, cuando pandas se da cuenta.</td><td><code>astype("int64")</code>.</td></tr>
+                  <tr class="cpm-tabla-grupo"><td colspan="3">Filtros y avisos de pandas</td></tr>
+                  <tr><td><code>ValueError: The truth value of a Series is ambiguous</code></td><td>Usaste <code>and</code>, <code>or</code> o <code>not</code> con columnas.</td><td><code>&amp;</code>, <code>|</code> y <code>~</code>, con cada condición entre paréntesis.</td></tr>
+                  <tr><td><code>SettingWithCopyWarning</code></td><td>Modificaste una tabla que salió de un filtro.</td><td><code>.copy()</code> o asignar con <code>loc</code>. <a href="#seleccionar">Ver</a>.</td></tr>
+                  <tr><td><code>FutureWarning: 'M' is deprecated</code></td><td>Código de frecuencia viejo.</td><td><code>"ME"</code>, <code>"QE"</code>, <code>"YE"</code>.</td></tr>
+                  <tr><td><code>FutureWarning: The default of observed=False is deprecated</code></td><td>Agrupaste por una columna categórica.</td><td><code>groupby(..., observed=True)</code>.</td></tr>
+                  <tr><td><code>FutureWarning: Downcasting behavior in `replace` is deprecated</code></td><td><code>replace</code> para convertir texto en <code>True</code>/<code>False</code> o números.</td><td>Usá <code>map</code> con un diccionario.</td></tr>
+                  <tr><td><code>FutureWarning: A value is trying to be set on a copy ... inplace</code></td><td><code>df["col"].fillna(0, inplace=True)</code>.</td><td><code>df["col"] = df["col"].fillna(0)</code>.</td></tr>
+                  <tr class="cpm-tabla-grupo"><td colspan="3">Propios de ChartPython</td></tr>
+                  <tr><td><code>NameError: name 'df' is not defined</code></td><td>La celda que lo crea no se ejecutó, o Python se reinició.</td><td><em>⏭ Ejecutar todo</em>.</td></tr>
+                  <tr><td><code>ModuleNotFoundError: No module named 'matplotlib'</code></td><td>Ese paquete no viene en ChartPython.</td><td><a href="#instalado">Qué trae instalado</a>.</td></tr>
+                  <tr><td><code>ImportError: Missing optional dependency 'Jinja2'</code></td><td>Usaste <code>df.style</code>.</td><td><code>round()</code> o <code>display.float_format</code>.</td></tr>
+                  <tr><td><code>SyntaxError</code> en una línea con <code>%</code>, <code>!</code> o <code>?</code></td><td>Comandos mágicos de Jupyter.</td><td><a href="#diferencias">Diferencias con Jupyter</a>.</td></tr>
+                  <tr><td><code>RuntimeError: input() no está disponible</code></td><td>ChartPython no puede pedir datos mientras corre.</td><td>Asigná el valor en una variable.</td></tr>
+                  <tr><td><em>[Salida truncada…]</em></td><td>La celda imprimió más de 1 MiB.</td><td>Mostrá menos: <code>head()</code>, <code>sample()</code>, un resumen.</td></tr>
+                  <tr><td><em>Python se detuvo</em></td><td>Se quedó sin memoria o se cortó el proceso.</td><td>Volvé a ejecutar; con datos grandes, leé sólo las columnas que usás.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Tres de estos, para reconocerlos cuando aparezcan:</p>
+            {% call py(error="FileNotFoundError") %}
+pd.read_csv("Ventas.csv")   # el archivo se llama ventas.csv, en minúscula
+            {% endcall %}
+            {% call salida_error() %}
+FileNotFoundError: [Errno 44] No such file or directory: 'Ventas.csv'
+            {% endcall %}
+            {% call py(error="KeyError") %}
+crudo = pd.read_csv("ventas.csv", sep=";")
+crudo["Cliente"]   # la columna es "Cliente " con un espacio
+            {% endcall %}
+            {% call salida_error() %}
+KeyError: 'Cliente'
+            {% endcall %}
+            {% call py(error="ParserError") %}
+import io
+
+texto = "producto,precio\nYerba,3450\nCafé,5200,50\n"   # coma decimal en un CSV con comas
+pd.read_csv(io.StringIO(texto))
+            {% endcall %}
+            {% call salida_error() %}
+ParserError: Error tokenizing data. C error: Expected 2 fields in line 3, saw 3
+            {% endcall %}
+          </section>
+
+          <section class="cpm-tema" id="chuleta">
+            <h3>Chuleta de comandos{{ ancla('chuleta') }}</h3>
+            <p>Lo más usado en una sola tabla. <code>df</code> es cualquier DataFrame y <code>"col"</code>, cualquier columna.</p>
+            <div class="cpm-tabla-caja">
+              <table class="cpm-tabla">
+                <thead><tr><th scope="col">Quiero…</th><th scope="col">Comando</th></tr></thead>
+                <tbody>
+                  <tr class="cpm-tabla-grupo"><td colspan="2">Leer y guardar</td></tr>
+                  <tr><td>Leer un CSV separado por punto y coma</td><td><code>df = pd.read_csv("archivo.csv", sep=";")</code></td></tr>
+                  <tr><td>Leer con coma decimal y punto de miles</td><td><code>pd.read_csv("archivo.csv", sep=";", decimal=",", thousands=".")</code></td></tr>
+                  <tr><td>Leer un CSV de Excel en Windows</td><td><code>pd.read_csv("archivo.csv", sep=";", encoding="latin-1")</code></td></tr>
+                  <tr><td>Conservar ceros a la izquierda</td><td><code>pd.read_csv("archivo.csv", dtype={"codigo": str})</code></td></tr>
+                  <tr><td>Ver qué archivos hay</td><td><code>import os; os.listdir()</code></td></tr>
+                  <tr><td>Guardar un CSV</td><td><code>df.to_csv("salida.csv", index=False)</code></td></tr>
+                  <tr><td>Guardar un CSV para Excel en castellano</td><td><code>df.to_csv("salida.csv", index=False, sep=";", decimal=",", encoding="utf-8-sig")</code></td></tr>
+
+                  <tr class="cpm-tabla-grupo"><td colspan="2">Explorar</td></tr>
+                  <tr><td>Primeras y últimas filas</td><td><code>df.head(10)</code>, <code>df.tail(5)</code></td></tr>
+                  <tr><td>Filas y columnas</td><td><code>df.shape</code></td></tr>
+                  <tr><td>Nombres y tipos de columnas</td><td><code>df.columns.tolist()</code>, <code>df.dtypes</code>, <code>df.info()</code></td></tr>
+                  <tr><td>Resumen estadístico</td><td><code>df.describe()</code>, <code>df.describe(include="all")</code></td></tr>
+                  <tr><td>Faltantes por columna</td><td><code>df.isna().sum()</code></td></tr>
+                  <tr><td>Frecuencia de cada valor</td><td><code>df["col"].value_counts(dropna=False)</code></td></tr>
+                  <tr><td>Valores distintos</td><td><code>df["col"].unique()</code>, <code>df["col"].nunique()</code></td></tr>
+
+                  <tr class="cpm-tabla-grupo"><td colspan="2">Seleccionar y filtrar</td></tr>
+                  <tr><td>Una o varias columnas</td><td><code>df["col"]</code>, <code>df[["col1", "col2"]]</code></td></tr>
+                  <tr><td>Por etiqueta o por posición</td><td><code>df.loc[fila, "col"]</code>, <code>df.iloc[0, 2]</code></td></tr>
+                  <tr><td>Filas que cumplen una condición</td><td><code>df[df["col"] &gt; 100]</code></td></tr>
+                  <tr><td>Dos condiciones</td><td><code>df[(df["a"] &gt; 1) &amp; (df["b"] == "x")]</code></td></tr>
+                  <tr><td>Valores de una lista</td><td><code>df[df["col"].isin(["a", "b"])]</code></td></tr>
+                  <tr><td>Texto que contiene algo</td><td><code>df[df["col"].str.contains("algo", case=False, na=False)]</code></td></tr>
+                  <tr><td>Ordenar</td><td><code>df.sort_values("col", ascending=False)</code></td></tr>
+
+                  <tr class="cpm-tabla-grupo"><td colspan="2">Limpiar</td></tr>
+                  <tr><td>Nombres de columnas prolijos</td><td><code>df.columns = df.columns.str.strip().str.lower().str.replace(r"\W+", "_", regex=True)</code></td></tr>
+                  <tr><td>Renombrar</td><td><code>df = df.rename(columns={"viejo": "nuevo"})</code></td></tr>
+                  <tr><td>Borrar filas vacías</td><td><code>df = df.dropna(how="all")</code></td></tr>
+                  <tr><td>Borrar duplicados</td><td><code>df = df.drop_duplicates()</code></td></tr>
+                  <tr><td>Espacios y mayúsculas</td><td><code>df["col"] = df["col"].str.strip().str.title()</code></td></tr>
+                  <tr><td>Reemplazar texto</td><td><code>df["col"].str.replace("viejo", "nuevo", regex=False)</code></td></tr>
+                  <tr><td>Unificar categorías</td><td><code>df["col"].map({"bs as": "Buenos Aires", "caba": "CABA"})</code></td></tr>
+                  <tr><td>Texto a número</td><td><code>pd.to_numeric(df["col"], errors="coerce")</code></td></tr>
+                  <tr><td>“$ 1.234,56” a número</td><td><code>pd.to_numeric(df["col"].str.replace("$", "", regex=False).str.replace(".", "", regex=False).str.replace(",", ".", regex=False), errors="coerce")</code></td></tr>
+                  <tr><td>Texto a fecha</td><td><code>pd.to_datetime(df["col"], format="%d/%m/%Y", errors="coerce")</code></td></tr>
+                  <tr><td>Completar faltantes</td><td><code>df["col"] = df["col"].fillna(0)</code></td></tr>
+                  <tr><td>Borrar filas con faltantes en una columna</td><td><code>df = df.dropna(subset=["col"])</code></td></tr>
+                  <tr><td>Cambiar el tipo</td><td><code>df["col"].astype("int64")</code>, <code>.astype(str)</code>, <code>.astype("category")</code></td></tr>
+
+                  <tr class="cpm-tabla-grupo"><td colspan="2">Transformar</td></tr>
+                  <tr><td>Columna calculada</td><td><code>df["total"] = df["cantidad"] * df["precio"]</code></td></tr>
+                  <tr><td>Según una condición</td><td><code>np.where(df["col"] &gt; 100, "alto", "bajo")</code></td></tr>
+                  <tr><td>Tramos</td><td><code>pd.cut(df["col"], bins=[0, 10, 100, np.inf])</code>, <code>pd.qcut(df["col"], q=4)</code></td></tr>
+                  <tr><td>Aplicar una función</td><td><code>df["col"].apply(funcion)</code></td></tr>
+                  <tr><td>Partes de una fecha</td><td><code>df["fecha"].dt.year</code>, <code>.dt.month</code>, <code>.dt.to_period("M")</code></td></tr>
+                  <tr><td>Borrar columnas</td><td><code>df = df.drop(columns=["col"])</code></td></tr>
+
+                  <tr class="cpm-tabla-grupo"><td colspan="2">Resumir y combinar</td></tr>
+                  <tr><td>Total por grupo</td><td><code>df.groupby("grupo")["valor"].sum()</code></td></tr>
+                  <tr><td>Varias medidas por grupo</td><td><code>df.groupby("grupo").agg(n=("valor", "size"), media=("valor", "mean"))</code></td></tr>
+                  <tr><td>Tabla dinámica</td><td><code>pd.pivot_table(df, index="fila", columns="columna", values="valor", aggfunc="sum")</code></td></tr>
+                  <tr><td>Tabla de contingencia</td><td><code>pd.crosstab(df["a"], df["b"], normalize="index")</code></td></tr>
+                  <tr><td>Participación dentro del grupo</td><td><code>df["valor"] / df.groupby("grupo")["valor"].transform("sum")</code></td></tr>
+                  <tr><td>Unir dos tablas</td><td><code>df.merge(otra, on="clave", how="left")</code></td></tr>
+                  <tr><td>Apilar tablas</td><td><code>pd.concat([df1, df2], ignore_index=True)</code></td></tr>
+                  <tr><td>De ancho a largo y al revés</td><td><code>df.melt(id_vars="id")</code>, <code>df.pivot(index="id", columns="var", values="valor")</code></td></tr>
+
+                  <tr class="cpm-tabla-grupo"><td colspan="2">Tiempo y estadística</td></tr>
+                  <tr><td>Sumar por mes</td><td><code>df.set_index("fecha")["valor"].resample("ME").sum()</code></td></tr>
+                  <tr><td>Variación y promedio móvil</td><td><code>s.pct_change()</code>, <code>s.rolling(3).mean()</code></td></tr>
+                  <tr><td>Correlaciones</td><td><code>df.corr()</code></td></tr>
+                  <tr><td>Diferencia de medias</td><td><code>stats.ttest_ind(a, b, equal_var=False)</code></td></tr>
+                  <tr><td>Regresión lineal</td><td><code>smf.ols("y ~ x1 + x2", data=df).fit()</code></td></tr>
+                  <tr><td>Con errores robustos</td><td><code>smf.ols("y ~ x1 + C(grupo)", data=df).fit(cov_type="HC1")</code></td></tr>
+                  <tr><td>Logit</td><td><code>smf.logit("y ~ x1 + x2", data=df).fit(disp=0)</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <p class="cpm-pie">Escrito para Pyodide 0.26.4 con pandas 2.2.0, NumPy 1.26.4, SciPy 1.12.0 y statsmodels 0.14.2, las versiones que trae ChartPython. En otra instalación de Python casi todo funciona igual; las diferencias están en <a href="#diferencias">Diferencias con Jupyter</a>. Material educativo: ningún modelo garantiza resultados.</p>
+      </article>
+    </div>
+  </main>
+
+  <script nonce="{{ csp_nonce }}">
+    // Mejora progresiva: sin JavaScript el manual se lee igual, sin colores en
+    // el código, sin botón de copiar y con el índice siempre abierto.
+    (function () {
+      var manual = document.querySelector('[data-manual]');
+      if (!manual) return;
+
+      // ── Resaltado de Python ─────────────────────────────────────────────
+      // Se recorre el texto del bloque y se arman nodos nuevos: nunca innerHTML.
+      var PALABRAS = {};
+      'False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield'
+        .split(' ').forEach(function (p) { PALABRAS[p] = 'tok-kw'; });
+      'abs all any bool dict display enumerate float help int isinstance len list max min open print range round set sorted str sum tuple type zip'
+        .split(' ').forEach(function (p) { PALABRAS[p] = 'tok-fn'; });
+      var TOKEN = /((?:\b[rRbBfF]{1,2})?(?:"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'))|(#[^\n]*)|(\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|([A-Za-z_]\w*)/g;
+
+      function resaltar(code) {
+        var texto = code.textContent;
+        var fragmento = document.createDocumentFragment();
+        var desde = 0, m;
+        function span(clase, valor) {
+          var s = document.createElement('span');
+          s.className = clase;
+          s.textContent = valor;
+          fragmento.appendChild(s);
+        }
+        TOKEN.lastIndex = 0;
+        while ((m = TOKEN.exec(texto))) {
+          if (m.index > desde) fragmento.appendChild(document.createTextNode(texto.slice(desde, m.index)));
+          if (m[1]) span('tok-str', m[0]);
+          else if (m[2]) span('tok-com', m[0]);
+          else if (m[3]) span('tok-num', m[0]);
+          else if (PALABRAS[m[0]]) span(PALABRAS[m[0]], m[0]);
+          else fragmento.appendChild(document.createTextNode(m[0]));
+          desde = TOKEN.lastIndex;
+        }
+        if (desde < texto.length) fragmento.appendChild(document.createTextNode(texto.slice(desde)));
+        code.textContent = '';
+        code.appendChild(fragmento);
+      }
+
+      // ── Copiar ──────────────────────────────────────────────────────────
+      function copiar(texto) {
+        if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(texto);
+        return new Promise(function (resolver, rechazar) {
+          var area = document.createElement('textarea');
+          area.value = texto;
+          area.setAttribute('readonly', '');
+          area.style.position = 'fixed';
+          area.style.opacity = '0';
+          document.body.appendChild(area);
+          area.select();
+          var ok = false;
+          try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+          document.body.removeChild(area);
+          if (ok) resolver(); else rechazar(new Error('No se pudo copiar'));
+        });
+      }
+
+      Array.prototype.forEach.call(manual.querySelectorAll('.cpm-bloque'), function (bloque) {
+        var code = bloque.querySelector('code');
+        var fuente = code.textContent;
+        resaltar(code);
+        var boton = document.createElement('button');
+        boton.type = 'button';
+        boton.className = 'cpm-copiar';
+        boton.textContent = 'Copiar';
+        boton.setAttribute('aria-label', 'Copiar el código de este ejemplo');
+        var reloj = null;
+        boton.addEventListener('click', function () {
+          copiar(fuente).then(function () {
+            boton.textContent = 'Copiado';
+            boton.dataset.hecho = 'true';
+          }, function () {
+            boton.textContent = 'Seleccioná y copiá';
+          }).then(function () {
+            clearTimeout(reloj);
+            reloj = setTimeout(function () {
+              boton.textContent = 'Copiar';
+              delete boton.dataset.hecho;
+            }, 1600);
+          });
+        });
+        bloque.appendChild(boton);
+      });
+
+      // ── Índice ──────────────────────────────────────────────────────────
+      // En pantallas angostas arranca cerrado y se cierra al elegir un tema; en
+      // las anchas queda fijo al costado y marca el tema que se está leyendo.
+      var nav = manual.querySelector('.cpm-indice');
+      var desplegable = nav && nav.querySelector('details');
+      if (!desplegable) return;
+      var angosto = window.matchMedia('(max-width: 980px)');
+      function acomodar() { desplegable.open = !angosto.matches; }
+      acomodar();
+      if (angosto.addEventListener) angosto.addEventListener('change', acomodar);
+      desplegable.addEventListener('click', function (evento) {
+        if (angosto.matches && evento.target.closest && evento.target.closest('a')) desplegable.open = false;
+      });
+
+      var enlaces = {};
+      Array.prototype.forEach.call(nav.querySelectorAll('a[href^="#"]'), function (a) {
+        enlaces[a.getAttribute('href').slice(1)] = a;
+      });
+      var temas = Array.prototype.slice.call(manual.querySelectorAll('.cpm-tema[id]'));
+      var actual = null, pendiente = false;
+
+      function mantenerVisible(enlace) {
+        var caja = nav.getBoundingClientRect(), fila = enlace.getBoundingClientRect();
+        if (fila.top < caja.top) nav.scrollTop -= caja.top - fila.top + 24;
+        else if (fila.bottom > caja.bottom) nav.scrollTop += fila.bottom - caja.bottom + 24;
+      }
+
+      function marcar() {
+        pendiente = false;
+        var elegido = temas[0];
+        for (var i = 0; i < temas.length; i++) {
+          if (temas[i].getBoundingClientRect().top <= 140) elegido = temas[i];
+          else break;
+        }
+        if (!elegido || elegido === actual) return;
+        if (actual && enlaces[actual.id]) enlaces[actual.id].removeAttribute('aria-current');
+        actual = elegido;
+        var enlace = enlaces[actual.id];
+        if (!enlace) return;
+        enlace.setAttribute('aria-current', 'true');
+        if (!angosto.matches) mantenerVisible(enlace);
+      }
+
+      window.addEventListener('scroll', function () {
+        if (!pendiente) { pendiente = true; window.requestAnimationFrame(marcar); }
+      }, { passive: true });
+      marcar();
+    })();
+  </script>
+</body>
+</html>

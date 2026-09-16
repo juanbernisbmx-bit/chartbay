@@ -1,0 +1,376 @@
+/* Manual de ChartPython: una página de lectura larga dentro del skin v2.
+   Los colores salen de las variables de redesign.css; lo único propio es la
+   paleta del resaltado de código, que usa esos mismos tonos. */
+
+[data-skin="v2"] .cpm{
+  --cpm-kw:var(--accent-700);
+  --cpm-str:var(--ok);
+  --cpm-num:var(--warn);
+  --cpm-com:var(--ink-3);
+  --cpm-fn:#6d3f99;
+  padding-bottom:64px;
+}
+
+/* ── Cabecera ──────────────────────────────────────────────── */
+[data-skin="v2"] .cpm-hero{
+  max-width:860px;
+  padding:34px 0 26px;
+}
+[data-skin="v2"] .cpm-kicker{
+  margin:0 0 8px;
+  font-family:var(--mono);
+  font-size:11.5px;
+  color:var(--accent);
+}
+[data-skin="v2"] .cpm-hero h1{
+  margin:0 0 12px;
+  font-family:var(--sans);
+  font-size:34px;
+  font-weight:600;
+  line-height:1.15;
+  letter-spacing:-.01em;
+  color:var(--ink);
+  text-align:left;
+}
+[data-skin="v2"] .cpm-lead{
+  max-width:720px;
+  margin:0 0 20px;
+  font-size:16px;
+  line-height:1.6;
+  color:var(--ink-2);
+}
+[data-skin="v2"] .cpm-acciones{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 22px}
+[data-skin="v2"] .cpm-acciones a{display:inline-block;text-decoration:none}
+[data-skin="v2"] .cpm-acciones a.btnp,
+[data-skin="v2"] .cpm-acciones a.btnp:visited{color:#fff}
+[data-skin="v2"] .cpm-acciones a.btns,
+[data-skin="v2"] .cpm-acciones a.btns:visited{color:var(--ink)}
+[data-skin="v2"] .cpm-hechos{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:0;
+  padding:0;
+  list-style:none;
+}
+[data-skin="v2"] .cpm-hechos li{
+  padding:3px 9px;
+  border:1px solid var(--line-2);
+  border-radius:3px;
+  font-size:12px;
+  color:var(--ink-2);
+  background:var(--paper);
+}
+
+/* ── Rejilla: índice + contenido ───────────────────────────── */
+[data-skin="v2"] .cpm-grid{
+  display:grid;
+  grid-template-columns:236px minmax(0,1fr);
+  gap:48px;
+  align-items:start;
+  padding-top:26px;
+  border-top:1px solid var(--line);
+}
+
+[data-skin="v2"] .cpm-indice{
+  position:sticky;
+  top:14px;
+  max-height:calc(100vh - 28px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-right:6px;
+}
+/* style.css pinta todos los <summary> en mono, 11px y color acento con
+   !important: acá hace falta ganarle para que el índice se lea. */
+[data-skin="v2"] .cpm-indice summary{
+  display:none;
+  color:var(--ink)!important;
+  font-family:var(--sans);
+  font-size:13.5px;
+  font-weight:600;
+}
+[data-skin="v2"] .cpm-indice ol{margin:0;padding:0;list-style:none}
+[data-skin="v2"] .cpm-indice>details>ol>li{margin:0 0 14px}
+[data-skin="v2"] .cpm-indice-parte{
+  display:block;
+  margin:0 0 4px;
+  font-size:11.5px;
+  font-weight:600;
+  color:var(--ink-3);
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+[data-skin="v2"] .cpm-indice li li a{
+  display:block;
+  padding:3px 8px;
+  border-left:2px solid var(--line);
+  font-size:13px;
+  line-height:1.4;
+  color:var(--ink-2);
+}
+[data-skin="v2"] .cpm-indice li li a:hover{color:var(--ink);background:var(--panel);text-decoration:none}
+[data-skin="v2"] .cpm-indice li li a[aria-current="true"]{
+  border-left-color:var(--accent);
+  color:var(--accent-700);
+  background:var(--accent-100);
+}
+
+/* ── Contenido ─────────────────────────────────────────────── */
+[data-skin="v2"] .cpm-contenido{min-width:0;max-width:800px}
+[data-skin="v2"] .cpm-contenido p,
+[data-skin="v2"] .cpm-contenido li{font-size:14.5px;line-height:1.65;color:var(--ink)}
+[data-skin="v2"] .cpm-contenido p{margin:0 0 12px}
+[data-skin="v2"] .cpm-contenido ul,
+[data-skin="v2"] .cpm-contenido ol{margin:0 0 14px;padding-left:22px}
+[data-skin="v2"] .cpm-contenido li{margin:0 0 5px}
+[data-skin="v2"] .cpm-contenido code{font-size:12.5px;overflow-wrap:anywhere}
+
+[data-skin="v2"] .cpm-parte{margin:0 0 56px}
+/* Estos dos son <p> dentro del contenido: sin el prefijo, la regla general de
+   párrafos les gana por especificidad y les pisa tamaño y color. */
+[data-skin="v2"] .cpm-contenido .cpm-parte-num{
+  margin:0 0 2px;
+  font-family:var(--mono);
+  font-size:11.5px;
+  color:var(--ink-3);
+}
+[data-skin="v2"] .cpm-parte>h2{
+  margin:0 0 10px;
+  padding:0 0 10px;
+  border-bottom:1px solid var(--line);
+  font-family:var(--sans);
+  font-size:26px;
+  font-weight:600;
+  line-height:1.2;
+  color:var(--ink);
+  text-align:left;
+}
+[data-skin="v2"] .cpm-tema{margin:34px 0 0}
+[data-skin="v2"] .cpm-tema>h3{
+  margin:0 0 10px;
+  font-family:var(--sans);
+  font-size:19px;
+  font-weight:600;
+  line-height:1.3;
+  color:var(--ink);
+}
+[data-skin="v2"] .cpm-tema h4{
+  margin:22px 0 8px;
+  font-family:var(--sans);
+  font-size:15px;
+  font-weight:600;
+  color:var(--ink);
+}
+[data-skin="v2"] .cpm h2[id],
+[data-skin="v2"] .cpm h3[id],
+[data-skin="v2"] .cpm-parte,
+[data-skin="v2"] .cpm-tema{scroll-margin-top:14px}
+[data-skin="v2"] .cpm-ancla,
+[data-skin="v2"] .cpm-ancla:visited{
+  margin-left:8px;
+  font-weight:400;
+  color:var(--line-2);
+  text-decoration:none;
+  opacity:0;
+}
+[data-skin="v2"] .cpm h2:hover .cpm-ancla,
+[data-skin="v2"] .cpm h3:hover .cpm-ancla,
+[data-skin="v2"] .cpm-ancla:focus-visible{opacity:1}
+[data-skin="v2"] .cpm-ancla:hover{color:var(--accent);text-decoration:none}
+
+[data-skin="v2"] .cpm kbd{
+  display:inline-block;
+  min-width:1.6em;
+  padding:0 5px;
+  border:1px solid var(--line-2);
+  border-bottom-width:2px;
+  border-radius:3px;
+  background:var(--paper);
+  font-family:var(--mono);
+  font-size:11.5px;
+  line-height:1.6;
+  text-align:center;
+  color:var(--ink);
+  white-space:nowrap;
+}
+
+/* ── Código y salidas ──────────────────────────────────────── */
+[data-skin="v2"] .cpm-bloque{position:relative;margin:14px 0 0}
+[data-skin="v2"] .cpm-bloque+p,
+[data-skin="v2"] .cpm-salida+p,
+[data-skin="v2"] .cpm-bloque+h4,
+[data-skin="v2"] .cpm-salida+h4{margin-top:14px}
+[data-skin="v2"] .cpm-code{
+  margin:0;
+  padding:12px 14px;
+  overflow-x:auto;
+  border:1px solid var(--line);
+  border-radius:4px;
+  background:var(--panel);
+  font-family:var(--mono);
+  font-size:12.5px;
+  line-height:1.6;
+  color:var(--ink);
+  tab-size:4;
+  white-space:pre;
+}
+[data-skin="v2"] .cpm-bloque[data-error] .cpm-code{border-left:3px solid var(--err)}
+[data-skin="v2"] .cpm-bloque-etiqueta{
+  display:block;
+  margin:0 0 4px;
+  font-size:12px;
+  font-weight:500;
+  color:var(--err);
+}
+/* El botón aparece al pasar por el bloque; en pantallas táctiles, siempre. */
+[data-skin="v2"] .cpm-copiar{
+  position:absolute;
+  top:6px;
+  right:6px;
+  padding:2px 9px;
+  border-color:var(--line-2);
+  background:var(--paper);
+  font-size:11.5px;
+  color:var(--ink-2);
+  opacity:0;
+  transition:opacity .12s;
+}
+[data-skin="v2"] .cpm-bloque[data-error] .cpm-copiar{top:28px}
+[data-skin="v2"] .cpm-bloque:hover .cpm-copiar,
+[data-skin="v2"] .cpm-copiar:focus-visible,
+[data-skin="v2"] .cpm-copiar[data-hecho="true"]{opacity:1}
+[data-skin="v2"] .cpm-copiar[data-hecho="true"]{color:var(--ok);border-color:var(--ok-line)}
+/* Sin mouse no hay hover: el botón va arriba del bloque, en su propia fila,
+   para no tapar el final de la primera línea de código. */
+@media (hover:none){
+  [data-skin="v2"] .cpm-bloque{display:flex;flex-direction:column}
+  [data-skin="v2"] .cpm-copiar{position:static;order:-1;align-self:flex-end;margin:0 0 4px;opacity:1}
+  [data-skin="v2"] .cpm-bloque-etiqueta{order:-2}
+}
+
+[data-skin="v2"] .cpm-salida{margin:6px 0 0}
+[data-skin="v2"] .cpm-salida-etiqueta{
+  display:block;
+  margin:0 0 2px;
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--ink-3);
+}
+[data-skin="v2"] .cpm-salida pre{
+  margin:0;
+  padding:8px 14px;
+  overflow-x:auto;
+  border:1px dashed var(--line-2);
+  border-radius:4px;
+  background:var(--paper);
+  font-family:var(--mono);
+  font-size:12.5px;
+  line-height:1.5;
+  color:var(--ink-2);
+  white-space:pre;
+}
+[data-skin="v2"] .cpm-salida[data-error] pre{
+  border:1px solid var(--err-line);
+  background:var(--err-100);
+  color:var(--err);
+  white-space:pre-wrap;
+}
+
+/* Resaltado: se agrega con JS sobre el texto ya escapado. */
+[data-skin="v2"] .cpm .tok-kw{color:var(--cpm-kw);font-weight:500}
+[data-skin="v2"] .cpm .tok-str{color:var(--cpm-str)}
+[data-skin="v2"] .cpm .tok-num{color:var(--cpm-num)}
+[data-skin="v2"] .cpm .tok-com{color:var(--cpm-com);font-style:italic}
+[data-skin="v2"] .cpm .tok-fn{color:var(--cpm-fn)}
+
+/* ── Avisos y tablas ───────────────────────────────────────── */
+[data-skin="v2"] .cpm-nota,
+[data-skin="v2"] .cpm-cuidado{
+  margin:16px 0;
+  padding:11px 14px;
+  border:1px solid var(--line);
+  border-left:3px solid var(--accent);
+  border-radius:4px;
+  background:var(--accent-100);
+}
+[data-skin="v2"] .cpm-cuidado{
+  border-color:var(--warn-line);
+  border-left-color:var(--warn);
+  background:var(--warn-100);
+}
+[data-skin="v2"] .cpm-nota p,
+[data-skin="v2"] .cpm-cuidado p{margin:0 0 6px;font-size:14px}
+[data-skin="v2"] .cpm-nota p:last-child,
+[data-skin="v2"] .cpm-cuidado p:last-child{margin:0}
+[data-skin="v2"] .cpm-nota ul,
+[data-skin="v2"] .cpm-cuidado ul{margin:4px 0 0}
+
+[data-skin="v2"] .cpm-tabla-caja{margin:14px 0 18px;overflow-x:auto}
+[data-skin="v2"] .cpm-tabla{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13.5px;
+}
+[data-skin="v2"] .cpm-tabla th{
+  padding:7px 10px;
+  border-bottom:1px solid var(--line-2);
+  font-size:12px;
+  font-weight:600;
+  color:var(--ink-3);
+  text-align:left;
+  vertical-align:bottom;
+}
+[data-skin="v2"] .cpm-tabla td{
+  padding:7px 10px;
+  border-bottom:1px solid var(--line);
+  line-height:1.5;
+  color:var(--ink);
+  vertical-align:top;
+}
+[data-skin="v2"] .cpm-tabla td code{white-space:pre-wrap;overflow-wrap:anywhere}
+[data-skin="v2"] .cpm-tabla tbody tr:last-child td{border-bottom:0}
+[data-skin="v2"] .cpm-tabla-grupo td{
+  padding-top:16px;
+  font-size:12px;
+  font-weight:600;
+  color:var(--ink-3);
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+
+[data-skin="v2"] .cpm-contenido .cpm-pie{
+  margin:40px 0 0;
+  padding:16px 0 0;
+  border-top:1px solid var(--line);
+  font-size:13px;
+  color:var(--ink-3);
+}
+
+/* ── Pantallas angostas ────────────────────────────────────── */
+@media (max-width:980px){
+  [data-skin="v2"] .cpm-grid{grid-template-columns:minmax(0,1fr);gap:0;padding-top:0;border-top:0}
+  [data-skin="v2"] .cpm-indice{
+    position:static;
+    max-height:none;
+    margin:0 0 30px;
+    padding:0;
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:var(--panel);
+  }
+  [data-skin="v2"] .cpm-indice summary{display:flex;justify-content:space-between;padding:11px 14px;cursor:pointer}
+  [data-skin="v2"] .cpm-indice summary::after{content:"\25BE";color:var(--ink-3);transition:transform .12s}
+  [data-skin="v2"] .cpm-indice details[open] summary::after{transform:rotate(180deg)}
+  [data-skin="v2"] .cpm-indice>details>ol{padding:0 14px 6px}
+  [data-skin="v2"] .cpm-contenido{max-width:none}
+}
+@media (max-width:720px){
+  [data-skin="v2"] .wrap.cpm{padding:0 16px 48px}
+  [data-skin="v2"] .cpm-hero{padding-top:24px}
+  [data-skin="v2"] .cpm-hero h1{font-size:28px}
+  [data-skin="v2"] .cpm-lead{font-size:15px}
+  [data-skin="v2"] .cpm-parte>h2{font-size:22px}
+  [data-skin="v2"] .cpm-tema>h3{font-size:17px}
+  [data-skin="v2"] .cpm-code,
+  [data-skin="v2"] .cpm-salida pre{font-size:12px}
+}

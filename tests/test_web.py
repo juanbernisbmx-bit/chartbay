@@ -657,11 +657,90 @@ def test_chartpython_se_puede_apagar_sin_borrar_nada():
     modulo, c = _cliente()
     modulo.SECCIONES["chartpython"] = False
     try:
-        assert c.get("/chartpython").status_code == 404
-        for ruta in ("/", "/limpiador"):
-            assert 'href="/chartpython"' not in c.get(ruta).get_data(as_text=True), ruta
+        for ruta in ("/chartpython", "/chartpython/manual", "/chartpython/manual.ipynb"):
+            assert c.get(ruta).status_code == 404, ruta
+        for ruta in ("/", "/limpiador", "/guia"):
+            html = c.get(ruta).get_data(as_text=True)
+            assert 'href="/chartpython"' not in html, ruta
+            assert 'href="/chartpython/manual"' not in html, ruta
     finally:
         modulo.SECCIONES["chartpython"] = True
+
+
+# ── Manual de ChartPython ────────────────────────────────────────────────────
+# Que cada ejemplo corra en Pyodide lo prueba quantbay/tests/chartpython/manual.test.ts;
+# acá, que la página y el notebook muestren exactamente esos ejemplos.
+
+def _ejemplos_del_manual(solo_ejecutables=False):
+    from chartpython_manual import PLANTILLA, bloques
+
+    return [
+        bloque["texto"].strip()
+        for bloque in bloques(PLANTILLA.read_text(encoding="utf-8"))
+        if bloque["macro"] == "py"
+        and not (solo_ejecutables and (bloque["opciones"].get("error") or bloque["opciones"].get("ejecutar") is False))
+    ]
+
+
+def test_manual_de_chartpython_se_sirve_y_se_enlaza():
+    _, c = _cliente()
+    respuesta = c.get("/chartpython/manual")
+    assert respuesta.status_code == 200
+    html = respuesta.get_data(as_text=True)
+    assert re.search(r"<h1[^>]*>\s*Manual de ChartPython", html)
+    assert 'href="/chartpython/manual.ipynb"' in html
+    assert c.get("/static/chartpython-manual.css").status_code == 200
+    for ruta in ("/chartpython", "/guia"):
+        assert 'href="/chartpython/manual"' in c.get(ruta).get_data(as_text=True), ruta
+
+
+def test_csp_del_manual_no_pide_wasm_y_su_script_lleva_nonce():
+    _, c = _cliente()
+    respuesta = c.get("/chartpython/manual")
+    script = respuesta.headers["Content-Security-Policy"].split("script-src")[1].split(";")[0]
+    assert "wasm" not in script and "'unsafe-inline'" not in script
+    nonce = re.search(r"'nonce-([^']+)'", script).group(1)
+    assert f'<script nonce="{nonce}">' in respuesta.get_data(as_text=True)
+
+
+def test_indice_del_manual_sigue_el_orden_de_los_temas():
+    _, c = _cliente()
+    html = c.get("/chartpython/manual").get_data(as_text=True)
+    indice = html.split('class="cpm-indice"', 1)[1].split("</nav>", 1)[0]
+    enlaces = re.findall(r'href="#([\w-]+)"', indice)
+    temas = re.findall(r'class="cpm-tema" id="([\w-]+)"', html)
+    assert len(temas) > 30
+    assert enlaces == temas
+
+
+def test_la_pagina_muestra_los_ejemplos_tal_como_se_ejecutan():
+    """El código llega escapado al HTML y, desescapado, es el mismo que corre la prueba de Pyodide."""
+    from html import unescape
+
+    _, c = _cliente()
+    html = c.get("/chartpython/manual").get_data(as_text=True)
+    mostrados = [unescape(codigo) for codigo in re.findall(r'<pre class="cpm-code"><code>(.*?)</code></pre>', html, re.S)]
+    ejemplos = _ejemplos_del_manual()
+    assert len(ejemplos) > 100
+    assert mostrados == ejemplos
+
+
+def test_notebook_del_manual_trae_solo_los_ejemplos_que_corren():
+    _, c = _cliente()
+    respuesta = c.get("/chartpython/manual.ipynb")
+    assert respuesta.status_code == 200
+    assert respuesta.mimetype == "application/x-ipynb+json"
+    assert respuesta.headers["Content-Disposition"] == 'attachment; filename="Manual de ChartPython.ipynb"'
+    notebook = json.loads(respuesta.get_data(as_text=True))
+    assert notebook["nbformat"] == 4
+    ids = [celda["id"] for celda in notebook["cells"]]
+    assert len(ids) == len(set(ids))
+    assert all(re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", i) for i in ids)
+    codigo = ["".join(celda["source"]) for celda in notebook["cells"] if celda["cell_type"] == "code"]
+    assert codigo == _ejemplos_del_manual(solo_ejecutables=True)
+    assert len(codigo) < len(_ejemplos_del_manual())
+    assert not any("while True" in celda or "input(" in celda for celda in codigo)
+    assert all(celda["outputs"] == [] for celda in notebook["cells"] if celda["cell_type"] == "code")
 
 
 # ── runner propio (no requiere pytest) ───────────────────────────────────────

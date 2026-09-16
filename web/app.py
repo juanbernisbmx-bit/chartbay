@@ -36,6 +36,7 @@ sys.path.insert(0, str(HERE))  # permite 'import source_archive' bajo gunicorn (
 load_dotenv(ROOT / ".env")
 
 import providers        # noqa: E402
+from chartpython_manual import notebook_de_practica  # noqa: E402
 from rate_limit import Limitador, Regla, ip_del_cliente  # noqa: E402
 from source_archive import build_source_archive  # noqa: E402
 
@@ -296,6 +297,28 @@ def limpiador():
 def chartpython():
     """Notebook de Python en el navegador: el intérprete es Pyodide, no el servidor."""
     return render_template("chartpython.html")
+
+
+@app.route("/chartpython/manual")
+@seccion("chartpython")
+def chartpython_manual():
+    """Manual de uso: el notebook y los comandos de pandas para limpiar y analizar datos."""
+    return render_template("chartpython_manual.html")
+
+
+@app.route("/chartpython/manual.ipynb")
+@seccion("chartpython")
+def chartpython_manual_notebook():
+    """Los ejemplos del manual como notebook, para abrirlos con "Abrir .ipynb"."""
+    # Render termina el TLS antes de Flask: sin forzar el esquema, el enlace
+    # que queda escrito en el notebook saldría con http.
+    url_manual = url_for("chartpython_manual", _external=True, _scheme="https" if _DETRAS_DE_RENDER else None)
+    contenido = notebook_de_practica(url_manual=url_manual)
+    return Response(
+        contenido,
+        mimetype="application/x-ipynb+json",
+        headers={"Content-Disposition": 'attachment; filename="Manual de ChartPython.ipynb"'},
+    )
 
 
 @app.route("/econometria")
