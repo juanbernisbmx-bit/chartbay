@@ -145,6 +145,11 @@ def correr_ipc(
                 **diferencias,
                 "hallazgos": _conteo(nuevos),
                 "hallazgos_ya_revisados": len(hallazgos) - len(nuevos),
+                # De dónde salió cada serie y qué se normalizó al leerla: viaja con el release.
+                "detalle_series": {
+                    s.serie_id: {"archivo": s.archivo, "hoja": s.hoja, "fila_origen": s.fila_origen, "notas": list(s.notas)}
+                    for s in series.values()
+                },
                 "reemplaza_candidatos": reemplazados,
             })
         return ResultadoCorrida(corrida, "con_candidato", candidato, tuple(nuevos))

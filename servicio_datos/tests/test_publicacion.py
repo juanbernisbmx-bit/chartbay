@@ -189,6 +189,77 @@ class RevisionTests(BasePublicacion):
         self.assertEqual(self.contar("revision_hallazgo"), 1)
 
 
+class ProcedenciaYLecturaTests(BasePublicacion):
+    """Lo que el release lleva congelado y lo que ChartBay lee de él."""
+
+    def procedencia(self, numero):
+        return self.uno("SELECT procedencia FROM release WHERE numero = %s", (numero,))
+
+    def test_el_release_congela_los_archivos_con_hash_y_fechas(self):
+        p = self.publicar(self.candidato())
+        archivos = {a["clave"]: a for a in self.procedencia(p.release_numero)["archivos"]}
+        self.assertEqual(sorted(archivos), ["aperturas", "nacional"])
+        nacional = archivos["nacional"]
+        self.assertEqual(nacional["file"], "sh_ipc_09_26.xls")
+        self.assertEqual(nacional["url"], NAC["09"])
+        self.assertEqual(nacional["sha256"], self.uno("SELECT sha256 FROM descarga WHERE url = %s", (NAC["09"],)))
+        self.assertEqual(nacional["published_at"], "2026-09-10T18:52:05+00:00")  # el Last-Modified de la fuente
+        self.assertRegex(nacional["retrieved_at"], r"^\d{4}-\d{2}-\d{2}T[\d:.]+\+00:00$")
+
+    def test_el_release_congela_de_donde_salio_cada_serie(self):
+        p = self.publicar(self.candidato())
+        series = self.procedencia(p.release_numero)["series"]
+        self.assertEqual(sorted(series), sorted(fuente.SERIES))
+        self.assertEqual(series["ipc_ng_nacional"], {"archivo": "nacional", "hoja": "Índices IPC Cobertura Nacional", "fila_origen": 10, "notas": []})
+        self.assertEqual(series["ipc_ng_cuyo"]["archivo"], "aperturas")
+
+    def test_las_notas_de_normalizacion_viajan_con_el_release(self):
+        nota = "Encabezado 2026-03-26 interpretado como período mensual 2026-03"
+        original = self.leer
+
+        def con_nota(ruta, archivo):
+            series = original(ruta, archivo)
+            if "ipc_ng_cuyo" in series:
+                s = series["ipc_ng_cuyo"]
+                series["ipc_ng_cuyo"] = SerieLeida(s.serie_id, s.archivo, s.hoja, s.fila_origen, s.observaciones, (nota,))
+            return series
+        self.leer = con_nota
+        self.validar.hallazgos = [Hallazgo("fecha_normalizada", "baja", "ipc_ng_cuyo", None, nota)]
+        resultado = self.correr()
+        self.aceptar_todos(resultado.candidato_id)
+        p = self.publicar(resultado.candidato_id)
+        self.assertEqual(self.procedencia(p.release_numero)["series"]["ipc_ng_cuyo"]["notas"], [nota])
+
+    def test_la_captura_es_la_primera_vez_que_se_vio_el_archivo(self):
+        primero = self.publicar(self.candidato())
+        segundo = self.publicar(self.candidato(self.mes_nuevo(), valor=200))
+        a1 = {a["clave"]: a for a in self.procedencia(primero.release_numero)["archivos"]}
+        a2 = {a["clave"]: a for a in self.procedencia(segundo.release_numero)["archivos"]}
+        # Las aperturas no cambiaron: se las volvió a ver, pero se capturaron la primera vez.
+        self.assertEqual(a2["aperturas"]["retrieved_at"], a1["aperturas"]["retrieved_at"])
+        self.assertNotEqual(a2["nacional"]["retrieved_at"], a1["nacional"]["retrieved_at"])
+        self.assertEqual(a2["nacional"]["file"], "sh_ipc_10_26.xls")
+
+    def test_las_vistas_muestran_solo_el_release_vigente(self):
+        self.assertEqual((self.contar("publicado_release"), self.contar("publicado_observaciones")), (0, 0))
+        primero = self.publicar(self.candidato(hasta=(2026, 7)))
+        segundo = self.publicar(self.candidato(self.mes_nuevo(), hasta=(2026, 8)))
+        vistas = self.conn.execute("SELECT fuente_id, numero, release_id, hash_contenido FROM publicado_release").fetchall()
+        self.assertEqual(vistas, [("INDEC_IPC", segundo.release_numero, segundo.release_id, segundo.hash_contenido)])
+        self.assertNotEqual(primero.release_numero, segundo.release_numero)
+        self.assertEqual(self.contar("publicado_observaciones"), 42)
+        self.assertEqual(self.uno("SELECT max(periodo) FROM publicado_observaciones"), date(2026, 8, 1))
+
+    def test_el_contrato_de_las_vistas_no_cambia_sin_avisar(self):
+        # ChartBay depende de estas columnas por nombre: si cambian, hay que cambiar la web.
+        def columnas(vista):
+            return [f[0] for f in self.conn.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_schema = %s AND table_name = %s ORDER BY ordinal_position",
+                (self.schema, vista))]
+        self.assertEqual(columnas("publicado_release"), ["fuente_id", "numero", "release_id", "publicado_en", "hash_contenido", "procedencia"])
+        self.assertEqual(columnas("publicado_observaciones"), ["fuente_id", "serie_id", "periodo", "valor"])
+
+
 class VersionadoTests(BasePublicacion):
     def segundo_mes(self, cambios):
         """Un candidato con un mes más y, opcionalmente, valores distintos: {(serie, periodo): valor}."""

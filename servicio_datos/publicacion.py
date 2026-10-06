@@ -19,6 +19,7 @@ from typing import Iterable
 
 import psycopg
 from psycopg import errors
+from psycopg.types.json import Jsonb
 
 from servicio_datos.ipc import fuente
 
@@ -96,6 +97,31 @@ def estado_revision(conn: psycopg.Connection, candidato_id: int) -> EstadoRevisi
     return EstadoRevision(*hallazgos, propuestas)
 
 
+def _utc(momento: datetime | None) -> str | None:
+    return momento.astimezone(timezone.utc).isoformat() if momento else None
+
+
+def procedencia_de(conn: psycopg.Connection, corrida_id: int) -> dict:
+    """Qué archivos y qué hoja, fila y notas respaldan a cada serie de una corrida.
+
+    La captura es la primera vez que se vio el archivo (no cuando se lo volvió a ver idéntico),
+    y la publicación es la fecha que informa la fuente.
+    """
+    resumen = conn.execute("SELECT resumen FROM corrida WHERE id = %s", (corrida_id,)).fetchone()[0]
+    archivos = []
+    for archivo in resumen.get("archivos", []):
+        captura, publicada = conn.execute(
+            "SELECT min(descargada_en), max(publicada_en) FROM descarga "
+            "WHERE url = %s AND sha256 = %s AND estado IN ('nueva', 'identica')",
+            (archivo["url"], archivo["sha256"]),
+        ).fetchone()
+        archivos.append({
+            "clave": archivo["clave"], "file": archivo["url"].rsplit("/", 1)[-1], "url": archivo["url"],
+            "sha256": archivo["sha256"], "retrieved_at": _utc(captura), "published_at": _utc(publicada),
+        })
+    return {"archivos": archivos, "series": resumen.get("detalle_series", {})}
+
+
 def _plural(n: int, singular: str, plural: str) -> str:
     return f"{n} {singular if n == 1 else plural}"
 
@@ -110,7 +136,8 @@ def publicar_candidato(
 
     with conn.transaction():
         previo = conn.execute(
-            "SELECT co.fuente_id FROM candidato c JOIN corrida co ON co.id = c.corrida_id WHERE c.id = %s", (candidato_id,)
+            "SELECT co.fuente_id, c.corrida_id FROM candidato c JOIN corrida co ON co.id = c.corrida_id WHERE c.id = %s",
+            (candidato_id,),
         ).fetchone()
         if previo is None:
             raise ErrorPublicacion("no_existe", f"No existe el candidato {candidato_id}")
@@ -151,8 +178,9 @@ def publicar_candidato(
             intento += 1
             release_id = f"{prefijo}-{fecha.isoformat()}-{contenido[:10]}-{intento}"
         numero = conn.execute(
-            "INSERT INTO release (release_id, candidato_id, aprobado_por, hash_contenido) VALUES (%s, %s, %s, %s) RETURNING numero",
-            (release_id, candidato_id, aprobado_por.strip(), contenido),
+            "INSERT INTO release (release_id, candidato_id, aprobado_por, hash_contenido, procedencia) "
+            "VALUES (%s, %s, %s, %s, %s) RETURNING numero",
+            (release_id, candidato_id, aprobado_por.strip(), contenido, Jsonb(procedencia_de(conn, previo[1]))),
         ).fetchone()[0]
 
         # Se cierra lo que ya no coincide con el candidato y después se abre lo que no está vigente.
