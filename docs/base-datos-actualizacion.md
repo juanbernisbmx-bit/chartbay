@@ -1,9 +1,8 @@
 # Base de datos: actualización automática con revisión
 
-Estado: diseño. Implementados en `servicio_datos/`: esquema PostgreSQL y migrador,
-colector, orquestador, publicación de candidatos y lectura desde ChartBay (pasos 1, 2 y 4); el parser y la
-validación (paso 3) los entregó Codex en su rama. Siguen en diseño la interfaz de
-revisión, la cola y el agente.
+Estado: diseño, con casi todo implementado. En `servicio_datos/`: esquema PostgreSQL y migrador,
+colector, orquestador, publicación de candidatos, lectura desde ChartBay, y la interfaz de revisión con su cola
+(pasos 1, 2, 4 y 5); el parser y la validación (paso 3) los entregó Codex en su rama. Sigue en diseño el agente.
 
 Complementa a `docs/base-datos.md`, que describe el piloto local y lista como
 pendientes PostgreSQL, la recolección programada, el historial de revisiones y la
@@ -203,6 +202,18 @@ Una pantalla por candidato.
   no toca lo publicado.
 - Los cambios mecánicos se marcan aparte como elegibles para aprobación
   automática; esa automatización la habilita el usuario, no se activa sola.
+
+## Lo que se construyó de la interfaz
+
+Está en `servicio_datos/revision/` y sigue el diseño de abajo, con tres diferencias que salieron de usarla
+con datos reales:
+
+- Los hallazgos van agrupados por regla, con una acción para aceptar de una vez los pendientes de un grupo
+  o todos: los 19 hallazgos del primer candidato real eran 7 casi iguales por serie.
+- Cada hallazgo trae el gráfico de su serie, con el período marcado y lo vigente en punteado.
+- Es una app aparte de la web pública, con login (usuario y contraseña, el usuario queda como revisor), token
+  en cada formulario, límite de intentos y cabeceras estrictas, porque es lo único que escribe. Funciona sin
+  JavaScript.
 
 ## Cola de candidatos
 

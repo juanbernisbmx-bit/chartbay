@@ -98,6 +98,8 @@ siga (parser, validación, candidato) la cierra como `con_candidato` o `fallida`
 - ChartBay lee de PostgreSQL: hecho, en dos ramas. El servicio (vistas, procedencia en el
   release) está en `claude/base-datos-postgres`; la web (`web/economic_database.py`) en
   `codex/base-datos-chartbay`. Probado con la web real contra la base real.
+- Interfaz de revisión (`revision/`): hecha y probada en un navegador real contra una base con un release
+  real publicado y un candidato con varios problemas. Es una app Flask aparte, con login.
 - Orquestador: hecho (`pipeline.py`, `ejecutar.py`). Probado con el parser y la
   validación reales y contra INDEC en vivo (2026-10-06): un candidato abierto con
   819 observaciones y 19 hallazgos (12 saltos mensuales y 7 notas de encabezado), y

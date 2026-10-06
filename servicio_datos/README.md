@@ -23,12 +23,52 @@ cambios.
 - `pipeline.py`, `ejecutar.py`: el orquestador. Corre colecta, parseo, validación y
   deja un candidato abierto, o cierra la corrida como `sin_cambios` o `fallida`.
   Recibe el parser y la validación por parámetro.
+- `revision/`: la interfaz web de revisión (cola de candidatos y pantalla de revisión). Es una app
+  Flask aparte de la web pública de ChartBay, con login. Ver "Interfaz de revisión".
 - `publicacion.py`, `publicar.py`: la revisión y la publicación de un candidato. Publicar es
   la única forma de que un dato llegue a lo vigente, y exige que cada hallazgo esté aceptado.
   `publicar.py` es el comando para revisar desde la terminal hasta que exista la interfaz.
 - `ipc/fuente.py`, `ipc/modelos.py`: qué archivos trae el IPC, cómo se describen
   sus series y los tipos que pasan entre colector, parser y validación.
 - `COORDINACION.md`: reparto del trabajo entre Claude y Codex y contrato.
+
+## Interfaz de revisión
+
+La cola de candidatos y la pantalla para revisarlos y publicarlos (`revision/`). Es una app aparte de
+la web pública de ChartBay porque **escribe** (acepta, rechaza, publica, descarta): la web no tiene
+login y se conecta con un rol de solo lectura. Necesita una URL de PostgreSQL con permiso de escritura
+sobre el servicio (la misma de `DATOS_DATABASE_URL`).
+
+```bash
+# 1. Una línea de usuario=hash por cada revisor (pide la contraseña, mínimo 12 caracteres)
+./.venv/bin/python -m servicio_datos.revision clave juani
+
+# 2. Probarla en este equipo (solo escucha en 127.0.0.1)
+export DATOS_DATABASE_URL=postgresql://...
+export DATOS_REVISORES='juani=scrypt:...'     # varios, separados por ;
+./.venv/bin/python -m servicio_datos.revision servir
+
+# En producción, con un servidor de verdad y siempre detrás de HTTPS (Basic manda la clave en cada pedido):
+gunicorn "servicio_datos.revision.__main__:app_desde_entorno()" --bind 0.0.0.0:$PORT
+```
+
+- **Quién es el revisor:** el usuario con el que se inició sesión. Queda registrado en cada decisión y en el
+  release; el formulario no puede poner otro nombre.
+- **Protecciones:** todo exige login (salvo `/salud`); cada formulario lleva un token y se rechaza un POST de
+  otro origen; los intentos de acceso fallidos se frenan (5 en 5 minutos por usuario y dirección); las
+  respuestas no se guardan en caché y llevan una política de contenido que no admite scripts. Funciona sin
+  JavaScript. `Referrer-Policy` es `same-origin` a propósito: con `no-referrer` el navegador manda
+  `Origin: null` en los formularios propios y el chequeo de origen rechazaría a todos.
+- **La cola:** candidatos esperando revisión, corridas fallidas sin resolver (una falla deja de aparecer
+  cuando una corrida posterior de la fuente termina bien) e historial. Las corridas sin cambios no generan
+  filas. Reintentar una corrida fallida es manual.
+- **La revisión:** qué cambia respecto de lo vigente, los archivos de la corrida y los hallazgos agrupados por
+  regla, con un gráfico de la serie en cada uno (lo vigente, en punteado, si difiere). Se acepta o rechaza
+  uno por uno (rechazar exige un motivo), o se aceptan de una vez los pendientes de un grupo o todos. Publicar
+  y descartar están al final; un candidato ya cerrado se ve sin formularios. Si la base no responde, muestra un
+  mensaje claro sin datos de la conexión.
+- **Sin agente todavía:** las propuestas del agente se muestran si existen y frenan la publicación, pero no hay
+  botones para decidirlas porque el agente no está conectado.
 
 ## Cómo lee ChartBay lo publicado
 
@@ -138,7 +178,8 @@ disco persistente o almacenamiento de objetos (cambia solo `crudo.py`).
 
 - El catálogo completo en PostgreSQL: hoy solo están las siete series del IPC, así que ChartBay
   sigue tomando del JSON las otras 93 entradas (que no tienen datos).
-- La interfaz de revisión y la cola de candidatos (diseñadas, sin construir).
+- Decidir las propuestas del agente desde la interfaz (el agente no está conectado).
+- Un aviso (mail o Slack) cuando entra algo a la cola o pasa la ventana del mes sin datos.
 - Parser y validación del IPC integrados a esta rama: están hechos (Codex, rama
   `codex/ipc-parser`) pero Juani decide cuándo se unen. Las pruebas del pipeline que
   usan la cadena real se saltean mientras tanto.
