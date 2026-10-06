@@ -62,6 +62,30 @@ Disparador -> Colector -> Crudo -> Parser -> Validación -> Candidato -> Revisi�
    ya existe (`ipc-piloto-fe3e20e47271`). `GET /api/base-datos/catalogo` lee de
    ahí y el frontend no cambia.
 
+## Decisiones del orquestador
+
+El pipeline (`servicio_datos/pipeline.py`) une colecta, parseo, validación y candidato.
+
+- Archivos nuevos con exactamente los datos ya publicados no son una novedad: la
+  corrida cierra `sin_cambios` y no crea candidato.
+- El candidato guarda la serie completa y no solo la diferencia: es el contenido
+  propuesto para el release. Lo que cambia respecto de lo publicado va en el
+  resumen de la corrida (períodos nuevos, cambiados y faltantes).
+- Un candidato nuevo descarta al que seguía abierto (`decidido_por = 'sistema'`) y
+  lo deja anotado en el resumen: no se publica una versión vieja sobre datos más
+  nuevos.
+- Los hallazgos que ya pasaron por una publicación no vuelven a la cola. Con los
+  umbrales actuales el IPC tiene 12 alertas de salto mensual históricas, todas reales
+  (diciembre de 2023 y enero de 2024); se revisan una vez y no reaparecen cada mes.
+- Un hallazgo sobre una serie que la base no conoce se guarda sin serie, con el
+  identificador en el texto.
+- Todo el armado del candidato es una transacción: si algo falla no queda nada a
+  medias, y la corrida se cierra `fallida`. Un archivo que el parser rechaza también
+  es `fallida`, no un error del programa.
+
+Pendiente: un aviso si pasa la ventana del mes sin datos nuevos. El pipeline solo
+mira lo que llega; que no llegue nada es trabajo del cron o del servicio de alertas.
+
 ## Reglas de validación del IPC
 
 - Estructura: hoja y fila de encabezado esperadas; nacional más 6 regiones
