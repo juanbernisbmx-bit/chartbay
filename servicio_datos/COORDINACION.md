@@ -92,6 +92,9 @@ siga (parser, validación, candidato) la cierra como `con_candidato` o `fallida`
   `sin_cambios`. `python -m servicio_datos.colectar ipc` (ver README).
 - Parser y validación: entregados por Codex en `codex/ipc-parser` (d45dc83), sin
   integrar a `claude/base-datos-postgres`; ver `NOTAS_CODEX.md` en esa rama.
+- Publicación del candidato y comando de revisión (`publicacion.py`, `publicar.py`, migración
+  0003): hecho. Probado de punta a punta con datos reales: lo publicado coincide valor por
+  valor con el catálogo del piloto (819 observaciones).
 - Orquestador: hecho (`pipeline.py`, `ejecutar.py`). Probado con el parser y la
   validación reales y contra INDEC en vivo (2026-10-06): un candidato abierto con
   819 observaciones y 19 hallazgos (12 saltos mensuales y 7 notas de encabezado), y

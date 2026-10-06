@@ -1,8 +1,9 @@
 # Base de datos: actualización automática con revisión
 
-Estado: diseño. Implementados en `servicio_datos/`: el paso 1 del orden de
-construcción (esquema PostgreSQL y migrador) y el colector del IPC (paso 2). El
-resto sigue en diseño.
+Estado: diseño. Implementados en `servicio_datos/`: esquema PostgreSQL y migrador,
+colector, orquestador y publicación de candidatos (pasos 1, 2 y 4); el parser y la
+validación (paso 3) los entregó Codex en su rama. Siguen en diseño la interfaz de
+revisión, la cola y el agente.
 
 Complementa a `docs/base-datos.md`, que describe el piloto local y lista como
 pendientes PostgreSQL, la recolección programada, el historial de revisiones y la
@@ -86,6 +87,29 @@ El pipeline (`servicio_datos/pipeline.py`) une colecta, parseo, validación y ca
 Pendiente: un aviso si pasa la ventana del mes sin datos nuevos. El pipeline solo
 mira lo que llega; que no llegue nada es trabajo del cron o del servicio de alertas.
 
+## Decisiones de la publicación
+
+`servicio_datos/publicacion.py` convierte un candidato abierto en el release vigente.
+
+- Todo hallazgo del candidato tiene que estar aceptado por una persona, y no puede haber
+  ninguno rechazado ni propuestas del agente sin decidir. Si no, no se publica y el mensaje
+  dice cuántos faltan. La revisión queda en `revision_hallazgo`, con quién y por qué.
+- Una revisión se cambia con otra: vale la última y el historial queda. Rechazar exige un
+  motivo. No se puede revisar un hallazgo de un candidato que ya no está abierto.
+- El release es una foto completa: lo vigente después de publicar es exactamente el
+  candidato. Los períodos con otro valor se cierran y se abren de nuevo, los que el
+  candidato ya no trae se cierran, y los que no cambian no se tocan. Por eso "los datos tal
+  como estaban en el release N" es una consulta exacta.
+- El contenido tiene un hash (SHA-256 de serie, período y valor, normalizando el valor) que
+  se guarda en el release y se puede recalcular desde lo vigente.
+- `release_id` es `ipc-AAAA-MM-DD-<10 del hash>`; si el mismo contenido se publica dos veces
+  el mismo día (un cambio y su vuelta atrás) se distingue con un número al final. Los
+  números de release (`numero`) pueden tener huecos tras una publicación que falló: es
+  normal en una secuencia y no afecta a las consultas.
+- Todo es una transacción y una publicación por fuente a la vez.
+- Descartar un candidato lo cierra entero, con quién y por qué, y no toca lo publicado. Un
+  candidato reemplazado por uno más nuevo deja su motivo también.
+
 ## Reglas de validación del IPC
 
 - Estructura: hoja y fila de encabezado esperadas; nacional más 6 regiones
@@ -142,6 +166,8 @@ propuesta. No toca el candidato ni lo publicado.
   `corrida_descarga`; el IPC trae dos archivos por corrida). Una corrida
   `en_curso` que supera el vencimiento se da por abandonada.
 - `hallazgo`: corrida, serie, período, regla, severidad, detalle.
+- `revision_hallazgo`: hallazgo, decisión (aceptado o rechazado), revisor, comentario y
+  fecha. Es lo que permite publicar; se detalla en "Decisiones de la publicación".
 - `propuesta`: hallazgo, tipo, valor actual, valor propuesto, evidencia,
   confianza, estado (pendiente, aprobada, rechazada), revisor, comentario.
 - `release`: `release_id`, corrida, quién aprobó, fecha, hash del contenido. Hace
