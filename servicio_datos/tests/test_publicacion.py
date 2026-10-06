@@ -171,11 +171,13 @@ class RevisionTests(BasePublicacion):
         with self.assertRaises(errors.RaiseException):
             self.conn.execute("DELETE FROM revision_hallazgo")
 
-    def test_una_propuesta_del_agente_sin_decidir_bloquea(self):
+    def test_una_propuesta_pendiente_sobre_algo_ya_decidido_sigue_bloqueando(self):
+        # Defensa en profundidad: el agente no aconseja sobre lo decidido y decidir resuelve las propuestas, así que
+        # esto no debería pasar; si pasara, la publicación no sigue como si nada.
         candidato = self.candidato(hallazgos=[A])
         hallazgo = self.hallazgos_de(candidato)[0]
         self.conn.execute("INSERT INTO propuesta (hallazgo_id, tipo, confianza) VALUES (%s, 'nota', 'media')", (hallazgo,))
-        publicacion.revisar_hallazgo(self.conn, hallazgo, "aceptado", "juani", "ok")
+        self.conn.execute("INSERT INTO revision_hallazgo (hallazgo_id, decision, revisor) VALUES (%s, 'aceptado', 'juani')", (hallazgo,))  # sin pasar por revisar_hallazgo
         self.assertIn("1 propuesta", self.rechaza("propuestas_pendientes", self.publicar, candidato))
         self.conn.execute("UPDATE propuesta SET estado = 'rechazada', revisor = 'juani', decidida_en = now(), comentario = 'no aplica'")
         self.assertEqual(self.publicar(candidato).observaciones_abiertas, 42)
@@ -258,6 +260,84 @@ class ProcedenciaYLecturaTests(BasePublicacion):
                 (self.schema, vista))]
         self.assertEqual(columnas("publicado_release"), ["fuente_id", "numero", "release_id", "publicado_en", "hash_contenido", "procedencia"])
         self.assertEqual(columnas("publicado_observaciones"), ["fuente_id", "serie_id", "periodo", "valor"])
+
+
+class PropuestasDelAgenteTests(BasePublicacion):
+    """Decidir un hallazgo resuelve sus propuestas: una sola decisión de la persona, y queda registrado si el agente acertó."""
+
+    def con_propuesta(self, sugerida="aceptar", evidencia="El mismo salto en las siete series", hallazgos=(A,), otra_vuelta=False):
+        # En la segunda vuelta de un mismo test hace falta un archivo y datos distintos: si no, el colector dice "sin cambios".
+        candidato = self.candidato(self.mes_nuevo(), hallazgos=list(hallazgos), valor=200) if otra_vuelta else self.candidato(hallazgos=list(hallazgos))
+        hallazgo = self.hallazgos_de(candidato)[0]
+        self.conn.execute(
+            "INSERT INTO propuesta (hallazgo_id, tipo, confianza, accion_sugerida, evidencia, razonamiento) VALUES (%s, 'dato_real', 'alta', %s, %s, 'porque sí')",
+            (hallazgo, sugerida, evidencia))
+        return candidato, hallazgo
+
+    def propuesta(self, hallazgo):
+        return self.conn.execute("SELECT estado, revisor, comentario, decidida_en IS NOT NULL FROM propuesta WHERE hallazgo_id = %s", (hallazgo,)).fetchone()
+
+    def test_si_la_persona_coincide_la_propuesta_queda_aprobada(self):
+        for vuelta, (sugerida, decision, hallazgos) in enumerate((("aceptar", "aceptado", (A,)), ("rechazar", "rechazado", (B,)))):
+            with self.subTest(sugerida=sugerida):
+                _, hallazgo = self.con_propuesta(sugerida, hallazgos=hallazgos, otra_vuelta=bool(vuelta))
+                publicacion.revisar_hallazgo(self.conn, hallazgo, decision, "juani", "Es la devaluación")
+                self.assertEqual(self.propuesta(hallazgo), ("aprobada", "juani", "Es la devaluación", True))
+
+    def test_si_la_persona_decide_distinto_queda_rechazada_con_su_comentario(self):
+        _, hallazgo = self.con_propuesta("aceptar")
+        publicacion.revisar_hallazgo(self.conn, hallazgo, "rechazado", "juani", "En realidad parece un error")
+        self.assertEqual(self.propuesta(hallazgo), ("rechazada", "juani", "En realidad parece un error", True))
+
+    def test_si_decide_distinto_sin_comentario_se_deja_constancia_igual(self):
+        _, hallazgo = self.con_propuesta("rechazar")
+        publicacion.revisar_hallazgo(self.conn, hallazgo, "aceptado", "juani")  # aceptar no exige comentario
+        self.assertEqual(self.propuesta(hallazgo)[:3], ("rechazada", "juani", "La persona decidió distinto de lo que proponía el agente."))
+
+    def test_una_propuesta_que_sugeria_investigar_no_puede_estar_en_desacuerdo(self):
+        for vuelta, decision in enumerate(("aceptado", "rechazado")):
+            with self.subTest(decision=decision):
+                _, hallazgo = self.con_propuesta("investigar", hallazgos=(A,) if decision == "aceptado" else (B,), otra_vuelta=bool(vuelta))
+                publicacion.revisar_hallazgo(self.conn, hallazgo, decision, "juani", "Lo revisé a mano")
+                self.assertEqual(self.propuesta(hallazgo)[:2], ("aprobada", "juani"))
+
+    def test_una_propuesta_sin_evidencia_no_se_aprueba_nunca(self):
+        _, hallazgo = self.con_propuesta("aceptar", evidencia="")
+        publicacion.revisar_hallazgo(self.conn, hallazgo, "aceptado", "juani", "ok")
+        self.assertEqual(self.propuesta(hallazgo)[:3], ("rechazada", "juani", "Sin evidencia citada: no se puede aprobar."))
+
+    def test_una_propuesta_manual_sin_accion_se_aprueba_si_tiene_evidencia(self):
+        candidato = self.candidato(hallazgos=[A])
+        hallazgo = self.hallazgos_de(candidato)[0]
+        self.conn.execute("INSERT INTO propuesta (hallazgo_id, tipo, confianza, evidencia) VALUES (%s, 'nota', 'media', 'Según la nota')", (hallazgo,))
+        publicacion.revisar_hallazgo(self.conn, hallazgo, "aceptado", "juani", "ok")
+        self.assertEqual(self.propuesta(hallazgo)[0], "aprobada")
+
+    def test_la_primera_decision_es_la_que_queda_aunque_la_persona_cambie_de_opinion(self):
+        _, hallazgo = self.con_propuesta("aceptar")
+        publicacion.revisar_hallazgo(self.conn, hallazgo, "aceptado", "juani", "ok")
+        publicacion.revisar_hallazgo(self.conn, hallazgo, "rechazado", "juani", "me arrepentí")
+        self.assertEqual(self.propuesta(hallazgo)[:3], ("aprobada", "juani", "ok"))  # decidida e inmutable
+
+    def test_con_la_propuesta_resuelta_ya_se_puede_publicar(self):
+        candidato, hallazgo = self.con_propuesta("aceptar")
+        publicacion.revisar_hallazgo(self.conn, hallazgo, "aceptado", "juani", "ok")
+        self.assertEqual(publicacion.estado_revision(self.conn, candidato).propuestas_pendientes, 0)
+        self.assertEqual(self.publicar(candidato).observaciones_abiertas, 42)
+
+    def test_la_base_no_deja_aconsejar_sobre_algo_ya_decidido(self):
+        candidato = self.candidato(hallazgos=[A])
+        hallazgo = self.hallazgos_de(candidato)[0]
+        publicacion.revisar_hallazgo(self.conn, hallazgo, "aceptado", "juani", "ok")
+        with self.assertRaisesRegex(errors.RaiseException, "ya fue decidido"):
+            self.conn.execute("INSERT INTO propuesta (hallazgo_id, tipo, confianza, accion_sugerida, evidencia) VALUES (%s, 'dato_real', 'alta', 'aceptar', 'x')", (hallazgo,))
+
+    def test_una_sola_propuesta_del_agente_por_hallazgo_pero_las_manuales_no_tienen_limite(self):
+        _, hallazgo = self.con_propuesta("aceptar")
+        with self.assertRaises(errors.UniqueViolation):
+            self.conn.execute("INSERT INTO propuesta (hallazgo_id, tipo, confianza, accion_sugerida, evidencia) VALUES (%s, 'dato_real', 'alta', 'rechazar', 'x')", (hallazgo,))
+        for _ in range(2):
+            self.conn.execute("INSERT INTO propuesta (hallazgo_id, tipo, confianza) VALUES (%s, 'nota', 'baja')", (hallazgo,))
 
 
 class VersionadoTests(BasePublicacion):

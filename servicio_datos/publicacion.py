@@ -61,15 +61,44 @@ def hash_contenido(filas: Iterable[tuple[str, date, Decimal]]) -> str:
     return hashlib.sha256("\n".join(lineas).encode("utf-8")).hexdigest()
 
 
+def _resolver_propuestas(conn: psycopg.Connection, hallazgo_id: int, decision: str, revisor: str, comentario: str | None) -> None:
+    """Cierra las propuestas del agente que seguían pendientes según lo que decidió la persona.
+
+    La persona toma UNA decisión sobre el hallazgo y eso resuelve la propuesta: `aprobada` si coincide con lo que
+    sugería, `rechazada` si decidió distinto. Así queda registrado cuánto acierta el agente, que es el dato con el
+    que se gana (o no) la confianza para automatizar. Una propuesta que sugería `investigar` no puede estar en
+    desacuerdo: se da por consultada. Una que no tiene evidencia no se aprueba nunca.
+    """
+    for propuesta_id, sugerida, evidencia in conn.execute(
+        "SELECT id, accion_sugerida, evidencia FROM propuesta WHERE hallazgo_id = %s AND estado = 'pendiente' ORDER BY id", (hallazgo_id,)
+    ).fetchall():
+        coincide = sugerida in (None, "investigar") or (sugerida, decision) in (("aceptar", "aceptado"), ("rechazar", "rechazado"))
+        if coincide and not (evidencia or "").strip():
+            estado, nota = "rechazada", "Sin evidencia citada: no se puede aprobar."
+        elif coincide:
+            estado, nota = "aprobada", comentario
+        else:
+            estado, nota = "rechazada", (comentario or "").strip() or "La persona decidió distinto de lo que proponía el agente."
+        conn.execute(
+            "UPDATE propuesta SET estado = %s, revisor = %s, decidida_en = now(), comentario = %s WHERE id = %s",
+            (estado, revisor.strip(), nota, propuesta_id),
+        )
+
+
 def revisar_hallazgo(
     conn: psycopg.Connection, hallazgo_id: int, decision: str, revisor: str, comentario: str | None = None
 ) -> None:
-    """Registra una decisión sobre un hallazgo. Una decisión nueva reemplaza a la anterior."""
+    """Registra una decisión sobre un hallazgo. Una decisión nueva reemplaza a la anterior.
+
+    También resuelve las propuestas del agente que seguían pendientes sobre ese hallazgo (ver `_resolver_propuestas`).
+    """
     try:
-        conn.execute(
-            "INSERT INTO revision_hallazgo (hallazgo_id, decision, revisor, comentario) VALUES (%s, %s, %s, %s)",
-            (hallazgo_id, decision, revisor, comentario),
-        )
+        with conn.transaction():
+            conn.execute(
+                "INSERT INTO revision_hallazgo (hallazgo_id, decision, revisor, comentario) VALUES (%s, %s, %s, %s)",
+                (hallazgo_id, decision, revisor, comentario),
+            )
+            _resolver_propuestas(conn, hallazgo_id, decision, revisor, comentario)
     except errors.RaiseException as error:
         raise ErrorPublicacion("candidato_cerrado", "Ese hallazgo ya no se puede revisar: su candidato no está abierto") from error
     except (errors.CheckViolation, errors.ForeignKeyViolation) as error:

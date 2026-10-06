@@ -300,15 +300,13 @@ class PantallaDeRevisionTests(BaseRevision):
         self.assertNotIn("Publicar versión", html)
         self.assertIn("Aceptado por juani", html)
 
-    def test_las_propuestas_del_agente_se_muestran_y_frenan_la_publicacion(self):
+    def test_las_propuestas_del_agente_se_muestran(self):
         candidato = self.abierto(hallazgos=[A])
         hallazgo = self.hallazgos_de(candidato)[0]
         self.conn.execute("INSERT INTO propuesta (hallazgo_id, tipo, confianza, evidencia) VALUES (%s, 'nota', 'media', 'Según la nota metodológica')", (hallazgo,))
-        self.aceptar_todos(candidato)
         html = self.get(f"/candidatos/{candidato}").get_data(as_text=True)
         self.assertIn("Propuesta del agente", html)
         self.assertIn("Según la nota metodológica", html)
-        self.assertIn("Faltan decidir 1 propuesta", html)
 
 
 class AccionesTests(BaseRevision):
