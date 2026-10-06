@@ -124,8 +124,9 @@ releases. `GET /api/base-datos/catalogo` mantiene su forma; solo agrega `origen`
 ## Avisos
 
 Por Slack (webhook) o correo (SMTP), configurables por entorno. Avisan, una vez cada uno, de un candidato
-para revisar, de una corrida fallida sin resolver (una vez por racha), de que pasó la ventana del mes sin el
-dato y de que el colector no corre hace días.
+para revisar, de que sigue abierto días después (recordatorios a los 3, 7 y 14 días y luego semanales, que se
+detienen al publicarlo, descartarlo o reemplazarlo), de una corrida fallida sin resolver (una vez por racha),
+de que pasó la ventana del mes sin el dato y de que el colector no corre hace días.
 
 - La detección mira el estado de la base, no eventos, así que se puede correr desde cualquier proceso y da lo
   mismo cuántas veces. Cada aviso se registra con una clave única antes de entregarse: no se repite, y un canal

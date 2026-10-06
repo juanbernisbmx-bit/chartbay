@@ -100,7 +100,8 @@ siga (parser, validación, candidato) la cierra como `con_candidato` o `fallida`
   `codex/base-datos-chartbay`. Probado con la web real contra la base real.
 - Interfaz de revisión (`revision/`): hecha y probada en un navegador real contra una base con un release
   real publicado y un candidato con varios problemas. Es una app Flask aparte, con login.
-- Avisos por Slack y correo (`avisos.py`, `canales.py`, `avisar.py`, migración 0005): hechos y probados contra un Slack
+- Avisos por Slack y correo (`avisos.py`, `canales.py`, `avisar.py`, migraciones 0005 y 0006, esta última con los
+  recordatorios de candidatos abiertos): hechos y probados contra un Slack
   y un servidor SMTP falsos y locales, y por el camino real como proceso aparte. Nunca se mandó nada a un servicio real.
 - Orquestador: hecho (`pipeline.py`, `ejecutar.py`). Probado con el parser y la
   validación reales y contra INDEC en vivo (2026-10-06): un candidato abierto con
