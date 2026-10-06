@@ -83,8 +83,7 @@ El pipeline (`servicio_datos/pipeline.py`) une colecta, parseo, validación y ca
   medias, y la corrida se cierra `fallida`. Un archivo que el parser rechaza también
   es `fallida`, no un error del programa.
 
-Pendiente: un aviso si pasa la ventana del mes sin datos nuevos. El pipeline solo
-mira lo que llega; que no llegue nada es trabajo del cron o del servicio de alertas.
+El pipeline solo mira lo que llega; que no llegue nada lo avisa `avisos.py` (ver "Avisos").
 
 ## Decisiones de la publicación
 
@@ -121,6 +120,20 @@ releases. `GET /api/base-datos/catalogo` mantiene su forma; solo agrega `origen`
   series del IPC. Lo publicado pisa los datos y la procedencia de esas siete.
 - Sin URL, sin nada publicado, o con la base caída, la web sirve el archivo. Un fallo no la
   frena: el resultado se guarda unos segundos y el log dice solo el tipo de error.
+
+## Avisos
+
+Por Slack (webhook) o correo (SMTP), configurables por entorno. Avisan, una vez cada uno, de un candidato
+para revisar, de una corrida fallida sin resolver (una vez por racha), de que pasó la ventana del mes sin el
+dato y de que el colector no corre hace días.
+
+- La detección mira el estado de la base, no eventos, así que se puede correr desde cualquier proceso y da lo
+  mismo cuántas veces. Cada aviso se registra con una clave única antes de entregarse: no se repite, y un canal
+  caído se reintenta en la corrida siguiente (hasta 5 veces).
+- Antes de entregar se vuelve a comprobar que siga siendo cierto: lo ya resuelto se descarta.
+- "No llegó el dato" y "el colector no corre" necesitan un cron propio, distinto del que corre el pipeline: si
+  el que mira es el que murió, no avisa nadie.
+- Sin canales configurados no registra nada, para que configurar uno después no dispare todo lo acumulado.
 
 ## Reglas de validación del IPC
 
