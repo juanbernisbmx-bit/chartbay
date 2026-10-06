@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>{% block titulo %}Revisión de datos{% endblock %} · ChartBay</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='revision.css') }}">
+</head>
+<body>
+  <header class="barra">
+    <a class="marca" href="{{ url_for('cola') }}">ChartBay <span>Revisión de datos</span></a>
+    {% if usuario %}<span class="sesion">Sesión: <strong>{{ usuario }}</strong></span>{% endif %}
+  </header>
+  <main>
+    {% block contenido %}{% endblock %}
+  </main>
+</body>
+</html>

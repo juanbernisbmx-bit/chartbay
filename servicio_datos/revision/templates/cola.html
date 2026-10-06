@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block titulo %}Cola de candidatos{% endblock %}
+{% block contenido %}
+<p class="ayuda">Base de datos · administración</p>
+<h1>Cola de candidatos</h1>
+
+<section class="tarjetas" aria-label="Resumen">
+  <div class="tarjeta"><p class="rotulo">Esperan revisión</p><p class="numero">{{ resumen.esperan_revision }}</p></div>
+  <div class="tarjeta {% if resumen.fallidas %}alerta{% endif %}"><p class="rotulo">Corridas fallidas</p><p class="numero">{{ resumen.fallidas }}</p></div>
+  <div class="tarjeta">
+    <p class="rotulo">Release vigente</p>
+    {% if resumen.release %}
+      <p class="dato">{{ resumen.release.release_id }}</p>
+      <p class="ayuda">{{ resumen.release.publicado_en|hace }} · {{ resumen.release.aprobado_por }}</p>
+    {% else %}<p class="dato">Todavía no hay</p>{% endif %}
+  </div>
+  <div class="tarjeta">
+    <p class="rotulo">Última corrida</p>
+    {% if resumen.ultima_corrida %}
+      <p class="dato">{{ {'sin_cambios': 'Sin cambios', 'con_candidato': 'Dejó un candidato', 'fallida': 'Falló', 'en_curso': 'En curso'}[resumen.ultima_corrida.estado] }}</p>
+      <p class="ayuda">{{ resumen.ultima_corrida.iniciada_en|hace }}</p>
+    {% else %}<p class="dato">Todavía no corrió</p>{% endif %}
+  </div>
+</section>
+
+<nav class="pestanas" aria-label="Qué mostrar">
+  {% for clave, titulo in (('atencion', 'Requieren atención'), ('historial', 'Historial'), ('todo', 'Todo')) %}
+    <a href="{{ url_for('cola', ver=clave) }}" {% if ver == clave %}aria-current="page"{% endif %}>{{ titulo }} · {{ cuentas[clave] }}</a>
+  {% endfor %}
+</nav>
+
+{% set muestra_atencion = ver in ('atencion', 'todo') %}
+{% set muestra_historial = ver in ('historial', 'todo') %}
+{% set hay = (muestra_atencion and (fallidas or abiertos)) or (muestra_historial and historial) %}
+
+{% if not hay %}
+  <section class="vacio">
+    <h2>{% if ver == 'historial' %}Todavía no hay historial{% else %}Todo al día{% endif %}</h2>
+    <p>{% if ver == 'historial' %}Acá van a aparecer los candidatos publicados y descartados.{% else %}La última corrida no encontró datos nuevos.{% endif %}</p>
+  </section>
+{% else %}
+<ul class="lista">
+  {% if muestra_atencion %}
+    {% for f in fallidas %}
+    <li class="item">
+      <div class="item-cuerpo">
+        <p><strong>Corrida {{ f.id }}</strong> <span class="ayuda">· {{ f.fuente_id }}</span></p>
+        <p class="ayuda">{{ f.iniciada_en|hace }} · {{ (f.error or 'Sin detalle')[:160] }}</p>
+      </div>
+      <div class="item-lado"><span class="chip malo">Falló</span><a class="boton" href="{{ url_for('corrida', corrida_id=f.id) }}">Ver error</a></div>
+    </li>
+    {% endfor %}
+    {% for a in abiertos %}
+    <li class="item">
+      <div class="item-cuerpo">
+        <p><strong>Candidato {{ a.id }}</strong> <span class="ayuda">· {{ a.fuente_id }}</span></p>
+        <p class="ayuda">Creado {{ a.creado_en|hace }} · corrida {{ a.corrida_id }}</p>
+        <p class="ayuda">
+          {% if a.hallazgos == 0 %}Sin hallazgos
+          {% else %}{{ a.pendientes }} de {{ a.hallazgos }} hallazgos sin resolver{% if a.rechazados %} · {{ a.rechazados }} rechazados{% endif %}{% endif %}
+        </p>
+      </div>
+      <div class="item-lado">
+        {% if a.rechazados %}<span class="chip malo">Con rechazos</span>
+        {% elif a.pendientes %}<span class="chip aviso">Pendiente</span>
+        {% else %}<span class="chip bueno">Listo para publicar</span>{% endif %}
+        <a class="boton" href="{{ url_for('candidato', candidato_id=a.id) }}">Abrir revisión</a>
+      </div>
+    </li>
+    {% endfor %}
+  {% endif %}
+  {% if muestra_historial %}
+    {% for h in historial %}
+    <li class="item">
+      <div class="item-cuerpo">
+        <p><strong>Candidato {{ h.id }}</strong> <span class="ayuda">· {{ h.fuente_id }}{% if h.release_id %} · {{ h.release_id }}{% endif %}</span></p>
+        <p class="ayuda">{{ 'Publicado' if h.estado == 'publicado' else 'Descartado' }} por {{ h.decidido_por }} {{ h.decidido_en|hace }}{% if h.motivo %} · {{ h.motivo[:120] }}{% endif %}</p>
+        <p class="ayuda">{{ h.hallazgos }} hallazgos</p>
+      </div>
+      <div class="item-lado">
+        <span class="chip {{ 'bueno' if h.estado == 'publicado' else '' }}">{{ 'Publicado' if h.estado == 'publicado' else 'Descartado' }}</span>
+        <a class="boton" href="{{ url_for('candidato', candidato_id=h.id) }}">Ver detalle</a>
+      </div>
+    </li>
+    {% endfor %}
+  {% endif %}
+</ul>
+{% endif %}
+{% endblock %}

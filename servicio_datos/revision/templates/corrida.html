@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block titulo %}Corrida {{ corrida.id }}{% endblock %}
+{% block contenido %}
+<p class="ayuda"><a href="{{ url_for('cola') }}">← Cola de candidatos</a></p>
+<h1>Corrida {{ corrida.id }}</h1>
+<p class="ayuda">{{ corrida.fuente_id }} · empezó {{ corrida.iniciada_en|fecha }}{% if corrida.terminada_en %} · terminó {{ corrida.terminada_en|fecha }}{% endif %}</p>
+
+{% if corrida.estado == 'fallida' %}
+  <p class="nota malo" role="alert"><strong>Falló.</strong> {{ corrida.error or 'Sin detalle.' }}</p>
+  <p>Reintentar es manual, para no repetir a ciegas un error que se va a repetir. Cuando la causa esté resuelta:</p>
+  <pre class="comando">python -m servicio_datos.ejecutar ipc</pre>
+{% elif corrida.estado == 'con_candidato' and corrida.candidato_id %}
+  <p class="nota bueno">Esta corrida dejó un candidato. <a href="{{ url_for('candidato', candidato_id=corrida.candidato_id) }}">Abrir la revisión</a>.</p>
+{% elif corrida.estado == 'sin_cambios' %}
+  <p class="nota">No encontró nada nuevo{% if corrida.resumen.motivo %}: {{ corrida.resumen.motivo }}{% endif %}.</p>
+{% else %}
+  <p class="nota aviso">La corrida sigue en curso.</p>
+{% endif %}
+
+<h2>Archivos</h2>
+<table class="tabla">
+  <thead><tr><th>Archivo</th><th>Resultado</th><th>Hash</th><th>Tamaño</th></tr></thead>
+  <tbody>
+  {% for a in archivos %}
+    <tr>
+      <td>{{ a.url.rsplit('/', 1)[-1] }}</td>
+      <td>{{ 'Nuevo' if a.estado == 'nueva' else 'Ya conocido' if a.estado == 'identica' else 'Falló: ' ~ (a.error or '') }}</td>
+      <td>{% if a.sha256 %}<code>{{ a.sha256|hash_corto }}</code>{% else %}—{% endif %}</td>
+      <td>{% if a.bytes %}{{ '{:,}'.format(a.bytes) }} bytes{% else %}—{% endif %}</td>
+    </tr>
+  {% else %}<tr><td colspan="4">No llegó a registrar archivos.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

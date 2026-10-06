@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block titulo %}Error {{ codigo }}{% endblock %}
+{% block contenido %}
+<section class="vacio">
+  <h1>{{ mensaje }}</h1>
+  <p><a href="{{ url_for('cola') }}">Volver a la cola de candidatos</a></p>
+</section>
+{% endblock %}

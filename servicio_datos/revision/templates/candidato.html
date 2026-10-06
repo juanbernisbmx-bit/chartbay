@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block titulo %}Candidato {{ c.id }}{% endblock %}
+{% macro csrf_campo() %}<input type="hidden" name="csrf" value="{{ csrf }}">{% endmacro %}
+{% block contenido %}
+<p class="ayuda"><a href="{{ url_for('cola') }}">← Cola de candidatos</a></p>
+<header class="encabezado">
+  <div>
+    <p class="ayuda">Revisión · {{ c.fuente_nombre }}</p>
+    <h1>Candidato {{ c.id }}</h1>
+    <p class="ayuda">Creado {{ c.creado_en|fecha }} · corrida {{ c.corrida_id }}</p>
+  </div>
+  <div>
+    {% if c.estado == 'abierto' %}<span class="chip aviso">Abierto</span>
+    {% elif c.estado == 'publicado' %}<span class="chip bueno">Publicado</span>
+    {% else %}<span class="chip">Descartado</span>{% endif %}
+  </div>
+</header>
+
+{% if c.estado == 'publicado' %}
+  <p class="nota bueno">Publicado como <strong>{{ c.release_id }}</strong> por {{ c.aprobado_por }}, el {{ c.publicado_en|fecha }}.</p>
+{% elif c.estado == 'descartado' %}
+  <p class="nota">Descartado por {{ c.decidido_por }}, el {{ c.decidido_en|fecha }}.{% if c.motivo %} Motivo: {{ c.motivo }}{% endif %}</p>
+{% endif %}
+{% if aviso %}<p class="nota bueno" role="status">{{ aviso }}{% if n_aviso is not none and aviso == 'Hallazgos aceptados.' %} ({{ n_aviso }}){% endif %}</p>{% endif %}
+{% if error %}<p class="nota malo" role="alert">{{ error }}</p>{% endif %}
+
+{% if abierto %}
+<section class="tarjetas tres" aria-label="Qué cambia">
+  <div class="tarjeta"><p class="rotulo">Períodos nuevos</p><p class="numero">{{ diff.nuevos }}</p></div>
+  <div class="tarjeta {% if diff.cambiados or diff.faltantes %}alerta{% endif %}">
+    <p class="rotulo">Datos ya publicados que cambian</p>
+    <p class="numero">{{ diff.cambiados + diff.faltantes }}</p>
+    {% if diff.cambiados or diff.faltantes %}<p class="ayuda">{% if diff.cambiados %}{{ diff.cambiados }} con otro valor{% endif %}{% if diff.cambiados and diff.faltantes %} · {% endif %}{% if diff.faltantes %}{{ diff.faltantes }} que faltan en el candidato{% endif %}</p>{% endif %}
+  </div>
+  <div class="tarjeta"><p class="rotulo">Hallazgos resueltos</p><p class="numero">{{ revision.aceptados }} de {{ revision.total }}</p>
+    {% if revision.rechazados %}<p class="ayuda">{{ revision.rechazados }} rechazados</p>{% endif %}</div>
+</section>
+{% endif %}
+
+<section aria-labelledby="h-archivos">
+  <h2 id="h-archivos">Archivos de la corrida</h2>
+  <table class="tabla">
+    <thead><tr><th>Archivo</th><th>Hash</th><th>Publicado por la fuente</th><th>Visto</th></tr></thead>
+    <tbody>
+    {% for a in archivos %}
+      <tr>
+        <td>{{ a.url.rsplit('/', 1)[-1] }}</td>
+        <td><code>{{ a.sha256|hash_corto }}</code></td>
+        <td>{{ a.publicada_en|fecha }}</td>
+        <td>{{ 'Nuevo' if a.estado == 'nueva' else 'Ya conocido' if a.estado == 'identica' else 'Falló' }}</td>
+      </tr>
+    {% else %}<tr><td colspan="4">Sin archivos registrados.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if abierto and diff.filas %}
+<section aria-labelledby="h-diff">
+  <h2 id="h-diff">Qué cambia respecto de lo vigente</h2>
+  <details {% if diff.cambiados or diff.faltantes %}open{% endif %}>
+    <summary>{{ diff.total }} períodos distintos{% if diff.total > diff.filas|length %} (se muestran {{ diff.filas|length }}){% endif %}</summary>
+    <table class="tabla">
+      <thead><tr><th>Serie</th><th>Período</th><th class="num">Vigente</th><th class="num">Candidato</th><th></th></tr></thead>
+      <tbody>
+      {% for f in diff.filas %}
+        <tr class="{{ 'destacada' if f.tipo != 'nuevo' }}">
+          <td>{{ f.serie_id }}</td><td>{{ f.periodo|mes }}</td>
+          <td class="num">{{ f.vigente|num4 }}</td>
+          <td class="num">{{ f.nuevo|num4 }}</td>
+          <td>{{ {'nuevo': 'Nuevo', 'cambiado': 'Cambia', 'faltante': 'Falta en el candidato'}[f.tipo] }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+</section>
+{% endif %}
+
+<section aria-labelledby="h-hallazgos">
+  <h2 id="h-hallazgos">Hallazgos</h2>
+  {% if not grupos %}
+    <p class="ayuda">Este candidato no tiene hallazgos.</p>
+  {% endif %}
+  {% for regla, items in grupos %}
+  {% set titulo, explicacion = reglas.get(regla, (regla, '')) %}
+  {% set pendientes = items|rejectattr('decision')|list|length %}
+  <article class="grupo" aria-labelledby="g-{{ regla }}">
+    <header class="grupo-cabeza">
+      <div>
+        <h3 id="g-{{ regla }}">{{ titulo }} <span class="cuenta">{{ items|length }}</span></h3>
+        <p class="ayuda">{{ explicacion }}</p>
+      </div>
+      {% if abierto and pendientes %}
+      <form method="post" action="{{ url_for('aceptar_pendientes', candidato_id=c.id) }}" class="grupo-accion">
+        {{ csrf_campo() }}<input type="hidden" name="regla" value="{{ regla }}">
+        <label class="ayuda" for="com-{{ regla }}">Comentario (opcional)</label>
+        <input id="com-{{ regla }}" name="comentario" maxlength="300" placeholder="Revisado">
+        <button type="submit">{{ 'Aceptar el pendiente' if pendientes == 1 else 'Aceptar los ' ~ pendientes ~ ' pendientes' }}</button>
+      </form>
+      {% endif %}
+    </header>
+    <ul class="hallazgos">
+      {% for h in items %}
+      <li id="hallazgo-{{ h.id }}" class="hallazgo">
+        <div class="hallazgo-fila">
+          <span class="punto sev-{{ h.severidad }}" title="Severidad {{ h.severidad }}"></span>
+          <div class="hallazgo-texto">
+            <p><strong>{{ h.serie_nombre or h.serie_id or 'Sin serie' }}</strong>{% if h.periodo %} · {{ h.periodo|mes }}{% endif %}</p>
+            <p class="ayuda">{{ h.detalle }}</p>
+            {% if h.decision %}
+              <p class="decision {{ 'bueno' if h.decision == 'aceptado' else 'malo' }}">
+                {{ 'Aceptado' if h.decision == 'aceptado' else 'Rechazado' }} por {{ h.revisor }} {{ h.decidida_en|hace }}{% if h.comentario %}: «{{ h.comentario }}»{% endif %}
+              </p>
+            {% endif %}
+          </div>
+          <span class="chip {{ 'bueno' if h.decision == 'aceptado' else 'malo' if h.decision == 'rechazado' else 'aviso' }}">
+            {{ 'Aceptado' if h.decision == 'aceptado' else 'Rechazado' if h.decision == 'rechazado' else 'Sin resolver' }}
+          </span>
+        </div>
+        {% if h.grafico or h.propuestas or abierto %}
+        <details class="hallazgo-detalle" {% if valores.get('comentario-' ~ h.id) is not none %}open{% endif %}>
+          <summary>{{ 'Ver gráfico y decidir' if abierto else 'Ver gráfico' }}</summary>
+          {% if h.grafico %}<div class="grafico-caja">{{ h.grafico|safe }}<p class="ayuda leyenda"><span class="muestra candidato"></span> Candidato{% if h.serie_id %} <span class="muestra vigente"></span> Vigente (si difiere){% endif %}</p></div>{% endif %}
+          {% for p in h.propuestas %}
+            <p class="propuesta"><strong>Propuesta del agente</strong> ({{ p.confianza }}, {{ p.estado }}): {{ p.tipo }}{% if p.evidencia %}. Evidencia: {{ p.evidencia }}{% endif %}</p>
+          {% endfor %}
+          {% if abierto %}
+          <form method="post" action="{{ url_for('revisar', candidato_id=c.id) }}" class="decidir">
+            {{ csrf_campo() }}<input type="hidden" name="hallazgo" value="{{ h.id }}">
+            <label for="com-{{ h.id }}">Comentario <span class="ayuda">(obligatorio para rechazar)</span></label>
+            <input id="com-{{ h.id }}" name="comentario" maxlength="500" value="{{ valores.get('comentario-' ~ h.id, '') }}">
+            <div class="botones">
+              <button type="submit" name="accion" value="aceptar">{{ 'Cambiar a aceptado' if h.decision == 'rechazado' else 'Aceptar' }}</button>
+              <button type="submit" name="accion" value="rechazar" class="secundario">{{ 'Rechazar' if h.decision != 'rechazado' else 'Mantener rechazado' }}</button>
+            </div>
+          </form>
+          {% endif %}
+        </details>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endfor %}
+</section>
+
+{% if abierto %}
+<section class="publicar" aria-labelledby="h-publicar">
+  <h2 id="h-publicar">Publicar</h2>
+  {% if revision.rechazados %}
+    <p class="nota malo">Hay {{ revision.rechazados }} hallazgo{{ 's' if revision.rechazados != 1 }} rechazado{{ 's' if revision.rechazados != 1 }}: este candidato no se puede publicar. Descartalo y esperá uno nuevo.</p>
+  {% elif revision.pendientes %}
+    <p class="nota aviso">Faltan {{ revision.pendientes }} hallazgo{{ 's' if revision.pendientes != 1 }} por resolver antes de publicar.</p>
+  {% elif revision.propuestas_pendientes %}
+    <p class="nota aviso">Faltan decidir {{ revision.propuestas_pendientes }} propuesta{{ 's' if revision.propuestas_pendientes != 1 }} del agente.</p>
+  {% else %}
+    <p class="nota bueno">Todos los hallazgos están resueltos. Al publicar se crea un release nuevo; el anterior sigue disponible.</p>
+  {% endif %}
+  <div class="acciones-finales">
+    <form method="post" action="{{ url_for('publicar', candidato_id=c.id) }}">
+      {{ csrf_campo() }}
+      <button type="submit">Publicar versión</button>
+    </form>
+    {% if revision.pendientes %}
+    <form method="post" action="{{ url_for('aceptar_pendientes', candidato_id=c.id) }}" class="en-linea">
+      {{ csrf_campo() }}
+      <input name="comentario" maxlength="300" placeholder="Comentario (opcional)" aria-label="Comentario para aceptar todos los pendientes">
+      <button type="submit" class="secundario">{{ 'Aceptar el pendiente' if revision.pendientes == 1 else 'Aceptar los ' ~ revision.pendientes ~ ' pendientes' }}</button>
+    </form>
+    {% endif %}
+  </div>
+  <details class="descartar">
+    <summary>Descartar este candidato</summary>
+    <form method="post" action="{{ url_for('descartar', candidato_id=c.id) }}">
+      {{ csrf_campo() }}
+      <p class="ayuda">Lo rechaza entero y no toca nada de lo publicado.</p>
+      <label for="motivo">Motivo (obligatorio)</label>
+      <input id="motivo" name="motivo" maxlength="500" value="{{ valores.get('motivo', '') }}">
+      <button type="submit" class="peligro">Descartar candidato</button>
+    </form>
+  </details>
+</section>
+{% endif %}
+{% endblock %}
