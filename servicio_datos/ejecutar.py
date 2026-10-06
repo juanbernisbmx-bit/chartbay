@@ -15,9 +15,24 @@ from pathlib import Path
 
 import psycopg
 
+from servicio_datos import avisos
+from servicio_datos.canales import configuracion_desde_entorno
 from servicio_datos.cliente_http import ClienteHttp
 from servicio_datos.crudo import AlmacenCrudo
 from servicio_datos.pipeline import correr_ipc
+
+
+def _avisar(conn: psycopg.Connection, hoy: date) -> dict | None:
+    """Detecta y entrega avisos tras la corrida. Si fallan, la corrida no cambia: se dice y se sigue."""
+    try:
+        configuracion = configuracion_desde_entorno(os.environ)
+        if not configuracion.canales:
+            return None
+        resultado = avisos.procesar(conn, configuracion.canales, configuracion.url_base, hoy)
+        return {"creados": resultado.creados, "enviados": resultado.enviados, "pendientes": resultado.pendientes, "errores": list(resultado.errores)}
+    except Exception as error:  # los avisos son un agregado: nunca pueden romper ni ocultar el resultado de la corrida
+        print(f"No se pudieron procesar los avisos ({type(error).__name__}).", file=sys.stderr)
+        return {"error": type(error).__name__}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -33,13 +48,14 @@ def main(argv: list[str] | None = None) -> int:
     hoy = args.hoy or datetime.now(timezone.utc).date()
     with psycopg.connect(args.url, autocommit=True) as conn:
         resultado = correr_ipc(conn, AlmacenCrudo(Path(args.crudo)), ClienteHttp(), hoy)
+        informe_avisos = _avisar(conn, hoy)
     por_regla: dict[str, int] = {}
     for hallazgo in resultado.hallazgos:
         clave = f"{hallazgo.regla}:{hallazgo.severidad}"
         por_regla[clave] = por_regla.get(clave, 0) + 1
     print(json.dumps({
         "corrida": resultado.corrida_id, "estado": resultado.estado, "candidato": resultado.candidato_id,
-        "hallazgos": por_regla, "error": resultado.error,
+        "hallazgos": por_regla, "error": resultado.error, "avisos": informe_avisos,
     }, ensure_ascii=False))
     return 1 if resultado.estado == "fallida" else 0
 

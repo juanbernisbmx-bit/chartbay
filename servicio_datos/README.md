@@ -23,6 +23,7 @@ cambios.
 - `pipeline.py`, `ejecutar.py`: el orquestador. Corre colecta, parseo, validación y
   deja un candidato abierto, o cierra la corrida como `sin_cambios` o `fallida`.
   Recibe el parser y la validación por parámetro.
+- `avisos.py`, `canales.py`, `avisar.py`: los avisos por Slack o correo. Ver "Avisos".
 - `revision/`: la interfaz web de revisión (cola de candidatos y pantalla de revisión). Es una app
   Flask aparte de la web pública de ChartBay, con login. Ver "Interfaz de revisión".
 - `publicacion.py`, `publicar.py`: la revisión y la publicación de un candidato. Publicar es
@@ -31,6 +32,49 @@ cambios.
 - `ipc/fuente.py`, `ipc/modelos.py`: qué archivos trae el IPC, cómo se describen
   sus series y los tipos que pasan entre colector, parser y validación.
 - `COORDINACION.md`: reparto del trabajo entre Claude y Codex y contrato.
+
+## Avisos
+
+Un sistema que se supone silencioso no puede callar cuando algo pasa. Avisa por Slack, por correo o por
+los dos de cuatro cosas, y de cada una una sola vez:
+
+- **Un candidato para revisar.** Con los números que importan (períodos nuevos, datos ya publicados que
+  cambian) y el enlace a la pantalla de revisión; lleva `[Atención]` si cambia algo ya publicado o tiene un
+  hallazgo de severidad alta.
+- **Una corrida fallida sin resolver**, con su error. Una vez por racha: si el cron sigue fallando no
+  repite, y vuelve a avisar recién después de que una corrida termine bien.
+- **Que pasó la ventana del mes sin el dato** (el mismo día límite que la regla de frescura de la
+  validación). No avisa si lo publicado, o un candidato abierto, ya lo cubre.
+- **Que el colector no corre hace días.** Sin esto, un cron muerto lo silenciaría todo.
+
+```bash
+# Canales (los que falten, no se usan; sin ninguno no hace nada ni acumula avisos)
+export DATOS_AVISOS_SLACK_URL='https://hooks.slack.com/services/...'   # es una credencial
+export DATOS_AVISOS_SMTP_HOST=smtp.example.com DATOS_AVISOS_SMTP_PUERTO=587
+export DATOS_AVISOS_SMTP_USUARIO=... DATOS_AVISOS_SMTP_CLAVE=...
+export DATOS_AVISOS_DE=datos@example.com DATOS_AVISOS_PARA='juani@example.com,ana@example.com'
+export DATOS_REVISION_URL=https://revision.example.com                  # para los enlaces
+
+./.venv/bin/python -m servicio_datos.migrar          # crea la tabla de avisos (migración 0005)
+./.venv/bin/python -m servicio_datos.avisar probar   # un mensaje de prueba por cada canal
+./.venv/bin/python -m servicio_datos.avisar          # detecta y entrega
+./.venv/bin/python -m servicio_datos.avisar estado   # los últimos avisos y cómo les fue
+```
+
+`ejecutar` ya procesa los avisos al terminar cada corrida si hay canales configurados, y un fallo de
+los avisos nunca cambia el resultado de la corrida. **Pero `avisar` también tiene que correr desde otro
+lado**, con su propio cron (cada pocas horas): los avisos de "no llegó el dato" y "el colector no corre"
+los detecta quien mira desde afuera, y si el único que mira es el mismo cron que murió, no avisa nadie.
+
+- **Se registran antes de entregarse** (bandeja de salida): un Slack caído no pierde nada, se reintenta en la
+  corrida siguiente (hasta 5 veces; `avisar estado` muestra los que se rindieron) y nunca se repite. Con dos
+  canales, uno roto no hace que el otro repita. Antes de entregar se vuelve a comprobar que siga siendo cierto:
+  un candidato que ya se resolvió, o un dato que ya llegó, descartan el aviso en vez de molestar tarde.
+- **Los secretos no salen nunca.** Una falla de entrega se describe con su tipo y su código; la URL de Slack y la
+  clave del correo no aparecen en errores, registros ni mensajes. Slack solo acepta `https://hooks.slack.com` y no
+  sigue redirecciones; el correo sin cifrado solo se admite contra un servidor local.
+- **Lo que viene de la base no es de confianza.** En Slack se escapa para que un error no pueda armar enlaces ni
+  `@channel`; en el correo se limpia el asunto para que no pueda inyectar cabeceras.
 
 ## Interfaz de revisión
 
@@ -182,7 +226,7 @@ disco persistente o almacenamiento de objetos (cambia solo `crudo.py`).
 - El catálogo completo en PostgreSQL: hoy solo están las siete series del IPC, así que ChartBay
   sigue tomando del JSON las otras 93 entradas (que no tienen datos).
 - Decidir las propuestas del agente desde la interfaz (el agente no está conectado).
-- Un aviso (mail o Slack) cuando entra algo a la cola o pasa la ventana del mes sin datos.
+- Recordatorios de un candidato que lleva días sin revisarse (hoy se avisa una sola vez).
 - Una ventana de ejecución: el colector corre una vez cuando lo llaman; el cron
   que lo dispara dentro de la ventana de publicación del mes no existe todavía.
 - Los tests no corren en CI todavía: faltaría un servicio PostgreSQL en el
