@@ -1,5 +1,7 @@
 # Dependencias del servicio de datos. NO van en el requirements.txt de la raíz:
 # la web de ChartBay no usa base de datos y corre en el plan gratuito de Render.
 psycopg[binary]>=3.2
+# Parser del IPC: lee los .xls de INDEC (xlrd 2 solo lee .xls, no .xlsx).
+xlrd==2.0.2
 # Interfaz de revisión (servicio_datos/revision). En producción, detrás de gunicorn y HTTPS.
 Flask>=3.0
