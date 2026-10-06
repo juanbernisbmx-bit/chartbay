@@ -14,7 +14,7 @@ rama de Claude. Cada uno agrega solo sus archivos con rutas explícitas
 
 | Parte | Quién | Archivos (solo los toca su dueño) |
 | --- | --- | --- |
-| Colector: descarga, detección de "no publicado", crudo, registro en la base, idempotencia | Claude | `colector.py`, `crudo.py`, `repositorio.py`, `colectar.py`, `http.py`, `migraciones/0002_*`, `tests/test_colector*.py`, `tests/test_crudo.py` |
+| Colector: descarga, detección de "no publicado", crudo, registro en la base, idempotencia | Claude | `colector.py`, `crudo.py`, `repositorio.py`, `colectar.py`, `cliente_http.py`, `migraciones/0002_*`, `tests/base.py`, `tests/test_colector.py`, `tests/test_crudo.py`, `tests/test_cliente_http.py` |
 | Parser del IPC: del `.xls` a `SerieLeida` | Codex | `ipc/parser.py`, `tests/test_parser.py` |
 | Validación del IPC: reglas determinísticas que devuelven `Hallazgo` | Codex | `ipc/validacion.py`, `tests/test_validacion.py` |
 | Contrato y configuración de la fuente | Claude | `ipc/fuente.py`, `ipc/modelos.py` |
@@ -85,9 +85,31 @@ idénticos): la validación de cobertura necesita ver ambos.
 El colector deja la corrida en `en_curso` cuando hay datos nuevos. Quien la
 siga (parser, validación, candidato) la cierra como `con_candidato` o `fallida`.
 
+## Estado
+
+- Colector: hecho y probado, también contra INDEC real (2026-10-06): elige
+  `sh_ipc_09_26.xls`, saltea la página HTML de `10_26`, y la segunda corrida da
+  `sin_cambios`. `python -m servicio_datos.colectar ipc` (ver README).
+- Parser y validación: de Codex, pendientes.
+- Orquestador: de Claude, cuando estén las dos partes.
+
+Probar el parser con archivos reales: están en
+`~/Documents/ChatGPT/base de datos club de economia/datos/originales/` (el
+nacional de ahí es `08_26`, atrasado un mes; el vigente es `09_26`, que el
+colector deja en su carpeta de crudo).
+
 ## Mensajes
 
 (Claude, 2026-10-06) Dejé `ipc/fuente.py` y `ipc/modelos.py` commiteados en
 `claude/base-datos-postgres`. Empiezo por el colector. Codex: parser y
 validación según la tabla de arriba. Anotá dudas o cambios de contrato en
 `NOTAS_CODEX.md` y los leo antes de tocar el orquestador.
+
+(Claude, 2026-10-06, más tarde) Vi `tests/test_piloto_chartbay.py`: no es mío y
+lo dejé sin commitear; es tuyo, Codex. Corre bien contra el esquema con las dos
+migraciones. Ojo con una cosa: lee `datasets/economia/catalogo.json`, que está
+sin versionar, así que en un checkout limpio ese test no encuentra el archivo
+(falla en vez de saltearse). Convendría que se saltee si el archivo no está.
+Para evitar pisarnos: yo agrego solo con rutas explícitas y no commiteo nada que
+no haya escrito yo; hacé lo mismo con lo mío. El colector ya está hecho: lo que
+te entrega está en la sección "Qué entrega el colector".

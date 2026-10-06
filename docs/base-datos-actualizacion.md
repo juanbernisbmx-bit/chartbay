@@ -1,7 +1,8 @@
 # Base de datos: actualización automática con revisión
 
-Estado: diseño. El paso 1 del orden de construcción (esquema PostgreSQL y
-migrador) está implementado en `servicio_datos/`; el resto sigue en diseño.
+Estado: diseño. Implementados en `servicio_datos/`: el paso 1 del orden de
+construcción (esquema PostgreSQL y migrador) y el colector del IPC (paso 2). El
+resto sigue en diseño.
 
 Complementa a `docs/base-datos.md`, que describe el piloto local y lista como
 pendientes PostgreSQL, la recolección programada, el historial de revisiones y la
@@ -44,9 +45,12 @@ Disparador -> Colector -> Crudo -> Parser -> Validación -> Candidato -> Revisi�
 1. Disparador. Cron diario dentro de la ventana de publicación del mes. Se
    detiene cuando aparece el dato nuevo. Fuera de la ventana no hace nada.
 2. Colector. El archivo nacional cambia de nombre cada mes (`sh_ipc_08_26.xls`,
-   con mes y año), así que arma la URL esperada del mes. El de aperturas tiene
+   con el mes y el año de publicación), así que prueba el mes en curso y los dos
+   anteriores, del más nuevo al más viejo, y se queda con el primero que sea de
+   verdad un `.xls`. El de aperturas tiene
    nombre fijo (`sh_ipc_aperturas.xls`): se vuelve a bajar y se compara el hash.
-   Si el archivo todavía no existe, no es un error.
+   Si el archivo del mes todavía no existe, no es un error; un error de red sí
+   lo es, y no cae al mes anterior (ocultaría una publicación nueva).
 3. Crudo. Se guarda tal cual. Si el hash es igual al de la descarga anterior, la
    corrida termina sin generar candidato.
 4. Parser. Pasa las hojas a observaciones por serie y mes. Determinístico.
@@ -110,7 +114,9 @@ propuesta. No toca el candidato ni lo publicado.
   si está vigente). Nunca se pisa un valor: se cierra la fila vieja y se abre una
   nueva. La vigencia se mide en releases y no en fechas, así que "los datos tal
   como estaban en el release N" es una consulta exacta.
-- `corrida`: descarga, estado, resumen.
+- `corrida`: estado, resumen y las descargas que trajo (tabla puente
+  `corrida_descarga`; el IPC trae dos archivos por corrida). Una corrida
+  `en_curso` que supera el vencimiento se da por abandonada.
 - `hallazgo`: corrida, serie, período, regla, severidad, detalle.
 - `propuesta`: hallazgo, tipo, valor actual, valor propuesto, evidencia,
   confianza, estado (pendiente, aprobada, rechazada), revisor, comentario.
@@ -153,12 +159,18 @@ Una pantalla por candidato.
 
 ## Observaciones del piloto
 
-- En `catalogo.json`, el nacional llega a 2026-07 y las regiones a 2026-08, aunque
-  el archivo se llama `sh_ipc_08_26`. Puede ser real o un problema de lectura;
-  hay que verificarlo contra el archivo. Es el caso que la regla de cobertura
-  debe marcar.
-- `published_at` es `null` en las dos entradas de `inputs`. La regla de frescura
-  necesita saber cuándo se publicó cada archivo; falta decidir de dónde sale.
+Verificadas contra el servidor de INDEC el 2026-10-06:
+
+- El desfase de cobertura no era un error de lectura. `sh_ipc_MM_AA.xls` lleva el
+  mes de publicación, no el del dato: `08_26` salió el 13/08 y llega hasta julio;
+  `09_26` salió el 10/09 y llega hasta agosto. El piloto mezcla el nacional de
+  `08_26` con las aperturas vigentes (hasta agosto), así que su nacional está
+  atrasado un mes. La regla de cobertura existe para detectar esto.
+- `published_at` sale del encabezado `Last-Modified` del servidor, que viene en
+  los archivos reales. El colector lo guarda en `descarga.publicada_en`.
+- INDEC no responde 404 a un archivo inexistente: contesta 200 con una página
+  HTML (`sh_ipc_10_26.xls`). El colector decide por el contenido (firma de
+  archivo `.xls` y tamaño mínimo), nunca por el código de estado.
 
 ## Decisiones abiertas
 
