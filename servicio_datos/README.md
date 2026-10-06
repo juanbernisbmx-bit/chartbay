@@ -20,8 +20,11 @@ cambios.
   colector del IPC. Baja los archivos de INDEC, los guarda sin modificar (nombre
   = hash del contenido) y registra qué vio en cada corrida. No interpreta los
   datos: eso es del parser.
-- `ipc/fuente.py`, `ipc/modelos.py`: qué archivos trae el IPC y los tipos que
-  pasan entre colector, parser y validación.
+- `pipeline.py`, `ejecutar.py`: el orquestador. Corre colecta, parseo, validación y
+  deja un candidato abierto, o cierra la corrida como `sin_cambios` o `fallida`.
+  Recibe el parser y la validación por parámetro.
+- `ipc/fuente.py`, `ipc/modelos.py`: qué archivos trae el IPC, cómo se describen
+  sus series y los tipos que pasan entre colector, parser y validación.
 - `COORDINACION.md`: reparto del trabajo entre Claude y Codex y contrato.
 
 ## Lo que la base garantiza
@@ -72,10 +75,15 @@ Para migrar una base real y correr el colector:
 export DATOS_DATABASE_URL=postgresql://...
 export DATOS_CRUDO_DIR=/ruta/al/crudo
 ./.venv/bin/python -m servicio_datos.migrar
-./.venv/bin/python -m servicio_datos.colectar ipc
+./.venv/bin/python -m servicio_datos.ejecutar ipc   # corrida completa hasta el candidato
+./.venv/bin/python -m servicio_datos.colectar ipc   # solo la descarga
 ```
 
-El colector imprime un resumen en JSON y sale con código 1 si la corrida falló,
+`ejecutar` necesita el parser y la validación (`ipc/parser.py` y `ipc/validacion.py`,
+con `xlrd`), que viven en la rama `codex/ipc-parser` hasta que se integre. Sale con
+código 1 si la corrida falló. Sus decisiones están en `docs/base-datos-actualizacion.md`.
+
+`colectar` imprime un resumen en JSON y sale con código 1 si la corrida falló,
 para que el cron dispare la alerta. Los estados: `sin_cambios` (todo igual a lo
 ya conocido), `nuevos_datos` (la corrida queda `en_curso` esperando al parser) y
 `fallida`. Si ya hay una corrida en curso, no abre otra.
@@ -89,8 +97,9 @@ disco persistente o almacenamiento de objetos (cambia solo `crudo.py`).
 - La función que publica un candidato (cierra versiones, abre las nuevas, crea el
   release y marca el candidato). Es el paso 4 del orden de construcción; hoy el
   esquema solo protege las tablas.
-- Parser y validación del IPC (paso 3), a cargo de Codex; ver `COORDINACION.md`.
-- El orquestador que une colector, parser y validación y cierra la corrida.
+- Parser y validación del IPC integrados a esta rama: están hechos (Codex, rama
+  `codex/ipc-parser`) pero Juani decide cuándo se unen. Las pruebas del pipeline que
+  usan la cadena real se saltean mientras tanto.
 - Una ventana de ejecución: el colector corre una vez cuando lo llaman; el cron
   que lo dispara dentro de la ventana de publicación del mes no existe todavía.
 - Los tests no corren en CI todavía: faltaría un servicio PostgreSQL en el

@@ -31,6 +31,31 @@ REGIONES: Mapping[str, str] = {
 }
 
 
+BASE_INDICE = "Diciembre 2016=100; serie original"
+_TERRITORIOS = {
+    "ipc_ng_gba": "Gran Buenos Aires",
+    "ipc_ng_pampeana": "Pampeana",
+    "ipc_ng_nea": "Noreste",
+    "ipc_ng_noa": "Noroeste",
+    "ipc_ng_cuyo": "Cuyo",
+    "ipc_ng_patagonia": "Patagonia",
+}
+
+
+def _definicion(nombre: str, nivel: str, territorio: str, clasificacion: str) -> dict[str, str]:
+    return {"nombre": nombre, "tema": "Precios", "nivel": nivel, "territorio": territorio,
+            "clasificacion": clasificacion, "frecuencia": "Mensual", "unidad": "Índice", "base": BASE_INDICE}
+
+
+# Lo que la tabla `serie` necesita antes de guardar observaciones. Es el mismo
+# texto que usa el catálogo del piloto para estas siete series.
+SERIES: Mapping[str, Mapping[str, str]] = {
+    "ipc_ng_nacional": _definicion("IPC nivel general - Argentina", "Nacional", "Argentina", "Total nacional IPC"),
+    **{serie_id: _definicion(f"IPC nivel general - {territorio}", "Regional", territorio, "Regiones IPC de INDEC")
+       for serie_id, territorio in _TERRITORIOS.items()},
+}
+
+
 @dataclass(frozen=True)
 class ArchivoFuente:
     clave: str

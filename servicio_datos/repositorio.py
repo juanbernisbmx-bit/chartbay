@@ -1,8 +1,9 @@
 """Lecturas y escrituras de la base que usa el colector. Sin lógica de negocio."""
 from __future__ import annotations
 
-from datetime import datetime
-from typing import NamedTuple
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Mapping, NamedTuple
 
 import psycopg
 from psycopg.types.json import Jsonb
@@ -93,10 +94,98 @@ def cerrar_corrida(
 ) -> None:
     conn.execute(
         "UPDATE corrida SET estado = %s, terminada_en = now(), error = %s, "
-        "resumen = coalesce(%s, resumen) WHERE id = %s AND estado = 'en_curso'",
+        "resumen = resumen || coalesce(%s::jsonb, '{}'::jsonb) WHERE id = %s AND estado = 'en_curso'",
         (estado, error, Jsonb(resumen) if resumen is not None else None, corrida_id),
     )
 
 
 def guardar_resumen(conn: psycopg.Connection, corrida_id: int, resumen: dict) -> None:
     conn.execute("UPDATE corrida SET resumen = %s WHERE id = %s", (Jsonb(resumen), corrida_id))
+
+
+# --- Lo que usa el pipeline para armar un candidato -------------------------
+
+
+def asegurar_series(
+    conn: psycopg.Connection, fuente_id: str, definiciones: Mapping[str, Mapping[str, str]],
+    origenes: Mapping[str, tuple[str, int]],
+) -> set[str]:
+    """Crea las series que falten y devuelve los ids que existen después.
+
+    Una serie ya creada no se toca: sus datos descriptivos son del catálogo, no de cada corrida.
+    """
+    for serie_id, d in definiciones.items():
+        hoja, fila = origenes.get(serie_id, (None, None))
+        conn.execute(
+            "INSERT INTO serie (id, fuente_id, nombre, tema, nivel, territorio, clasificacion, frecuencia, "
+            "unidad, base, hoja_origen, fila_origen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+            "ON CONFLICT (id) DO NOTHING",
+            (serie_id, fuente_id, d["nombre"], d["tema"], d["nivel"], d["territorio"], d["clasificacion"],
+             d["frecuencia"], d["unidad"], d["base"], hoja, fila),
+        )
+    return {fila[0] for fila in conn.execute("SELECT id FROM serie WHERE fuente_id = %s", (fuente_id,))}
+
+
+def vigentes(conn: psycopg.Connection, fuente_id: str) -> dict[str, dict[date, Decimal]]:
+    """Las observaciones del último release publicado, por serie y período."""
+    resultado: dict[str, dict[date, Decimal]] = {}
+    for serie_id, periodo, valor in conn.execute(
+        "SELECT o.serie_id, o.periodo, o.valor FROM observacion_vigente o "
+        "JOIN serie s ON s.id = o.serie_id WHERE s.fuente_id = %s",
+        (fuente_id,),
+    ):
+        resultado.setdefault(serie_id, {})[periodo] = valor
+    return resultado
+
+
+def hallazgos_revisados(conn: psycopg.Connection, fuente_id: str) -> set[tuple]:
+    """Hallazgos que ya pasaron por una publicación: alguien los vio y aprobó el release.
+
+    Se acumulan sobre todos los releases de la fuente: cada corrida solo guarda lo que
+    era nuevo para ella, así que mirar solo el último olvidaría lo aprobado antes.
+    """
+    return {
+        tuple(fila)
+        for fila in conn.execute(
+            "SELECT h.regla, h.serie_id, h.periodo, h.detalle FROM hallazgo h WHERE h.corrida_id IN ("
+            " SELECT c.corrida_id FROM release r JOIN candidato c ON c.id = r.candidato_id "
+            " JOIN corrida co ON co.id = c.corrida_id WHERE co.fuente_id = %s)",
+            (fuente_id,),
+        )
+    }
+
+
+def descartar_candidatos_abiertos(conn: psycopg.Connection, fuente_id: str) -> list[int]:
+    """Cierra como descartados los candidatos que esperaban revisión y quedaron viejos."""
+    return [
+        fila[0]
+        for fila in conn.execute(
+            "UPDATE candidato SET estado = 'descartado', decidido_en = now(), decidido_por = 'sistema' "
+            "WHERE estado = 'abierto' AND corrida_id IN (SELECT id FROM corrida WHERE fuente_id = %s) "
+            "RETURNING id",
+            (fuente_id,),
+        )
+    ]
+
+
+def crear_candidato(conn: psycopg.Connection, corrida_id: int) -> int:
+    return conn.execute("INSERT INTO candidato (corrida_id) VALUES (%s) RETURNING id", (corrida_id,)).fetchone()[0]
+
+
+def guardar_observaciones_candidatas(conn: psycopg.Connection, candidato_id: int, filas: list[tuple]) -> None:
+    """`filas`: (serie_id, periodo, valor). Guarda el candidato completo, no solo la diferencia."""
+    with conn.cursor() as cursor:
+        cursor.executemany(
+            "INSERT INTO observacion_candidata (candidato_id, serie_id, periodo, valor) VALUES (%s, %s, %s, %s)",
+            [(candidato_id, serie_id, periodo, valor) for serie_id, periodo, valor in filas],
+        )
+
+
+def guardar_hallazgos(conn: psycopg.Connection, corrida_id: int, hallazgos: list[tuple]) -> None:
+    """`hallazgos`: (serie_id | None, periodo | None, regla, severidad, detalle)."""
+    with conn.cursor() as cursor:
+        cursor.executemany(
+            "INSERT INTO hallazgo (corrida_id, serie_id, periodo, regla, severidad, detalle) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
+            [(corrida_id, *h) for h in hallazgos],
+        )
