@@ -35,3 +35,12 @@ DATOS_AVISOS_DE=
 DATOS_AVISOS_PARA=
 # Días hasta el primer recordatorio de un candidato abierto (0 los apaga)
 DATOS_AVISOS_RECORDATORIO_DIAS=3
+
+# --- Analista de hallazgos: modelo de lenguaje LOCAL (Ollama, llama.cpp, LM Studio...) ---
+# Sin DATOS_AGENTE_MODELO el analista no usa ningún modelo: solo repite lo que una persona ya decidió sobre hallazgos
+# idénticos. No lleva claves y los datos no salen del equipo: la dirección tiene que ser localhost o 127.0.0.1.
+# Para elegir modelo: python -m servicio_datos.agente probar  (mide cuántos casos de prueba clasifica bien)
+DATOS_AGENTE_MODELO=
+DATOS_AGENTE_URL=http://127.0.0.1:11434/v1
+# Segundos de espera por cada respuesta del modelo (entre 5 y 3600)
+DATOS_AGENTE_TIMEOUT=180

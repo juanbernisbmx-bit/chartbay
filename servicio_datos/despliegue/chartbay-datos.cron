@@ -1,7 +1,7 @@
 # Tareas programadas del servicio de datos de ChartBay. Se instala como /etc/cron.d/chartbay-datos.
 #
-# Las dos corren como chartbay-datos, con el lanzador de tareas: carga los secretos de /etc/chartbay-datos/entorno,
-# evita que dos corridas de la misma tarea se pisen y corta una colgada a los 20 minutos.
+# Las tres corren como chartbay-datos, con el lanzador de tareas: carga los secretos de /etc/chartbay-datos/entorno,
+# evita que dos corridas de la misma tarea se pisen y corta una colgada a los 20 minutos (la tarea 3, a la hora).
 #
 # El servidor tiene que estar en hora de Argentina (timedatectl); CRON_TZ lo fuerza en las versiones de cron que
 # lo entienden. Si no, las horas de abajo corren en la hora del equipo: no se rompe nada (las tareas se pueden repetir
@@ -20,3 +20,9 @@ DATOS_RUN_DIR=/var/lib/chartbay-datos
 # 2) Avisos y vigilancia del silencio. Tiene que correr APARTE de la tarea 1: "no llegó el dato" y "el colector no
 #    corre" los detecta quien mira desde afuera; si el único que mira es la tarea que murió, no avisa nadie.
 15 */4 * * *   chartbay-datos  cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno avisar >> /var/log/chartbay-datos/avisar.log 2>&1
+
+# 3) Analista de hallazgos con el modelo local (ver DATOS_AGENTE_* en el entorno). Deja una propuesta fundada junto a cada
+#    hallazgo del candidato abierto; solo propone, la decisión sigue siendo de una persona. Sin nada pendiente no usa el
+#    modelo (es una consulta a la base), así que cada hora es barato; si el modelo no está, reintenta en la hora siguiente.
+#    Trabaja hasta 50 minutos y el lanzador lo corta a los 60.
+45 * * * *     chartbay-datos  cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno --limite 3600 agente --limite 3000 >> /var/log/chartbay-datos/agente.log 2>&1

@@ -139,8 +139,8 @@ class LineaDeComandosTests(Base):
             codigo = tarea.main(list(args))
         return codigo, salida.getvalue(), errores.getvalue()
 
-    def test_las_dos_tareas_apuntan_a_modulos_que_existen(self):
-        self.assertEqual(sorted(tarea.TAREAS), ["avisar", "ejecutar"])
+    def test_las_tareas_apuntan_a_modulos_que_existen(self):
+        self.assertEqual(sorted(tarea.TAREAS), ["agente", "avisar", "ejecutar"])
         for comando in tarea.TAREAS.values():
             modulo = comando[comando.index("-m") + 1]
             self.assertIsNotNone(importlib.util.find_spec(modulo), modulo)
@@ -168,6 +168,16 @@ class LineaDeComandosTests(Base):
         with patch.dict(tarea.TAREAS, falsa), patch.dict(os.environ, {"DATOS_RUN_DIR": str(self.carpeta)}):
             self.assertEqual(self.cli("avisar", "probar", "--hoy", "2026-10-06")[0], 0)
         self.assertEqual(resultado.read_text(), "probar --hoy 2026-10-06")
+
+    def test_el_limite_del_lanzador_y_el_de_la_tarea_no_se_confunden(self):
+        # Así está la línea de cron del analista: `tarea --limite 3600 agente --limite 3000`.
+        resultado = self.carpeta / "argumentos"
+        falsa = {"agente": (sys.executable, "-c", f"import sys, pathlib; pathlib.Path({str(resultado)!r}).write_text(' '.join(sys.argv[1:]))")}
+        with patch.dict(tarea.TAREAS, falsa), patch.dict(os.environ, {"DATOS_RUN_DIR": str(self.carpeta)}), \
+                patch.object(tarea, "ejecutar_tarea", wraps=tarea.ejecutar_tarea) as espia:
+            self.assertEqual(self.cli("--limite", "3600", "agente", "--limite", "3000")[0], 0)
+        self.assertEqual(resultado.read_text(), "--limite 3000")
+        self.assertEqual(espia.call_args.args[3], 3600.0)
 
     def test_una_tarea_desconocida_la_rechaza_argparse(self):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):

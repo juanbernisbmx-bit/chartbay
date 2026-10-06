@@ -1,4 +1,4 @@
-"""Lanzador de las tareas programadas (cron): `python -m servicio_datos.tarea ejecutar` o `avisar`.
+"""Lanzador de las tareas programadas (cron): `python -m servicio_datos.tarea ejecutar`, `avisar` o `agente`.
 
 Cron arranca los procesos con un entorno casi vacío y no sabe si la corrida anterior sigue andando. Esto
 resuelve lo que cron no hace, sin tocar las tareas en sí:
@@ -34,6 +34,7 @@ from typing import Mapping, Sequence
 TAREAS: Mapping[str, Sequence[str]] = {
     "ejecutar": (sys.executable, "-m", "servicio_datos.ejecutar", "ipc"),
     "avisar": (sys.executable, "-m", "servicio_datos.avisar"),
+    "agente": (sys.executable, "-m", "servicio_datos.agente"),
 }
 LIMITE_SEGUNDOS = 20 * 60
 NOMBRE_VALIDO = re.compile(r"^[A-Z_][A-Z0-9_]*$")

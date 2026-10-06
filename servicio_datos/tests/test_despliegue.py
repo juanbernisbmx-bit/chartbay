@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 
 from servicio_datos import tarea
+from servicio_datos.agente.modelo import modelo_desde_entorno
 from servicio_datos.canales import configuracion_desde_entorno
 from servicio_datos.revision.__main__ import revisores_desde_entorno
 
@@ -52,6 +53,11 @@ def trabajos_cron():
     return trabajos, entorno
 
 
+def nombre_de_tarea(comando):
+    """La tarea que lanza un trabajo de cron: lo primero que no es una opción del lanzador."""
+    return re.search(r"servicio_datos\.tarea (?:--\S+ \S+ )*(\w+)", comando).group(1)
+
+
 def seccion_unidad():
     valores = {}
     for linea in leer("chartbay-revision.service").splitlines():
@@ -64,14 +70,14 @@ def seccion_unidad():
 class CronTests(unittest.TestCase):
     def test_el_horario_es_valido(self):
         trabajos, _ = trabajos_cron()
-        self.assertEqual(len(trabajos), 2)
+        self.assertEqual(len(trabajos), 3)
         for t in trabajos:
             for campo, (minimo, maximo) in zip(t["horario"], ((0, 59), (0, 23), (1, 31), (1, 12), (0, 7))):
                 self.assertTrue(campo_cron_valido(campo, minimo, maximo), f"{campo} en {t['comando'][:60]}")
 
-    def test_hay_exactamente_las_dos_tareas_y_corren_como_el_usuario_del_servicio(self):
+    def test_hay_exactamente_una_linea_por_tarea_y_corren_como_el_usuario_del_servicio(self):
         trabajos, _ = trabajos_cron()
-        self.assertEqual({re.search(r"servicio_datos\.tarea .*? (ejecutar|avisar) >>", t["comando"]).group(1) for t in trabajos}, set(tarea.TAREAS))
+        self.assertEqual(sorted(nombre_de_tarea(t["comando"]) for t in trabajos), sorted(tarea.TAREAS))
         for t in trabajos:
             self.assertEqual(t["usuario"], USUARIO)
             self.assertNotEqual(t["usuario"], "root")
@@ -81,15 +87,25 @@ class CronTests(unittest.TestCase):
 
     def test_cada_tarea_deja_su_propio_registro(self):
         for t in trabajos_cron()[0]:
-            nombre = re.search(r"tarea .*? (ejecutar|avisar) >>", t["comando"]).group(1)
-            self.assertIn(f">> /var/log/chartbay-datos/{nombre}.log 2>&1", t["comando"])
+            nombre = nombre_de_tarea(t["comando"])
+            self.assertTrue(t["comando"].endswith(f">> /var/log/chartbay-datos/{nombre}.log 2>&1"), nombre)
 
     def test_avisar_corre_aparte_y_seguido(self):
         # Los avisos de silencio los detecta quien mira desde afuera: si solo corriera junto con ejecutar, no servirían.
-        por_tarea = {re.search(r" (ejecutar|avisar) >>", t["comando"]).group(1): t for t in trabajos_cron()[0]}
+        por_tarea = {nombre_de_tarea(t["comando"]): t for t in trabajos_cron()[0]}
         self.assertNotEqual(por_tarea["ejecutar"]["horario"], por_tarea["avisar"]["horario"])
         minuto, hora = por_tarea["avisar"]["horario"][:2]
         self.assertRegex(hora, r"^\*/([1-6])$", "avisar tiene que correr al menos cada 6 horas")
+
+    def test_el_analista_corre_cada_hora_con_un_presupuesto_menor_que_el_limite_del_lanzador(self):
+        # Si el lanzador lo cortara antes de que termine con gracia, perdería el resumen de la corrida; y si dura más que la
+        # hora, la corrida siguiente se omite (flock) en vez de pisarlo.
+        comando = {nombre_de_tarea(t["comando"]): t for t in trabajos_cron()[0]}["agente"]
+        self.assertEqual(comando["horario"][1:], ["*", "*", "*", "*"])
+        limite_lanzador = int(re.search(r"servicio_datos\.tarea .*?--limite (\d+) agente", comando["comando"]).group(1))
+        limite_trabajo = int(re.search(r" agente --limite (\d+) >>", comando["comando"]).group(1))
+        self.assertLess(limite_trabajo, limite_lanzador)
+        self.assertLessEqual(limite_lanzador, 3600)
 
     def test_el_entorno_del_cron(self):
         _, entorno = trabajos_cron()
@@ -132,6 +148,14 @@ class EntornoEjemploTests(unittest.TestCase):
         for vacia in ("DATOS_AVISOS_SLACK_URL", "DATOS_AVISOS_SMTP_CLAVE", "DATOS_AVISOS_SMTP_USUARIO"):
             self.assertEqual(valores[vacia], "")
         self.assertEqual(valores["DATOS_REVISORES"], "USUARIO=HASH")
+
+    def test_el_analista_viene_apagado_y_solo_acepta_un_modelo_local(self):
+        valores = self.cargar()
+        self.assertEqual(valores["DATOS_AGENTE_MODELO"], "")  # el modelo lo elige quien instala, con `agente probar`
+        self.assertIsNone(modelo_desde_entorno(valores))
+        elegido = modelo_desde_entorno({**valores, "DATOS_AGENTE_MODELO": "qwen2.5:7b"})  # con modelo elegido, el resto del ejemplo sirve tal cual
+        self.assertEqual((elegido.nombre, elegido._timeout), ("qwen2.5:7b", 180))
+        self.assertRegex(valores["DATOS_AGENTE_URL"], r"^http://(127\.0\.0\.1|localhost)[:/]")
 
     def test_el_servicio_lo_acepta_tal_cual(self):
         valores = self.cargar()
@@ -195,6 +219,11 @@ class ProxyYRegistrosTests(unittest.TestCase):
         guia = (RAIZ / "docs" / "despliegue-servicio-datos.md").read_text(encoding="utf-8")
         for archivo in DESPLIEGUE.iterdir():
             self.assertIn(archivo.name, guia, f"la guía no menciona {archivo.name}")
+
+    def test_la_guia_explica_el_analista_local(self):
+        guia = (RAIZ / "docs" / "despliegue-servicio-datos.md").read_text(encoding="utf-8")
+        for texto in ("DATOS_AGENTE_MODELO", "agente probar", "agente estado", "agente.log", "Solo propone", "nunca con un\nmodelo real"):
+            self.assertIn(texto, guia)
 
     def test_todos_los_archivos_usan_las_mismas_rutas_base(self):
         for nombre in ("chartbay-datos.cron", "chartbay-revision.service"):

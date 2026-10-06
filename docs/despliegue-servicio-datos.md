@@ -1,24 +1,25 @@
 # Despliegue del servicio de datos (HTTPS y cron)
 
 Este documento instala, en el equipo Ubuntu del club, lo que corre fuera de Supabase: la interfaz de revisión, detrás
-de HTTPS, y las dos tareas programadas. La base de datos (Supabase, sus roles y sus migraciones) está en
+de HTTPS, y las tres tareas programadas. La base de datos (Supabase, sus roles y sus migraciones) está en
 [`despliegue-supabase.md`](despliegue-supabase.md); hacé eso primero.
 
 ```
 INDEC ──► cron: ejecutar ──► PostgreSQL (Supabase) ◄── ChartBay (solo lectura)
                                   ▲                        
    revisores ──HTTPS──► Caddy ──► gunicorn (revisión) ─────┘
-   cron: avisar ──► Slack / correo
+   cron: avisar ──► Slack / correo                         ▲
+   cron: agente ──► modelo local (esta misma computadora) ─┘  (solo escribe propuestas)
 ```
 
 Los archivos están en `servicio_datos/despliegue/`:
 
 | Archivo | Va a | Qué es |
 | --- | --- | --- |
-| `entorno.ejemplo` | `/etc/chartbay-datos/entorno` | Los secretos y la configuración. Lo leen las dos tareas y la interfaz |
+| `entorno.ejemplo` | `/etc/chartbay-datos/entorno` | Los secretos y la configuración. Lo leen las tareas y la interfaz |
 | `chartbay-revision.service` | `/etc/systemd/system/` | La interfaz de revisión como servicio, escuchando solo en `127.0.0.1:8000` |
 | `Caddyfile` | `/etc/caddy/Caddyfile` | El HTTPS: certificado automático y proxy hacia el servicio |
-| `chartbay-datos.cron` | `/etc/cron.d/chartbay-datos` | Las dos tareas programadas |
+| `chartbay-datos.cron` | `/etc/cron.d/chartbay-datos` | Las tres tareas programadas |
 | `logrotate-chartbay-datos` | `/etc/logrotate.d/chartbay-datos` | Rotación de los registros de cron |
 
 ## Qué se verificó y qué no
@@ -27,6 +28,9 @@ Se probó en una Mac, con herramientas reales: el Caddyfile pasa `caddy validate
 certificado local sirvió la interfaz por HTTPS (HTTP/2, redirección de HTTP, HSTS solo por HTTPS, 401 sin credenciales, origen
 ajeno y token faltante rechazados con 403, y un cliente que falsea `X-Forwarded-For` no esquiva el límite de intentos). El
 lanzador de tareas tiene pruebas de bloqueo, límite de tiempo y permisos.
+
+El analista (sección 7) se probó solo contra un servidor falso que habla el mismo protocolo que Ollama y los demás: **nunca con un
+modelo real**. Que su código ande no dice nada sobre si un modelo concreto sirve; para eso está `agente probar`.
 
 **No se probó**: la unidad de systemd ni el archivo de cron en Ubuntu (no hay cómo hacerlo desde una Mac; usan directivas
 comunes, y las pruebas fijan que sean coherentes entre sí), ni un certificado real de Let's Encrypt, ni la conexión a Supabase.
@@ -107,7 +111,7 @@ configuración lista para esos: el servicio sirve igual, solo necesita que quien
 el puerto 8000 directo ni quites el proxy dejando `DATOS_REVISION_PROXY=1`: cualquiera podría falsear su dirección y esquivar el
 límite de intentos.
 
-## 6. Las dos tareas
+## 6. Las tres tareas
 
 ```bash
 sudo cp servicio_datos/despliegue/chartbay-datos.cron /etc/cron.d/chartbay-datos      # root, 644: cron.d lo exige
@@ -119,6 +123,7 @@ sudo cp servicio_datos/despliegue/logrotate-chartbay-datos /etc/logrotate.d/char
 | --- | --- | --- |
 | `ejecutar` | 9:30 y 17:30 | Descarga el IPC, lo valida, y deja un candidato si hay algo nuevo; entrega los avisos que genere. Si no hay nada nuevo, no hace nada |
 | `avisar` | cada 4 horas | Detecta y entrega avisos: candidato nuevo, recordatorios, corrida fallida, "no llegó el dato", "el colector no corre" |
+| `agente` | cada hora, al minuto 45 | Deja una propuesta fundada junto a cada hallazgo del candidato abierto (sección 7). Sin nada pendiente no usa el modelo |
 
 Los últimos tres meses (julio, agosto y septiembre de 2026) INDEC la publicó entre las 15:52 y las 16:08: la corrida de las 17:30 la
 encuentra el mismo día. `avisar` corre **aparte** a propósito: los avisos de silencio los detecta quien mira desde afuera, y si el único que mira es la
@@ -128,7 +133,41 @@ El servidor tiene que estar en hora de Argentina (`timedatectl`); `CRON_TZ` lo f
 no, las horas corren en la del equipo: no se rompe nada, solo cambia a qué hora se enteran del dato.
 
 Cada corrida deja una línea de registro en `/var/log/chartbay-datos/<tarea>.log` con su código de salida y lo que tardó. Si una
-corrida anterior sigue andando, la nueva se omite (no es un error). Una corrida colgada se corta a los 20 minutos.
+corrida anterior sigue andando, la nueva se omite (no es un error). Una corrida colgada se corta a los 20 minutos (`agente`, a la hora).
+
+## 7. El analista de hallazgos con un modelo local (opcional)
+
+Junto a cada hallazgo de un candidato abierto, el analista deja una propuesta (qué es, qué haría, con qué hechos y con qué
+confianza), que la persona ve en la interfaz de revisión. **Solo propone**: no decide ningún hallazgo, no toca el candidato y no
+publica. La decisión de la persona sobre el hallazgo resuelve la propuesta, y así queda medido cuánto acierta
+(`... servicio_datos.agente estado`).
+
+El modelo corre **en esta misma computadora**: no hay claves ni API en la nube, y lo que se analiza no sale del equipo. Por eso la
+dirección tiene que ser `localhost` o `127.0.0.1` (cualquier otra se rechaza).
+
+1. Instalá un servidor de modelos local que hable el protocolo de chat de OpenAI (Ollama, llama.cpp, LM Studio; seguí su guía de
+   instalación) y bajá el modelo que quieras probar. Tiene que entrar en la memoria del equipo.
+2. En `/etc/chartbay-datos/entorno` definí `DATOS_AGENTE_MODELO` con el nombre del modelo en ese servidor (y `DATOS_AGENTE_URL` si no
+   es el puerto 11434 de Ollama). **Sin `DATOS_AGENTE_MODELO` no se usa ningún modelo**: el analista solo repite lo que una persona
+   ya decidió sobre un hallazgo idéntico.
+3. Medí si el modelo sirve antes de dejarlo trabajar:
+
+   ```bash
+   sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno agente probar'
+   ```
+
+   Pasa cinco casos con respuesta conocida por el mismo prompt y validador que usa el analista, y dice cuántos clasificó bien, cuántas
+   veces el validador tuvo que corregirle algo y cuánto tarda por caso. Con menos de 4 de 5, las propuestas son ruido: probá con un
+   modelo más grande.
+
+Qué hace que se pueda confiar en una propuesta sin confiar en el modelo: el modelo no consulta nada, recibe una lista numerada de
+hechos que comprobó el código y solo puede citarlos; el validador descarta citas que no existen, exige para cada clasificación un
+hecho de la clase que la sostiene (no puede decir "el archivo está atrasado" si no se comprobó una fecha de archivo) y no deja que la
+confianza supere lo que la evidencia permite. Lo que el validador corrige queda anotado en la propuesta.
+
+Si el servidor del modelo no está, el analista no escribe nada de esos hallazgos, corta tras tres fallos seguidos y sale con código
+1 (se ve en `agente.log`); la hora siguiente reintenta. Un hallazgo cuya respuesta fue inservible queda marcado como "requiere
+revisión humana" y no se reintenta.
 
 ## Lista de comprobación al instalar
 
@@ -143,7 +182,10 @@ sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-dat
 # 3. Los canales de avisos
 sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno avisar probar'
 
-# 4. HTTPS desde afuera
+# 4. El modelo local (solo si configuraste DATOS_AGENTE_MODELO)
+sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno agente probar'
+
+# 5. HTTPS desde afuera
 curl -sI http://TU.DOMINIO.ORG/              # 308 hacia https
 curl -sI https://TU.DOMINIO.ORG/             # 401 con www-authenticate (sin credenciales no se ve nada)
 curl -sI -u USUARIO https://TU.DOMINIO.ORG/  # 200 y strict-transport-security
@@ -159,7 +201,8 @@ Y en el equipo: `systemctl status chartbay-revision`, `ls -l /etc/chartbay-datos
   `sudo systemctl restart chartbay-revision`. Si hay migraciones nuevas, **antes** aplicalas con el comando del administrador de
   `despliegue-supabase.md` (el usuario de este servicio no puede migrar a propósito).
 - **Registros**: `journalctl -u chartbay-revision` (interfaz) y `/var/log/chartbay-datos/*.log` (tareas). El estado de los avisos:
-  `... servicio_datos.tarea --entorno /etc/chartbay-datos/entorno avisar estado`.
+  `... servicio_datos.tarea --entorno /etc/chartbay-datos/entorno avisar estado`. Las propuestas del analista:
+  `... servicio_datos.tarea --entorno /etc/chartbay-datos/entorno agente estado`.
 - **Respaldos**: no están automatizados. Hacen falta dos, por separado y con una restauración ensayada: la base (en el plan gratuito
   de Supabase no hay copias diarias) y `/var/lib/chartbay-datos/crudo`.
 - **Una corrida fallida** no se reintenta sola: se ve en la cola de la interfaz y llega un aviso; cuando se arregla la causa, se
