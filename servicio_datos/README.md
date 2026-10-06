@@ -23,6 +23,9 @@ cambios.
 - `pipeline.py`, `ejecutar.py`: el orquestador. Corre colecta, parseo, validación y
   deja un candidato abierto, o cierra la corrida como `sin_cambios` o `fallida`.
   Recibe el parser y la validación por parámetro.
+- `publicacion.py`, `publicar.py`: la revisión y la publicación de un candidato. Publicar es
+  la única forma de que un dato llegue a lo vigente, y exige que cada hallazgo esté aceptado.
+  `publicar.py` es el comando para revisar desde la terminal hasta que exista la interfaz.
 - `ipc/fuente.py`, `ipc/modelos.py`: qué archivos trae el IPC, cómo se describen
   sus series y los tipos que pasan entre colector, parser y validación.
 - `COORDINACION.md`: reparto del trabajo entre Claude y Codex y contrato.
@@ -37,6 +40,8 @@ cambios.
 - Una propuesta no se aprueba sin evidencia ni se rechaza sin comentario, y una
   vez decidida no cambia.
 - Una descarga fallida explica el error; una lograda tiene hash, tamaño y ruta.
+- Las revisiones de hallazgos son un registro de solo agregar: una decisión se cambia
+  con otra (vale la última) y solo se revisan hallazgos de un candidato abierto.
 
 Los datos tal como estaban en el release `N`:
 `release_desde <= N AND (release_hasta IS NULL OR release_hasta > N)`.
@@ -79,6 +84,18 @@ export DATOS_CRUDO_DIR=/ruta/al/crudo
 ./.venv/bin/python -m servicio_datos.colectar ipc   # solo la descarga
 ```
 
+Después, con el candidato que dejó `ejecutar` (el comando lo imprime):
+
+```bash
+./.venv/bin/python -m servicio_datos.publicar estado 1
+./.venv/bin/python -m servicio_datos.publicar aceptar 1 --por juani --comentario "Revisado"
+./.venv/bin/python -m servicio_datos.publicar publicar 1 --por juani
+```
+
+`aceptar` sin `--hallazgo` acepta todos los que faltan; `rechazar` exige el hallazgo y un
+motivo; `descartar` rechaza el candidato entero. `publicar` falla, y dice por qué, si falta
+resolver algún hallazgo, si hay uno rechazado o si el candidato ya no está abierto.
+
 `ejecutar` necesita el parser y la validación (`ipc/parser.py` y `ipc/validacion.py`,
 con `xlrd`), que viven en la rama `codex/ipc-parser` hasta que se integre. Sale con
 código 1 si la corrida falló. Sus decisiones están en `docs/base-datos-actualizacion.md`.
@@ -94,9 +111,9 @@ disco persistente o almacenamiento de objetos (cambia solo `crudo.py`).
 
 ## Lo que todavía no hay
 
-- La función que publica un candidato (cierra versiones, abre las nuevas, crea el
-  release y marca el candidato). Es el paso 4 del orden de construcción; hoy el
-  esquema solo protege las tablas.
+- Que ChartBay lea de PostgreSQL: lo publicado ya está en `observacion_vigente`, pero
+  `/api/base-datos/catalogo` sigue sirviendo el JSON del piloto.
+- La interfaz de revisión y la cola de candidatos (diseñadas, sin construir).
 - Parser y validación del IPC integrados a esta rama: están hechos (Codex, rama
   `codex/ipc-parser`) pero Juani decide cuándo se unen. Las pruebas del pipeline que
   usan la cadena real se saltean mientras tanto.

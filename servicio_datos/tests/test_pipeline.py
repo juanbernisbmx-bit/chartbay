@@ -27,13 +27,13 @@ except ImportError:
 
 
 def serie(serie_id, archivo, hasta=(2026, 8), desde=(2026, 3), valor=100):
-    """Una serie sintética mensual de `desde` a `hasta`, con valores 100, 101, 102..."""
+    """Una serie sintética mensual de `desde` a `hasta`: marzo de 2026 vale `valor`, abril `valor + 1`..."""
     meses, (anio, mes) = [], desde
     while (anio, mes) <= hasta:
         meses.append(date(anio, mes, 1))
         anio, mes = (anio + 1, 1) if mes == 12 else (anio, mes + 1)
     return SerieLeida(serie_id, archivo.clave, archivo.hoja, 10,
-                      tuple((periodo, Decimal(valor + i)) for i, periodo in enumerate(meses)), ())
+                      tuple((p, Decimal(valor + (p.year - 2026) * 12 + p.month - 3)) for p in meses), ())
 
 
 class LectorFalso:

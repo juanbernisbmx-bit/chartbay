@@ -126,7 +126,8 @@ def correr_ipc(
         with conn.transaction():
             origenes = {s.serie_id: (s.hoja, s.fila_origen) for s in series.values()}
             existentes = repositorio.asegurar_series(conn, fuente.FUENTE_ID, fuente.SERIES, origenes)
-            reemplazados = repositorio.descartar_candidatos_abiertos(conn, fuente.FUENTE_ID)
+            reemplazados = repositorio.descartar_candidatos_abiertos(
+                conn, fuente.FUENTE_ID, f"Reemplazado por el candidato de la corrida {corrida}")
             candidato = repositorio.crear_candidato(conn, corrida)
             repositorio.guardar_observaciones_candidatas(
                 conn, candidato,

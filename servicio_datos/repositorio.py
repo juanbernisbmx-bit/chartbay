@@ -155,15 +155,15 @@ def hallazgos_revisados(conn: psycopg.Connection, fuente_id: str) -> set[tuple]:
     }
 
 
-def descartar_candidatos_abiertos(conn: psycopg.Connection, fuente_id: str) -> list[int]:
+def descartar_candidatos_abiertos(conn: psycopg.Connection, fuente_id: str, motivo: str) -> list[int]:
     """Cierra como descartados los candidatos que esperaban revisión y quedaron viejos."""
     return [
         fila[0]
         for fila in conn.execute(
-            "UPDATE candidato SET estado = 'descartado', decidido_en = now(), decidido_por = 'sistema' "
+            "UPDATE candidato SET estado = 'descartado', decidido_en = now(), decidido_por = 'sistema', motivo = %s "
             "WHERE estado = 'abierto' AND corrida_id IN (SELECT id FROM corrida WHERE fuente_id = %s) "
             "RETURNING id",
-            (fuente_id,),
+            (motivo, fuente_id),
         )
     ]
 

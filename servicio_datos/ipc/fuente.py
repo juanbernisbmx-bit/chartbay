@@ -16,6 +16,7 @@ from datetime import date
 from typing import Mapping
 
 FUENTE_ID = "INDEC_IPC"
+RELEASE_PREFIJO = "ipc"
 FUENTE_NOMBRE = "INDEC"
 URL_BASE = "https://www.indec.gob.ar/ftp/cuadros/economia/"
 URL_PUBLICACION = "https://www.indec.gob.ar/indec/web/Nivel4-Tema-3-5-31"
