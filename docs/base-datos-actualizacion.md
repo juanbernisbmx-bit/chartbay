@@ -1,7 +1,7 @@
 # Base de datos: actualización automática con revisión
 
 Estado: diseño. Implementados en `servicio_datos/`: esquema PostgreSQL y migrador,
-colector, orquestador y publicación de candidatos (pasos 1, 2 y 4); el parser y la
+colector, orquestador, publicación de candidatos y lectura desde ChartBay (pasos 1, 2 y 4); el parser y la
 validación (paso 3) los entregó Codex en su rama. Siguen en diseño la interfaz de
 revisión, la cola y el agente.
 
@@ -109,6 +109,19 @@ mira lo que llega; que no llegue nada es trabajo del cron o del servicio de aler
 - Todo es una transacción y una publicación por fuente a la vez.
 - Descartar un candidato lo cierra entero, con quién y por qué, y no toca lo publicado. Un
   candidato reemplazado por uno más nuevo deja su motivo también.
+
+## Lectura desde ChartBay
+
+La web lee dos vistas del servicio y no sus tablas: `publicado_release` (el release vigente de
+cada fuente, con su procedencia) y `publicado_observaciones`. Se conecta con un rol de solo
+lectura que ve únicamente esas vistas, y las lee en una sola transacción para no mezclar dos
+releases. `GET /api/base-datos/catalogo` mantiene su forma; solo agrega `origen`.
+
+- La procedencia se congela en el release al publicar, no se reconstruye después.
+- El catálogo de 100 entradas sigue saliendo del JSON, porque en la base solo están las siete
+  series del IPC. Lo publicado pisa los datos y la procedencia de esas siete.
+- Sin URL, sin nada publicado, o con la base caída, la web sirve el archivo. Un fallo no la
+  frena: el resultado se guarda unos segundos y el log dice solo el tipo de error.
 
 ## Reglas de validación del IPC
 

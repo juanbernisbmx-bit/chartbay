@@ -30,6 +30,31 @@ cambios.
   sus series y los tipos que pasan entre colector, parser y validación.
 - `COORDINACION.md`: reparto del trabajo entre Claude y Codex y contrato.
 
+## Cómo lee ChartBay lo publicado
+
+La web (rama `codex/base-datos-chartbay`) no lee las tablas: lee dos vistas, que son el contrato.
+
+- `publicado_release`: el release vigente de cada fuente (`fuente_id`, `numero`, `release_id`,
+  `publicado_en`, `hash_contenido`, `procedencia`).
+- `publicado_observaciones`: sus datos (`fuente_id`, `serie_id`, `periodo`, `valor`).
+
+`procedencia` queda congelada en el release al publicar: los archivos que lo respaldan (URL,
+hash, fecha de captura y de publicación según la fuente) y de dónde salió cada serie (hoja,
+fila y notas de normalización). Una prueba fija las columnas de las vistas: si cambian, hay que
+cambiar la web.
+
+La web se conecta con un rol que solo ve esas dos vistas. Las vistas corren con los permisos de
+su dueño, así que el rol no necesita ni tiene acceso a las tablas:
+
+```sql
+CREATE ROLE chartbay_lectura LOGIN PASSWORD '...';
+GRANT SELECT ON publicado_release, publicado_observaciones TO chartbay_lectura;
+```
+
+Con ese rol se verificó que puede leer las vistas y que leer `release` u `observacion`, o
+escribir en cualquier tabla, da "permission denied". La URL va en `CHARTBAY_DATABASE_URL` de la
+web; sin ella, o si la base no responde, ChartBay sirve el archivo del piloto.
+
 ## Lo que la base garantiza
 
 - `descarga` y `release` son de solo agregar (ni UPDATE, ni DELETE, ni TRUNCATE).
@@ -111,8 +136,8 @@ disco persistente o almacenamiento de objetos (cambia solo `crudo.py`).
 
 ## Lo que todavía no hay
 
-- Que ChartBay lea de PostgreSQL: lo publicado ya está en `observacion_vigente`, pero
-  `/api/base-datos/catalogo` sigue sirviendo el JSON del piloto.
+- El catálogo completo en PostgreSQL: hoy solo están las siete series del IPC, así que ChartBay
+  sigue tomando del JSON las otras 93 entradas (que no tienen datos).
 - La interfaz de revisión y la cola de candidatos (diseñadas, sin construir).
 - Parser y validación del IPC integrados a esta rama: están hechos (Codex, rama
   `codex/ipc-parser`) pero Juani decide cuándo se unen. Las pruebas del pipeline que
