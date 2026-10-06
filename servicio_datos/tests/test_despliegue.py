@@ -1,0 +1,208 @@
+"""Archivos de despliegue: que sean coherentes entre sí y no pierdan lo que los hace seguros. No necesita Postgres.
+
+No reemplaza probarlos en el equipo de verdad (ni systemd ni cron se pueden correr acá), pero atrapa lo que se rompe
+al cambiar una ruta, un puerto o una variable en un archivo y olvidarse de los otros.
+"""
+import importlib
+import os
+import re
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+
+from servicio_datos import tarea
+from servicio_datos.canales import configuracion_desde_entorno
+from servicio_datos.revision.__main__ import revisores_desde_entorno
+
+RAIZ = Path(__file__).resolve().parents[2]
+DESPLIEGUE = RAIZ / "servicio_datos" / "despliegue"
+USUARIO, ENTORNO, REPO = "chartbay-datos", "/etc/chartbay-datos/entorno", "/opt/chartbay-datos/repo"
+
+
+def leer(nombre):
+    return (DESPLIEGUE / nombre).read_text(encoding="utf-8")
+
+
+def campo_cron_valido(campo, minimo, maximo):
+    for parte in campo.split(","):
+        base, _, paso = parte.partition("/")
+        if paso and not (paso.isdigit() and int(paso) > 0):
+            return False
+        if base == "*":
+            continue
+        rango = base.split("-")
+        if len(rango) > 2 or not all(r.isdigit() and minimo <= int(r) <= maximo for r in rango):
+            return False
+    return True
+
+
+def trabajos_cron():
+    trabajos, entorno = [], {}
+    for linea in leer("chartbay-datos.cron").splitlines():
+        linea = linea.strip()
+        if not linea or linea.startswith("#"):
+            continue
+        asignacion = re.match(r"^([A-Z_]+)=(.*)$", linea)
+        if asignacion:
+            entorno[asignacion.group(1)] = asignacion.group(2).strip('"')
+            continue
+        campos = linea.split(None, 6)
+        trabajos.append({"horario": campos[:5], "usuario": campos[5], "comando": campos[6]})
+    return trabajos, entorno
+
+
+def seccion_unidad():
+    valores = {}
+    for linea in leer("chartbay-revision.service").splitlines():
+        if linea.strip() and not linea.startswith(("#", "[")):
+            clave, _, valor = linea.partition("=")
+            valores[clave.strip()] = valor.strip()
+    return valores
+
+
+class CronTests(unittest.TestCase):
+    def test_el_horario_es_valido(self):
+        trabajos, _ = trabajos_cron()
+        self.assertEqual(len(trabajos), 2)
+        for t in trabajos:
+            for campo, (minimo, maximo) in zip(t["horario"], ((0, 59), (0, 23), (1, 31), (1, 12), (0, 7))):
+                self.assertTrue(campo_cron_valido(campo, minimo, maximo), f"{campo} en {t['comando'][:60]}")
+
+    def test_hay_exactamente_las_dos_tareas_y_corren_como_el_usuario_del_servicio(self):
+        trabajos, _ = trabajos_cron()
+        self.assertEqual({re.search(r"servicio_datos\.tarea .*? (ejecutar|avisar) >>", t["comando"]).group(1) for t in trabajos}, set(tarea.TAREAS))
+        for t in trabajos:
+            self.assertEqual(t["usuario"], USUARIO)
+            self.assertNotEqual(t["usuario"], "root")
+            self.assertIn(f"--entorno {ENTORNO}", t["comando"])
+            self.assertIn(f"cd {REPO} &&", t["comando"])
+            self.assertIn("/opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea", t["comando"])
+
+    def test_cada_tarea_deja_su_propio_registro(self):
+        for t in trabajos_cron()[0]:
+            nombre = re.search(r"tarea .*? (ejecutar|avisar) >>", t["comando"]).group(1)
+            self.assertIn(f">> /var/log/chartbay-datos/{nombre}.log 2>&1", t["comando"])
+
+    def test_avisar_corre_aparte_y_seguido(self):
+        # Los avisos de silencio los detecta quien mira desde afuera: si solo corriera junto con ejecutar, no servirían.
+        por_tarea = {re.search(r" (ejecutar|avisar) >>", t["comando"]).group(1): t for t in trabajos_cron()[0]}
+        self.assertNotEqual(por_tarea["ejecutar"]["horario"], por_tarea["avisar"]["horario"])
+        minuto, hora = por_tarea["avisar"]["horario"][:2]
+        self.assertRegex(hora, r"^\*/([1-6])$", "avisar tiene que correr al menos cada 6 horas")
+
+    def test_el_entorno_del_cron(self):
+        _, entorno = trabajos_cron()
+        self.assertEqual(entorno["MAILTO"], "")  # sin un servidor de correo configurado cron no puede mandar nada
+        self.assertEqual(entorno["CRON_TZ"], "America/Argentina/Buenos_Aires")
+        self.assertEqual(entorno["DATOS_RUN_DIR"], "/var/lib/chartbay-datos")
+
+
+class EntornoEjemploTests(unittest.TestCase):
+    def cargar(self):
+        carpeta = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, carpeta, ignore_errors=True)
+        destino = carpeta / "entorno"
+        shutil.copy(DESPLIEGUE / "entorno.ejemplo", destino)
+        destino.chmod(0o600)
+        return tarea.leer_entorno(destino)  # el mismo lector que usa cron
+
+    def test_lo_lee_el_lanzador_de_tareas(self):
+        self.assertIn("DATOS_DATABASE_URL", self.cargar())
+
+    def test_cubre_todas_las_variables_que_lee_el_servicio(self):
+        usadas = set()
+        for ruta in (RAIZ / "servicio_datos").rglob("*.py"):
+            if "tests" in ruta.parts:
+                continue
+            usadas |= set(re.findall(r'"((?:DATOS|CHARTBAY)_[A-Z_]+)"', ruta.read_text(encoding="utf-8")))
+        usadas -= {"DATOS_TEST_DATABASE_URL", "DATOS_IPC_ORIGINALES_DIR"}  # solo de las pruebas
+        faltan = usadas - set(self.cargar())
+        self.assertEqual(faltan, set(), f"el servicio lee estas variables y el ejemplo no las documenta: {sorted(faltan)}")
+
+    def test_no_trae_lo_que_no_debe_estar_en_el_servidor(self):
+        claves = set(self.cargar())
+        self.assertNotIn("SUPABASE_ADMIN_DATABASE_URL", claves)  # el administrador de la base no vive en el servidor diario
+        self.assertNotIn("CHARTBAY_DATABASE_URL", claves)  # esa es de la web pública, no de este servicio
+
+    def test_los_valores_son_marcadores_y_no_secretos_de_verdad(self):
+        valores = self.cargar()
+        self.assertIn("PROJECT_REF", valores["DATOS_DATABASE_URL"])
+        self.assertIn("CLAVE", valores["DATOS_DATABASE_URL"])
+        for vacia in ("DATOS_AVISOS_SLACK_URL", "DATOS_AVISOS_SMTP_CLAVE", "DATOS_AVISOS_SMTP_USUARIO"):
+            self.assertEqual(valores[vacia], "")
+        self.assertEqual(valores["DATOS_REVISORES"], "USUARIO=HASH")
+
+    def test_el_servicio_lo_acepta_tal_cual(self):
+        valores = self.cargar()
+        configuracion = configuracion_desde_entorno(valores)
+        self.assertEqual((configuracion.canales, configuracion.recordatorio_dias), ((), 3))  # sin canales: no avisa, pero tampoco falla
+        self.assertEqual(configuracion.url_base, "https://revision.ejemplo.org")
+        self.assertEqual(revisores_desde_entorno(valores["DATOS_REVISORES"]), {"USUARIO": "HASH"})
+        self.assertEqual(valores["DATOS_REVISION_PROXY"], "1")
+
+
+class UnidadDeSystemdTests(unittest.TestCase):
+    def test_escucha_solo_en_el_equipo_y_no_corre_como_root(self):
+        unidad = seccion_unidad()
+        self.assertIn("--bind 127.0.0.1:", unidad["ExecStart"])
+        self.assertNotIn("0.0.0.0", unidad["ExecStart"])
+        self.assertEqual((unidad["User"], unidad["Group"]), (USUARIO, USUARIO))
+
+    def test_usa_un_solo_worker_porque_el_limite_de_intentos_vive_en_memoria(self):
+        self.assertIn("--workers 1", seccion_unidad()["ExecStart"])
+
+    def test_la_fabrica_que_arranca_existe(self):
+        fabrica = re.search(r'"([\w.]+):(\w+)\(\)"', seccion_unidad()["ExecStart"])
+        self.assertIsNotNone(fabrica)
+        self.assertTrue(callable(getattr(importlib.import_module(fabrica.group(1)), fabrica.group(2))))
+
+    def test_toma_los_secretos_del_mismo_archivo_que_cron(self):
+        self.assertEqual(seccion_unidad()["EnvironmentFile"], ENTORNO)
+
+    def test_esta_endurecida(self):
+        unidad = seccion_unidad()
+        for clave, valor in (("NoNewPrivileges", "true"), ("ProtectSystem", "strict"), ("PrivateTmp", "true"), ("ProtectHome", "true"),
+                             ("CapabilityBoundingSet", ""), ("RestrictSUIDSGID", "true"), ("Restart", "on-failure")):
+            self.assertEqual(unidad.get(clave), valor, clave)
+
+    def test_el_registro_de_accesos_no_incluye_el_usuario(self):
+        formato = re.search(r"--access-logformat '([^']*)'", seccion_unidad()["ExecStart"]).group(1)
+        self.assertNotIn("%(u)s", formato)  # si alguien escribe su clave en el campo de usuario, no queda en el log
+
+
+class ProxyYRegistrosTests(unittest.TestCase):
+    def test_caddy_apunta_a_donde_escucha_el_servicio_y_a_ningun_otro_lado(self):
+        puerto = re.search(r"--bind 127\.0\.0\.1:(\d+)", seccion_unidad()["ExecStart"]).group(1)
+        caddy = leer("Caddyfile")
+        self.assertIn(f"reverse_proxy 127.0.0.1:{puerto}", caddy)
+        self.assertNotIn("0.0.0.0", caddy)
+        self.assertIn("header_down -Server", caddy)
+
+    def test_el_dominio_de_ejemplo_es_el_mismo_en_el_proxy_y_en_el_entorno(self):
+        dominio = re.search(r"^(\S+) \{", leer("Caddyfile"), re.M).group(1)
+        self.assertIn(f"https://{dominio}", leer("entorno.ejemplo"))
+
+    def test_logrotate_cubre_los_registros_que_escribe_cron(self):
+        rotacion = leer("logrotate-chartbay-datos")
+        self.assertIn("/var/log/chartbay-datos/*.log", rotacion)
+        self.assertIn(f"create 0640 {USUARIO} {USUARIO}", rotacion)
+
+    def test_gunicorn_esta_entre_las_dependencias(self):
+        self.assertRegex((RAIZ / "servicio_datos" / "requirements.txt").read_text(), r"(?m)^gunicorn")
+
+    def test_la_guia_nombra_cada_archivo_de_despliegue(self):
+        guia = (RAIZ / "docs" / "despliegue-servicio-datos.md").read_text(encoding="utf-8")
+        for archivo in DESPLIEGUE.iterdir():
+            self.assertIn(archivo.name, guia, f"la guía no menciona {archivo.name}")
+
+    def test_todos_los_archivos_usan_las_mismas_rutas_base(self):
+        for nombre in ("chartbay-datos.cron", "chartbay-revision.service"):
+            texto = leer(nombre)
+            self.assertIn(REPO, texto)
+            self.assertIn("/opt/chartbay-datos/venv/bin/", texto)
+            self.assertIn(ENTORNO, texto)
+
+
+if __name__ == "__main__":
+    unittest.main()

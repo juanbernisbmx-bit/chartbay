@@ -24,6 +24,8 @@ cambios.
   deja un candidato abierto, o cierra la corrida como `sin_cambios` o `fallida`.
   Recibe el parser y la validación por parámetro.
 - `avisos.py`, `canales.py`, `avisar.py`: los avisos por Slack o correo. Ver "Avisos".
+- `tarea.py` y `despliegue/`: cómo se instala todo en el equipo Ubuntu: el lanzador de las dos tareas de cron y los archivos de
+  cron, systemd, HTTPS (Caddy), secretos y registros. La guía es `docs/despliegue-servicio-datos.md`.
 - `revision/`: la interfaz web de revisión (cola de candidatos y pantalla de revisión). Es una app
   Flask aparte de la web pública de ChartBay, con login. Ver "Interfaz de revisión".
 - `publicacion.py`, `publicar.py`: la revisión y la publicación de un candidato. Publicar es
@@ -98,8 +100,9 @@ export DATOS_DATABASE_URL=postgresql://...
 export DATOS_REVISORES='juani=scrypt:...'     # varios, separados por ;
 ./.venv/bin/python -m servicio_datos.revision servir
 
-# En producción, con un servidor de verdad y siempre detrás de HTTPS (Basic manda la clave en cada pedido):
-gunicorn "servicio_datos.revision.__main__:app_desde_entorno()" --bind 0.0.0.0:$PORT
+# En producción: gunicorn escuchando SOLO en 127.0.0.1, detrás de un proxy con HTTPS (Basic manda la clave en cada
+# pedido) y con DATOS_REVISION_PROXY=1. Ver docs/despliegue-servicio-datos.md.
+gunicorn "servicio_datos.revision.__main__:app_desde_entorno()" --bind 127.0.0.1:8000 --workers 1 --threads 4
 ```
 
 - **Quién es el revisor:** el usuario con el que se inició sesión. Queda registrado en cada decisión y en el

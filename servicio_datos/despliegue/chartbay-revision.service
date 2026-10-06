@@ -1,0 +1,36 @@
+# Interfaz de revisión de datos de ChartBay. Se instala como /etc/systemd/system/chartbay-revision.service.
+# Escucha SOLO en 127.0.0.1: la cara pública (HTTPS) la da el proxy (Caddy), que está delante.
+[Unit]
+Description=ChartBay - interfaz de revisión de datos
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=chartbay-datos
+Group=chartbay-datos
+WorkingDirectory=/opt/chartbay-datos/repo
+# Los secretos (URL de la base, hashes de los revisores) salen de este archivo, no de la unidad.
+EnvironmentFile=/etc/chartbay-datos/entorno
+# Un solo worker con hilos: el límite de intentos de acceso vive en la memoria del proceso.
+# El registro de accesos no incluye el usuario (%(u)s): si alguien escribe su contraseña en ese campo, no queda en el log.
+ExecStart=/opt/chartbay-datos/venv/bin/gunicorn "servicio_datos.revision.__main__:app_desde_entorno()" --bind 127.0.0.1:8000 --workers 1 --threads 4 --timeout 60 --access-logfile - --access-logformat '%(h)s %(t)s "%(r)s" %(s)s %(b)s "%(a)s"'
+Restart=on-failure
+RestartSec=5
+
+# Endurecimiento: la interfaz solo necesita leer su código y hablar con la base.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

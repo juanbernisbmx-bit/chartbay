@@ -5,3 +5,5 @@ psycopg[binary]>=3.2
 xlrd==2.0.2
 # Interfaz de revisión (servicio_datos/revision). En producción, detrás de gunicorn y HTTPS.
 Flask>=3.0
+# Servidor de la interfaz de revisión en producción (un solo worker con hilos: el límite de intentos vive en memoria).
+gunicorn>=21.0

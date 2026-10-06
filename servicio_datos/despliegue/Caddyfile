@@ -1,0 +1,12 @@
+# HTTPS para la interfaz de revisión. Se instala como /etc/caddy/Caddyfile.
+#
+# Reemplazá revision.ejemplo.org por el dominio real (con su registro DNS apuntando a este equipo y los puertos 80 y
+# 443 abiertos). Caddy consigue y renueva solo el certificado (Let's Encrypt) y redirige HTTP a HTTPS.
+# Pasa al servicio la dirección del visitante, el host y el esquema, y descarta los que traiga el cliente: por eso el
+# servicio puede confiar en ellos (DATOS_REVISION_PROXY=1).
+revision.ejemplo.org {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8000 {
+		header_down -Server
+	}
+}

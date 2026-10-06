@@ -136,6 +136,18 @@ de que pasó la ventana del mes sin el dato y de que el colector no corre hace d
   el que mira es el que murió, no avisa nadie.
 - Sin canales configurados no registra nada, para que configurar uno después no dispare todo lo acumulado.
 
+## Despliegue
+
+Supabase aloja solo PostgreSQL (`docs/despliegue-supabase.md`). El resto corre en el equipo Ubuntu del club
+(`docs/despliegue-servicio-datos.md`): la interfaz de revisión como servicio de systemd detrás de Caddy con HTTPS, y dos tareas de cron.
+
+- `ejecutar` corre a las 9:30 y a las 17:30 (INDEC publicó entre las 15:52 y las 16:08 los últimos tres meses); `avisar`, cada
+  4 horas y **aparte**, porque los avisos de silencio los detecta quien mira desde afuera.
+- Un lanzador (`tarea.py`) carga los secretos de un archivo que tiene que ser solo de su usuario, evita que dos corridas se
+  pisen y corta una colgada a los 20 minutos.
+- La interfaz escucha solo en `127.0.0.1` y confía en lo que le pasa el proxy únicamente si se lo pide (`DATOS_REVISION_PROXY=1`):
+  si no, cualquiera podría falsear su dirección para esquivar el límite de intentos.
+
 ## Reglas de validación del IPC
 
 - Estructura: hoja y fila de encabezado esperadas; nacional más 6 regiones

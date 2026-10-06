@@ -1,0 +1,22 @@
+# Tareas programadas del servicio de datos de ChartBay. Se instala como /etc/cron.d/chartbay-datos.
+#
+# Las dos corren como chartbay-datos, con el lanzador de tareas: carga los secretos de /etc/chartbay-datos/entorno,
+# evita que dos corridas de la misma tarea se pisen y corta una colgada a los 20 minutos.
+#
+# El servidor tiene que estar en hora de Argentina (timedatectl); CRON_TZ lo fuerza en las versiones de cron que
+# lo entienden. Si no, las horas de abajo corren en la hora del equipo: no se rompe nada (las tareas se pueden repetir
+# sin riesgo), solo cambia a qué hora se enteran del dato.
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+CRON_TZ=America/Argentina/Buenos_Aires
+MAILTO=""
+DATOS_RUN_DIR=/var/lib/chartbay-datos
+
+# 1) Colecta, parseo, validación y candidato. INDEC publica el IPC a mediados de mes cerca de las 16 h; a las 17:30
+#    lo encuentra el mismo día y a las 9:30 queda una segunda oportunidad. Si no hay nada nuevo, no hace nada.
+#    También entrega los avisos que esa corrida genere.
+30 9,17 * * *  chartbay-datos  cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno ejecutar >> /var/log/chartbay-datos/ejecutar.log 2>&1
+
+# 2) Avisos y vigilancia del silencio. Tiene que correr APARTE de la tarea 1: "no llegó el dato" y "el colector no
+#    corre" los detecta quien mira desde afuera; si el único que mira es la tarea que murió, no avisa nadie.
+15 */4 * * *   chartbay-datos  cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno avisar >> /var/log/chartbay-datos/avisar.log 2>&1

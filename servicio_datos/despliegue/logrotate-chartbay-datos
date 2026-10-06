@@ -1,0 +1,11 @@
+# Se instala como /etc/logrotate.d/chartbay-datos. Cada corrida de cron abre el archivo de nuevo, así que no hace
+# falta copytruncate.
+/var/log/chartbay-datos/*.log {
+    weekly
+    rotate 8
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 chartbay-datos chartbay-datos
+}

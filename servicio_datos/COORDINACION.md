@@ -103,6 +103,9 @@ siga (parser, validación, candidato) la cierra como `con_candidato` o `fallida`
 - Avisos por Slack y correo (`avisos.py`, `canales.py`, `avisar.py`, migraciones 0005 y 0006, esta última con los
   recordatorios de candidatos abiertos): hechos y probados contra un Slack
   y un servidor SMTP falsos y locales, y por el camino real como proceso aparte. Nunca se mandó nada a un servicio real.
+- Despliegue (`despliegue/`, `tarea.py`, `docs/despliegue-servicio-datos.md`): hecho para el equipo Ubuntu, con HTTPS por Caddy y los dos
+  crons. La arquitectura es la de Codex (`docs/despliegue-supabase.md`, rama `codex/supabase-setup`): este despliegue no toca la base.
+  Probado en una Mac con Caddy y gunicorn reales; **sin probar** en Ubuntu (systemd, cron) ni con Supabase.
 - Orquestador: hecho (`pipeline.py`, `ejecutar.py`). Probado con el parser y la
   validación reales y contra INDEC en vivo (2026-10-06): un candidato abierto con
   819 observaciones y 19 hallazgos (12 saltos mensuales y 7 notas de encabezado), y
