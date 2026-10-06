@@ -139,6 +139,10 @@ DATOS_TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:54329/postgres \
 Cada test crea su propio schema y lo borra al terminar. Sin la variable, los
 tests se saltean.
 
+Las pruebas que corren el parser y la validación sobre los archivos reales de INDEC necesitan
+`DATOS_IPC_ORIGINALES_DIR` apuntando a una carpeta con `sh_ipc_08_26.xls`, `sh_ipc_09_26.xls` y
+`sh_ipc_aperturas.xls` (pesan 2,3 MB y no se versionan); sin ella se saltean.
+
 Para migrar una base real y correr el colector:
 
 ```bash
@@ -161,9 +165,8 @@ Después, con el candidato que dejó `ejecutar` (el comando lo imprime):
 motivo; `descartar` rechaza el candidato entero. `publicar` falla, y dice por qué, si falta
 resolver algún hallazgo, si hay uno rechazado o si el candidato ya no está abierto.
 
-`ejecutar` necesita el parser y la validación (`ipc/parser.py` y `ipc/validacion.py`,
-con `xlrd`), que viven en la rama `codex/ipc-parser` hasta que se integre. Sale con
-código 1 si la corrida falló. Sus decisiones están en `docs/base-datos-actualizacion.md`.
+`ejecutar` usa el parser y la validación del IPC (`ipc/parser.py` y `ipc/validacion.py`, con
+`xlrd`). Sale con código 1 si la corrida falló. Sus decisiones están en `docs/base-datos-actualizacion.md`.
 
 `colectar` imprime un resumen en JSON y sale con código 1 si la corrida falló,
 para que el cron dispare la alerta. Los estados: `sin_cambios` (todo igual a lo
@@ -180,9 +183,6 @@ disco persistente o almacenamiento de objetos (cambia solo `crudo.py`).
   sigue tomando del JSON las otras 93 entradas (que no tienen datos).
 - Decidir las propuestas del agente desde la interfaz (el agente no está conectado).
 - Un aviso (mail o Slack) cuando entra algo a la cola o pasa la ventana del mes sin datos.
-- Parser y validación del IPC integrados a esta rama: están hechos (Codex, rama
-  `codex/ipc-parser`) pero Juani decide cuándo se unen. Las pruebas del pipeline que
-  usan la cadena real se saltean mientras tanto.
 - Una ventana de ejecución: el colector corre una vez cuando lo llaman; el cron
   que lo dispara dentro de la ventana de publicación del mes no existe todavía.
 - Los tests no corren en CI todavía: faltaría un servicio PostgreSQL en el

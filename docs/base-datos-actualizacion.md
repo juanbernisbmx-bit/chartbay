@@ -2,7 +2,7 @@
 
 Estado: diseño, con casi todo implementado. En `servicio_datos/`: esquema PostgreSQL y migrador,
 colector, orquestador, publicación de candidatos, lectura desde ChartBay, y la interfaz de revisión con su cola
-(pasos 1, 2, 4 y 5); el parser y la validación (paso 3) los entregó Codex en su rama. Sigue en diseño el agente.
+(pasos 1, 2, 4 y 5); el parser y la validación (paso 3) los entregó Codex y están integrados. Sigue en diseño el agente.
 
 Complementa a `docs/base-datos.md`, que describe el piloto local y lista como
 pendientes PostgreSQL, la recolección programada, el historial de revisiones y la

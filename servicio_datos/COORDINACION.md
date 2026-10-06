@@ -90,8 +90,8 @@ siga (parser, validación, candidato) la cierra como `con_candidato` o `fallida`
 - Colector: hecho y probado, también contra INDEC real (2026-10-06): elige
   `sh_ipc_09_26.xls`, saltea la página HTML de `10_26`, y la segunda corrida da
   `sin_cambios`. `python -m servicio_datos.colectar ipc` (ver README).
-- Parser y validación: entregados por Codex en `codex/ipc-parser` (d45dc83), sin
-  integrar a `claude/base-datos-postgres`; ver `NOTAS_CODEX.md` en esa rama.
+- Parser y validación: entregados por Codex en `codex/ipc-parser` (d45dc83) e integrados a
+  `claude/base-datos-postgres` por merge; ver `NOTAS_CODEX.md`.
 - Publicación del candidato y comando de revisión (`publicacion.py`, `publicar.py`, migración
   0003): hecho. Probado de punta a punta con datos reales: lo publicado coincide valor por
   valor con el catálogo del piloto (819 observaciones).

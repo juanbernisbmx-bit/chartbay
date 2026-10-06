@@ -6,10 +6,12 @@ y que cada final posible de la corrida queda registrado. La clase del final corr
 la cadena real (parser y validación de Codex, y los .xls de INDEC) si están.
 """
 import os
+import sys
 import unittest
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
 from psycopg import errors
 
@@ -20,9 +22,9 @@ from servicio_datos.ipc.modelos import Hallazgo, SerieLeida
 from servicio_datos.tests.test_colector import APERTURAS, HOY, NAC, PUBLICADA, BaseColector, ClienteFalso, xls
 
 try:
-    from servicio_datos.ipc import parser, validacion  # noqa: F401  (viven en la rama de Codex hasta integrarse)
+    from servicio_datos.ipc import parser, validacion  # noqa: F401
     HAY_PARSER = True
-except ImportError:
+except ImportError:  # por ejemplo, sin xlrd instalado
     HAY_PARSER = False
 
 
@@ -193,10 +195,13 @@ class FallosTests(BasePipeline):
         self.assertEqual(self.contar("serie"), 1)  # solo la del armado de la prueba
         self.assertEqual(self.uno("SELECT estado FROM corrida"), "fallida")
 
-    def test_sin_el_parser_real_avisa_que_falta(self):
-        if HAY_PARSER:
-            self.skipTest("El parser real está disponible")
-        with self.assertRaisesRegex(RuntimeError, "parser y la validación"):
+    def test_sin_el_parser_avisa_que_falta_y_no_abre_ninguna_corrida(self):
+        # Un entorno sin xlrd: el módulo no se puede importar. `from paquete import modulo` mira primero el
+        # atributo ya cargado, así que además de bloquear el import hay que quitarlo (y devolverlo al final).
+        paquete = sys.modules["servicio_datos.ipc"]
+        cargado = paquete.__dict__.pop("parser", None)
+        self.addCleanup(lambda: cargado is not None and setattr(paquete, "parser", cargado))
+        with patch.dict(sys.modules, {"servicio_datos.ipc.parser": None}), self.assertRaisesRegex(RuntimeError, "parser y la validación"):
             pipeline.correr_ipc(self.conn, self.almacen, ClienteFalso({}), HOY)
         # Y no abre ninguna corrida: falla antes de tocar la base.
         self.assertEqual(self.contar("corrida"), 0)
@@ -297,7 +302,7 @@ ORIGINALES = Path(os.environ.get("DATOS_IPC_ORIGINALES_DIR", "/nonexistent"))
 
 @unittest.skipUnless(
     HAY_PARSER and all((ORIGINALES / n).is_file() for n in ("sh_ipc_08_26.xls", "sh_ipc_09_26.xls", "sh_ipc_aperturas.xls")),
-    "Falta el parser real (rama codex/ipc-parser) o DATOS_IPC_ORIGINALES_DIR con los .xls de INDEC",
+    "Falta xlrd o DATOS_IPC_ORIGINALES_DIR con los .xls de INDEC",
 )
 class CadenaRealTests(BasePipeline):
     def test_con_los_archivos_vigentes_deja_un_candidato_de_819_observaciones(self):
