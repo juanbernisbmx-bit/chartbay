@@ -2,7 +2,8 @@
 
 Estado: diseño, con casi todo implementado. En `servicio_datos/`: esquema PostgreSQL y migrador,
 colector, orquestador, publicación de candidatos, lectura desde ChartBay, y la interfaz de revisión con su cola
-(pasos 1, 2, 4 y 5); el parser y la validación (paso 3) los entregó Codex y están integrados. Sigue en diseño el agente.
+(pasos 1, 2, 4 y 5); el parser y la validación (paso 3) los entregó Codex y están integrados. El agente (paso 6) está
+implementado con un modelo local, sin haberse probado todavía con uno real (ver "Qué hace el agente").
 
 Complementa a `docs/base-datos.md`, que describe el piloto local y lista como
 pendientes PostgreSQL, la recolección programada, el historial de revisiones y la
@@ -181,6 +182,24 @@ propuesta sale como "requiere revisión humana".
 Permisos: lectura sobre crudo y candidato; una sola escritura, crear una
 propuesta. No toca el candidato ni lo publicado.
 
+### Cómo quedó implementado (`servicio_datos/agente/`)
+
+Decisión: **un modelo local en la misma computadora que corre el servicio**, no un modelo en la nube. No hay claves ni costo por
+consulta y lo analizado no sale del equipo. El costo es que un modelo chico se equivoca más, y el diseño parte de eso.
+
+- El modelo no busca evidencia: el código reúne hechos comprobables por regla (salto aislado o compartido por todas las series,
+  si se revierte o se sostiene, fechas de los archivos, decisiones previas de una persona) y el modelo los cita por número.
+- El validador, que es código común y probado, tiene la última palabra sobre qué se acepta: sin una cita válida no hay propuesta
+  ("requiere revisión humana"); cada clasificación exige un hecho de su clase; la acción tiene que ser coherente con la
+  clasificación; la confianza alta exige dos citas.
+- Escribe solo `propuesta` (migraciones 0007 y 0008: acción sugerida, razonamiento, hechos citados, notas del validador, origen y
+  modelo). Una propuesta pendiente frena la publicación igual que un hallazgo sin resolver, pero **no hay un botón para decidirla**: la
+  persona decide el hallazgo una sola vez y esa decisión resuelve la propuesta, como acierto (coincide) o como desacuerdo. Así
+  queda medido cuánto acierta, que es lo que justificaría, más adelante, automatizar alguna categoría.
+- Un hallazgo idéntico a uno que una persona ya decidió en otro candidato se resuelve con esa decisión como propuesta, sin modelo.
+- Queda fuera de este diseño, a propósito: proponer un valor corregido (hoy solo aconseja aceptar, rechazar o mirar) y "pedir otra
+  propuesta" con el comentario del rechazo como contexto.
+
 ## Aprobación por niveles
 
 - Humana, siempre al comienzo: cualquier cambio de valor numérico, de base o de
@@ -296,7 +315,7 @@ Verificadas contra el servidor de INDEC el 2026-10-06:
 3. Parser y validación determinística, con las reglas de arriba.
 4. Candidato y release, y que `GET /api/base-datos/catalogo` lea de ahí.
 5. Interfaz de revisión y cola, aún sin agente (los hallazgos se resuelven a mano).
-6. Agente, con propuestas y evidencia.
+6. Agente, con propuestas y evidencia (hecho, con un modelo local; pendiente de probarlo con uno real).
 7. Aprobación automática por categoría, cuando haya historial que la justifique.
 8. Más fuentes y ampliación provincial.
 

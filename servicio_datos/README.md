@@ -24,8 +24,9 @@ cambios.
   deja un candidato abierto, o cierra la corrida como `sin_cambios` o `fallida`.
   Recibe el parser y la validación por parámetro.
 - `avisos.py`, `canales.py`, `avisar.py`: los avisos por Slack o correo. Ver "Avisos".
-- `tarea.py` y `despliegue/`: cómo se instala todo en el equipo Ubuntu: el lanzador de las dos tareas de cron y los archivos de
+- `tarea.py` y `despliegue/`: cómo se instala todo en el equipo Ubuntu: el lanzador de las tres tareas de cron y los archivos de
   cron, systemd, HTTPS (Caddy), secretos y registros. La guía es `docs/despliegue-servicio-datos.md`.
+- `agente/`: el analista de hallazgos, con un modelo de lenguaje local. Ver "El analista".
 - `revision/`: la interfaz web de revisión (cola de candidatos y pantalla de revisión). Es una app
   Flask aparte de la web pública de ChartBay, con login. Ver "Interfaz de revisión".
 - `publicacion.py`, `publicar.py`: la revisión y la publicación de un candidato. Publicar es
@@ -120,8 +121,33 @@ gunicorn "servicio_datos.revision.__main__:app_desde_entorno()" --bind 127.0.0.1
   uno por uno (rechazar exige un motivo), o se aceptan de una vez los pendientes de un grupo o todos. Publicar
   y descartar están al final; un candidato ya cerrado se ve sin formularios. Si la base no responde, muestra un
   mensaje claro sin datos de la conexión.
-- **Sin agente todavía:** las propuestas del agente se muestran si existen y frenan la publicación, pero no hay
-  botones para decidirlas porque el agente no está conectado.
+- **Las propuestas del analista:** junto a cada hallazgo se ve qué propone (aceptar, rechazar o que lo mires), la
+  clasificación y la confianza; al abrirlo, el razonamiento, los hechos en que se apoya y lo que corrigió el validador. No hay
+  botones para decidir la propuesta: la persona decide el hallazgo, y esa decisión resuelve la propuesta (ver "El analista").
+
+## El analista
+
+`python -m servicio_datos.agente` (`analizar`, `probar` y `estado`; es una tarea de cron más) deja, junto a cada hallazgo de un
+candidato abierto, una `propuesta` con qué es, qué haría, con qué hechos y con qué confianza. **Solo escribe propuestas**: no decide
+hallazgos, no toca el candidato y no publica. Diseño y operación: `docs/despliegue-servicio-datos.md` (sección 7).
+
+- **Por qué se puede confiar sin confiar en el modelo.** El modelo no consulta nada: recibe una lista numerada de hechos que
+  comprobó el código (`agente/evidencia.py`: comparación con las demás series del mes, con el mes siguiente, con lo ya publicado
+  y con las fechas de los archivos) y solo puede citarlos. El validador (`agente/dictamen.py`) descarta citas inexistentes, exige para
+  cada clasificación un hecho de la clase que la sostiene (no puede decir "error de carga" si el salto no resultó aislado ni se
+  revirtió), pide coherencia entre clasificación y acción, y no deja subir la confianza más de lo que la evidencia permite. Lo que
+  corrige queda en `propuesta.notas`.
+- **El modelo corre en la misma computadora** (`agente/modelo.py`): Ollama, llama.cpp o cualquier servidor con la API de chat de
+  OpenAI. Sin claves, y solo acepta `localhost`: lo analizado no sale del equipo. Sin `DATOS_AGENTE_MODELO` no se usa modelo, y solo se
+  repiten decisiones previas de las personas sobre hallazgos idénticos (`origen = 'precedente'`).
+- **Seguro de repetir.** Un hallazgo con propuesta no se vuelve a analizar; uno decidido por una persona se saltea (lo exige un trigger);
+  un candidato que se cierra mientras el modelo piensa se abandona. Si el servidor del modelo no está, no se escribe nada de ese
+  hallazgo, se corta tras tres fallos seguidos y se reintenta en la corrida siguiente.
+- **Se mide.** La decisión de la persona sobre el hallazgo resuelve la propuesta (aprobada si coincide con lo que proponía, rechazada
+  si decidió distinto); `agente estado` dice cuánto coincidió. `agente probar` pasa cinco casos de respuesta conocida por el mismo
+  prompt y validador y dice cuántos clasificó bien: es la forma de elegir un modelo.
+- **Lo que no se probó:** nunca corrió con un modelo real. Las pruebas usan un servidor falso con el mismo protocolo; sirven para el
+  código, no para saber si un modelo concreto razona bien. Eso lo dice `agente probar`, en el equipo, con el modelo elegido.
 
 ## Cómo lee ChartBay lo publicado
 
@@ -234,8 +260,8 @@ disco persistente o almacenamiento de objetos (cambia solo `crudo.py`).
 
 - El catálogo completo en PostgreSQL: hoy solo están las siete series del IPC, así que ChartBay
   sigue tomando del JSON las otras 93 entradas (que no tienen datos).
-- Decidir las propuestas del agente desde la interfaz (el agente no está conectado).
-- Una ventana de ejecución: el colector corre una vez cuando lo llaman; el cron
-  que lo dispara dentro de la ventana de publicación del mes no existe todavía.
+- Un modelo real probado con el analista: ver "El analista". Y que el analista corrija con una propuesta de valor: hoy
+  solo aconseja aceptar, rechazar o mirar; nunca propone un valor distinto.
+- Pruebas en el equipo Ubuntu de lo desplegado (systemd, cron, Let's Encrypt, Supabase): ver `docs/despliegue-servicio-datos.md`.
 - Los tests no corren en CI todavía: faltaría un servicio PostgreSQL en el
   workflow.
