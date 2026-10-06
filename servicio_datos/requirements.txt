@@ -1,0 +1,3 @@
+# Dependencias del servicio de datos. NO van en el requirements.txt de la raíz:
+# la web de ChartBay no usa base de datos y corre en el plan gratuito de Render.
+psycopg[binary]>=3.2
