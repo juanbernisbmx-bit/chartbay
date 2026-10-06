@@ -124,6 +124,64 @@ class SeguridadTests(BaseRevision):
         self.assertEqual(self.uno("SELECT revisor FROM revision_hallazgo WHERE hallazgo_id = %s", (hallazgo,)), "ana")
 
 
+class DetrasDeUnProxyTests(BaseRevision):
+    """Con Caddy o nginx delante: la dirección real del visitante, HSTS por HTTPS y nada que se pueda falsear."""
+
+    def app_con_proxy(self, confiar):
+        url = f"{URL}{'&' if '?' in URL else '?'}options=-csearch_path%3D{self.schema}%2Cpublic"
+        return crear_app(url, {"juani": HASH, "ana": HASH}, confiar_en_proxy=confiar).test_client()
+
+    def fallar(self, cliente, desde, veces=5, usuario="juani"):
+        for _ in range(veces):
+            cliente.get("/", headers={**basic(usuario, "mal-mal-mal-mal"), "X-Forwarded-For": desde})
+
+    def test_con_proxy_el_limite_de_intentos_cuenta_por_visitante_y_no_por_proxy(self):
+        cliente = self.app_con_proxy(True)
+        self.fallar(cliente, "203.0.113.7")
+        self.assertEqual(cliente.get("/", headers={**basic("juani"), "X-Forwarded-For": "203.0.113.7"}).status_code, 429)
+        # Otro visitante, mismo usuario: no queda bloqueado por lo que hizo el primero.
+        self.assertEqual(cliente.get("/", headers={**basic("juani"), "X-Forwarded-For": "198.51.100.9"}).status_code, 200)
+
+    def test_sin_confiar_en_el_proxy_no_se_puede_esquivar_el_limite_falseando_la_cabecera(self):
+        cliente = self.app_con_proxy(False)
+        for i in range(5):
+            cliente.get("/", headers={**basic("juani", "mal-mal-mal-mal"), "X-Forwarded-For": f"203.0.113.{i}"})  # un origen distinto cada vez
+        self.assertEqual(cliente.get("/", headers={**basic("juani"), "X-Forwarded-For": "198.51.100.9"}).status_code, 429)
+
+    def test_hsts_solo_sale_por_https(self):
+        cliente = self.app_con_proxy(True)
+        por_http = cliente.get("/", headers=basic("juani"))
+        por_https = cliente.get("/", headers={**basic("juani"), "X-Forwarded-Proto": "https"})
+        self.assertNotIn("Strict-Transport-Security", por_http.headers)
+        self.assertEqual(por_https.headers["Strict-Transport-Security"], "max-age=31536000")
+        self.assertNotIn("includeSubDomains", por_https.headers["Strict-Transport-Security"])
+
+    def test_sin_confiar_en_el_proxy_una_cabecera_falsa_no_hace_pasar_el_pedido_por_https(self):
+        respuesta = self.app_con_proxy(False).get("/", headers={**basic("juani"), "X-Forwarded-Proto": "https"})
+        self.assertNotIn("Strict-Transport-Security", respuesta.headers)
+
+    def test_el_chequeo_de_origen_usa_el_host_publico_que_informa_el_proxy(self):
+        candidato = self.abierto()
+        token = self.token(candidato)
+        ruta = f"/candidatos/{candidato}/publicar"
+        publico = {**basic("juani"), "X-Forwarded-Host": "revision.example.org", "X-Forwarded-Proto": "https"}
+        con_proxy = self.app_con_proxy(True)
+        self.assertEqual(con_proxy.post(ruta, data={"csrf": token}, headers={**publico, "Origin": "https://revision.example.org"}).status_code, 422)
+        self.assertEqual(con_proxy.post(ruta, data={"csrf": token}, headers={**publico, "Origin": "https://otro.example.org"}).status_code, 403)
+        # Sin confiar en el proxy, esa cabecera no cuenta: el host es el real y el origen público no coincide.
+        sin_proxy = self.app_con_proxy(False)
+        self.assertEqual(sin_proxy.post(ruta, data={"csrf": token}, headers={**publico, "Origin": "https://revision.example.org"}).status_code, 403)
+
+    def test_la_fabrica_de_gunicorn_activa_el_proxy_solo_si_se_pide(self):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        base = {"DATOS_DATABASE_URL": "postgresql://x/y", "DATOS_REVISORES": f"juani={HASH}"}
+        with patch.dict("os.environ", {**base, "DATOS_REVISION_PROXY": "1"}):
+            self.assertIsInstance(cli.app_desde_entorno().wsgi_app, ProxyFix)
+        for valor in ({}, {"DATOS_REVISION_PROXY": "0"}, {"DATOS_REVISION_PROXY": "si"}):
+            with patch.dict("os.environ", {**base, **valor}):
+                self.assertNotIsInstance(cli.app_desde_entorno().wsgi_app, ProxyFix, valor)
+
+
 class ColaTests(BaseRevision):
     def test_vacia_dice_todo_al_dia(self):
         html = self.get("/").get_data(as_text=True)

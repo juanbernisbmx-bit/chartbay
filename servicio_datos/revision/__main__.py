@@ -5,7 +5,10 @@
 
 En producción se sirve con un servidor de verdad, siempre detrás de HTTPS:
 
-    gunicorn "servicio_datos.revision.__main__:app_desde_entorno()" --bind 0.0.0.0:$PORT
+    gunicorn "servicio_datos.revision.__main__:app_desde_entorno()" --bind 127.0.0.1:8000 --workers 1 --threads 4
+
+Detrás de un proxy con HTTPS hay que definir DATOS_REVISION_PROXY=1 (y escuchar solo en 127.0.0.1). Ver
+docs/despliegue-servicio-datos.md.
 """
 from __future__ import annotations
 
@@ -35,7 +38,8 @@ def app_desde_entorno():
     url = os.environ.get("DATOS_DATABASE_URL")
     if not url:
         raise SystemExit("Falta DATOS_DATABASE_URL")
-    return crear_app(url, revisores_desde_entorno(os.environ.get("DATOS_REVISORES")))
+    return crear_app(url, revisores_desde_entorno(os.environ.get("DATOS_REVISORES")),
+                     confiar_en_proxy=os.environ.get("DATOS_REVISION_PROXY") == "1")
 
 
 def main(argv: list[str] | None = None) -> int:

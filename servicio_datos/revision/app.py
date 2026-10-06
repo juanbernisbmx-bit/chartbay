@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 from flask import Flask, Response, abort, g, redirect, render_template, request, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 
 from servicio_datos import publicacion
@@ -65,11 +66,19 @@ def crear_app(
     url_base_datos: str,
     revisores: Mapping[str, str],
     conexion: Callable[[], psycopg.Connection] | None = None,
+    confiar_en_proxy: bool = False,
 ) -> Flask:
-    """`revisores`: usuario -> hash de contraseña (werkzeug). `conexion` solo se pasa en pruebas."""
+    """`revisores`: usuario -> hash de contraseña (werkzeug). `conexion` solo se pasa en pruebas.
+
+    `confiar_en_proxy`: detrás de un proxy con HTTPS (Caddy, nginx), toma de él la dirección del visitante, el
+    esquema y el host. Solo se activa si hay UN proxy delante que pisa esas cabeceras y la app escucha únicamente
+    en 127.0.0.1: si no, cualquiera podría falsear `X-Forwarded-For` y esquivar el límite de intentos.
+    """
     if not revisores:
         raise ValueError("Hace falta al menos un revisor: sin autenticación esta interfaz no arranca")
     app = Flask(__name__)
+    if confiar_en_proxy:
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)  # type: ignore[method-assign]
     secreto = hashlib.sha256("|".join(f"{u}={h}" for u, h in sorted(revisores.items())).encode()).digest()
     fallos: dict[tuple[str, str], list[float]] = {}
 
@@ -95,7 +104,7 @@ def crear_app(
         if credenciales:
             fallos[clave_intentos] = recientes + [ahora]
         respuesta = Response("Hace falta iniciar sesión.", 401)
-        respuesta.headers["WWW-Authenticate"] = 'Basic realm="Revisión de datos", charset="UTF-8"'
+        respuesta.headers["WWW-Authenticate"] = 'Basic realm="Revision de datos", charset="UTF-8"'
         return respuesta
 
     @app.before_request
@@ -131,6 +140,10 @@ def crear_app(
         respuesta.headers["X-Frame-Options"] = "DENY"
         if request.endpoint != "static":
             respuesta.headers["Cache-Control"] = "no-store"
+        if request.is_secure:
+            # Solo por HTTPS (HSTS por HTTP no vale y fijaría al navegador a un sitio que quizá no lo tenga).
+            # Sin includeSubDomains: el dominio puede tener otras cosas que todavía no sirven por HTTPS.
+            respuesta.headers["Strict-Transport-Security"] = "max-age=31536000"
         return respuesta
 
     @app.teardown_request
