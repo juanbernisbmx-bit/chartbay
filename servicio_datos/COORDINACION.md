@@ -65,11 +65,11 @@ Esto cambia lo que dice el documento de diseño sobre el "desfase de cobertura":
    13/08 y llega hasta julio. `09_26` salió el 10/09 y llega hasta agosto.
 2. `sh_ipc_aperturas.xls` tiene nombre fijo y hoy (modificado el 10/09) llega
    hasta agosto.
-3. El piloto actual (`datasets/economia/catalogo.json`) mezcla el nacional de
-   `08_26` (hasta julio) con aperturas actual (hasta agosto). El desfase de un
-   mes no era un error de lectura: el nacional del piloto está atrasado. La
-   regla de cobertura tiene que detectar exactamente esto: el último período del
-   nacional debe coincidir con el de las regiones.
+3. La primera versión del piloto mezclaba el nacional de `08_26` (hasta julio)
+   con las aperturas actuales (hasta agosto). El desfase de un mes no era un
+   error de lectura: el nacional estaba atrasado. Ya se regeneró con `09_26`
+   (2026-10-06). La regla de cobertura tiene que detectar exactamente esto: el
+   último período del nacional debe coincidir con el de las regiones.
 4. Un archivo inexistente (`sh_ipc_10_26.xls`) no da 404: INDEC responde 200 con
    una página HTML. El colector lo trata como "no publicado" mirando el contenido.
 5. `Last-Modified` viene en los archivos reales: es la fecha de publicación
@@ -94,9 +94,9 @@ siga (parser, validación, candidato) la cierra como `con_candidato` o `fallida`
 - Orquestador: de Claude, cuando estén las dos partes.
 
 Probar el parser con archivos reales: están en
-`~/Documents/ChatGPT/base de datos club de economia/datos/originales/` (el
-nacional de ahí es `08_26`, atrasado un mes; el vigente es `09_26`, que el
-colector deja en su carpeta de crudo).
+`~/Documents/ChatGPT/base de datos club de economia/datos/originales/` (están
+`08_26`, la versión anterior del nacional, y `09_26`, la vigente; ambos sirven
+para probar que el parser lee las dos y que la validación detecta el desfase).
 
 ## Mensajes
 

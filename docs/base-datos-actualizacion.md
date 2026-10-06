@@ -163,9 +163,11 @@ Verificadas contra el servidor de INDEC el 2026-10-06:
 
 - El desfase de cobertura no era un error de lectura. `sh_ipc_MM_AA.xls` lleva el
   mes de publicación, no el del dato: `08_26` salió el 13/08 y llega hasta julio;
-  `09_26` salió el 10/09 y llega hasta agosto. El piloto mezcla el nacional de
-  `08_26` con las aperturas vigentes (hasta agosto), así que su nacional está
-  atrasado un mes. La regla de cobertura existe para detectar esto.
+  `09_26` salió el 10/09 y llega hasta agosto. La primera versión del piloto mezcló
+  el nacional de `08_26` con las aperturas vigentes (hasta agosto), y su nacional
+  quedó un mes atrás. Se corrigió el 2026-10-06 regenerándolo con `09_26` (819
+  observaciones; las 116 anteriores del nacional no cambiaron). La regla de
+  cobertura existe para detectar esto antes de que llegue a la base.
 - `published_at` sale del encabezado `Last-Modified` del servidor, que viene en
   los archivos reales. El colector lo guarda en `descarga.publicada_en`.
 - INDEC no responde 404 a un archivo inexistente: contesta 200 con una página
