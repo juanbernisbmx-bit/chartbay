@@ -3,6 +3,8 @@
 Se avisa de cuatro cosas, que son las que un sistema que se supone silencioso no puede callar:
 
 - `candidato_nuevo`: hay un candidato esperando revisión.
+- `candidato_pendiente`: ese candidato sigue abierto días después. Recordatorios escalonados (a los 3
+  días, a los 7, a los 14 y desde ahí uno por semana), cada hito una sola vez.
 - `corrida_fallida`: una corrida falló y nadie la resolvió. Se avisa una vez por racha, no por
   cada corrida que siga fallando.
 - `sin_datos`: pasó la ventana del mes y no llegó el dato (ni lo publicado ni un candidato abierto
@@ -30,6 +32,7 @@ from servicio_datos.canales import Canal, ErrorEnvio, Mensaje
 from servicio_datos.ipc.validacion import DIA_LIMITE_PUBLICACION
 
 MAX_INTENTOS = 5
+RECORDATORIO_DIAS = 3  # primer recordatorio de un candidato abierto; 0 los desactiva
 INACTIVIDAD_DIAS = 2  # el colector corre por lo menos una vez por día
 CANDADO = 727275  # pg_try_advisory_lock: una sola entrega a la vez
 ZONA = ZoneInfo("America/Argentina/Buenos_Aires")
@@ -45,6 +48,10 @@ class Resultado:
     pendientes: int = 0  # siguen esperando un reintento
     ocupado: bool = False  # otra corrida de avisos estaba entregando
     errores: tuple[str, ...] = ()  # por canal, sin secretos
+
+
+def _cantidad(n: int, singular: str, plural: str) -> str:
+    return f"{n} {singular if n == 1 else plural}"
 
 
 def _mes(periodo: date) -> str:
@@ -78,6 +85,50 @@ def _ultimo_periodo(conn: psycopg.Connection, fuente_id: str) -> date | None:
     ).fetchone()[0]
 
 
+def hito_de_recordatorio(edad_dias: int, primero: int = RECORDATORIO_DIAS) -> int | None:
+    """El hito de recordatorio que corresponde a un candidato con esa edad, o None si todavía no toca.
+
+    El primero a los `primero` días, y después uno por semana (7, 14, 21...). Si el sistema estuvo
+    apagado solo cuenta el hito más alto alcanzado: no se manda de golpe lo que se acumuló.
+    """
+    if primero <= 0 or edad_dias < primero:
+        return None
+    return primero if edad_dias < 7 else max(primero, 7 * (edad_dias // 7))
+
+
+def _detectar_recordatorios(conn: psycopg.Connection, ahora: datetime, recordatorio_dias: int = RECORDATORIO_DIAS, **_) -> int:
+    creados = 0
+    if recordatorio_dias <= 0:
+        return creados
+    for c in _filas(
+        conn,
+        "SELECT c.id, c.creado_en, co.fuente_id, f.nombre, count(h.id) AS hallazgos, "
+        " count(*) FILTER (WHERE u.decision = 'aceptado') AS aceptados, count(*) FILTER (WHERE u.decision = 'rechazado') AS rechazados, "
+        " count(h.id) FILTER (WHERE u.decision IS NULL) AS pendientes "
+        "FROM candidato c JOIN corrida co ON co.id = c.corrida_id JOIN fuente f ON f.id = co.fuente_id "
+        "LEFT JOIN hallazgo h ON h.corrida_id = c.corrida_id "
+        "LEFT JOIN LATERAL (SELECT decision FROM revision_hallazgo r WHERE r.hallazgo_id = h.id ORDER BY r.id DESC LIMIT 1) u ON true "
+        "WHERE c.estado = 'abierto' GROUP BY c.id, co.id, f.id ORDER BY c.id",
+    ):
+        edad = (ahora - c["creado_en"]).days
+        hito = hito_de_recordatorio(edad, recordatorio_dias)
+        if hito is None:
+            continue
+        if c["rechazados"]:
+            situacion = (f"Tiene {_cantidad(c['rechazados'], 'hallazgo rechazado', 'hallazgos rechazados')}: "
+                         "con rechazos no se puede publicar, hay que descartarlo y esperar el próximo.")
+        elif c["pendientes"]:
+            situacion = f"Faltan resolver {c['pendientes']} de {c['hallazgos']} hallazgos."
+        else:
+            situacion = "Todos los hallazgos están resueltos: está listo para publicar." if c["hallazgos"] else "No tiene hallazgos: está listo para publicar."
+        creados += _insertar(
+            conn, f"candidato_pendiente:{c['id']}:{hito}", "candidato_pendiente", c["fuente_id"], str(c["id"]),
+            f"{'[Atención]' if edad >= 14 else '[Recordatorio]'} Candidato {c['id']} lleva {edad} días sin cerrarse ({c['fuente_id']})",
+            f"El candidato {c['id']} de {c['nombre']} se creó el {_fecha(c['creado_en'])} y sigue abierto, hace {edad} días.\n{situacion}\n"
+            "Mientras tanto ChartBay sigue mostrando la versión anterior.", f"/candidatos/{c['id']}")
+    return creados
+
+
 _SIN_RESOLVER = ("NOT EXISTS (SELECT 1 FROM corrida c2 WHERE c2.fuente_id = c.fuente_id AND c2.id > c.id "
                  "AND c2.estado IN ('sin_cambios', 'con_candidato'))")
 
@@ -104,7 +155,9 @@ def _detectar_candidatos(conn: psycopg.Connection, **_) -> int:
         nuevos, cambian, faltan = r.get("periodos_nuevos", 0), r.get("periodos_cambiados", 0), r.get("periodos_faltantes", 0)
         urgente = bool(cambian or faltan or c["altas"])
         lineas = [f"Candidato {c['id']} de {c['nombre']} ({c['fuente_id']}), creado el {_fecha(c['creado_en'])}.",
-                  f"Respecto de lo publicado: {nuevos} períodos nuevos, {cambian} datos ya publicados que cambian, {faltan} que faltan."]
+                  f"Respecto de lo publicado: {_cantidad(nuevos, 'período nuevo', 'períodos nuevos')}, "
+                  f"{_cantidad(cambian, 'dato ya publicado que cambia', 'datos ya publicados que cambian')}, "
+                  f"{_cantidad(faltan, 'que falta', 'que faltan')}."]
         lineas.append(f"Hallazgos para revisar: {c['hallazgos']}" + (f" ({c['altas']} de severidad alta)" if c["altas"] else "") + "."
                       if c["hallazgos"] else "No tiene hallazgos.")
         if r.get("hallazgos_ya_revisados"):
@@ -158,19 +211,20 @@ def _detectar_inactivo(conn: psycopg.Connection, ahora: datetime, **_) -> int:
     return creados
 
 
-DETECTORES: Sequence[Callable[..., int]] = (_detectar_candidatos, _detectar_fallidas, _detectar_sin_datos, _detectar_inactivo)
+DETECTORES: Sequence[Callable[..., int]] = (_detectar_candidatos, _detectar_recordatorios, _detectar_fallidas, _detectar_sin_datos, _detectar_inactivo)
 
 
-def detectar(conn: psycopg.Connection, hoy: date, ahora: datetime | None = None, dia_limite: int = DIA_LIMITE_PUBLICACION) -> int:
+def detectar(conn: psycopg.Connection, hoy: date, ahora: datetime | None = None, dia_limite: int = DIA_LIMITE_PUBLICACION,
+             recordatorio_dias: int = RECORDATORIO_DIAS) -> int:
     """Registra los avisos que falten. Devuelve cuántos son nuevos."""
     ahora = ahora or datetime.now(timezone.utc)
-    return sum(d(conn, hoy=hoy, ahora=ahora, dia_limite=dia_limite) for d in DETECTORES)
+    return sum(d(conn, hoy=hoy, ahora=ahora, dia_limite=dia_limite, recordatorio_dias=recordatorio_dias) for d in DETECTORES)
 
 
 def _sigue_siendo_cierto(conn: psycopg.Connection, aviso: dict, hoy: date, ahora: datetime, dia_limite: int) -> bool:
     """Antes de entregar: un candidato ya resuelto o un dato que ya llegó no merecen un aviso tardío."""
     tipo, ref, fuente_id = aviso["tipo"], aviso["referencia"], aviso["fuente_id"]
-    if tipo == "candidato_nuevo":
+    if tipo in ("candidato_nuevo", "candidato_pendiente"):
         return conn.execute("SELECT estado = 'abierto' FROM candidato WHERE id = %s", (int(ref),)).fetchone()[0]
     if tipo == "corrida_fallida":
         return conn.execute(f"SELECT {_SIN_RESOLVER} FROM corrida c WHERE c.id = %s", (int(ref),)).fetchone()[0]
@@ -223,11 +277,11 @@ def entregar(conn: psycopg.Connection, canales: Sequence[Canal], url_base: str |
 
 
 def procesar(conn: psycopg.Connection, canales: Sequence[Canal], url_base: str | None, hoy: date, ahora: datetime | None = None,
-             dia_limite: int = DIA_LIMITE_PUBLICACION) -> Resultado:
+             dia_limite: int = DIA_LIMITE_PUBLICACION, recordatorio_dias: int = RECORDATORIO_DIAS) -> Resultado:
     """Detecta y entrega. Sin canales configurados no hace nada, ni siquiera registra: si no, al
     configurar uno después se enviaría de golpe todo lo que se fue acumulando."""
     if not canales:
         return Resultado()
-    creados = detectar(conn, hoy, ahora, dia_limite)
+    creados = detectar(conn, hoy, ahora, dia_limite, recordatorio_dias)
     resultado = entregar(conn, canales, url_base, hoy, ahora, dia_limite)
     return Resultado(creados, resultado.enviados, resultado.descartados, resultado.fallidos, resultado.pendientes, resultado.ocupado, resultado.errores)

@@ -36,11 +36,16 @@ cambios.
 ## Avisos
 
 Un sistema que se supone silencioso no puede callar cuando algo pasa. Avisa por Slack, por correo o por
-los dos de cuatro cosas, y de cada una una sola vez:
+los dos de cinco cosas, y de cada una una sola vez:
 
 - **Un candidato para revisar.** Con los números que importan (períodos nuevos, datos ya publicados que
   cambian) y el enlace a la pantalla de revisión; lleva `[Atención]` si cambia algo ya publicado o tiene un
   hallazgo de severidad alta.
+- **Que ese candidato sigue abierto**, días después: recordatorios a los 3 días, a los 7, a los 14 y desde ahí
+  uno por semana, cada hito una sola vez. Dicen en qué punto está (cuántos hallazgos faltan, si está listo para
+  publicar o si tiene rechazados y hay que descartarlo) y, desde los 14 días, llevan `[Atención]`. Si el sistema
+  estuvo apagado manda solo el hito más alto, no los atrasados de golpe. Se detienen cuando el candidato se publica,
+  se descarta o lo reemplaza uno más nuevo.
 - **Una corrida fallida sin resolver**, con su error. Una vez por racha: si el cron sigue fallando no
   repite, y vuelve a avisar recién después de que una corrida termine bien.
 - **Que pasó la ventana del mes sin el dato** (el mismo día límite que la regla de frescura de la
@@ -54,8 +59,9 @@ export DATOS_AVISOS_SMTP_HOST=smtp.example.com DATOS_AVISOS_SMTP_PUERTO=587
 export DATOS_AVISOS_SMTP_USUARIO=... DATOS_AVISOS_SMTP_CLAVE=...
 export DATOS_AVISOS_DE=datos@example.com DATOS_AVISOS_PARA='juani@example.com,ana@example.com'
 export DATOS_REVISION_URL=https://revision.example.com                  # para los enlaces
+export DATOS_AVISOS_RECORDATORIO_DIAS=3                                 # primer recordatorio; 0 los apaga (por defecto 3)
 
-./.venv/bin/python -m servicio_datos.migrar          # crea la tabla de avisos (migración 0005)
+./.venv/bin/python -m servicio_datos.migrar          # crea la tabla de avisos y el tipo de recordatorio (0005 y 0006)
 ./.venv/bin/python -m servicio_datos.avisar probar   # un mensaje de prueba por cada canal
 ./.venv/bin/python -m servicio_datos.avisar          # detecta y entrega
 ./.venv/bin/python -m servicio_datos.avisar estado   # los últimos avisos y cómo les fue
@@ -226,7 +232,6 @@ disco persistente o almacenamiento de objetos (cambia solo `crudo.py`).
 - El catálogo completo en PostgreSQL: hoy solo están las siete series del IPC, así que ChartBay
   sigue tomando del JSON las otras 93 entradas (que no tienen datos).
 - Decidir las propuestas del agente desde la interfaz (el agente no está conectado).
-- Recordatorios de un candidato que lleva días sin revisarse (hoy se avisa una sola vez).
 - Una ventana de ejecución: el colector corre una vez cuando lo llaman; el cron
   que lo dispara dentro de la ventana de publicación del mes no existe todavía.
 - Los tests no corren en CI todavía: faltaría un servicio PostgreSQL en el

@@ -61,6 +61,13 @@ class CandidatoNuevoTests(BaseAvisos):
         segundo = self.procesar()
         self.assertEqual((segundo.creados, segundo.enviados, len(self.canal.mensajes)), (0, 0, 1))
 
+    def test_las_cantidades_van_en_singular_cuando_es_uno(self):
+        self.candidato(hallazgos=[B])
+        self.conn.execute("UPDATE corrida SET resumen = resumen || '{\"periodos_nuevos\": 1, \"periodos_cambiados\": 1, \"periodos_faltantes\": 1}'")
+        self.procesar()
+        self.assertIn("1 período nuevo, 1 dato ya publicado que cambia, 1 que falta.", self.canal.mensajes[0].cuerpo)
+        self.assertEqual(avisos._cantidad(0, "dato", "datos"), "0 datos")
+
     def test_marca_como_atencion_lo_que_tiene_hallazgos_graves_o_cambia_lo_publicado(self):
         self.candidato(hallazgos=[C])  # severidad alta
         self.procesar()
@@ -292,6 +299,122 @@ class SlackDeVerdadTests(BaseAvisos):
         self.assertIn(f"<{BASE}/corridas/", texto)  # el enlace propio sí es un enlace
 
 
+class RecordatoriosTests(BaseAvisos):
+    """Un candidato que sigue abierto vuelve a avisar, cada vez menos seguido y sin ráfagas."""
+
+    def abierto_hace(self, dias, **kwargs):
+        candidato = self.candidato(**kwargs)
+        self.conn.execute("UPDATE candidato SET creado_en = now() - make_interval(days => %s) WHERE id = %s", (dias, candidato))
+        return candidato
+
+    def edad(self, dias):
+        self.conn.execute("UPDATE candidato SET creado_en = now() - make_interval(days => %s)", (dias,))
+
+    def recordar(self, **kwargs):
+        return self.procesar(ahora=datetime.now(timezone.utc), **kwargs)
+
+    def recordatorios(self):
+        return [m for m in self.canal.mensajes if "sin cerrarse" in m.asunto]
+
+    def test_el_calendario_de_hitos(self):
+        hito = avisos.hito_de_recordatorio
+        self.assertEqual([hito(e) for e in (0, 2, 3, 6, 7, 13, 14, 20, 21, 100)], [None, None, 3, 3, 7, 7, 14, 14, 21, 98])
+        self.assertEqual([hito(e, 1) for e in (0, 1, 6, 7, 8)], [None, 1, 1, 7, 7])
+        self.assertEqual([hito(e, 10) for e in (9, 10, 13, 14)], [None, 10, 10, 14])
+        self.assertEqual((hito(50, 0), hito(50, -1)), (None, None))
+
+    def test_antes_del_primer_hito_no_recuerda(self):
+        self.abierto_hace(2, hallazgos=[B])
+        self.recordar()
+        self.assertEqual(self.recordatorios(), [])
+
+    def test_a_los_tres_dias_recuerda_con_el_estado_y_el_enlace(self):
+        candidato = self.abierto_hace(3, hallazgos=[A, B, C])
+        resultado = self.recordar()
+        (recordatorio,) = self.recordatorios()
+        self.assertEqual(recordatorio.asunto, f"[Recordatorio] Candidato {candidato} lleva 3 días sin cerrarse (INDEC_IPC)")
+        self.assertIn("Faltan resolver 3 de 3 hallazgos.", recordatorio.cuerpo)
+        self.assertIn("ChartBay sigue mostrando la versión anterior", recordatorio.cuerpo)
+        self.assertEqual(recordatorio.enlace, f"{BASE}/candidatos/{candidato}")
+        self.assertEqual(resultado.creados, 2)  # el aviso de candidato nuevo, que nunca se había mandado, y el recordatorio
+
+    def test_cada_hito_avisa_una_sola_vez_y_escala(self):
+        self.abierto_hace(3, hallazgos=[B])
+        for dias, esperados in ((3, 1), (5, 1), (7, 2), (10, 2), (14, 3), (20, 3), (21, 4), (27, 4), (28, 5)):
+            self.edad(dias)
+            self.recordar()
+            self.assertEqual(len(self.recordatorios()), esperados, f"a los {dias} días")
+        asuntos = [m.asunto.split(" Candidato")[0] for m in self.recordatorios()]
+        self.assertEqual(asuntos, ["[Recordatorio]", "[Recordatorio]", "[Atención]", "[Atención]", "[Atención]"])
+
+    def test_si_el_sistema_estuvo_apagado_manda_solo_el_hito_mas_alto(self):
+        self.abierto_hace(20, hallazgos=[B])
+        self.recordar()
+        (recordatorio,) = self.recordatorios()
+        self.assertIn("lleva 20 días", recordatorio.asunto)
+        self.assertEqual(self.conn.execute("SELECT clave FROM aviso WHERE tipo = 'candidato_pendiente'").fetchall(), [(f"candidato_pendiente:{self.conn.execute('SELECT id FROM candidato').fetchone()[0]}:14",)])
+
+    def test_si_hay_rechazados_dice_que_no_se_puede_publicar_y_que_hay_que_descartarlo(self):
+        candidato = self.abierto_hace(4, hallazgos=[A, B])
+        from servicio_datos import publicacion
+        publicacion.revisar_hallazgo(self.conn, self.hallazgos_de(candidato)[0], "rechazado", "juani", "Parece mal cargado")
+        self.recordar()
+        (recordatorio,) = self.recordatorios()
+        self.assertIn("Tiene 1 hallazgo rechazado", recordatorio.cuerpo)
+        self.assertIn("hay que descartarlo y esperar el próximo", recordatorio.cuerpo)
+
+    def test_si_todo_esta_resuelto_dice_que_solo_falta_publicar(self):
+        candidato = self.abierto_hace(4, hallazgos=[A])
+        self.aceptar_todos(candidato)
+        self.recordar()
+        self.assertIn("está listo para publicar", self.recordatorios()[0].cuerpo)
+
+    def test_un_candidato_sin_hallazgos_tambien_recuerda_que_esta_listo(self):
+        self.abierto_hace(4, hallazgos=[])
+        self.recordar()
+        self.assertIn("No tiene hallazgos: está listo para publicar.", self.recordatorios()[0].cuerpo)
+
+    def test_un_candidato_publicado_o_descartado_deja_de_recordar(self):
+        from servicio_datos import publicacion
+        publicado = self.abierto_hace(8, hallazgos=[])
+        self.publicar(publicado)
+        self.recordar()
+        self.assertEqual(self.recordatorios(), [])
+        nuevo = self.candidato(self.mes_nuevo(), hallazgos=[], valor=200)
+        self.edad(8)
+        publicacion.descartar_candidato(self.conn, nuevo, "juani", "Mal cargado")
+        self.recordar()
+        self.assertEqual(self.recordatorios(), [])
+
+    def test_un_recordatorio_pendiente_se_descarta_si_el_candidato_se_cierra(self):
+        candidato = self.abierto_hace(4, hallazgos=[])
+        self.procesar([CanalFalso(falla=ErrorEnvio("caído"))], ahora=datetime.now(timezone.utc))  # se registran, no se entregan
+        self.publicar(candidato)
+        resultado = self.recordar()
+        self.assertGreaterEqual(resultado.descartados, 2)  # el de candidato nuevo y el recordatorio
+        self.assertEqual(self.canal.mensajes, [])
+
+    def test_un_candidato_reemplazado_no_sigue_recordando_pero_el_nuevo_arranca_de_cero(self):
+        viejo = self.abierto_hace(8, hallazgos=[])
+        nuevo = self.candidato(self.mes_nuevo(), hallazgos=[], valor=200)
+        self.assertEqual(self.conn.execute("SELECT estado FROM candidato WHERE id = %s", (viejo,)).fetchone()[0], "descartado")
+        self.recordar()
+        self.assertEqual(self.recordatorios(), [])
+        self.edad(3)
+        self.recordar()
+        (recordatorio,) = self.recordatorios()
+        self.assertIn(f"Candidato {nuevo} lleva 3 días", recordatorio.asunto)
+
+    def test_se_pueden_apagar_o_adelantar(self):
+        self.abierto_hace(5, hallazgos=[B])
+        self.recordar(recordatorio_dias=0)
+        self.assertEqual(self.recordatorios(), [])
+        self.edad(1)
+        self.recordar(recordatorio_dias=1)
+        self.assertEqual(len(self.recordatorios()), 1)
+        self.assertIn("lleva 1 días", self.recordatorios()[0].asunto)
+
+
 class LineaDeComandosTests(BaseAvisos):
     def cli(self, *args, entorno=None):
         url = f"{URL}{'&' if '?' in URL else '?'}options=-csearch_path%3D{self.schema}%2Cpublic"
@@ -350,6 +473,25 @@ class LineaDeComandosTests(BaseAvisos):
         self.assertIn("Prueba de avisos de ChartBay", slack.recibidos[0][1]["text"])
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(self.cli("probar")[0], 1)
+
+    def avisar_con_un_candidato_de_cuatro_dias(self, entorno_extra):
+        slack = SlackFalso()
+        self.addCleanup(slack.cerrar)
+        candidato = self.candidato(hallazgos=[B])
+        self.conn.execute("UPDATE candidato SET creado_en = now() - interval '4 days' WHERE id = %s", (candidato,))
+        with patch("servicio_datos.canales.CanalSlack", lambda url: slack.canal()):
+            self.cli(entorno={**self.entorno_slack(slack), **entorno_extra})
+        return [r[1]["text"] for r in slack.recibidos]
+
+    def test_el_comando_manda_el_recordatorio_de_un_candidato_abierto_hace_dias(self):
+        textos = self.avisar_con_un_candidato_de_cuatro_dias({})
+        self.assertEqual(len(textos), 2)
+        self.assertTrue(any("sin cerrarse" in t for t in textos))
+
+    def test_los_recordatorios_se_apagan_por_entorno(self):
+        textos = self.avisar_con_un_candidato_de_cuatro_dias({"DATOS_AVISOS_RECORDATORIO_DIAS": "0"})
+        self.assertEqual(len(textos), 1)
+        self.assertFalse(any("sin cerrarse" in t for t in textos))
 
     def test_una_configuracion_invalida_se_informa_sin_la_url(self):
         codigo, _, errores = self.cli(entorno={"DATOS_AVISOS_SLACK_URL": "https://otro.example/services/T/B/SECRETTOKEN123"})

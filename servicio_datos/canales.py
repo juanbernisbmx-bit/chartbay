@@ -129,6 +129,7 @@ class CanalEmail:
 class Configuracion:
     canales: tuple[Canal, ...]
     url_base: str | None  # dirección de la interfaz de revisión, para los enlaces
+    recordatorio_dias: int = 3  # días hasta el primer recordatorio de un candidato abierto; 0 los desactiva
 
 
 def configuracion_desde_entorno(env: Mapping[str, str]) -> Configuracion:
@@ -145,4 +146,7 @@ def configuracion_desde_entorno(env: Mapping[str, str]) -> Configuracion:
     url = (env.get("DATOS_REVISION_URL") or "").strip().rstrip("/") or None
     if url and not re.match(r"^https?://", url):
         raise ValueError("DATOS_REVISION_URL tiene que empezar con https:// (o http:// en una prueba local)")
-    return Configuracion(tuple(canales), url)
+    texto = env.get("DATOS_AVISOS_RECORDATORIO_DIAS", "3").strip()
+    if not texto.isdigit() or int(texto) > 60:
+        raise ValueError("DATOS_AVISOS_RECORDATORIO_DIAS tiene que ser un número de días entre 0 (sin recordatorios) y 60")
+    return Configuracion(tuple(canales), url, int(texto))

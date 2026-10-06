@@ -28,7 +28,7 @@ def _avisar(conn: psycopg.Connection, hoy: date) -> dict | None:
         configuracion = configuracion_desde_entorno(os.environ)
         if not configuracion.canales:
             return None
-        resultado = avisos.procesar(conn, configuracion.canales, configuracion.url_base, hoy)
+        resultado = avisos.procesar(conn, configuracion.canales, configuracion.url_base, hoy, recordatorio_dias=configuracion.recordatorio_dias)
         return {"creados": resultado.creados, "enviados": resultado.enviados, "pendientes": resultado.pendientes, "errores": list(resultado.errores)}
     except Exception as error:  # los avisos son un agregado: nunca pueden romper ni ocultar el resultado de la corrida
         print(f"No se pudieron procesar los avisos ({type(error).__name__}).", file=sys.stderr)

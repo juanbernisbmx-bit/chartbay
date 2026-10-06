@@ -262,6 +262,14 @@ class ConfiguracionTests(unittest.TestCase):
             configuracion_desde_entorno({"DATOS_AVISOS_SLACK_URL": f"https://otro.example{RUTA_SLACK}"})
         self.assertNotIn(SECRETO, str(contexto.exception))
 
+    def test_los_dias_del_primer_recordatorio_tienen_valor_por_defecto_y_se_validan(self):
+        self.assertEqual(configuracion_desde_entorno({}).recordatorio_dias, 3)
+        self.assertEqual(configuracion_desde_entorno({"DATOS_AVISOS_RECORDATORIO_DIAS": "0"}).recordatorio_dias, 0)
+        self.assertEqual(configuracion_desde_entorno({"DATOS_AVISOS_RECORDATORIO_DIAS": " 7 "}).recordatorio_dias, 7)
+        for malo in ("abc", "-1", "61", "2.5", ""):
+            with self.assertRaises(ValueError, msg=malo):
+                configuracion_desde_entorno({"DATOS_AVISOS_RECORDATORIO_DIAS": malo})
+
     def test_la_direccion_de_la_interfaz_tiene_que_ser_una_url(self):
         with self.assertRaises(ValueError):
             configuracion_desde_entorno({"DATOS_REVISION_URL": "javascript:alert(1)"})

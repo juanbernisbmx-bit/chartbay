@@ -11,6 +11,7 @@ Los canales se configuran por entorno; sin ninguno, no hace nada:
     DATOS_AVISOS_SMTP_SEGURIDAD   starttls (por defecto), ssl o ninguna (solo para un servidor local)
     DATOS_AVISOS_DE / _PARA       remitente y destinatarios (separados por coma)
     DATOS_REVISION_URL            dirección de la interfaz de revisión, para los enlaces
+    DATOS_AVISOS_RECORDATORIO_DIAS  días hasta el primer recordatorio de un candidato abierto (3); 0 los apaga
 
 Sale con código 1 si alguna entrega falló, para que el cron lo marque.
 """
@@ -72,7 +73,8 @@ def main(argv: list[str] | None = None) -> int:
                     canales = ", ".join(f"{n}={'ok' if e.get('ok') else 'falló'}" for n, e in a["entregas"].items()) or "sin intentos"
                     print(f"[{a['id']}] {a['tipo']} · {a['estado']} · {a['intentos']} intentos · {a['creado_en']:%Y-%m-%d %H:%M} · {canales}")
             return 0
-        resultado = avisos.procesar(conn, configuracion.canales, configuracion.url_base, args.hoy or datetime.now(timezone.utc).date())
+        resultado = avisos.procesar(conn, configuracion.canales, configuracion.url_base, args.hoy or datetime.now(timezone.utc).date(),
+                                    recordatorio_dias=configuracion.recordatorio_dias)
     if not configuracion.canales:
         print("No hay ningún canal configurado: no se avisa nada.", file=sys.stderr)
     print(json.dumps(resumen(resultado), ensure_ascii=False))
