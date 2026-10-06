@@ -48,6 +48,15 @@ REGLAS: Mapping[str, tuple[str, str]] = {
     "estructura": ("Estructura del archivo", "Falta una serie esperada o apareció una que no corresponde."),
     "base_referencia": ("Base de referencia", "La serie ya no empieza en diciembre de 2016 con índice 100."),
 }
+# Cómo se muestra lo que propone el analista (ver servicio_datos/agente): clasificación, qué aconseja y con qué tono.
+CLASIFICACIONES: Mapping[str, str] = {
+    "dato_real": "Dato real", "cosmetico": "Cambio cosmético", "posible_error_de_carga": "Posible error de carga",
+    "desfase_de_archivo": "Desfase de archivo", "cambio_de_base": "Posible cambio de base",
+    "requiere_revision_humana": "Requiere revisión humana", "precedente": "Decisión previa de una persona",
+}
+SUGERENCIAS: Mapping[str, tuple[str, str]] = {
+    "aceptar": ("Propone aceptar", "bueno"), "rechazar": ("Propone rechazar", "malo"), "investigar": ("Pide que lo mires", "aviso"),
+}
 ORDEN_SEVERIDAD = {"alta": 0, "media": 1, "baja": 2}
 AVISOS = {
     "aceptado": "Hallazgo aceptado.",
@@ -160,7 +169,8 @@ def crear_app(
     @app.context_processor
     def contexto() -> dict:
         usuario = g.get("usuario")
-        return {"usuario": usuario, "csrf": _clave_csrf(secreto, usuario) if usuario else "", "reglas": REGLAS}
+        return {"usuario": usuario, "csrf": _clave_csrf(secreto, usuario) if usuario else "", "reglas": REGLAS,
+                "clasificaciones": CLASIFICACIONES, "sugerencias": SUGERENCIAS}
 
     # --- Formato ----------------------------------------------------------
 
@@ -225,10 +235,14 @@ def crear_app(
                     h["periodo"], titulo=f"{h['serie_nombre'] or h['serie_id']}", uid=f"h{h['id']}")
             grupos.setdefault(h["regla"], []).append({**h, "grafico": grafico_svg})
         ordenados = sorted(grupos.items(), key=lambda kv: (min(ORDEN_SEVERIDAD[h["severidad"]] for h in kv[1]), kv[0]))
+        # Lo que el analista propone sobre lo que sigue sin resolver, para verlo de un vistazo.
+        sin_resolver = [h for g in grupos.values() for h in g if not h["decision"]]
+        sugeridas = [p["accion_sugerida"] for h in sin_resolver for p in h["propuestas"] if p["accion_sugerida"]]
+        analisis = {"sin_resolver": len(sin_resolver), **{a: sugeridas.count(a) for a in SUGERENCIAS}} if sugeridas else None
         revision = publicacion.estado_revision(c, candidato_id)
         archivos = consultas.archivos_de_corrida(c, cand["corrida_id"])
         html = render_template(
-            "candidato.html", c=cand, grupos=ordenados, revision=revision, diff=diff, archivos=archivos, abierto=abierto,
+            "candidato.html", c=cand, grupos=ordenados, revision=revision, diff=diff, archivos=archivos, abierto=abierto, analisis=analisis,
             error=error, aviso=AVISOS.get(aviso or ""), valores=valores or {}, n_aviso=request.args.get("n", type=int))
         return html, estado
 

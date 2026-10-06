@@ -39,6 +39,7 @@
 
 <section aria-labelledby="h-archivos">
   <h2 id="h-archivos">Archivos de la corrida</h2>
+  <div class="tabla-caja">
   <table class="tabla">
     <thead><tr><th>Archivo</th><th>Hash</th><th>Publicado por la fuente</th><th>Visto</th></tr></thead>
     <tbody>
@@ -52,6 +53,7 @@
     {% else %}<tr><td colspan="4">Sin archivos registrados.</td></tr>{% endfor %}
     </tbody>
   </table>
+  </div>
 </section>
 
 {% if abierto and diff.filas %}
@@ -59,6 +61,7 @@
   <h2 id="h-diff">Qué cambia respecto de lo vigente</h2>
   <details {% if diff.cambiados or diff.faltantes %}open{% endif %}>
     <summary>{{ diff.total }} períodos distintos{% if diff.total > diff.filas|length %} (se muestran {{ diff.filas|length }}){% endif %}</summary>
+    <div class="tabla-caja">
     <table class="tabla">
       <thead><tr><th>Serie</th><th>Período</th><th class="num">Vigente</th><th class="num">Candidato</th><th></th></tr></thead>
       <tbody>
@@ -72,12 +75,16 @@
       {% endfor %}
       </tbody>
     </table>
+    </div>
   </details>
 </section>
 {% endif %}
 
 <section aria-labelledby="h-hallazgos">
   <h2 id="h-hallazgos">Hallazgos</h2>
+  {% if analisis and abierto %}
+    <p class="nota" id="resumen-analisis">El asistente analizó los hallazgos sin resolver y <strong>propone</strong>: aceptar {{ analisis.aceptar }}, rechazar {{ analisis.rechazar }}, que lo mires vos {{ analisis.investigar }}{% if analisis.sin_resolver > analisis.aceptar + analisis.rechazar + analisis.investigar %} (faltan {{ analisis.sin_resolver - analisis.aceptar - analisis.rechazar - analisis.investigar }} por analizar){% endif %}. Es una sugerencia: la decisión es tuya.</p>
+  {% endif %}
   {% if not grupos %}
     <p class="ayuda">Este candidato no tiene hallazgos.</p>
   {% endif %}
@@ -107,6 +114,11 @@
           <div class="hallazgo-texto">
             <p><strong>{{ h.serie_nombre or h.serie_id or 'Sin serie' }}</strong>{% if h.periodo %} · {{ h.periodo|mes }}{% endif %}</p>
             <p class="ayuda">{{ h.detalle }}</p>
+            {% set sugerida = (h.propuestas|selectattr('accion_sugerida')|list|first) if h.propuestas else none %}
+            {% if sugerida %}
+              {% set rotulo, tono = sugerencias[sugerida.accion_sugerida] %}
+              <p class="sugerencia"><span class="chip {{ tono }}">{{ rotulo }}</span> <span class="ayuda">{{ clasificaciones.get(sugerida.tipo, sugerida.tipo) }} · confianza {{ sugerida.confianza }}</span></p>
+            {% endif %}
             {% if h.decision %}
               <p class="decision {{ 'bueno' if h.decision == 'aceptado' else 'malo' }}">
                 {{ 'Aceptado' if h.decision == 'aceptado' else 'Rechazado' }} por {{ h.revisor }} {{ h.decidida_en|hace }}{% if h.comentario %}: «{{ h.comentario }}»{% endif %}
@@ -119,10 +131,26 @@
         </div>
         {% if h.grafico or h.propuestas or abierto %}
         <details class="hallazgo-detalle" {% if valores.get('comentario-' ~ h.id) is not none %}open{% endif %}>
-          <summary>{{ 'Ver gráfico y decidir' if abierto else 'Ver gráfico' }}</summary>
+          <summary>{{ ('Ver análisis y decidir' if abierto else 'Ver análisis') if h.propuestas|selectattr('accion_sugerida')|list else ('Ver gráfico y decidir' if abierto else 'Ver gráfico') }}</summary>
           {% if h.grafico %}<div class="grafico-caja">{{ h.grafico|safe }}<p class="ayuda leyenda"><span class="muestra candidato"></span> Candidato{% if h.serie_id %} <span class="muestra vigente"></span> Vigente (si difiere){% endif %}</p></div>{% endif %}
           {% for p in h.propuestas %}
+          {% if p.accion_sugerida %}
+            <div class="propuesta analisis">
+              <p><strong>{{ 'Decisión previa de una persona' if p.origen == 'precedente' else 'Análisis del asistente' }}</strong> · {{ sugerencias[p.accion_sugerida][0] }}{% if p.origen != 'precedente' %} · {{ clasificaciones.get(p.tipo, p.tipo) }}{% endif %} · confianza {{ p.confianza }}</p>
+              {% if p.razonamiento %}<p>{% if p.notas %}<span class="ayuda">El modelo dijo:</span> «{{ p.razonamiento }}»{% else %}{{ p.razonamiento }}{% endif %}</p>{% endif %}
+              {% if p.hechos %}
+                <p class="ayuda">Se apoya en lo que se comprobó:</p>
+                <ul class="hechos">{% for f in p.hechos %}<li>{{ f.texto }}</li>{% endfor %}</ul>
+              {% else %}
+                <p class="ayuda">No pudo respaldar ninguna conclusión con los hechos comprobados: miralo vos.</p>
+              {% endif %}
+              {% if p.notas %}<p class="ayuda">El validador corrigió lo que dijo el modelo: {{ p.notas|join(' ') }}</p>{% endif %}
+              <p class="ayuda">{% if p.modelo %}Modelo local: {{ p.modelo }}. {% endif %}Es una propuesta, no una decisión.
+                {% if p.estado == 'aprobada' %}La persona coincidió.{% elif p.estado == 'rechazada' and p.hechos %}La persona decidió distinto.{% endif %}</p>
+            </div>
+          {% else %}
             <p class="propuesta"><strong>Propuesta del agente</strong> ({{ p.confianza }}, {{ p.estado }}): {{ p.tipo }}{% if p.evidencia %}. Evidencia: {{ p.evidencia }}{% endif %}</p>
+          {% endif %}
           {% endfor %}
           {% if abierto %}
           <form method="post" action="{{ url_for('revisar', candidato_id=c.id) }}" class="decidir">

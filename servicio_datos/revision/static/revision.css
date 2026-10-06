@@ -61,6 +61,7 @@ label { display: block; font-size: 13px; margin: 8px 0 3px; }
 .nota.aviso { background: var(--aviso-fondo); color: var(--aviso); border-color: transparent; }
 .nota.malo { background: var(--malo-fondo); color: var(--malo); border-color: transparent; }
 
+.tabla-caja { max-width: 100%; overflow-x: auto; }
 .tabla { width: 100%; border-collapse: collapse; background: var(--papel); border: 1px solid var(--linea); font-size: 13.5px; }
 .tabla th, .tabla td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--linea); vertical-align: top; }
 .tabla th { color: var(--tinta-3); font-weight: 500; font-size: 12.5px; background: var(--panel); }
@@ -88,6 +89,10 @@ label { display: block; font-size: 13px; margin: 8px 0 3px; }
 .decidir { margin-top: 8px; max-width: 520px; }
 .botones { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .propuesta { background: var(--panel); border-radius: var(--radio); padding: 8px 10px; font-size: 13px; margin-top: 8px; }
+.propuesta p { margin: 0 0 4px; }
+.sugerencia { margin-top: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.hechos { margin: 2px 0 6px 18px; padding: 0; }
+.hechos li { margin-bottom: 2px; }
 
 .grafico-caja { margin-top: 8px; max-width: 600px; }
 .grafico { width: 100%; height: auto; background: var(--papel); border: 1px solid var(--linea); border-radius: var(--radio); }

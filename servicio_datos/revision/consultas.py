@@ -118,7 +118,8 @@ def hallazgos(conn: psycopg.Connection, candidato_id: int) -> list[Fila]:
     )
     propuestas = _filas(
         conn,
-        "SELECT p.hallazgo_id, p.tipo, p.valor_actual, p.valor_propuesto, p.evidencia, p.confianza, p.estado "
+        "SELECT p.hallazgo_id, p.tipo, p.valor_actual, p.valor_propuesto, p.evidencia, p.confianza, p.estado, "
+        " p.accion_sugerida, p.razonamiento, p.hechos, p.notas, p.origen, p.modelo "
         "FROM propuesta p JOIN hallazgo h ON h.id = p.hallazgo_id JOIN candidato c ON c.corrida_id = h.corrida_id "
         "WHERE c.id = %s ORDER BY p.id",
         (candidato_id,),

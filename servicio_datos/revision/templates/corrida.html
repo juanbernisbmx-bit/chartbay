@@ -18,6 +18,7 @@
 {% endif %}
 
 <h2>Archivos</h2>
+<div class="tabla-caja">
 <table class="tabla">
   <thead><tr><th>Archivo</th><th>Resultado</th><th>Hash</th><th>Tamaño</th></tr></thead>
   <tbody>
@@ -31,4 +32,5 @@
   {% else %}<tr><td colspan="4">No llegó a registrar archivos.</td></tr>{% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}

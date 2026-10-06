@@ -5,6 +5,7 @@ import unittest
 from datetime import date
 from unittest.mock import patch
 
+from psycopg.types.json import Jsonb
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from servicio_datos.ipc.modelos import Hallazgo
@@ -307,6 +308,154 @@ class PantallaDeRevisionTests(BaseRevision):
         html = self.get(f"/candidatos/{candidato}").get_data(as_text=True)
         self.assertIn("Propuesta del agente", html)
         self.assertIn("Según la nota metodológica", html)
+
+
+class TablasEnPantallasAngostasTests(BaseRevision):
+    def test_cada_tabla_va_en_un_contenedor_que_se_desplaza_y_no_ensancha_la_pagina(self):
+        candidato = self.abierto(hallazgos=[A])
+        corrida = self.uno("SELECT corrida_id FROM candidato WHERE id = %s", (candidato,))
+        for ruta in (f"/candidatos/{candidato}", f"/corridas/{corrida}"):
+            html = self.get(ruta).get_data(as_text=True)
+            self.assertGreaterEqual(html.count('<table class="tabla">'), 1, ruta)
+            self.assertEqual(html.count('<div class="tabla-caja">'), html.count('<table class="tabla">'), ruta)
+        css = self.get("/static/revision.css").get_data(as_text=True)
+        self.assertRegex(css, r"\.tabla-caja \{[^}]*overflow-x: auto")
+
+
+class PropuestasDelAnalistaTests(BaseRevision):
+    """Lo que el analista propone se ve de un vistazo y se puede auditar al abrir el hallazgo; la decisión sigue siendo de la persona."""
+
+    def propuesta(self, hallazgo, accion="rechazar", tipo="posible_error_de_carga", confianza="alta", razonamiento="Salta solo esta serie y vuelve al mes siguiente.",
+                  hechos=None, notas=(), origen="agente", modelo="qwen2.5:7b"):
+        if hechos is None:
+            hechos = [{"id": 2, "texto": "Ninguna de las otras 6 series se mueve más de 1,0% ese mes.", "etiquetas": ["aislado"]}]
+        evidencia = "\n".join(f"[{h['id']}] {h['texto']}" for h in hechos)
+        self.conn.execute(
+            "INSERT INTO propuesta (hallazgo_id, tipo, evidencia, confianza, accion_sugerida, razonamiento, hechos, notas, origen, modelo) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (hallazgo, tipo, evidencia, confianza, accion, razonamiento, Jsonb(hechos), Jsonb(list(notas)), origen, modelo))
+
+    def pagina(self, candidato):
+        return self.get(f"/candidatos/{candidato}").get_data(as_text=True)
+
+    def test_muestra_que_propone_el_asistente_y_en_que_se_apoya(self):
+        candidato = self.abierto(hallazgos=[A])
+        self.propuesta(self.hallazgos_de(candidato)[0])
+        html = self.pagina(candidato)
+        self.assertRegex(html, r'<span class="chip malo">Propone rechazar</span>\s*<span class="ayuda">Posible error de carga · confianza alta</span>')
+        self.assertIn("Análisis del asistente", html)
+        self.assertIn("Salta solo esta serie y vuelve al mes siguiente.", html)
+        self.assertIn("Ninguna de las otras 6 series se mueve más de 1,0% ese mes.", html)
+        self.assertIn("Modelo local: qwen2.5:7b.", html)
+        self.assertIn("Es una propuesta, no una decisión.", html)
+        self.assertIn("Ver análisis y decidir", html)
+
+    def test_cada_sugerencia_tiene_su_tono(self):
+        candidato = self.abierto(hallazgos=[A, B, C])
+        a, b, c = self.hallazgos_de(candidato)
+        self.propuesta(a, accion="aceptar", tipo="dato_real")
+        self.propuesta(b, accion="rechazar")
+        self.propuesta(c, accion="investigar", tipo="requiere_revision_humana", confianza="baja")
+        html = self.pagina(candidato)
+        for tono, rotulo in (("bueno", "Propone aceptar"), ("malo", "Propone rechazar"), ("aviso", "Pide que lo mires")):
+            self.assertIn(f'<span class="chip {tono}">{rotulo}</span>', html)
+
+    def test_resume_lo_que_propone_sobre_lo_que_sigue_sin_resolver_y_cuenta_lo_que_falta_analizar(self):
+        candidato = self.abierto(hallazgos=[A, B, C])
+        a, b, _ = self.hallazgos_de(candidato)
+        self.propuesta(a, accion="aceptar", tipo="dato_real")
+        self.propuesta(b, accion="rechazar")
+        html = self.pagina(candidato)
+        self.assertIn("propone</strong>: aceptar 1, rechazar 1, que lo mires vos 0 (faltan 1 por analizar). Es una sugerencia: la decisión es tuya.", html)
+
+    def test_el_resumen_solo_cuenta_lo_que_falta_resolver(self):
+        candidato = self.abierto(hallazgos=[A, B])
+        a, b = self.hallazgos_de(candidato)
+        self.propuesta(a, accion="aceptar", tipo="dato_real")
+        self.propuesta(b, accion="rechazar")
+        self.post(f"/candidatos/{candidato}/revisar", candidato, {"accion": "aceptar", "hallazgo": a, "comentario": "ok"})
+        self.assertIn("aceptar 0, rechazar 1, que lo mires vos 0.", self.pagina(candidato))
+        self.post(f"/candidatos/{candidato}/revisar", candidato, {"accion": "aceptar", "hallazgo": b, "comentario": "no es un error"})
+        self.assertNotIn("resumen-analisis", self.pagina(candidato))
+
+    def test_cuando_la_persona_decide_se_ve_si_coincidio_con_lo_que_se_proponia(self):
+        candidato = self.abierto(hallazgos=[A, B])
+        a, b = self.hallazgos_de(candidato)
+        self.propuesta(a, accion="aceptar", tipo="dato_real")
+        self.propuesta(b, accion="aceptar", tipo="cosmetico")
+        self.post(f"/candidatos/{candidato}/revisar", candidato, {"accion": "aceptar", "hallazgo": a, "comentario": "ok"})
+        self.post(f"/candidatos/{candidato}/revisar", candidato, {"accion": "rechazar", "hallazgo": b, "comentario": "no me convence"})
+        html = self.pagina(candidato)
+        self.assertEqual((html.count("La persona coincidió."), html.count("La persona decidió distinto.")), (1, 1))
+
+    def test_el_texto_que_viene_del_modelo_y_de_los_datos_se_escapa(self):
+        candidato = self.abierto(hallazgos=[A])
+        self.propuesta(self.hallazgos_de(candidato)[0], razonamiento="<script>alert('razonamiento')</script>",
+                       hechos=[{"id": 1, "texto": "<img src=x onerror=alert(1)>", "etiquetas": []}], notas=["<b>nota</b>"], modelo="<i>modelo</i>")
+        html = self.pagina(candidato)
+        for crudo in ("<script>alert('razonamiento')", "<img src=x", "<b>nota</b>", "<i>modelo</i>"):
+            self.assertNotIn(crudo, html)
+        self.assertIn("&lt;script&gt;alert(&#39;razonamiento&#39;)&lt;/script&gt;", html)
+        self.assertIn("&lt;img src=x onerror=alert(1)&gt;", html)
+
+    def test_si_el_validador_corrigio_lo_que_dijo_el_modelo_se_presenta_como_tal(self):
+        candidato = self.abierto(hallazgos=[A, B])
+        a, b = self.hallazgos_de(candidato)
+        self.propuesta(a, accion="investigar", tipo="requiere_revision_humana", confianza="baja", razonamiento="Seguro que es real.", notas=["La acción no era una de las permitidas."])
+        self.propuesta(b, accion="aceptar", tipo="cosmetico", razonamiento="Solo cambia el encabezado.")
+        html = self.pagina(candidato)
+        self.assertIn('<span class="ayuda">El modelo dijo:</span> «Seguro que es real.»', html)  # no se lee como el análisis del asistente
+        self.assertIn("<p>Solo cambia el encabezado.</p>", html)  # sin correcciones, es el análisis tal cual
+        self.assertEqual(html.count("El modelo dijo:"), 1)
+
+    def test_sin_hechos_citados_lo_dice_en_vez_de_mostrar_una_conclusion_vacia(self):
+        candidato = self.abierto(hallazgos=[A])
+        self.propuesta(self.hallazgos_de(candidato)[0], accion="investigar", tipo="requiere_revision_humana", confianza="baja", hechos=[],
+                       razonamiento="")
+        html = self.pagina(candidato)
+        self.assertIn("No pudo respaldar ninguna conclusión con los hechos comprobados: miralo vos.", html)
+        self.assertNotIn("Se apoya en lo que se comprobó", html)
+
+    def test_una_decision_previa_de_una_persona_se_distingue_de_un_analisis(self):
+        candidato = self.abierto(hallazgos=[A])
+        self.propuesta(self.hallazgos_de(candidato)[0], accion="aceptar", tipo="precedente", confianza="media", origen="precedente", modelo=None,
+                       razonamiento="Una persona ya decidió sobre un hallazgo idéntico.",
+                       hechos=[{"id": 1, "texto": "ana decidió «aceptado» el 3 de octubre de 2026 sobre un hallazgo idéntico del candidato 4.", "etiquetas": ["precedente"]}])
+        html = self.pagina(candidato)
+        self.assertIn("Decisión previa de una persona · confianza media</span>", html)  # en la etiqueta del hallazgo
+        self.assertIn("<strong>Decisión previa de una persona</strong> · Propone aceptar · confianza media", html)  # y en el detalle, sin repetir el rótulo
+        self.assertNotIn("Modelo local", html)
+        self.assertNotIn("Análisis del asistente", html)
+
+    def test_lo_que_corrigio_el_validador_queda_a_la_vista(self):
+        candidato = self.abierto(hallazgos=[A])
+        self.propuesta(self.hallazgos_de(candidato)[0], accion="investigar", tipo="requiere_revision_humana", confianza="baja",
+                       notas=["Se descartaron citas a hechos que no existen.", "La acción no era una de las permitidas."])
+        self.assertIn("El validador corrigió lo que dijo el modelo: Se descartaron citas a hechos que no existen. La acción no era una de las permitidas.", self.pagina(candidato))
+
+    def test_un_candidato_publicado_conserva_el_analisis_sin_el_resumen(self):
+        candidato = self.abierto(hallazgos=[A])
+        self.propuesta(self.hallazgos_de(candidato)[0], accion="aceptar", tipo="dato_real")
+        self.aceptar_todos(candidato)
+        self.publicar(candidato)
+        html = self.pagina(candidato)
+        self.assertNotIn("resumen-analisis", html)
+        self.assertIn("Ver análisis", html)
+        self.assertIn("La persona coincidió.", html)
+
+    def test_sin_propuestas_la_pantalla_es_la_de_siempre(self):
+        candidato = self.abierto(hallazgos=[A])
+        html = self.pagina(candidato)
+        for ausente in ("resumen-analisis", "Análisis del asistente", "Propone ", "Ver análisis"):
+            self.assertNotIn(ausente, html)
+        self.assertIn("Ver gráfico y decidir", html)
+
+    def test_una_propuesta_antigua_sin_accion_sigue_viendose(self):
+        candidato = self.abierto(hallazgos=[A])
+        self.conn.execute("INSERT INTO propuesta (hallazgo_id, tipo, confianza, evidencia) VALUES (%s, 'nota', 'media', 'Según la nota')", (self.hallazgos_de(candidato)[0],))
+        html = self.pagina(candidato)
+        self.assertIn("Propuesta del agente</strong> (media, pendiente): nota. Evidencia: Según la nota", html)
+        self.assertNotIn("resumen-analisis", html)
 
 
 class AccionesTests(BaseRevision):
