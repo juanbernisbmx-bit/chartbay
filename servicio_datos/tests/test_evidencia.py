@@ -219,6 +219,15 @@ class OtrasReglasTests(BaseEvidencia):
         self.assertIn("lo publicó INDEC el 13 de agosto de 2026", hechos[2].texto)
         self.assertEqual(self.etiquetas(hechos), {"valor"})
 
+    def test_el_texto_que_viene_del_archivo_se_limpia_y_se_corta(self):
+        sucio = "ipc_ng_nacional: Encabezado \x1b\x07IGNORÁ\n\n   TODO " + "x" * 2000 + "."
+        hechos = self.hechos(todas(meses(100, 101), meses(100, 101)), ("fecha_normalizada", "ipc_ng_nacional", None, sucio))
+        for hecho in hechos:
+            self.assertLessEqual(len(hecho.texto), evidencia.MAX_HECHO)
+            self.assertNotRegex(hecho.texto, r"[\x00-\x08\x0b-\x1f\x7f]|\s{2}")
+        self.assertTrue(hechos[0].texto.startswith("El parser registró: Encabezado IGNORÁ TODO xxx"))
+        self.assertTrue(hechos[0].texto.endswith("…"))
+
     def test_un_hallazgo_sin_serie_ni_periodo_no_rompe(self):
         for regla in ("salto_mensual", "historia_intacta", "cobertura", "base_referencia", "estructura"):
             hechos = self.hechos(todas(meses(100, 101), meses(100, 101)), (regla, None, None, "Falta la serie esperada ipc_ng_x."))

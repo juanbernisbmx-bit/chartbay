@@ -41,6 +41,14 @@ REQUISITOS: Mapping[str, frozenset[str]] = {
     "desfase_de_archivo": frozenset({"archivo"}),
     "cambio_de_base": frozenset({"base"}),
 }
+# Lo mismo, dicho para quien revisa: va en la nota cuando el validador baja una conclusión.
+EXPLICACION_REQUISITOS: Mapping[str, str] = {
+    "dato_real": "que el movimiento se ve en varias series a la vez, que el nivel se mantiene o que una persona ya lo aceptó antes",
+    "cosmetico": "que es una nota del parser sobre cómo leyó el archivo, o que una persona ya la aceptó antes",
+    "posible_error_de_carga": "que el salto es propio de esta serie o que se revierte",
+    "desfase_de_archivo": "que el archivo de esta serie se publicó antes que el de las demás",
+    "cambio_de_base": "que la serie ya no arranca en la base de referencia",
+}
 MAX_RAZONAMIENTO = 600
 
 
@@ -58,7 +66,7 @@ class Dictamen:
     clasificacion: str
     accion_sugerida: str
     confianza: str
-    razonamiento: str
+    razonamiento: str  # lo que dijo el modelo, limpio y acotado; vacío si no dijo nada (nunca una frase inventada por el sistema)
     hechos_citados: tuple[int, ...]
     notas: tuple[str, ...] = field(default=())  # lo que el validador cambió respecto de lo que dijo el modelo
 
@@ -70,7 +78,7 @@ def _limpiar(texto: str) -> str:
 
 
 def _sin_dictamen(motivo: str, razonamiento: str = "") -> Dictamen:
-    return Dictamen("requiere_revision_humana", "investigar", "baja", razonamiento or "El modelo no aportó un análisis utilizable.", (), (motivo,))
+    return Dictamen("requiere_revision_humana", "investigar", "baja", razonamiento, (), (motivo,))
 
 
 def validar_dictamen(crudo: object, hechos: Sequence[Hecho]) -> Dictamen:
@@ -107,7 +115,7 @@ def validar_dictamen(crudo: object, hechos: Sequence[Hecho]) -> Dictamen:
     etiquetas = set().union(*(por_id[c].etiquetas for c in citas))
 
     if clasificacion in REQUISITOS and not (REQUISITOS[clasificacion] & etiquetas):
-        notas.append(f"Para decir «{clasificacion}» hace falta citar un hecho de la clase {sorted(REQUISITOS[clasificacion])}, y no lo hizo.")
+        notas.append(f"Para decir «{clasificacion}» hace falta citar un hecho que muestre {EXPLICACION_REQUISITOS[clasificacion]}, y no lo hizo.")
         clasificacion, accion, confianza = "requiere_revision_humana", "investigar", "baja"
     if accion not in ACCIONES_COHERENTES[clasificacion]:
         notas.append(f"La acción «{accion}» no es coherente con «{clasificacion}».")
@@ -117,4 +125,4 @@ def validar_dictamen(crudo: object, hechos: Sequence[Hecho]) -> Dictamen:
     if confianza == "alta" and len(citas) < 2:
         notas.append("La confianza alta exige al menos dos hechos citados.")
         confianza = "media"
-    return Dictamen(clasificacion, accion, confianza, razonamiento or "Sin razonamiento del modelo.", tuple(citas), tuple(notas))
+    return Dictamen(clasificacion, accion, confianza, razonamiento, tuple(citas), tuple(notas))

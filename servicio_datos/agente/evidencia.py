@@ -9,6 +9,7 @@ fechas de los archivos. Todo es determinístico: el mismo candidato da siempre l
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -22,6 +23,8 @@ from servicio_datos.agente.dictamen import Hecho
 
 MESES = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
 MESES_LARGOS = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+
+MAX_HECHO = 400
 
 Serie = Mapping[date, Decimal]
 Colectado = list[tuple[str, set[str]]]  # (texto, etiquetas)
@@ -47,7 +50,7 @@ def _mes(periodo: date) -> str:
     return f"{MESES[periodo.month - 1]} {periodo.year}"
 
 
-def _fecha(momento: datetime) -> str:
+def fecha_larga(momento: datetime) -> str:
     return f"{momento.day} de {MESES_LARGOS[momento.month - 1]} de {momento.year}"
 
 
@@ -143,7 +146,7 @@ def _historia_intacta(ctx: Contexto, h: Mapping) -> Colectado:
         hechos.append((f"Cambian datos ya publicados en {len(con_cambios)} de las {len(ctx.vigente)} series.", {"sistemico"}))
     archivo = ctx.archivos.get(serie)
     if archivo and archivo.publicada_en and ctx.release_vigente:
-        hechos.append((f"El archivo del dato nuevo ({archivo.nombre}) lo publicó INDEC el {_fecha(archivo.publicada_en)}; el release vigente se publicó el {_fecha(ctx.release_vigente[1])}.", set()))
+        hechos.append((f"El archivo del dato nuevo ({archivo.nombre}) lo publicó INDEC el {fecha_larga(archivo.publicada_en)}; el release vigente se publicó el {fecha_larga(ctx.release_vigente[1])}.", set()))
     return hechos
 
 
@@ -159,7 +162,7 @@ def _cobertura(ctx: Contexto, h: Mapping) -> Colectado:
     if mia and otra and mia.publicada_en and otra.publicada_en:
         dias = (otra.publicada_en - mia.publicada_en).days
         if mia.nombre != otra.nombre and dias >= 1:
-            hechos.append((f"El archivo de esta serie ({mia.nombre}) se publicó el {_fecha(mia.publicada_en)} y el de las que están al día ({otra.nombre}) el {_fecha(otra.publicada_en)}, {dias} días después.", {"archivo"}))
+            hechos.append((f"El archivo de esta serie ({mia.nombre}) se publicó el {fecha_larga(mia.publicada_en)} y el de las que están al día ({otra.nombre}) el {fecha_larga(otra.publicada_en)}, {dias} días después.", {"archivo"}))
         elif mia.nombre == otra.nombre:
             hechos.append((f"Las dos salen del mismo archivo ({mia.nombre}): el desfase no se explica por archivos distintos.", set()))
         else:
@@ -196,7 +199,7 @@ def _generico(ctx: Contexto, h: Mapping) -> Colectado:
         hechos.append(("Últimos valores de la serie: " + ", ".join(f"{_mes(p)} {_num(valores[p])}" for p in sorted(valores)[-3:]) + ".", set()))
     archivo = ctx.archivos.get(h["serie_id"] or "")
     if archivo and archivo.publicada_en:
-        hechos.append((f"El archivo de esta serie ({archivo.nombre}) lo publicó INDEC el {_fecha(archivo.publicada_en)}.", set()))
+        hechos.append((f"El archivo de esta serie ({archivo.nombre}) lo publicó INDEC el {fecha_larga(archivo.publicada_en)}.", set()))
     return hechos
 
 
@@ -204,9 +207,15 @@ COLECTORES = {"salto_mensual": _salto_mensual, "historia_intacta": _historia_int
               "base_referencia": _base_referencia, "fecha_normalizada": _fecha_normalizada}
 
 
+def limpiar_texto(texto: str) -> str:
+    """Algunos hechos repiten texto que viene del archivo de la fuente (p. ej. un encabezado): sin controles y con tope."""
+    texto = re.sub(r"\s+", " ", re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", texto)).strip()
+    return texto if len(texto) <= MAX_HECHO else texto[: MAX_HECHO - 1].rstrip() + "…"
+
+
 def reunir_hechos(ctx: Contexto, hallazgo: Mapping) -> list[Hecho]:
     """Los hechos comprobados sobre un hallazgo, numerados desde 1."""
-    return [Hecho(i, texto, frozenset(etiquetas)) for i, (texto, etiquetas) in enumerate(COLECTORES.get(hallazgo["regla"], _generico)(ctx, hallazgo), 1)]
+    return [Hecho(i, limpiar_texto(texto), frozenset(etiquetas)) for i, (texto, etiquetas) in enumerate(COLECTORES.get(hallazgo["regla"], _generico)(ctx, hallazgo), 1)]
 
 
 def buscar_precedente(conn: psycopg.Connection, candidato_id: int, hallazgo: Mapping) -> dict | None:

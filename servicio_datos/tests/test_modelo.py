@@ -5,7 +5,7 @@ import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from servicio_datos.agente.modelo import ErrorModelo, ModeloLocal, extraer_json, modelo_desde_entorno
+from servicio_datos.agente.modelo import ErrorModelo, ModeloLocal, ModeloNoDisponible, extraer_json, modelo_desde_entorno
 
 
 class ServidorFalso:
@@ -100,27 +100,29 @@ class ConsultaTests(unittest.TestCase):
             "HTTP 500": ((500, "stacktrace con /home/usuario/secreto"), "HTTP 500"),
             "HTTP 404": ((404, "modelo qwen-inexistente no encontrado"), "HTTP 404"),
         }
+        respondio_algo_inutil = {"sin JSON", "vacío", "JSON que no es un objeto", "pensamiento sin cerrar"}  # el modelo contestó: reintentar no arregla nada
         for nombre, (respuesta, esperado) in casos.items():
             self.servidor.responde(respuesta)
             with self.assertRaises(ErrorModelo, msg=nombre) as contexto:
                 self.modelo().consultar_json(MENSAJES)
+            self.assertEqual(isinstance(contexto.exception, ModeloNoDisponible), nombre not in respondio_algo_inutil, nombre)
             self.assertIn(esperado, str(contexto.exception), nombre)
             for filtrado in ("127.0.0.1", "secreto", "stacktrace", "qwen-inexistente"):
                 self.assertNotIn(filtrado, str(contexto.exception), nombre)
 
     def test_un_servidor_lento_o_caido_se_informa_sin_la_direccion(self):
         self.servidor.responde('{"ok": true}').demora = 3
-        with self.assertRaises(ErrorModelo) as contexto:
+        with self.assertRaises(ModeloNoDisponible) as contexto:
             self.modelo(timeout=0.5).consultar_json(MENSAJES)
         self.assertIn("No se pudo hablar con el servidor del modelo", str(contexto.exception))
         caido = ModeloLocal("m", "http://127.0.0.1:1/v1", timeout=2)
-        with self.assertRaises(ErrorModelo) as contexto:
+        with self.assertRaises(ModeloNoDisponible) as contexto:
             caido.consultar_json(MENSAJES)
         self.assertNotIn("127.0.0.1", str(contexto.exception))
 
     def test_no_sigue_redirecciones(self):
         self.servidor.redirige_a = "http://otro-equipo.example/v1/chat/completions"
-        with self.assertRaisesRegex(ErrorModelo, "redirección"):
+        with self.assertRaisesRegex(ModeloNoDisponible, "redirección"):
             self.modelo().consultar_json(MENSAJES)
 
     def test_probar_mide_cuanto_tarda_y_falla_si_no_responde_json(self):

@@ -25,12 +25,20 @@ URL_POR_DEFECTO = "http://127.0.0.1:11434/v1"  # Ollama
 
 
 class ErrorModelo(Exception):
-    """No se pudo obtener un análisis del modelo. El mensaje no incluye la dirección ni la respuesta."""
+    """No se pudo obtener un análisis del modelo. El mensaje no incluye la dirección ni la respuesta.
+
+    Este error a secas quiere decir que el modelo SÍ respondió pero no algo utilizable (vacío, sin JSON): con ese hallazgo
+    no va a andar mejor la próxima vez. Si el que falla es el servidor, el error es `ModeloNoDisponible`.
+    """
+
+
+class ModeloNoDisponible(ErrorModelo):
+    """El servidor no está, no contesta a tiempo o contesta algo que no es el protocolo: conviene reintentar más tarde."""
 
 
 class _SinRedirecciones(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
-        raise ErrorModelo("El servidor del modelo respondió con una redirección, que no se sigue")
+        raise ModeloNoDisponible("El servidor del modelo respondió con una redirección, que no se sigue")
 
 
 def extraer_json(texto: str) -> object:
@@ -75,6 +83,7 @@ class ModeloLocal:
             try:
                 crudo = self._pedir(mensajes, formato_json=True)
             except urllib.error.HTTPError as error:
+                error.close()  # el error es también la respuesta, con su conexión abierta
                 if error.code != 400:
                     raise
                 crudo = self._pedir(mensajes, formato_json=False)  # no todos los servidores aceptan response_format
@@ -82,12 +91,12 @@ class ModeloLocal:
         except ErrorModelo:
             raise
         except urllib.error.HTTPError as error:
-            raise ErrorModelo(f"El servidor del modelo respondió HTTP {error.code}") from None
+            raise ModeloNoDisponible(f"El servidor del modelo respondió HTTP {error.code}") from None
         except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as error:
             motivo = error.reason if isinstance(error, urllib.error.URLError) else error
-            raise ErrorModelo(f"No se pudo hablar con el servidor del modelo ({type(motivo).__name__})") from None
+            raise ModeloNoDisponible(f"No se pudo hablar con el servidor del modelo ({type(motivo).__name__})") from None
         except (ValueError, KeyError, IndexError, TypeError):
-            raise ErrorModelo("El servidor del modelo respondió con un formato que no se entiende") from None
+            raise ModeloNoDisponible("El servidor del modelo respondió con un formato que no se entiende") from None
         if not isinstance(contenido, str) or not contenido.strip():
             raise ErrorModelo("El modelo respondió vacío")
         return extraer_json(contenido)
