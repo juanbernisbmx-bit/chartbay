@@ -221,6 +221,73 @@ class ColectorInactivoTests(BaseAvisos):
         self.assertEqual([m for m in self.canal.mensajes if "no corre" in m.asunto], [])
 
 
+class RespaldosTests(BaseAvisos):
+    def respaldo(self, horas_antes, ok=True, error=None):
+        inicio = AHORA - timedelta(hours=horas_antes)
+        return self.uno("INSERT INTO respaldo (iniciado_en, terminado_en, ok, error) VALUES (%s, %s, %s, %s) RETURNING id",
+                        (inicio, inicio + timedelta(minutes=2), ok, None if ok else (error or "Base: pg_dump falló")))
+
+    def de_respaldo(self):
+        return [a for a in self.avisos() if a[0].startswith("respaldo")]
+
+    def test_sin_ningun_respaldo_todavia_no_hay_nada_que_extranar(self):
+        self.procesar()
+        self.assertEqual(self.de_respaldo(), [])
+
+    def test_un_respaldo_fallido_avisa_una_vez_por_racha(self):
+        self.respaldo(30)
+        primera = self.respaldo(5, ok=False, error="Base: pg_dump 16 no puede respaldar PostgreSQL 17")
+        self.procesar()
+        self.respaldo(2, ok=False)
+        self.procesar()
+        self.assertEqual(self.de_respaldo(), [("respaldo_fallido", "enviado", 1, str(primera))])
+        mensaje = self.canal.mensajes[0]
+        self.assertIn("pg_dump 16 no puede respaldar PostgreSQL 17", mensaje.cuerpo)
+        self.assertIn("respaldar estado", mensaje.cuerpo)
+        self.assertIsNone(mensaje.enlace)
+        # Uno bueno corta la racha: la falla siguiente es otra.
+        self.respaldo(1)
+        otra = self.respaldo(0, ok=False)
+        self.procesar()
+        self.assertEqual([a[3] for a in self.de_respaldo()], [str(primera), str(otra)])
+
+    def test_si_antes_de_entregarlo_salio_bien_uno_no_se_avisa(self):
+        self.respaldo(5, ok=False)
+        avisos.detectar(self.conn, HOY, AHORA)
+        self.respaldo(1)
+        self.procesar()
+        self.assertEqual(self.de_respaldo(), [("respaldo_fallido", "descartado", 0, self.de_respaldo()[0][3])])
+        self.assertEqual(self.canal.mensajes, [])
+
+    def test_si_hace_dias_que_no_sale_bien_ninguno_avisa_aunque_el_cron_ya_no_corra(self):
+        bueno = self.respaldo(24 * 3 + 1)
+        self.procesar()
+        self.procesar()
+        self.assertEqual(self.de_respaldo(), [("respaldo_atrasado", "enviado", 1, str(bueno))])
+        self.assertIn("No hay un respaldo bueno hace 3 días", self.canal.mensajes[0].asunto)
+        self.assertIn("¿Está montado el disco de destino?", self.canal.mensajes[0].cuerpo)
+
+    def test_un_dia_sin_respaldo_todavia_no_es_un_atraso(self):
+        self.respaldo(30)
+        self.procesar()
+        self.assertEqual(self.de_respaldo(), [])
+
+    def test_si_nunca_salio_bien_uno_lo_dice(self):
+        self.respaldo(24 * 2 + 3, ok=False)
+        self.procesar()
+        tipos = {a[0]: a for a in self.de_respaldo()}
+        self.assertEqual(set(tipos), {"respaldo_fallido", "respaldo_atrasado"})
+        self.assertEqual(tipos["respaldo_atrasado"][3], "0")
+        self.assertTrue(any("nunca salió bien uno" in m.cuerpo for m in self.canal.mensajes))
+
+    def test_un_atraso_que_se_resolvio_antes_de_entregarse_se_descarta(self):
+        self.respaldo(24 * 4)
+        avisos.detectar(self.conn, HOY, AHORA)
+        self.respaldo(1)
+        self.procesar()
+        self.assertEqual([a[:2] for a in self.de_respaldo()], [("respaldo_atrasado", "descartado")])
+
+
 class EntregaTests(BaseAvisos):
     def test_sin_canales_no_hace_nada_ni_acumula_avisos(self):
         self.candidato(hallazgos=[A])

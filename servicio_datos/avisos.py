@@ -1,6 +1,6 @@
 """Avisos: detecta lo que merece que alguien se entere y lo entrega por Slack o correo.
 
-Se avisa de cuatro cosas, que son las que un sistema que se supone silencioso no puede callar:
+Se avisa de lo que un sistema que se supone silencioso no puede callar:
 
 - `candidato_nuevo`: hay un candidato esperando revisión.
 - `candidato_pendiente`: ese candidato sigue abierto días después. Recordatorios escalonados (a los 3
@@ -10,6 +10,9 @@ Se avisa de cuatro cosas, que son las que un sistema que se supone silencioso no
 - `sin_datos`: pasó la ventana del mes y no llegó el dato (ni lo publicado ni un candidato abierto
   lo cubren).
 - `colector_inactivo`: no hay corridas hace días. Sin esto, un cron muerto lo silenciaría todo.
+- `respaldo_fallido`: falló el respaldo de la base o del crudo. Una vez por racha.
+- `respaldo_atrasado`: no hay un respaldo bueno hace días (falla, o directamente dejó de correr). Solo después del primer
+  respaldo: antes no hay nada que extrañar.
 
 La detección mira el estado de la base, no eventos: se puede correr sola, desde cualquier
 proceso, y da lo mismo cuántas veces. Cada aviso se registra con una clave única antes de
@@ -34,6 +37,7 @@ from servicio_datos.ipc.validacion import DIA_LIMITE_PUBLICACION
 MAX_INTENTOS = 5
 RECORDATORIO_DIAS = 3  # primer recordatorio de un candidato abierto; 0 los desactiva
 INACTIVIDAD_DIAS = 2  # el colector corre por lo menos una vez por día
+RESPALDO_ATRASO_DIAS = 2  # el respaldo corre una vez por día
 CANDADO = 727275  # pg_try_advisory_lock: una sola entrega a la vez
 ZONA = ZoneInfo("America/Argentina/Buenos_Aires")
 MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
@@ -133,7 +137,7 @@ _SIN_RESOLVER = ("NOT EXISTS (SELECT 1 FROM corrida c2 WHERE c2.fuente_id = c.fu
                  "AND c2.estado IN ('sin_cambios', 'con_candidato'))")
 
 
-def _insertar(conn: psycopg.Connection, clave: str, tipo: str, fuente_id: str, referencia: str, asunto: str, cuerpo: str, ruta: str | None) -> int:
+def _insertar(conn: psycopg.Connection, clave: str, tipo: str, fuente_id: str | None, referencia: str, asunto: str, cuerpo: str, ruta: str | None) -> int:
     return conn.execute(
         "INSERT INTO aviso (clave, tipo, fuente_id, referencia, asunto, cuerpo, ruta) VALUES (%s, %s, %s, %s, %s, %s, %s) "
         "ON CONFLICT (clave) DO NOTHING",
@@ -211,7 +215,34 @@ def _detectar_inactivo(conn: psycopg.Connection, ahora: datetime, **_) -> int:
     return creados
 
 
-DETECTORES: Sequence[Callable[..., int]] = (_detectar_candidatos, _detectar_recordatorios, _detectar_fallidas, _detectar_sin_datos, _detectar_inactivo)
+def _detectar_respaldos(conn: psycopg.Connection, ahora: datetime, **_) -> int:
+    ultimo = _filas(conn, "SELECT id, ok, iniciado_en, error FROM respaldo ORDER BY id DESC LIMIT 1")
+    if not ultimo:  # el respaldo todavía no se configuró
+        return 0
+    creados, ultimo = 0, ultimo[0]
+    bueno = _filas(conn, "SELECT id, iniciado_en FROM respaldo WHERE ok ORDER BY id DESC LIMIT 1")
+    if not ultimo["ok"]:
+        # Una vez por racha: la primera falla después del último respaldo bueno.
+        primera = conn.execute("SELECT min(id) FROM respaldo WHERE id > %s", (bueno[0]["id"] if bueno else 0,)).fetchone()[0]
+        error = " ".join((ultimo["error"] or "Sin detalle").split())[:400]
+        creados += _insertar(
+            conn, f"respaldo_fallido:{primera}", "respaldo_fallido", None, str(primera), "[Atención] Falló el respaldo de la base o del crudo",
+            f"El respaldo del {_fecha(ultimo['iniciado_en'])} falló:\n{error}\n"
+            "Mientras no salga bien uno posterior, no se vuelve a avisar de esta falla. El detalle: python -m servicio_datos.respaldar estado", None)
+    desde = bueno[0]["iniciado_en"] if bueno else conn.execute("SELECT min(iniciado_en) FROM respaldo").fetchone()[0]
+    dias = (ahora - desde).days
+    if dias >= RESPALDO_ATRASO_DIAS:
+        referencia = str(bueno[0]["id"]) if bueno else "0"
+        cuando = f"el último bueno es del {_fecha(desde)}" if bueno else "nunca salió bien uno"
+        creados += _insertar(
+            conn, f"respaldo_atrasado:{referencia}", "respaldo_atrasado", None, referencia, f"[Atención] No hay un respaldo bueno hace {dias} días",
+            f"Los respaldos de la base y del crudo corren una vez por día y {cuando}.\n"
+            "¿Está corriendo el cron? ¿Está montado el disco de destino? El detalle: python -m servicio_datos.respaldar estado", None)
+    return creados
+
+
+DETECTORES: Sequence[Callable[..., int]] = (_detectar_candidatos, _detectar_recordatorios, _detectar_fallidas, _detectar_sin_datos, _detectar_inactivo,
+                                            _detectar_respaldos)
 
 
 def detectar(conn: psycopg.Connection, hoy: date, ahora: datetime | None = None, dia_limite: int = DIA_LIMITE_PUBLICACION,
@@ -233,6 +264,10 @@ def _sigue_siendo_cierto(conn: psycopg.Connection, aviso: dict, hoy: date, ahora
         return ultimo is not None and ultimo < _esperado(hoy, dia_limite)
     if tipo == "colector_inactivo":
         return conn.execute("SELECT max(id) = %s FROM corrida WHERE fuente_id = %s", (int(ref), fuente_id)).fetchone()[0]
+    if tipo == "respaldo_fallido":
+        return conn.execute("SELECT NOT ok FROM respaldo ORDER BY id DESC LIMIT 1").fetchone()[0]
+    if tipo == "respaldo_atrasado":  # mientras no haya uno bueno más nuevo que el que se nombró
+        return conn.execute("SELECT coalesce(max(id), 0) = %s FROM respaldo WHERE ok", (int(ref),)).fetchone()[0]
     return True
 
 
