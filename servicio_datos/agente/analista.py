@@ -1,7 +1,7 @@
 """El analista: para cada hallazgo sin decidir de un candidato abierto, deja una propuesta fundada en hechos.
 
 Lo único que escribe es `propuesta`. No toca el candidato, no decide ningún hallazgo y no publica: la persona sigue
-siendo quien decide, y su decisión sobre el hallazgo resuelve la propuesta (ver `publicacion._resolver_propuestas`), así
+siendo quien decide, y su decisión sobre el hallazgo resuelve la propuesta (ver `resolver_propuestas` en la migración 0010), así
 queda registrado cuánto acierta el analista.
 
 Para cada hallazgo:

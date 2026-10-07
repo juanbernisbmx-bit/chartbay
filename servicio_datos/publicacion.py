@@ -1,5 +1,8 @@
 """Revisión y publicación de un candidato: lo que pasa después de que una persona lo mira.
 
+La lógica vive en funciones de la base (migración 0010), para que la puedan usar también una Edge Function o la página de
+revisión de ChartBay. Este módulo es la puerta de entrada desde Python: llama a esas funciones y traduce sus errores.
+
 Publicar convierte el contenido de un candidato abierto en el release vigente. Es la
 única forma de que un dato llegue a la capa publicada, y por eso exige que cada
 hallazgo del candidato haya sido aceptado por alguien. Todo ocurre en una transacción:
@@ -13,15 +16,16 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 from typing import Iterable
 
 import psycopg
-from psycopg import errors
-from psycopg.types.json import Jsonb
 
 from servicio_datos.ipc import fuente
+
+
+ERROR_DE_NEGOCIO = "CB001"  # el SQLSTATE con que fallan las funciones de la base; el DETAIL trae el código
 
 
 class ErrorPublicacion(Exception):
@@ -61,28 +65,15 @@ def hash_contenido(filas: Iterable[tuple[str, date, Decimal]]) -> str:
     return hashlib.sha256("\n".join(lineas).encode("utf-8")).hexdigest()
 
 
-def _resolver_propuestas(conn: psycopg.Connection, hallazgo_id: int, decision: str, revisor: str, comentario: str | None) -> None:
-    """Cierra las propuestas del agente que seguían pendientes según lo que decidió la persona.
-
-    La persona toma UNA decisión sobre el hallazgo y eso resuelve la propuesta: `aprobada` si coincide con lo que
-    sugería, `rechazada` si decidió distinto. Así queda registrado cuánto acierta el agente, que es el dato con el
-    que se gana (o no) la confianza para automatizar. Una propuesta que sugería `investigar` no puede estar en
-    desacuerdo: se da por consultada. Una que no tiene evidencia no se aprueba nunca.
-    """
-    for propuesta_id, sugerida, evidencia in conn.execute(
-        "SELECT id, accion_sugerida, evidencia FROM propuesta WHERE hallazgo_id = %s AND estado = 'pendiente' ORDER BY id", (hallazgo_id,)
-    ).fetchall():
-        coincide = sugerida in (None, "investigar") or (sugerida, decision) in (("aceptar", "aceptado"), ("rechazar", "rechazado"))
-        if coincide and not (evidencia or "").strip():
-            estado, nota = "rechazada", "Sin evidencia citada: no se puede aprobar."
-        elif coincide:
-            estado, nota = "aprobada", comentario
-        else:
-            estado, nota = "rechazada", (comentario or "").strip() or "La persona decidió distinto de lo que proponía el agente."
-        conn.execute(
-            "UPDATE propuesta SET estado = %s, revisor = %s, decidida_en = now(), comentario = %s WHERE id = %s",
-            (estado, revisor.strip(), nota, propuesta_id),
-        )
+def _llamar(conn: psycopg.Connection, consulta: str, parametros: tuple = ()) -> psycopg.Cursor:
+    """Llama a una función de la base, en su propia transacción (o en la de quien llama), y traduce sus errores."""
+    try:
+        with conn.transaction():
+            return conn.execute(consulta, parametros)
+    except psycopg.Error as error:
+        if error.sqlstate == ERROR_DE_NEGOCIO:
+            raise ErrorPublicacion(error.diag.message_detail or "error", error.diag.message_primary or str(error)) from None
+        raise
 
 
 def revisar_hallazgo(
@@ -90,162 +81,35 @@ def revisar_hallazgo(
 ) -> None:
     """Registra una decisión sobre un hallazgo. Una decisión nueva reemplaza a la anterior.
 
-    También resuelve las propuestas del agente que seguían pendientes sobre ese hallazgo (ver `_resolver_propuestas`).
+    También resuelve las propuestas del agente que seguían pendientes sobre ese hallazgo: aprobada si la persona decidió lo
+    que sugería, rechazada si no (ver `resolver_propuestas` en la migración 0010).
     """
-    try:
-        with conn.transaction():
-            conn.execute(
-                "INSERT INTO revision_hallazgo (hallazgo_id, decision, revisor, comentario) VALUES (%s, %s, %s, %s)",
-                (hallazgo_id, decision, revisor, comentario),
-            )
-            _resolver_propuestas(conn, hallazgo_id, decision, revisor, comentario)
-    except errors.RaiseException as error:
-        raise ErrorPublicacion("candidato_cerrado", "Ese hallazgo ya no se puede revisar: su candidato no está abierto") from error
-    except (errors.CheckViolation, errors.ForeignKeyViolation) as error:
-        raise ErrorPublicacion("revision_invalida", f"Revisión inválida: {error.diag.message_primary}") from error
+    _llamar(conn, "SELECT revisar_hallazgo(%s, %s, %s, %s)", (hallazgo_id, decision, revisor, comentario))
+
+
+def aceptar_pendientes(conn: psycopg.Connection, candidato_id: int, revisor: str, comentario: str | None = None,
+                       regla: str | None = None) -> int:
+    """Acepta de una vez los hallazgos sin decisión (los de una regla, o todos). Todos o ninguno. Devuelve cuántos."""
+    return _llamar(conn, "SELECT aceptar_pendientes(%s, %s, %s, %s)", (candidato_id, revisor, comentario, regla)).fetchone()[0]
 
 
 def estado_revision(conn: psycopg.Connection, candidato_id: int) -> EstadoRevision:
-    fila = conn.execute("SELECT corrida_id FROM candidato WHERE id = %s", (candidato_id,)).fetchone()
-    if fila is None:
-        raise ErrorPublicacion("no_existe", f"No existe el candidato {candidato_id}")
-    corrida_id = fila[0]
-    hallazgos = conn.execute(
-        "WITH ultima AS ("
-        " SELECT DISTINCT ON (r.hallazgo_id) r.hallazgo_id, r.decision FROM revision_hallazgo r"
-        " JOIN hallazgo h ON h.id = r.hallazgo_id WHERE h.corrida_id = %(c)s ORDER BY r.hallazgo_id, r.id DESC)"
-        " SELECT count(*), count(*) FILTER (WHERE u.decision = 'aceptado'),"
-        "  count(*) FILTER (WHERE u.decision = 'rechazado'), count(*) FILTER (WHERE u.decision IS NULL)"
-        " FROM hallazgo h LEFT JOIN ultima u ON u.hallazgo_id = h.id WHERE h.corrida_id = %(c)s",
-        {"c": corrida_id},
-    ).fetchone()
-    propuestas = conn.execute(
-        "SELECT count(*) FROM propuesta p JOIN hallazgo h ON h.id = p.hallazgo_id "
-        "WHERE h.corrida_id = %s AND p.estado = 'pendiente'", (corrida_id,),
-    ).fetchone()[0]
-    return EstadoRevision(*hallazgos, propuestas)
-
-
-def _utc(momento: datetime | None) -> str | None:
-    return momento.astimezone(timezone.utc).isoformat() if momento else None
+    return EstadoRevision(*_llamar(conn, "SELECT * FROM estado_revision(%s)", (candidato_id,)).fetchone())
 
 
 def procedencia_de(conn: psycopg.Connection, corrida_id: int) -> dict:
-    """Qué archivos y qué hoja, fila y notas respaldan a cada serie de una corrida.
-
-    Tres fechas que no se mezclan: `retrieved_at` es la primera vez que se vio el archivo (no cuando se lo volvió a ver
-    idéntico); `http_last_modified` es lo que declara el servidor HTTP (`Last-Modified`), que dice cuándo cambió el archivo
-    ahí y no cuándo se publicó oficialmente; y `published_at` queda vacía porque la fuente no informa la hora oficial.
-    """
-    resumen = conn.execute("SELECT resumen FROM corrida WHERE id = %s", (corrida_id,)).fetchone()[0]
-    archivos = []
-    for archivo in resumen.get("archivos", []):
-        captura, modificada = conn.execute(
-            "SELECT min(descargada_en), max(publicada_en) FROM descarga "
-            "WHERE url = %s AND sha256 = %s AND estado IN ('nueva', 'identica')",
-            (archivo["url"], archivo["sha256"]),
-        ).fetchone()
-        archivos.append({
-            "clave": archivo["clave"], "file": archivo["url"].rsplit("/", 1)[-1], "url": archivo["url"],
-            "sha256": archivo["sha256"], "retrieved_at": _utc(captura), "http_last_modified": _utc(modificada), "published_at": None,
-        })
-    return {"archivos": archivos, "series": resumen.get("detalle_series", {})}
-
-
-def _plural(n: int, singular: str, plural: str) -> str:
-    return f"{n} {singular if n == 1 else plural}"
+    """Qué archivos y qué hoja, fila y notas respaldan a cada serie de una corrida (ver `procedencia_de` en la base)."""
+    return _llamar(conn, "SELECT procedencia_de(%s)", (corrida_id,)).fetchone()[0]
 
 
 def publicar_candidato(
     conn: psycopg.Connection, candidato_id: int, aprobado_por: str, *,
     fecha: date | None = None, prefijo: str = fuente.RELEASE_PREFIJO,
 ) -> Publicacion:
-    if not aprobado_por or not aprobado_por.strip():
-        raise ErrorPublicacion("aprobador_vacio", "Falta quién aprueba la publicación")
-    fecha = fecha or datetime.now(timezone.utc).date()
-
-    with conn.transaction():
-        previo = conn.execute(
-            "SELECT co.fuente_id, c.corrida_id FROM candidato c JOIN corrida co ON co.id = c.corrida_id WHERE c.id = %s",
-            (candidato_id,),
-        ).fetchone()
-        if previo is None:
-            raise ErrorPublicacion("no_existe", f"No existe el candidato {candidato_id}")
-        # Una publicación por vez por fuente: dos releases a la vez se pisarían las versiones.
-        conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("publicar:" + previo[0],))
-        estado = conn.execute("SELECT estado FROM candidato WHERE id = %s FOR UPDATE", (candidato_id,)).fetchone()[0]
-        if estado != "abierto":
-            raise ErrorPublicacion("no_abierto", f"El candidato {candidato_id} no está abierto (estado: {estado})")
-
-        revision = estado_revision(conn, candidato_id)
-        if revision.rechazados:
-            raise ErrorPublicacion(
-                "hallazgos_rechazados",
-                f"Hay {_plural(revision.rechazados, 'hallazgo rechazado', 'hallazgos rechazados')}: "
-                "el candidato no se publica, hay que descartarlo o esperar uno nuevo",
-            )
-        if revision.pendientes:
-            raise ErrorPublicacion(
-                "hallazgos_pendientes", f"Faltan {_plural(revision.pendientes, 'hallazgo', 'hallazgos')} por resolver"
-            )
-        if revision.propuestas_pendientes:
-            raise ErrorPublicacion(
-                "propuestas_pendientes",
-                f"Faltan decidir {_plural(revision.propuestas_pendientes, 'propuesta', 'propuestas')} del agente",
-            )
-
-        filas = conn.execute(
-            "SELECT serie_id, periodo, valor FROM observacion_candidata WHERE candidato_id = %s ORDER BY serie_id, periodo",
-            (candidato_id,),
-        ).fetchall()
-        if not filas:
-            raise ErrorPublicacion("candidato_vacio", f"El candidato {candidato_id} no tiene observaciones")
-
-        contenido = hash_contenido(filas)
-        release_id, intento = f"{prefijo}-{fecha.isoformat()}-{contenido[:10]}", 1
-        while conn.execute("SELECT 1 FROM release WHERE release_id = %s", (release_id,)).fetchone():
-            # El mismo contenido el mismo día (un cambio y su vuelta atrás): se distingue con un número.
-            intento += 1
-            release_id = f"{prefijo}-{fecha.isoformat()}-{contenido[:10]}-{intento}"
-        numero = conn.execute(
-            "INSERT INTO release (release_id, candidato_id, aprobado_por, hash_contenido, procedencia) "
-            "VALUES (%s, %s, %s, %s, %s) RETURNING numero",
-            (release_id, candidato_id, aprobado_por.strip(), contenido, Jsonb(procedencia_de(conn, previo[1]))),
-        ).fetchone()[0]
-
-        # Se cierra lo que ya no coincide con el candidato y después se abre lo que no está vigente.
-        cerradas = conn.execute(
-            "UPDATE observacion o SET release_hasta = %s FROM serie s "
-            "WHERE s.id = o.serie_id AND s.fuente_id = %s AND o.release_hasta IS NULL AND NOT EXISTS ("
-            " SELECT 1 FROM observacion_candidata c WHERE c.candidato_id = %s AND c.serie_id = o.serie_id "
-            " AND c.periodo = o.periodo AND c.valor = o.valor)",
-            (numero, previo[0], candidato_id),
-        ).rowcount
-        abiertas = conn.execute(
-            "INSERT INTO observacion (serie_id, periodo, valor, release_desde) "
-            "SELECT c.serie_id, c.periodo, c.valor, %s FROM observacion_candidata c WHERE c.candidato_id = %s "
-            "AND NOT EXISTS (SELECT 1 FROM observacion o WHERE o.serie_id = c.serie_id AND o.periodo = c.periodo "
-            " AND o.valor = c.valor AND o.release_hasta IS NULL)",
-            (numero, candidato_id),
-        ).rowcount
-        conn.execute(
-            "UPDATE candidato SET estado = 'publicado', decidido_en = now(), decidido_por = %s WHERE id = %s",
-            (aprobado_por.strip(), candidato_id),
-        )
-    return Publicacion(numero, release_id, contenido, abiertas, cerradas, len(filas) - abiertas)
+    fila = _llamar(conn, "SELECT * FROM publicar_candidato(%s, %s, %s, %s)", (candidato_id, aprobado_por, prefijo, fecha)).fetchone()
+    return Publicacion(*fila)
 
 
 def descartar_candidato(conn: psycopg.Connection, candidato_id: int, decidido_por: str, motivo: str) -> None:
     """Rechaza el candidato entero. No toca nada de lo publicado."""
-    if not decidido_por.strip() or not motivo.strip():
-        raise ErrorPublicacion("descarte_incompleto", "Descartar un candidato exige quién lo descarta y por qué")
-    actualizado = conn.execute(
-        "UPDATE candidato SET estado = 'descartado', decidido_en = now(), decidido_por = %s, motivo = %s "
-        "WHERE id = %s AND estado = 'abierto' RETURNING id",
-        (decidido_por.strip(), motivo.strip(), candidato_id),
-    ).fetchone()
-    if actualizado is None:
-        existe = conn.execute("SELECT estado FROM candidato WHERE id = %s", (candidato_id,)).fetchone()
-        if existe is None:
-            raise ErrorPublicacion("no_existe", f"No existe el candidato {candidato_id}")
-        raise ErrorPublicacion("no_abierto", f"El candidato {candidato_id} no está abierto (estado: {existe[0]})")
+    _llamar(conn, "SELECT descartar_candidato(%s, %s, %s)", (candidato_id, decidido_por, motivo))

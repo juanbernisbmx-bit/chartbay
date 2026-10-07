@@ -1,6 +1,6 @@
 # Base de datos: todo dentro de Supabase (plan)
 
-Estado: plan aprobado; paso 0 hecho (2026-10-07).
+Estado: plan aprobado; pasos 0 y 1 hechos (2026-10-07).
 
 ## La decisión
 
@@ -75,14 +75,44 @@ pipeline, revisión Flask, despliegue en Ubuntu, modelo local, respaldo a disco 
    SheetJS, unos milisegundos. Las 819 observaciones coinciden una por una con las del parser de Python (solo cambia escribir `100`
    en vez de `100.0`, que la base trata igual). Leer solo la hoja necesaria no ahorra: el `.xls` se recorre entero. Si el servidor de
    Supabase resultara bastante más lento, cada archivo puede ir en su propio pedido.
-1. **Revisión y publicación como funciones SQL**, con el esquema `revision` y la lista de revisores. Es la base de la página de
-   ChartBay y no depende de nada más.
+1. **Revisión y publicación como funciones SQL**, con el esquema `revision` y la lista de revisores. **Hecho**: ver "La API de
+   revisión" abajo.
 2. **Validación y carga del candidato como funciones SQL.**
 3. **Edge Function `colectar-ipc`**, el bucket del crudo y pg_cron.
 4. **La página de revisión en ChartBay.**
 5. **Avisos.**
 6. **El analista con la API.**
 7. **El respaldo**, según lo que se decida.
+
+## La API de revisión (paso 1)
+
+La lógica de revisar y publicar está en funciones del esquema del servicio (migración 0010): `revisar_hallazgo`,
+`aceptar_pendientes`, `estado_revision`, `publicar_candidato`, `descartar_candidato`, `procedencia_de` y `hash_candidato` (el mismo
+hash que Python). `publicacion.py` las llama, así que las ~230 pruebas de siempre las cubren. Un error de negocio sale con
+SQLSTATE `CB001`, el mensaje para la persona y un código en DETAIL (`no_existe`, `no_abierto`, `hallazgos_pendientes`,
+`hallazgos_rechazados`, `propuestas_pendientes`, `candidato_vacio`, `revision_invalida`, `candidato_cerrado`, `descarte_incompleto`,
+`aprobador_vacio`).
+
+La página de ChartBay no ve esas tablas ni esas funciones: ve el esquema `revision` (`api_revision.py`), que se instala aparte y
+se expone en Supabase. Todas sus funciones exigen que el correo de la sesión de Supabase Auth esté activo en la tabla `revisor`
+(si no: SQLSTATE `42501`, DETAIL `no_autorizado`) y revisan o publican con el nombre de esa tabla:
+
+| Función (`supabase.schema('revision').rpc(...)`) | Parámetros | Devuelve |
+| --- | --- | --- |
+| `cola` | — | `{revisor, abiertos[], fallidas[], historial[], release}` |
+| `candidato` | `candidato_id` | `{candidato, estado, archivos[], hallazgos[] (con su decisión y sus propuestas), diferencias}` |
+| `series` | `candidato_id`, `serie_ids[]` | `{serie_id: {candidato: [[periodo, valor]...], vigente: [...]}}` |
+| `revisar` | `hallazgo_id`, `decision` (`aceptado`/`rechazado`), `comentario` | nada |
+| `aceptar_pendientes` | `candidato_id`, `regla` (opcional), `comentario` (opcional) | cuántos aceptó |
+| `publicar` | `candidato_id` | `{release_numero, release_id, hash_contenido, observaciones_abiertas, ...}` |
+| `descartar` | `candidato_id`, `motivo` | nada |
+| `revisor_actual` | — | el nombre del revisor, o `null` |
+
+Para instalarla: aplicar las migraciones, correr el SQL de `python -m servicio_datos.api_revision` (o `api_revision.instalar` desde
+`preparar_supabase`), agregar `revision` a *Exposed schemas* y cargar los revisores (`INSERT INTO economia.revisor (email, nombre)`).
+Supabase Auth tiene que exigir confirmar el correo: la lista confía en que el correo de la sesión es de quien la inició. Las pruebas
+imitan una sesión con el rol `authenticated` y el correo en `request.jwt.claims`, que es lo que hace Supabase; no se probó contra
+Supabase de verdad.
 
 ## Reparto con Codex (aprobado por Juani)
 

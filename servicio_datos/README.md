@@ -31,7 +31,10 @@ cambios.
 - `agente/`: el analista de hallazgos, con un modelo de lenguaje local. Ver "El analista".
 - `revision/`: la interfaz web de revisión (cola de candidatos y pantalla de revisión). Es una app
   Flask aparte de la web pública de ChartBay, con login. Ver "Interfaz de revisión".
-- `publicacion.py`, `publicar.py`: la revisión y la publicación de un candidato. Publicar es
+- `api_revision.py`: el esquema `revision` que ve la página de revisión de ChartBay, con sesión de Supabase Auth. Ver
+  `docs/base-datos-supabase.md`.
+- `publicacion.py`, `publicar.py`: la revisión y la publicación de un candidato (la lógica está en funciones de la base,
+  migración 0010; este módulo las llama). Publicar es
   la única forma de que un dato llegue a lo vigente, y exige que cada hallazgo esté aceptado.
   `publicar.py` es el comando para revisar desde la terminal hasta que exista la interfaz.
 - `ipc/fuente.py`, `ipc/modelos.py`: qué archivos trae el IPC, cómo se describen
