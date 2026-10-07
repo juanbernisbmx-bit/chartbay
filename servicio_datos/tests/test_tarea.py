@@ -140,7 +140,7 @@ class LineaDeComandosTests(Base):
         return codigo, salida.getvalue(), errores.getvalue()
 
     def test_las_tareas_apuntan_a_modulos_que_existen(self):
-        self.assertEqual(sorted(tarea.TAREAS), ["agente", "avisar", "ejecutar"])
+        self.assertEqual(sorted(tarea.TAREAS), ["agente", "avisar", "ejecutar", "respaldar"])
         for comando in tarea.TAREAS.values():
             modulo = comando[comando.index("-m") + 1]
             self.assertIsNotNone(importlib.util.find_spec(modulo), modulo)

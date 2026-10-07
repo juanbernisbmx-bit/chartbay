@@ -1,7 +1,7 @@
 # Tareas programadas del servicio de datos de ChartBay. Se instala como /etc/cron.d/chartbay-datos.
 #
-# Las tres corren como chartbay-datos, con el lanzador de tareas: carga los secretos de /etc/chartbay-datos/entorno,
-# evita que dos corridas de la misma tarea se pisen y corta una colgada a los 20 minutos (la tarea 3, a la hora).
+# Todas corren como chartbay-datos, con el lanzador de tareas: carga los secretos de /etc/chartbay-datos/entorno,
+# evita que dos corridas de la misma tarea se pisen y corta una colgada a los 20 minutos (las tareas 3 y 4, a la hora).
 #
 # El servidor tiene que estar en hora de Argentina (timedatectl); CRON_TZ lo fuerza en las versiones de cron que
 # lo entienden. Si no, las horas de abajo corren en la hora del equipo: no se rompe nada (las tareas se pueden repetir
@@ -26,3 +26,8 @@ DATOS_RUN_DIR=/var/lib/chartbay-datos
 #    modelo (es una consulta a la base), así que cada hora es barato; si el modelo no está, reintenta en la hora siguiente.
 #    Trabaja hasta 50 minutos y el lanzador lo corta a los 60.
 45 * * * *     chartbay-datos  cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno --limite 3600 agente --limite 3000 >> /var/log/chartbay-datos/agente.log 2>&1
+
+# 4) Respaldo de la base (pg_dump con un rol de solo lectura) y del crudo, a DATOS_RESPALDO_DIR, que tiene que estar en otro
+#    disco. Verifica todo lo copiado, ensaya restaurar si hay base de ensayo y poda lo viejo. De madrugada, lejos de la tarea 1.
+#    Si falla o deja de correr, avisa la tarea 2 (lo ve en la tabla `respaldo`).
+15 3 * * *     chartbay-datos  cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno --limite 3600 respaldar >> /var/log/chartbay-datos/respaldar.log 2>&1

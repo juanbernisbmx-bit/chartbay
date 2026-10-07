@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from servicio_datos import tarea
+from servicio_datos import respaldo, tarea
 from servicio_datos.agente.modelo import modelo_desde_entorno
 from servicio_datos.canales import configuracion_desde_entorno
 from servicio_datos.revision.__main__ import revisores_desde_entorno
@@ -70,7 +70,7 @@ def seccion_unidad():
 class CronTests(unittest.TestCase):
     def test_el_horario_es_valido(self):
         trabajos, _ = trabajos_cron()
-        self.assertEqual(len(trabajos), 3)
+        self.assertEqual(len(trabajos), 4)
         for t in trabajos:
             for campo, (minimo, maximo) in zip(t["horario"], ((0, 59), (0, 23), (1, 31), (1, 12), (0, 7))):
                 self.assertTrue(campo_cron_valido(campo, minimo, maximo), f"{campo} en {t['comando'][:60]}")
@@ -106,6 +106,14 @@ class CronTests(unittest.TestCase):
         limite_trabajo = int(re.search(r" agente --limite (\d+) >>", comando["comando"]).group(1))
         self.assertLess(limite_trabajo, limite_lanzador)
         self.assertLessEqual(limite_lanzador, 3600)
+
+    def test_el_respaldo_corre_cada_dia_de_madrugada_lejos_de_la_colecta(self):
+        por_tarea = {nombre_de_tarea(t["comando"]): t for t in trabajos_cron()[0]}
+        minuto, hora, dia, mes, semana = por_tarea["respaldar"]["horario"]
+        self.assertTrue(minuto.isdigit() and hora.isdigit() and int(hora) < 7, "una vez por día, de madrugada")
+        self.assertEqual((dia, mes, semana), ("*", "*", "*"))
+        self.assertNotIn(hora, por_tarea["ejecutar"]["horario"][1].split(","))
+        self.assertRegex(por_tarea["respaldar"]["comando"], r"--limite (\d+) respaldar >>")
 
     def test_el_entorno_del_cron(self):
         _, entorno = trabajos_cron()
@@ -156,6 +164,14 @@ class EntornoEjemploTests(unittest.TestCase):
         elegido = modelo_desde_entorno({**valores, "DATOS_AGENTE_MODELO": "qwen2.5:7b"})  # con modelo elegido, el resto del ejemplo sirve tal cual
         self.assertEqual((elegido.nombre, elegido._timeout), ("qwen2.5:7b", 180))
         self.assertRegex(valores["DATOS_AGENTE_URL"], r"^http://(127\.0\.0\.1|localhost)[:/]")
+
+    def test_el_respaldo_lo_acepta_tal_cual_y_usa_un_rol_de_solo_lectura(self):
+        valores = self.cargar()
+        conf = respaldo.configuracion_desde_entorno(valores)
+        self.assertEqual((conf.dias, conf.url_ensayo, conf.pg_bin), (30, None, None))
+        self.assertIn("datos_respaldo.PROJECT_REF:CLAVE@", conf.url_volcado)  # no el rol que escribe
+        self.assertNotIn("datos_escritura", conf.url_volcado)
+        self.assertTrue(str(conf.destino).startswith("/mnt/"), "el ejemplo sugiere otro disco, no una carpeta junto al crudo")
 
     def test_el_servicio_lo_acepta_tal_cual(self):
         valores = self.cargar()
@@ -224,6 +240,12 @@ class ProxyYRegistrosTests(unittest.TestCase):
         guia = (RAIZ / "docs" / "despliegue-servicio-datos.md").read_text(encoding="utf-8")
         for texto in ("DATOS_AGENTE_MODELO", "agente probar", "agente estado", "agente.log", "Solo propone", "nunca con un\nmodelo real"):
             self.assertIn(texto, guia)
+
+    def test_la_guia_explica_el_respaldo_y_como_restaurar(self):
+        guia = (RAIZ / "docs" / "despliegue-servicio-datos.md").read_text(encoding="utf-8")
+        for texto in ("DATOS_RESPALDO_DIR", "respaldar sql-del-rol", "respaldar ensayar", "restaurar-crudo", "pg_restore", "otro disco", "respaldar.log"):
+            self.assertIn(texto, guia)
+        self.assertNotIn("Respaldos**: no están automatizados", guia)
 
     def test_todos_los_archivos_usan_las_mismas_rutas_base(self):
         for nombre in ("chartbay-datos.cron", "chartbay-revision.service"):

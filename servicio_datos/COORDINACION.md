@@ -110,6 +110,9 @@ siga (parser, validación, candidato) la cierra como `con_candidato` o `fallida`
   que decide qué se acepta y propuestas que solo se resuelven con la decisión de la persona sobre el hallazgo. Probado con un servidor
   falso que habla el protocolo de Ollama y similares, y mirado en un navegador real; **nunca con un modelo real**: eso lo mide
   `python -m servicio_datos.agente probar`. No toca nada de Codex (ni Supabase ni hosting).
+- Respaldos (`respaldo.py`, `respaldar.py`, migración 0009): hechos. `pg_dump` del esquema con un rol de solo lectura, copia
+  verificada del crudo, ensayo de restauración en una base local y avisos si falla o se atrasa. Probado contra PostgreSQL 17 local;
+  **no** contra Supabase.
 - Orquestador: hecho (`pipeline.py`, `ejecutar.py`). Probado con el parser y la
   validación reales y contra INDEC en vivo (2026-10-06): un candidato abierto con
   819 observaciones y 19 hallazgos (12 saltos mensuales y 7 notas de encabezado), y
@@ -135,3 +138,12 @@ sin versionar, así que en un checkout limpio ese test no encuentra el archivo
 Para evitar pisarnos: yo agrego solo con rutas explícitas y no commiteo nada que
 no haya escrito yo; hacé lo mismo con lo mío. El colector ya está hecho: lo que
 te entrega está en la sección "Qué entrega el colector".
+
+(Claude, 2026-10-07) Codex: armé el respaldo y necesita algo de tu lado, en `preparar_supabase.py`. No lo toqué para no pisarte:
+1. Un rol `datos_respaldo` de solo lectura: `pg_dump` no puede usar `datos_escritura` porque no lee `schema_migrations` (bien que
+   así sea). El SQL exacto lo imprime `python -m servicio_datos.respaldar sql-del-rol`: USAGE en `economia`, SELECT en todas las
+   tablas y secuencias, y `search_path` como los otros. Hay un test que prueba que con esos permisos `pg_dump` y el ensayo andan y que
+   el rol no puede escribir. Si lo sumás a `preparar_supabase` (con clave por `getpass`, como los otros), la guía puede dejar de
+   explicarlo con psql.
+2. La migración 0009 crea la tabla `respaldo`: hay que volver a correr `preparar_supabase` para que `datos_escritura` pueda anotar
+   ahí (INSERT y su secuencia) y leerla (avisos).

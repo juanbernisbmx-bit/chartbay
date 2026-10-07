@@ -44,3 +44,15 @@ DATOS_AGENTE_MODELO=
 DATOS_AGENTE_URL=http://127.0.0.1:11434/v1
 # Segundos de espera por cada respuesta del modelo (entre 5 y 3600)
 DATOS_AGENTE_TIMEOUT=180
+
+# --- Respaldo de la base y del crudo (ver docs/despliegue-servicio-datos.md, sección 8) ---
+# Dónde se guarda todo. Tiene que estar en OTRO disco que DATOS_CRUDO_DIR: si ese disco falla, se pierden los dos.
+DATOS_RESPALDO_DIR=/mnt/respaldo-chartbay/chartbay-datos
+# Rol de SOLO LECTURA para pg_dump (lo crea el administrador con: python -m servicio_datos.respaldar sql-del-rol)
+DATOS_RESPALDO_DATABASE_URL='postgresql://datos_respaldo.PROJECT_REF:CLAVE@HOST_DEL_POOLER:5432/postgres?sslmode=require'
+# Días durante los que se conservan todos los volcados; de los más viejos queda uno por mes
+DATOS_RESPALDO_DIAS=30
+# Base LOCAL, vacía y dedicada, donde se ensaya cada día la restauración (opcional, recomendado)
+DATOS_RESPALDO_ENSAYO_URL=
+# Carpeta de pg_dump y pg_restore si los del PATH no son de la versión del servidor (p. ej. /usr/lib/postgresql/17/bin)
+DATOS_PG_BIN=

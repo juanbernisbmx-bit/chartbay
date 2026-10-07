@@ -1,7 +1,7 @@
 # Despliegue del servicio de datos (HTTPS y cron)
 
 Este documento instala, en el equipo Ubuntu del club, lo que corre fuera de Supabase: la interfaz de revisión, detrás
-de HTTPS, y las tres tareas programadas. La base de datos (Supabase, sus roles y sus migraciones) está en
+de HTTPS, y las cuatro tareas programadas. La base de datos (Supabase, sus roles y sus migraciones) está en
 [`despliegue-supabase.md`](despliegue-supabase.md); hacé eso primero.
 
 ```
@@ -10,6 +10,7 @@ INDEC ──► cron: ejecutar ──► PostgreSQL (Supabase) ◄── ChartBa
    revisores ──HTTPS──► Caddy ──► gunicorn (revisión) ─────┘
    cron: avisar ──► Slack / correo                         ▲
    cron: agente ──► modelo local (esta misma computadora) ─┘  (solo escribe propuestas)
+   cron: respaldar ──► otro disco: volcado de la base y copia del crudo
 ```
 
 Los archivos están en `servicio_datos/despliegue/`:
@@ -19,7 +20,7 @@ Los archivos están en `servicio_datos/despliegue/`:
 | `entorno.ejemplo` | `/etc/chartbay-datos/entorno` | Los secretos y la configuración. Lo leen las tareas y la interfaz |
 | `chartbay-revision.service` | `/etc/systemd/system/` | La interfaz de revisión como servicio, escuchando solo en `127.0.0.1:8000` |
 | `Caddyfile` | `/etc/caddy/Caddyfile` | El HTTPS: certificado automático y proxy hacia el servicio |
-| `chartbay-datos.cron` | `/etc/cron.d/chartbay-datos` | Las tres tareas programadas |
+| `chartbay-datos.cron` | `/etc/cron.d/chartbay-datos` | Las cuatro tareas programadas |
 | `logrotate-chartbay-datos` | `/etc/logrotate.d/chartbay-datos` | Rotación de los registros de cron |
 
 ## Qué se verificó y qué no
@@ -31,6 +32,10 @@ lanzador de tareas tiene pruebas de bloqueo, límite de tiempo y permisos.
 
 El analista (sección 7) se probó solo contra un servidor falso que habla el mismo protocolo que Ollama y los demás: **nunca con un
 modelo real**. Que su código ande no dice nada sobre si un modelo concreto sirve; para eso está `agente probar`.
+
+Los respaldos (sección 8) se probaron contra un PostgreSQL 17 local con `pg_dump` y `pg_restore` 17 reales: volcado con un rol de solo
+lectura armado con `sql-del-rol`, ensayo de restauración completo y recuperación del crudo. **No se probó** contra Supabase (ni volcar
+por el pooler ni restaurar ahí), ni el montaje del disco, ni el PostgreSQL de ensayo en Ubuntu.
 
 **No se probó**: la unidad de systemd ni el archivo de cron en Ubuntu (no hay cómo hacerlo desde una Mac; usan directivas
 comunes, y las pruebas fijan que sean coherentes entre sí), ni un certificado real de Let's Encrypt, ni la conexión a Supabase.
@@ -46,7 +51,7 @@ sudo chmod 750 /var/lib/chartbay-datos /etc/chartbay-datos
 ```
 
 `/var/lib/chartbay-datos/crudo` guarda los `.xls` originales: la base sola no alcanza para reconstruir una descarga si se
-pierde. **Respaldala** (junto con la base; ver "Respaldos").
+pierde. **Respaldala** (junto con la base; ver la sección 8).
 
 ## 2. El código y sus dependencias
 
@@ -111,7 +116,7 @@ configuración lista para esos: el servicio sirve igual, solo necesita que quien
 el puerto 8000 directo ni quites el proxy dejando `DATOS_REVISION_PROXY=1`: cualquiera podría falsear su dirección y esquivar el
 límite de intentos.
 
-## 6. Las tres tareas
+## 6. Las tareas programadas
 
 ```bash
 sudo cp servicio_datos/despliegue/chartbay-datos.cron /etc/cron.d/chartbay-datos      # root, 644: cron.d lo exige
@@ -124,6 +129,7 @@ sudo cp servicio_datos/despliegue/logrotate-chartbay-datos /etc/logrotate.d/char
 | `ejecutar` | 9:30 y 17:30 | Descarga el IPC, lo valida, y deja un candidato si hay algo nuevo; entrega los avisos que genere. Si no hay nada nuevo, no hace nada |
 | `avisar` | cada 4 horas | Detecta y entrega avisos: candidato nuevo, recordatorios, corrida fallida, "no llegó el dato", "el colector no corre" |
 | `agente` | cada hora, al minuto 45 | Deja una propuesta fundada junto a cada hallazgo del candidato abierto (sección 7). Sin nada pendiente no usa el modelo |
+| `respaldar` | 3:15 | Respalda la base y el crudo en otro disco, verifica lo copiado, ensaya restaurar si hay dónde y poda lo viejo (sección 8) |
 
 Los últimos tres meses (julio, agosto y septiembre de 2026) INDEC la publicó entre las 15:52 y las 16:08: la corrida de las 17:30 la
 encuentra el mismo día. `avisar` corre **aparte** a propósito: los avisos de silencio los detecta quien mira desde afuera, y si el único que mira es la
@@ -133,7 +139,7 @@ El servidor tiene que estar en hora de Argentina (`timedatectl`); `CRON_TZ` lo f
 no, las horas corren en la del equipo: no se rompe nada, solo cambia a qué hora se enteran del dato.
 
 Cada corrida deja una línea de registro en `/var/log/chartbay-datos/<tarea>.log` con su código de salida y lo que tardó. Si una
-corrida anterior sigue andando, la nueva se omite (no es un error). Una corrida colgada se corta a los 20 minutos (`agente`, a la hora).
+corrida anterior sigue andando, la nueva se omite (no es un error). Una corrida colgada se corta a los 20 minutos (`agente` y `respaldar`, a la hora).
 
 ## 7. El analista de hallazgos con un modelo local (opcional)
 
@@ -169,6 +175,91 @@ Si el servidor del modelo no está, el analista no escribe nada de esos hallazgo
 1 (se ve en `agente.log`); la hora siguiente reintenta. Un hallazgo cuya respuesta fue inservible queda marcado como "requiere
 revisión humana" y no se reintenta.
 
+## 8. Respaldos de la base y del crudo
+
+Hacen falta los dos, por separado: la base (en el plan gratuito de Supabase no hay copias diarias) y el crudo (los `.xls`
+originales; INDEC pisa `sh_ipc_aperturas.xls` cada mes, así que el crudo es la única copia de las versiones anteriores). `respaldar`
+corre cada día a las 3:15:
+
+- **Base**: `pg_dump` del esquema `economia` con un rol que solo puede leer. Las filas de cada tabla se cuentan en la misma foto de la
+  base que se vuelca y quedan en un manifiesto (`.json`) junto al volcado (`.dump`).
+- **Crudo**: copia lo nuevo y verifica todo, original y copia, recalculando el hash que es el nombre de cada archivo. Una copia dañada
+  se repone sola; un original dañado o que falta se avisa. De la copia del crudo no se borra nunca nada.
+- **Ensayo** (si hay una base local para eso): restaura el volcado del día y compara tabla por tabla con el manifiesto.
+- **Conservación**: todos los volcados de los últimos 30 días (`DATOS_RESPALDO_DIAS`) y, de los anteriores, el primero de cada mes.
+  Nunca borra el último bueno.
+- Cada corrida queda en la tabla `respaldo`. Si una falla, o si pasan dos días sin uno bueno (aunque el cron haya dejado de correr),
+  `avisar` lo avisa. El detalle de cada corrida va a `respaldar.log`.
+
+### El disco
+
+`DATOS_RESPALDO_DIR` tiene que estar en **otro disco** que el crudo (un disco USB, otro disco interno, un NAS montado): si están en el
+mismo y ese disco falla, se pierden los dos. Montalo por UUID y con `nofail` en `/etc/fstab` (así el equipo arranca aunque el disco no
+esté) y creá la carpeta **una sola vez, con el disco montado**:
+
+```bash
+sudo mkdir /mnt/respaldo-chartbay/chartbay-datos      # con el disco ya montado en /mnt/respaldo-chartbay
+sudo chown chartbay-datos:chartbay-datos /mnt/respaldo-chartbay/chartbay-datos && sudo chmod 700 /mnt/respaldo-chartbay/chartbay-datos
+```
+
+El respaldo **no crea** esa carpeta: si el disco no se montó, falla y avisa, en vez de llenar en silencio el disco del sistema. Si
+igual quedan en el mismo disco, cada corrida lo advierte.
+
+Esto protege de un disco que se rompe y de un borrado, no de perder el equipo entero (robo, incendio). Para eso hay que sincronizar
+`DATOS_RESPALDO_DIR` con otro lugar (por ejemplo con rclone o restic a un almacenamiento externo); eso no está armado ni probado.
+
+### El rol de solo lectura
+
+`pg_dump` necesita leer todo el esquema, también `schema_migrations`, que `datos_escritura` no puede leer a propósito. El respaldo usa
+un rol propio que solo lee. Lo crea el administrador, una vez:
+
+```bash
+python -m servicio_datos.respaldar sql-del-rol     # imprime el SQL, sin ninguna clave
+psql "postgresql://postgres.PROJECT_REF@HOST_DEL_POOLER:5432/postgres?sslmode=require"     # pide la clave del administrador
+```
+
+En psql se pega ese SQL y después `\password datos_respaldo`, que pide la clave nueva sin que quede escrita en ningún lado. La URL va
+en `DATOS_RESPALDO_DATABASE_URL`, con el usuario `datos_respaldo.PROJECT_REF`. Después de cada migración nueva hay que repetir los dos
+`GRANT SELECT` (igual que se repite `preparar_supabase` para los otros roles); si no, el respaldo falla diciendo qué tabla no puede leer.
+
+### pg_dump de la versión del servidor
+
+`pg_dump` tiene que ser de la misma versión mayor que el PostgreSQL de Supabase, o más nueva. El respaldo lo comprueba y, si no, falla
+diciendo qué instalar. El de Ubuntu puede quedar viejo: instalá `postgresql-client-N` (N es la versión del servidor, que muestra el
+panel de Supabase) desde el repositorio oficial de PostgreSQL ([instrucciones](https://www.postgresql.org/download/linux/ubuntu/)). Si
+queda más de una versión instalada, indicá la carpeta en `DATOS_PG_BIN` (por ejemplo `/usr/lib/postgresql/17/bin`).
+
+### El ensayo de restauración (recomendado)
+
+Un respaldo que nunca se restauró es una esperanza, no un respaldo. Con un PostgreSQL local y una base vacía dedicada, cada corrida
+restaura el volcado nuevo y compara:
+
+```bash
+sudo apt install postgresql-N         # el servidor, de la misma versión que el cliente
+sudo -u postgres createuser chartbay-datos
+sudo -u postgres createdb -O chartbay-datos chartbay_ensayo
+```
+
+y en el entorno `DATOS_RESPALDO_ENSAYO_URL=postgresql:///chartbay_ensayo?host=/var/run/postgresql` (socket local, sin clave). El
+ensayo solo acepta una base de este equipo, nunca la del servicio, y solo borra el esquema que creó él mismo la vez anterior. Para
+correrlo a mano: `... servicio_datos.tarea --entorno /etc/chartbay-datos/entorno respaldar ensayar`.
+
+### Restaurar
+
+- **El crudo** (se perdió o se dañó la carpeta): con `DATOS_CRUDO_DIR` apuntando a la carpeta, vacía o dañada,
+  `... respaldar restaurar-crudo` devuelve lo que falte o esté dañado, y solo desde copias que coinciden con su hash.
+- **La base** (se perdió el proyecto o los datos): en un proyecto nuevo, como administrador y sin la clave en la URL (la pide):
+
+  ```bash
+  psql "postgresql://postgres.PROJECT_REF@HOST:5432/postgres?sslmode=require" -c "CREATE EXTENSION IF NOT EXISTS btree_gist SCHEMA public"
+  pg_restore --no-owner --no-acl --exit-on-error -d "postgresql://postgres.PROJECT_REF@HOST:5432/postgres?sslmode=require" \
+    /mnt/respaldo-chartbay/chartbay-datos/base/economia-AAAAMMDDTHHMMSSZ.dump
+  ```
+
+  Restaura el esquema `economia` entero, con su registro de migraciones. Después `preparar_supabase` recrea los roles y sus permisos
+  sin volver a migrar (ver `despliegue-supabase.md`) y `sql-del-rol`, el del respaldo. Esto no se probó contra Supabase: lo probado es
+  restaurar en un PostgreSQL 17 local, que es lo mismo que hace el ensayo.
+
 ## Lista de comprobación al instalar
 
 ```bash
@@ -185,7 +276,11 @@ sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-dat
 # 4. El modelo local (solo si configuraste DATOS_AGENTE_MODELO)
 sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno agente probar'
 
-# 5. HTTPS desde afuera
+# 5. El respaldo (con el disco montado, la carpeta creada y el rol de solo lectura)
+sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno respaldar'
+sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno respaldar estado'
+
+# 6. HTTPS desde afuera
 curl -sI http://TU.DOMINIO.ORG/              # 308 hacia https
 curl -sI https://TU.DOMINIO.ORG/             # 401 con www-authenticate (sin credenciales no se ve nada)
 curl -sI -u USUARIO https://TU.DOMINIO.ORG/  # 200 y strict-transport-security
@@ -203,8 +298,8 @@ Y en el equipo: `systemctl status chartbay-revision`, `ls -l /etc/chartbay-datos
 - **Registros**: `journalctl -u chartbay-revision` (interfaz) y `/var/log/chartbay-datos/*.log` (tareas). El estado de los avisos:
   `... servicio_datos.tarea --entorno /etc/chartbay-datos/entorno avisar estado`. Las propuestas del analista:
   `... servicio_datos.tarea --entorno /etc/chartbay-datos/entorno agente estado`.
-- **Respaldos**: no están automatizados. Hacen falta dos, por separado y con una restauración ensayada: la base (en el plan gratuito
-  de Supabase no hay copias diarias) y `/var/lib/chartbay-datos/crudo`.
+- **Respaldos**: automáticos, ver la sección 8. Cómo vienen: `... servicio_datos.tarea --entorno /etc/chartbay-datos/entorno respaldar estado`.
+  Las claves (`/etc/chartbay-datos/entorno`) no se respaldan acá, a propósito: guardalas en un gestor de contraseñas.
 - **Una corrida fallida** no se reintenta sola: se ve en la cola de la interfaz y llega un aviso; cuando se arregla la causa, se
   corre `ejecutar` a mano (el comando del punto 2).
 

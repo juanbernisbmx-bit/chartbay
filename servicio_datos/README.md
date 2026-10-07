@@ -24,7 +24,8 @@ cambios.
   deja un candidato abierto, o cierra la corrida como `sin_cambios` o `fallida`.
   Recibe el parser y la validación por parámetro.
 - `avisos.py`, `canales.py`, `avisar.py`: los avisos por Slack o correo. Ver "Avisos".
-- `tarea.py` y `despliegue/`: cómo se instala todo en el equipo Ubuntu: el lanzador de las tres tareas de cron y los archivos de
+- `respaldo.py`, `respaldar.py`: el respaldo diario de la base y del crudo. Ver "Respaldos".
+- `tarea.py` y `despliegue/`: cómo se instala todo en el equipo Ubuntu: el lanzador de las cuatro tareas de cron y los archivos de
   cron, systemd, HTTPS (Caddy), secretos y registros. La guía es `docs/despliegue-servicio-datos.md`.
 - `agente/`: el analista de hallazgos, con un modelo de lenguaje local. Ver "El analista".
 - `revision/`: la interfaz web de revisión (cola de candidatos y pantalla de revisión). Es una app
@@ -149,6 +150,27 @@ hallazgos, no toca el candidato y no publica. Diseño y operación: `docs/despli
 - **Lo que no se probó:** nunca corrió con un modelo real. Las pruebas usan un servidor falso con el mismo protocolo; sirven para el
   código, no para saber si un modelo concreto razona bien. Eso lo dice `agente probar`, en el equipo, con el modelo elegido.
 
+## Respaldos
+
+`python -m servicio_datos.respaldar` (cada día a las 3:15; también `estado`, `ensayar`, `restaurar-crudo` y `sql-del-rol`) guarda en
+`DATOS_RESPALDO_DIR`, que tiene que estar en otro disco:
+
+- **La base**: `pg_dump` del esquema del servicio con un rol de solo lectura (`datos_escritura` no puede leer `schema_migrations`, a
+  propósito). Las filas de cada tabla se cuentan en la misma foto que se vuelca (`pg_export_snapshot`) y van a un manifiesto junto al
+  volcado. Comprueba que `pg_dump` sea de la versión del servidor o más nuevo, y que el volcado se pueda leer y traiga cada tabla.
+- **El crudo**: copia lo nuevo y, en cada corrida, verifica todo (original y copia) recalculando el hash que es el nombre de cada
+  archivo. Repone copias dañadas, avisa originales dañados o que faltan (contra lo que nombra `descarga`) y no borra nunca nada de la
+  copia. `restaurar-crudo` devuelve lo perdido.
+- **El ensayo**: si hay una base local dedicada (`DATOS_RESPALDO_ENSAYO_URL`), restaura cada volcado y compara tabla por tabla. Se niega
+  a usar una base que no sea de este equipo o que sea la del servicio, y solo borra el esquema que creó él mismo.
+- **Se vigila desde la base**: cada corrida deja una fila en `respaldo` (migración 0009). `avisar` avisa si una falla o si pasan dos
+  días sin un respaldo bueno, aunque el cron ya no corra.
+- **No crea la carpeta de destino**: si el disco no está montado, falla y avisa en vez de escribir en el disco del sistema.
+- La clave nunca va en la línea de comandos de `pg_dump` (la vería cualquier usuario con `ps`): va por el entorno del proceso.
+
+Instalación y restauración: `docs/despliegue-servicio-datos.md`, sección 8. Probado contra PostgreSQL 17 local con `pg_dump` y
+`pg_restore` reales; **no** contra Supabase.
+
 ## Cómo lee ChartBay lo publicado
 
 La web (rama `codex/base-datos-chartbay`) no lee las tablas: lee dos vistas, que son el contrato.
@@ -262,6 +284,8 @@ disco persistente o almacenamiento de objetos (cambia solo `crudo.py`).
   sigue tomando del JSON las otras 93 entradas (que no tienen datos).
 - Un modelo real probado con el analista: ver "El analista". Y que el analista corrija con una propuesta de valor: hoy
   solo aconseja aceptar, rechazar o mirar; nunca propone un valor distinto.
-- Pruebas en el equipo Ubuntu de lo desplegado (systemd, cron, Let's Encrypt, Supabase): ver `docs/despliegue-servicio-datos.md`.
+- Pruebas en el equipo Ubuntu de lo desplegado (systemd, cron, Let's Encrypt, Supabase, el respaldo por el pooler y restaurar en
+  Supabase): ver `docs/despliegue-servicio-datos.md`.
+- Una copia de los respaldos fuera del equipo (protege del robo o un incendio, no solo de un disco roto).
 - Los tests no corren en CI todavía: faltaría un servicio PostgreSQL en el
   workflow.
