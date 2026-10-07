@@ -31,6 +31,7 @@ cambios.
 - `agente/`: el analista de hallazgos, con un modelo de lenguaje local. Ver "El analista".
 - `revision/`: la interfaz web de revisión (cola de candidatos y pantalla de revisión). Es una app
   Flask aparte de la web pública de ChartBay, con login. Ver "Interfaz de revisión".
+- `carga.py`: la validación del IPC y la carga del candidato, que están en la base (migración 0011), desde Python.
 - `api_revision.py`: el esquema `revision` que ve la página de revisión de ChartBay, con sesión de Supabase Auth. Ver
   `docs/base-datos-supabase.md`.
 - `publicacion.py`, `publicar.py`: la revisión y la publicación de un candidato (la lógica está en funciones de la base,

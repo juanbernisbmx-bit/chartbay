@@ -1,6 +1,6 @@
 # Base de datos: todo dentro de Supabase (plan)
 
-Estado: plan aprobado; pasos 0 y 1 hechos (2026-10-07).
+Estado: plan aprobado; pasos 0, 1 y 2 hechos (2026-10-07).
 
 ## La decisión
 
@@ -77,7 +77,7 @@ pipeline, revisión Flask, despliegue en Ubuntu, modelo local, respaldo a disco 
    Supabase resultara bastante más lento, cada archivo puede ir en su propio pedido.
 1. **Revisión y publicación como funciones SQL**, con el esquema `revision` y la lista de revisores. **Hecho**: ver "La API de
    revisión" abajo.
-2. **Validación y carga del candidato como funciones SQL.**
+2. **Validación y carga del candidato como funciones SQL.** **Hecho**: ver "La carga del candidato" abajo.
 3. **Edge Function `colectar-ipc`**, el bucket del crudo y pg_cron.
 4. **La página de revisión en ChartBay.**
 5. **Avisos.**
@@ -113,6 +113,30 @@ Para instalarla: aplicar las migraciones, correr el SQL de `python -m servicio_d
 Supabase Auth tiene que exigir confirmar el correo: la lista confía en que el correo de la sesión es de quien la inició. Las pruebas
 imitan una sesión con el rol `authenticated` y el correo en `request.jwt.claims`, que es lo que hace Supabase; no se probó contra
 Supabase de verdad.
+
+## La carga del candidato (paso 2)
+
+Quien haga la colecta (la Edge Function del paso 3) baja los archivos, los lee y llama a `cargar_candidato(corrida, hoy, carga)`
+con una corrida en curso. Desde ahí todo pasa en la base, en una transacción: compara con lo vigente, valida, descarta el candidato
+abierto, crea el nuevo con sus observaciones y sus hallazgos (salvo los que ya pasaron por una publicación) y cierra la corrida
+como `con_candidato` o `sin_cambios`. Devuelve `{estado, corrida, candidato_id, hallazgos, hallazgos_ya_revisados,
+reemplaza_candidatos, periodos_nuevos, periodos_cambiados, periodos_faltantes}`.
+
+```json
+{"series": [{"serie_id": "ipc_ng_nacional", "archivo": "nacional", "hoja": "Índices IPC Cobertura Nacional", "fila_origen": 10,
+             "observaciones": [["2016-12-01", "100.0"], ["2017-01-01", "101.5859"]], "notas": []}],
+ "definiciones": {"ipc_ng_nacional": {"nombre": "IPC nivel general - Argentina", "tema": "Precios", "...": "..."}},
+ "descargados": ["nacional", "aperturas"]}
+```
+
+Los valores van como texto, para no perder decimales. Una carga que no tiene esa forma (valores que no son números, fechas que no
+son `AAAA-MM-DD`, series o períodos repetidos, una serie sin definición) falla con `carga_invalida` y no deja nada: quien llama
+cierra la corrida como fallida.
+
+La validación es `validar_ipc`, que replica regla por regla y con los mismos textos `ipc/validacion.py` (incluido el redondeo al
+par de la variación). Las pruebas lo comparan con Python en escenarios armados, con los `.xls` reales y con 150 variaciones al azar,
+y comparan `cargar_candidato` con el orquestador de Python de punta a punta con los archivos reales: mismas observaciones, mismos
+hallazgos en el mismo orden y el mismo resumen. Mientras exista el Python, una regla nueva va en los dos lados.
 
 ## Reparto con Codex (aprobado por Juani)
 

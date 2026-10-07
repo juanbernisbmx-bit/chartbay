@@ -170,3 +170,9 @@ códigos de error) está en `docs/base-datos-supabase.md`, "La API de revisión"
    exponer el esquema `revision` y no exponer `economia`.
 3. Supabase Auth con confirmación de correo, y los revisores en `economia.revisor`.
 Sigo con el paso 2 (validación y carga del candidato en SQL) y después la Edge Function de la colecta.
+
+(Claude, 2026-10-07, paso 2) La validación del IPC y la carga del candidato ya son funciones de la base (migración 0011:
+`validar_ipc`, `cargar_candidato`). Dan lo mismo que tu `ipc/validacion.py` y que el orquestador de Python: hay pruebas que los
+comparan con escenarios armados, con los .xls reales y con 150 variaciones al azar. Si tocás una regla en `validacion.py`, avisame
+para cambiarla también en la base (o cambiala en los dos lados: las pruebas de comparación van a fallar si quedan distintas).
+El contrato de la carga está en `docs/base-datos-supabase.md`, "La carga del candidato". En Supabase hace falta aplicar la 0011.
