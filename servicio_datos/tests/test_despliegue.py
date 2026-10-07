@@ -4,14 +4,13 @@ No reemplaza probarlos en el equipo de verdad (ni systemd ni cron se pueden corr
 al cambiar una ruta, un puerto o una variable en un archivo y olvidarse de los otros.
 """
 import importlib
-import os
 import re
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
-from servicio_datos import respaldo, tarea
+from servicio_datos import monitor, respaldo, tarea
 from servicio_datos.agente.modelo import modelo_desde_entorno
 from servicio_datos.canales import configuracion_desde_entorno
 from servicio_datos.revision.__main__ import revisores_desde_entorno
@@ -53,6 +52,15 @@ def trabajos_cron():
     return trabajos, entorno
 
 
+def expandir_campo(campo, maximo):
+    """Los valores de un campo de cron: `*`, `*/n`, `a,b` o un número."""
+    if campo == "*":
+        return list(range(maximo + 1))
+    if campo.startswith("*/"):
+        return list(range(0, maximo + 1, int(campo[2:])))
+    return [int(v) for v in campo.split(",")]
+
+
 def nombre_de_tarea(comando):
     """La tarea que lanza un trabajo de cron: lo primero que no es una opción del lanzador."""
     return re.search(r"servicio_datos\.tarea (?:--\S+ \S+ )*(\w+)", comando).group(1)
@@ -70,7 +78,7 @@ def seccion_unidad():
 class CronTests(unittest.TestCase):
     def test_el_horario_es_valido(self):
         trabajos, _ = trabajos_cron()
-        self.assertEqual(len(trabajos), 4)
+        self.assertEqual(len(trabajos), 5)
         for t in trabajos:
             for campo, (minimo, maximo) in zip(t["horario"], ((0, 59), (0, 23), (1, 31), (1, 12), (0, 7))):
                 self.assertTrue(campo_cron_valido(campo, minimo, maximo), f"{campo} en {t['comando'][:60]}")
@@ -114,6 +122,22 @@ class CronTests(unittest.TestCase):
         self.assertEqual((dia, mes, semana), ("*", "*", "*"))
         self.assertNotIn(hora, por_tarea["ejecutar"]["horario"][1].split(","))
         self.assertRegex(por_tarea["respaldar"]["comando"], r"--limite (\d+) respaldar >>")
+
+    def test_el_latido_corre_seguido_y_termina_antes_del_siguiente(self):
+        comando = {nombre_de_tarea(t["comando"]): t for t in trabajos_cron()[0]}["latido"]
+        self.assertEqual(comando["horario"], ["*/10", "*", "*", "*", "*"])
+        self.assertLess(int(re.search(r"--limite (\d+) latido", comando["comando"]).group(1)), 10 * 60)
+
+    def test_lo_que_el_latido_espera_de_cada_tarea_cuadra_con_el_cron(self):
+        # Si alguien cambia un horario y no el ritmo que espera el latido, este avisaría de una falla que no es (o callaría una que sí).
+        por_tarea = {nombre_de_tarea(t["comando"]): t for t in trabajos_cron()[0]}
+        self.assertEqual(set(monitor.CADENCIAS), set(por_tarea) - {"latido"})
+        for nombre, cadencia in monitor.CADENCIAS.items():
+            minutos, horas = (expandir_campo(c, maximo) for c, maximo in zip(por_tarea[nombre]["horario"][:2], (59, 23)))
+            corridas = sorted(h * 60 + m for h in horas for m in minutos)
+            mayor = max(b - a for a, b in zip(corridas, corridas[1:] + [corridas[0] + 24 * 60]))
+            self.assertLess(mayor * 60, cadencia.total_seconds(), f"{nombre}: el cron deja {mayor / 60:.1f} h entre corridas")
+            self.assertLessEqual(cadencia.total_seconds(), mayor * 60 + 3 * 3600, f"{nombre}: el latido tarda demasiado en notar que no corre")
 
     def test_el_entorno_del_cron(self):
         _, entorno = trabajos_cron()
@@ -172,6 +196,13 @@ class EntornoEjemploTests(unittest.TestCase):
         self.assertIn("datos_respaldo.PROJECT_REF:CLAVE@", conf.url_volcado)  # no el rol que escribe
         self.assertNotIn("datos_escritura", conf.url_volcado)
         self.assertTrue(str(conf.destino).startswith("/mnt/"), "el ejemplo sugiere otro disco, no una carpeta junto al crudo")
+
+    def test_el_latido_mira_donde_escucha_la_interfaz(self):
+        valores = self.cargar()
+        puerto = re.search(r"--bind 127\.0\.0\.1:(\d+)", seccion_unidad()["ExecStart"]).group(1)
+        self.assertEqual(valores["DATOS_MONITOR_SALUD_LOCAL"], f"http://127.0.0.1:{puerto}/salud")
+        self.assertEqual(monitor.SALUD_LOCAL, valores["DATOS_MONITOR_SALUD_LOCAL"])
+        self.assertEqual(valores["DATOS_MONITOR_URL"], "")  # es una credencial: el ejemplo no trae una
 
     def test_el_servicio_lo_acepta_tal_cual(self):
         valores = self.cargar()
@@ -239,6 +270,11 @@ class ProxyYRegistrosTests(unittest.TestCase):
     def test_la_guia_explica_el_analista_local(self):
         guia = (RAIZ / "docs" / "despliegue-servicio-datos.md").read_text(encoding="utf-8")
         for texto in ("DATOS_AGENTE_MODELO", "agente probar", "agente estado", "agente.log", "Solo propone", "nunca con un\nmodelo real"):
+            self.assertIn(texto, guia)
+
+    def test_la_guia_explica_el_latido(self):
+        guia = (RAIZ / "docs" / "despliegue-servicio-datos.md").read_text(encoding="utf-8")
+        for texto in ("DATOS_MONITOR_URL", "latido probar", "latido estado", "latido.log", "/fail", "Healthchecks"):
             self.assertIn(texto, guia)
 
     def test_la_guia_explica_el_respaldo_y_como_restaurar(self):

@@ -113,6 +113,9 @@ siga (parser, validación, candidato) la cierra como `con_candidato` o `fallida`
 - Respaldos (`respaldo.py`, `respaldar.py`, migración 0009): hechos. `pg_dump` del esquema con un rol de solo lectura, copia
   verificada del crudo, ensayo de restauración en una base local y avisos si falla o se atrasa. Probado contra PostgreSQL 17 local;
   **no** contra Supabase.
+- Monitor externo (`monitor.py`, `latido.py`): hecho. El equipo late cada 10 minutos hacia un servicio de afuera
+  (protocolo de Healthchecks) después de comprobar `/salud`, la base, los avisos, las tareas de cron y los discos. `tarea.py` ahora
+  deja el estado de la última corrida de cada tarea en `DATOS_RUN_DIR`. Probado contra servidores locales; no contra Healthchecks.io.
 - Orquestador: hecho (`pipeline.py`, `ejecutar.py`). Probado con el parser y la
   validación reales y contra INDEC en vivo (2026-10-06): un candidato abierto con
   819 observaciones y 19 hallazgos (12 saltos mensuales y 7 notas de encabezado), y

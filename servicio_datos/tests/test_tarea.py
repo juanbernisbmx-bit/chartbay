@@ -35,6 +35,56 @@ class Base(unittest.TestCase):
         return codigo, salida.getvalue()
 
 
+class EstadoDeLaUltimaCorridaTests(Base):
+    """Lo que mira el latido para saber si cron sigue corriendo cada tarea."""
+
+    def estado(self):
+        return json.loads(tarea.ruta_estado(self.carpeta, "prueba").read_text())
+
+    def test_guarda_cuando_termino_y_con_que_codigo(self):
+        self.correr("pass")
+        estado = self.estado()
+        self.assertEqual((estado["tarea"], estado["codigo"], estado["fallas_seguidas"]), ("prueba", 0, 0))
+        self.assertIn("+00:00", estado["fin"])
+
+    def test_cuenta_las_fallas_seguidas_y_vuelve_a_cero_con_una_buena(self):
+        for esperado in (1, 2, 3):
+            self.correr("raise SystemExit(4)")
+            self.assertEqual((self.estado()["codigo"], self.estado()["fallas_seguidas"]), (4, esperado))
+        self.correr("pass")
+        self.assertEqual(self.estado()["fallas_seguidas"], 0)
+
+    def test_una_corrida_cortada_por_el_limite_cuenta_como_falla(self):
+        self.correr("import time; time.sleep(30)", limite=0.5)
+        self.assertEqual((self.estado()["codigo"], self.estado()["fallas_seguidas"]), (124, 1))
+
+    def test_una_corrida_omitida_no_lo_toca(self):
+        self.correr("pass")
+        antes = self.estado()
+        with open(self.carpeta / "chartbay-datos-prueba.lock", "a") as bloqueo:
+            import fcntl
+            fcntl.flock(bloqueo, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.correr("raise SystemExit(9)")
+        self.assertEqual(self.estado(), antes)
+
+    def test_un_estado_ilegible_se_reemplaza_sin_romper_la_tarea(self):
+        tarea.ruta_estado(self.carpeta, "prueba").write_text("{no es json")
+        self.assertEqual(self.correr("raise SystemExit(2)")[0], 2)
+        self.assertEqual(self.estado()["fallas_seguidas"], 1)
+
+    def test_una_consulta_a_mano_con_subcomando_no_cuenta_como_corrida_programada(self):
+        falsa = {"respaldar": (sys.executable, "-c", "pass")}
+        with patch.dict(tarea.TAREAS, falsa), patch.dict(os.environ, {"DATOS_RUN_DIR": str(self.carpeta)}), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            tarea.main(["respaldar", "estado"])
+            self.assertFalse(tarea.ruta_estado(self.carpeta, "respaldar").exists())
+            tarea.main(["respaldar"])
+            self.assertTrue(tarea.ruta_estado(self.carpeta, "respaldar").exists())
+            tarea.ruta_estado(self.carpeta, "respaldar").unlink()
+            tarea.main(["respaldar", "--limite", "30"])  # opciones (como en el cron del analista) sí son la forma programada
+            self.assertTrue(tarea.ruta_estado(self.carpeta, "respaldar").exists())
+
+
 class EntornoTests(Base):
     def test_lee_pares_clave_valor_ignorando_comentarios_y_lineas_vacias(self):
         ruta = self.entorno("# secretos\n\nDATOS_DATABASE_URL=postgresql://u:p@h/db?sslmode=require\nOTRA = valor con espacios \n"
@@ -140,7 +190,7 @@ class LineaDeComandosTests(Base):
         return codigo, salida.getvalue(), errores.getvalue()
 
     def test_las_tareas_apuntan_a_modulos_que_existen(self):
-        self.assertEqual(sorted(tarea.TAREAS), ["agente", "avisar", "ejecutar", "respaldar"])
+        self.assertEqual(sorted(tarea.TAREAS), ["agente", "avisar", "ejecutar", "latido", "respaldar"])
         for comando in tarea.TAREAS.values():
             modulo = comando[comando.index("-m") + 1]
             self.assertIsNotNone(importlib.util.find_spec(modulo), modulo)

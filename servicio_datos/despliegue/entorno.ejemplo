@@ -56,3 +56,10 @@ DATOS_RESPALDO_DIAS=30
 DATOS_RESPALDO_ENSAYO_URL=
 # Carpeta de pg_dump y pg_restore si los del PATH no son de la versión del servidor (p. ej. /usr/lib/postgresql/17/bin)
 DATOS_PG_BIN=
+
+# --- Monitor externo: el latido (ver docs/despliegue-servicio-datos.md, sección 9) ---
+# Dirección de latido del servicio de afuera (Healthchecks.io: https://hc-ping.com/...). Es una credencial: quien la tenga
+# puede hacerse pasar por el equipo. Sin ella, el latido no late y nadie se entera si el equipo se apaga.
+DATOS_MONITOR_URL=
+# Dónde responde /salud la interfaz de revisión en el equipo (el --bind de chartbay-revision.service)
+DATOS_MONITOR_SALUD_LOCAL=http://127.0.0.1:8000/salud

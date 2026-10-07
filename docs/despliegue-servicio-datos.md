@@ -1,7 +1,7 @@
 # Despliegue del servicio de datos (HTTPS y cron)
 
 Este documento instala, en el equipo Ubuntu del club, lo que corre fuera de Supabase: la interfaz de revisión, detrás
-de HTTPS, y las cuatro tareas programadas. La base de datos (Supabase, sus roles y sus migraciones) está en
+de HTTPS, las tareas programadas y el latido hacia un monitor externo. La base de datos (Supabase, sus roles y sus migraciones) está en
 [`despliegue-supabase.md`](despliegue-supabase.md); hacé eso primero.
 
 ```
@@ -11,6 +11,7 @@ INDEC ──► cron: ejecutar ──► PostgreSQL (Supabase) ◄── ChartBa
    cron: avisar ──► Slack / correo                         ▲
    cron: agente ──► modelo local (esta misma computadora) ─┘  (solo escribe propuestas)
    cron: respaldar ──► otro disco: volcado de la base y copia del crudo
+   cron: latido ──► monitor externo (Healthchecks): si deja de latir, avisa él
 ```
 
 Los archivos están en `servicio_datos/despliegue/`:
@@ -20,7 +21,7 @@ Los archivos están en `servicio_datos/despliegue/`:
 | `entorno.ejemplo` | `/etc/chartbay-datos/entorno` | Los secretos y la configuración. Lo leen las tareas y la interfaz |
 | `chartbay-revision.service` | `/etc/systemd/system/` | La interfaz de revisión como servicio, escuchando solo en `127.0.0.1:8000` |
 | `Caddyfile` | `/etc/caddy/Caddyfile` | El HTTPS: certificado automático y proxy hacia el servicio |
-| `chartbay-datos.cron` | `/etc/cron.d/chartbay-datos` | Las cuatro tareas programadas |
+| `chartbay-datos.cron` | `/etc/cron.d/chartbay-datos` | Las tareas programadas y el latido |
 | `logrotate-chartbay-datos` | `/etc/logrotate.d/chartbay-datos` | Rotación de los registros de cron |
 
 ## Qué se verificó y qué no
@@ -36,6 +37,10 @@ modelo real**. Que su código ande no dice nada sobre si un modelo concreto sirv
 Los respaldos (sección 8) se probaron contra un PostgreSQL 17 local con `pg_dump` y `pg_restore` 17 reales: volcado con un rol de solo
 lectura armado con `sql-del-rol`, ensayo de restauración completo y recuperación del crudo. **No se probó** contra Supabase (ni volcar
 por el pooler ni restaurar ahí), ni el montaje del disco, ni el PostgreSQL de ensayo en Ubuntu.
+
+El latido (sección 9) se probó contra servidores locales: un monitor falso con el protocolo de Healthchecks, el `/salud` de la
+interfaz de verdad y un HTTPS con certificados generados para la prueba (uno vigente, uno por vencer y uno que no es de confianza).
+**No se probó** contra Healthchecks.io de verdad.
 
 **No se probó**: la unidad de systemd ni el archivo de cron en Ubuntu (no hay cómo hacerlo desde una Mac; usan directivas
 comunes, y las pruebas fijan que sean coherentes entre sí), ni un certificado real de Let's Encrypt, ni la conexión a Supabase.
@@ -130,6 +135,7 @@ sudo cp servicio_datos/despliegue/logrotate-chartbay-datos /etc/logrotate.d/char
 | `avisar` | cada 4 horas | Detecta y entrega avisos: candidato nuevo, recordatorios, corrida fallida, "no llegó el dato", "el colector no corre" |
 | `agente` | cada hora, al minuto 45 | Deja una propuesta fundada junto a cada hallazgo del candidato abierto (sección 7). Sin nada pendiente no usa el modelo |
 | `respaldar` | 3:15 | Respalda la base y el crudo en otro disco, verifica lo copiado, ensaya restaurar si hay dónde y poda lo viejo (sección 8) |
+| `latido` | cada 10 minutos | Comprueba todo lo de arriba y le avisa al monitor externo que el equipo sigue vivo (sección 9) |
 
 Los últimos tres meses (julio, agosto y septiembre de 2026) INDEC la publicó entre las 15:52 y las 16:08: la corrida de las 17:30 la
 encuentra el mismo día. `avisar` corre **aparte** a propósito: los avisos de silencio los detecta quien mira desde afuera, y si el único que mira es la
@@ -139,7 +145,9 @@ El servidor tiene que estar en hora de Argentina (`timedatectl`); `CRON_TZ` lo f
 no, las horas corren en la del equipo: no se rompe nada, solo cambia a qué hora se enteran del dato.
 
 Cada corrida deja una línea de registro en `/var/log/chartbay-datos/<tarea>.log` con su código de salida y lo que tardó. Si una
-corrida anterior sigue andando, la nueva se omite (no es un error). Una corrida colgada se corta a los 20 minutos (`agente` y `respaldar`, a la hora).
+corrida anterior sigue andando, la nueva se omite (no es un error). Una corrida colgada se corta a los 20 minutos (`agente` y `respaldar`, a la hora; `latido`, a los 2 minutos).
+El lanzador deja además el resultado de la última corrida de cada tarea en `/var/lib/chartbay-datos/chartbay-datos-<tarea>.estado.json`:
+es lo que mira el latido para saber si cron sigue corriendo cada una.
 
 ## 7. El analista de hallazgos con un modelo local (opcional)
 
@@ -260,6 +268,45 @@ correrlo a mano: `... servicio_datos.tarea --entorno /etc/chartbay-datos/entorno
   sin volver a migrar (ver `despliegue-supabase.md`) y `sql-del-rol`, el del respaldo. Esto no se probó contra Supabase: lo probado es
   restaurar en un PostgreSQL 17 local, que es lo mismo que hace el ensayo.
 
+## 9. El monitor externo: el latido
+
+Lo que corre en el equipo no puede avisar que el equipo se apagó, que se cortó la red o que cron dejó de correr: el que tendría que
+avisar es justo lo que se cayó. Por eso el control se da vuelta. Cada 10 minutos el equipo **late**: le manda a un servicio de afuera
+un "sigo vivo" con el detalle de cómo está. Si los latidos dejan de llegar, el servicio de afuera avisa por su cuenta. Funciona aunque
+la interfaz de revisión solo sea accesible por una red privada (Tailscale): no hace falta que nadie de afuera llegue al equipo.
+
+Antes de latir comprueba:
+
+| Qué | Falla si |
+| --- | --- |
+| revisión local | `/salud` no responde «ok» en `127.0.0.1:8000` |
+| revisión pública | `DATOS_REVISION_URL` no responde por HTTPS, o el certificado vence en menos de 7 días (menos de 21: advertencia) |
+| base | no responde (también si Supabase pausó el proyecto) |
+| avisos entregados | hay avisos que no se pueden entregar: Slack o el correo fallan, y el latido es lo único que sale |
+| tareas | `ejecutar`, `avisar` o `respaldar` no corrieron a tiempo, o fallaron 3 veces seguidas (`agente` solo da advertencias) |
+| discos | el disco de respaldo no está montado, o queda menos de 1 GB libre (menos de 5 GB: advertencia) |
+
+Si algo falla, late "con falla" (`/fail`, el protocolo de Healthchecks) y el servicio avisa enseguida, con el detalle. Las
+advertencias van en el detalle de un latido normal.
+
+1. Creá una cuenta en [Healthchecks.io](https://healthchecks.io) (o usá uno propio: es software libre) y un chequeo con período de
+   10 minutos y un margen de gracia de 20. Elegí cómo te avisa: correo, Telegram, Slack... Mejor por un camino distinto del de los
+   avisos del servicio: si el que se rompe es ese, este tiene que llegar igual.
+2. Copiá su dirección de latido (`https://hc-ping.com/...`) en `DATOS_MONITOR_URL`. Es una credencial: va solo en el archivo de entorno.
+3. Probalo:
+
+   ```bash
+   sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno latido probar'
+   sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno latido estado'
+   ```
+
+   `probar` manda un latido de prueba (tiene que aparecer en el panel de Healthchecks); `estado` muestra todas las comprobaciones sin
+   latir. Recién instalado, las tareas que todavía no corrieron salen como advertencia; al día siguiente tienen que estar todas en ✓.
+
+Con todo bien, `latido.log` guarda una línea por latido; con algo mal, el detalle entero. Si la interfaz es pública, se puede sumar
+un monitor de disponibilidad desde afuera sobre `https://TU.DOMINIO.ORG/salud` (prueba el camino desde internet), pero no reemplaza
+al latido: no sabe nada de la base, de cron ni del disco.
+
 ## Lista de comprobación al instalar
 
 ```bash
@@ -280,7 +327,10 @@ sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-dat
 sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno respaldar'
 sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno respaldar estado'
 
-# 6. HTTPS desde afuera
+# 6. El latido (con DATOS_MONITOR_URL puesto)
+sudo -u chartbay-datos bash -c 'cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno latido probar'
+
+# 7. HTTPS desde afuera
 curl -sI http://TU.DOMINIO.ORG/              # 308 hacia https
 curl -sI https://TU.DOMINIO.ORG/             # 401 con www-authenticate (sin credenciales no se ve nada)
 curl -sI -u USUARIO https://TU.DOMINIO.ORG/  # 200 y strict-transport-security
@@ -300,14 +350,16 @@ Y en el equipo: `systemctl status chartbay-revision`, `ls -l /etc/chartbay-datos
   `... servicio_datos.tarea --entorno /etc/chartbay-datos/entorno agente estado`.
 - **Respaldos**: automáticos, ver la sección 8. Cómo vienen: `... servicio_datos.tarea --entorno /etc/chartbay-datos/entorno respaldar estado`.
   Las claves (`/etc/chartbay-datos/entorno`) no se respaldan acá, a propósito: guardalas en un gestor de contraseñas.
+- **Cómo está todo**: `... servicio_datos.tarea --entorno /etc/chartbay-datos/entorno latido estado`, y el panel del monitor externo.
 - **Una corrida fallida** no se reintenta sola: se ve en la cola de la interfaz y llega un aviso; cuando se arregla la causa, se
   corre `ejecutar` a mano (el comando del punto 2).
 
 ## Límites conocidos
 
-- Si el servidor, la red o la base (Supabase pausa los proyectos gratuitos tras 7 días sin actividad) caen por días, `avisar`
-  tampoco puede hablar con la base y no avisa. Para eso hace falta algo que mire desde afuera de este equipo, como un monitor de
-  disponibilidad sobre `https://TU.DOMINIO.ORG/salud`. `/salud` responde sin consultar la base: dice que el proceso vive, no que la
-  base responde.
+- Si el servidor, la red o la base (Supabase pausa los proyectos gratuitos tras 7 días sin actividad) se caen, `avisar` no puede
+  avisar: eso lo cubre el latido (sección 9), y solo si `DATOS_MONITOR_URL` está puesto. `/salud` responde sin consultar la base:
+  dice que el proceso vive; la base la comprueba el latido.
+- El latido no ve lo que pasa entre dos latidos ni lo que no comprueba: que una corrida haya leído mal un archivo, por ejemplo, es
+  cosa de los hallazgos y de la revisión, no del monitor.
 - Acceso con usuario y contraseña (HTTP Basic): sirve para pocos revisores. No tiene recuperación de contraseña ni segundo factor.
 - El límite de intentos de acceso vive en la memoria del servicio: se reinicia con él.

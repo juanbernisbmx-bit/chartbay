@@ -1,7 +1,8 @@
 # Tareas programadas del servicio de datos de ChartBay. Se instala como /etc/cron.d/chartbay-datos.
 #
 # Todas corren como chartbay-datos, con el lanzador de tareas: carga los secretos de /etc/chartbay-datos/entorno,
-# evita que dos corridas de la misma tarea se pisen y corta una colgada a los 20 minutos (las tareas 3 y 4, a la hora).
+# evita que dos corridas de la misma tarea se pisen y corta una colgada a los 20 minutos (las tareas 3 y 4, a la hora;
+# la 5, a los 2 minutos).
 #
 # El servidor tiene que estar en hora de Argentina (timedatectl); CRON_TZ lo fuerza en las versiones de cron que
 # lo entienden. Si no, las horas de abajo corren en la hora del equipo: no se rompe nada (las tareas se pueden repetir
@@ -31,3 +32,8 @@ DATOS_RUN_DIR=/var/lib/chartbay-datos
 #    disco. Verifica todo lo copiado, ensaya restaurar si hay base de ensayo y poda lo viejo. De madrugada, lejos de la tarea 1.
 #    Si falla o deja de correr, avisa la tarea 2 (lo ve en la tabla `respaldo`).
 15 3 * * *     chartbay-datos  cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno --limite 3600 respaldar >> /var/log/chartbay-datos/respaldar.log 2>&1
+
+# 5) Latido hacia el monitor externo (DATOS_MONITOR_URL). Comprueba /salud, la base, los avisos, que cada tarea de arriba
+#    haya corrido a tiempo y el disco, y le avisa a un servicio de afuera que el equipo sigue vivo. Si el equipo, la red o
+#    cron se caen, el latido deja de llegar y es el servicio de afuera el que avisa. Por eso corre seguido y aparte de todo.
+*/10 * * * *   chartbay-datos  cd /opt/chartbay-datos/repo && /opt/chartbay-datos/venv/bin/python -m servicio_datos.tarea --entorno /etc/chartbay-datos/entorno --limite 120 latido >> /var/log/chartbay-datos/latido.log 2>&1

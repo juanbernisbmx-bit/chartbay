@@ -25,7 +25,8 @@ cambios.
   Recibe el parser y la validación por parámetro.
 - `avisos.py`, `canales.py`, `avisar.py`: los avisos por Slack o correo. Ver "Avisos".
 - `respaldo.py`, `respaldar.py`: el respaldo diario de la base y del crudo. Ver "Respaldos".
-- `tarea.py` y `despliegue/`: cómo se instala todo en el equipo Ubuntu: el lanzador de las cuatro tareas de cron y los archivos de
+- `monitor.py`, `latido.py`: el latido hacia un monitor externo. Ver "El latido".
+- `tarea.py` y `despliegue/`: cómo se instala todo en el equipo Ubuntu: el lanzador de las tareas de cron y los archivos de
   cron, systemd, HTTPS (Caddy), secretos y registros. La guía es `docs/despliegue-servicio-datos.md`.
 - `agente/`: el analista de hallazgos, con un modelo de lenguaje local. Ver "El analista".
 - `revision/`: la interfaz web de revisión (cola de candidatos y pantalla de revisión). Es una app
@@ -170,6 +171,16 @@ hallazgos, no toca el candidato y no publica. Diseño y operación: `docs/despli
 
 Instalación y restauración: `docs/despliegue-servicio-datos.md`, sección 8. Probado contra PostgreSQL 17 local con `pg_dump` y
 `pg_restore` reales; **no** contra Supabase.
+
+## El latido
+
+Lo que corre en el equipo no puede avisar que el equipo se cayó. `python -m servicio_datos.latido` (cada 10 minutos; también `estado`
+y `probar`) le avisa a un servicio de afuera (Healthchecks.io o compatible, en `DATOS_MONITOR_URL`) que el equipo sigue vivo; si los
+latidos dejan de llegar, avisa ese servicio. Antes de latir comprueba `/salud` en el equipo y por HTTPS (con el vencimiento del
+certificado), la base, que los avisos se estén entregando, que cron haya corrido cada tarea a tiempo (lo lee de los archivos de estado
+que deja `tarea.py`, sin depender de la base) y el espacio y el montaje de los discos. Si algo falla, late a `/fail` con el detalle.
+Una comprobación que se rompe es una falla más: nunca impide el latido. Guía: `docs/despliegue-servicio-datos.md`, sección 9.
+Probado contra servidores locales; **no** contra Healthchecks.io de verdad.
 
 ## Cómo lee ChartBay lo publicado
 
