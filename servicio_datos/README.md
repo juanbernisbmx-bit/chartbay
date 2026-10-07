@@ -14,7 +14,9 @@ cambios.
 
 - `migraciones/0001_esquema_inicial.sql`: tablas, restricciones y triggers.
 - `migrar.py`: aplica las migraciones numeradas, cada una en su transacción, con
-  checksum. Una migración ya aplicada no se edita: se agrega una nueva.
+  checksum. Una migración ya aplicada no se edita: se agrega una nueva. Toda función
+  tiene el `search_path` fijo (migración 0013): una migración que agregue funciones
+  termina con `CALL fijar_search_path();`, y `tests/test_search_path.py` lo revisa.
 - `tests/test_esquema.py`: pruebas de que la base misma sostiene las reglas.
 - `colector.py`, `colectar.py`, `cliente_http.py`, `crudo.py`, `repositorio.py`: el
   colector del IPC. Baja los archivos de INDEC, los guarda sin modificar (nombre
@@ -36,6 +38,8 @@ cambios.
 - `carga.py`: la validación del IPC y la carga del candidato, que están en la base (migración 0011), desde Python.
 - `api_revision.py`: el esquema `revision` que ve la página de revisión de ChartBay, con sesión de Supabase Auth. Ver
   `docs/base-datos-supabase.md`.
+- `api_colecta.py`: el esquema `colecta` y el rol `colector`, lo único que puede tocar la Edge Function de la colecta: corridas,
+  descargas y candidatos, sin ver las tablas ni publicar. Ver `docs/base-datos-supabase.md`.
 - `publicacion.py`, `publicar.py`: la revisión y la publicación de un candidato (la lógica está en funciones de la base,
   migración 0010; este módulo las llama). Publicar es
   la única forma de que un dato llegue a lo vigente, y exige que cada hallazgo esté aceptado.

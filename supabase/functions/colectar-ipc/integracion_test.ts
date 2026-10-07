@@ -1,12 +1,13 @@
 // La colecta de punta a punta contra una base real, con los .xls reales de INDEC servidos por un HTTP falso y un Storage en
-// memoria. La maneja `servicio_datos/tests/test_funciones_supabase.py`, que prepara el esquema y después revisa la base.
+// memoria. La maneja `servicio_datos/tests/test_funciones_supabase.py`, que prepara el esquema de datos, el de la colecta y su
+// rol, y después revisa la base. Se conecta como ese rol: lo mismo que va a poder hacer en Supabase.
 import { assertEquals } from "jsr:@std/assert@1";
 import { basePostgres } from "../_compartido/base.ts";
 import type { Respuesta } from "../_compartido/http.ts";
 import { colectarIpc } from "./colecta.ts";
 
 const URL_BASE = Deno.env.get("DATOS_COLECTA_URL");
-const ESQUEMA = Deno.env.get("DATOS_COLECTA_ESQUEMA");
+const ESQUEMA = Deno.env.get("DATOS_COLECTA_ESQUEMA"); // el de la colecta, no el de los datos
 const ORIGINALES = Deno.env.get("DATOS_IPC_ORIGINALES_DIR");
 
 Deno.test({
@@ -15,7 +16,7 @@ Deno.test({
   sanitizeResources: false,
   sanitizeOps: false,
   async fn() {
-    const base = basePostgres(URL_BASE!, { searchPath: `${ESQUEMA}, public` });
+    const base = basePostgres(URL_BASE!, ESQUEMA!);
     const guardados = new Map<string, Uint8Array>();
     const http = {
       async get(url: string): Promise<Respuesta> {

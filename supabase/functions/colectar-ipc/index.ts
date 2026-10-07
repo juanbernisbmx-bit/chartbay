@@ -3,9 +3,12 @@
 // Secretos que necesita (`supabase secrets set ...`):
 //   COLECTA_CLAVE         lo que tiene que mandar quien la llama, en el encabezado `x-chartbay-clave`. Sin eso no hace nada:
 //                         la clave pública de Supabase la tiene cualquiera, así que no alcanza para disparar una colecta.
-//   DATOS_DATABASE_URL    la base, con el rol `datos_escritura` (no el administrador)
+//   DATOS_DATABASE_URL    la base, con el rol `colector` (solo ejecuta las funciones del esquema `colecta`; ver
+//                         `servicio_datos/api_colecta.py`). Nunca la del administrador ni la `SUPABASE_DB_URL` que pone Supabase.
 //   DATOS_MONITOR_URL     opcional: la dirección de latido del monitor externo (Healthchecks)
-// y usa los que Supabase pone solo: SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY (para el bucket privado `crudo`).
+//   DATOS_CLAVE_SERVIDOR  opcional: una clave secreta del proyecto (`sb_secret_…`) para Storage, si el proyecto apagó la vieja
+//                         `service_role`. Nunca la publicable.
+// y usa los que Supabase pone solo: SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY (para el bucket privado `economia-crudos`).
 import { almacenSupabase } from "../_compartido/almacen.ts";
 import { basePostgres } from "../_compartido/base.ts";
 import { hoyEnArgentina } from "../_compartido/fechas.ts";
@@ -27,12 +30,13 @@ Deno.serve(async (pedido) => {
   if (pedido.method !== "POST") return responder({ error: "Usar POST" }, 405);
   const clave = Deno.env.get("COLECTA_CLAVE");
   if (!clave || !iguales(pedido.headers.get("x-chartbay-clave") ?? "", clave)) return responder({ error: "No autorizado" }, 401);
-  const urlBase = Deno.env.get("DATOS_DATABASE_URL"), urlSupabase = Deno.env.get("SUPABASE_URL"), claveServicio = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!urlBase || !urlSupabase || !claveServicio) return responder({ error: "Falta configurar DATOS_DATABASE_URL o las variables de Supabase" }, 500);
+  const urlBase = Deno.env.get("DATOS_DATABASE_URL"), urlSupabase = Deno.env.get("SUPABASE_URL");
+  const claveServidor = Deno.env.get("DATOS_CLAVE_SERVIDOR") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!urlBase || !urlSupabase || !claveServidor) return responder({ error: "Falta configurar DATOS_DATABASE_URL o las variables de Supabase" }, 500);
 
   const base = basePostgres(urlBase);
   try {
-    const resultado = await colectarIpc({ base, almacen: almacenSupabase(urlSupabase, claveServicio), http: new ClienteHttp(), hoy: hoyEnArgentina() });
+    const resultado = await colectarIpc({ base, almacen: almacenSupabase(urlSupabase, claveServidor), http: new ClienteHttp(), hoy: hoyEnArgentina() });
     const falla = resultado.estado === "fallida";
     const avisoMonitor = await latir(Deno.env.get("DATOS_MONITOR_URL"), `Colecta del IPC: ${JSON.stringify(resultado)}`, falla);
     return responder({ ...resultado, ...(avisoMonitor ? { monitor: avisoMonitor } : {}) }, falla ? 500 : 200);

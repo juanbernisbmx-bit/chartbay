@@ -9,8 +9,11 @@ import shutil
 import subprocess
 import unittest
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
-from servicio_datos import carga
+import psycopg
+
+from servicio_datos import api_colecta, carga
 from servicio_datos.ipc import fuente
 from servicio_datos.tests.base import URL, BaseEsquema
 from servicio_datos.tests.test_pipeline import HAY_PARSER, HOY, ORIGINALES
@@ -50,11 +53,31 @@ class ParserDeTypeScriptTests(unittest.TestCase):
             self.assertEqual(json.loads(proceso.stdout), esperado, nacional)
 
 
+def como_usuario(url, usuario):
+    """La misma URL de la base, con otro usuario y sin contraseña (el Postgres de las pruebas confía en la conexión local)."""
+    partes = urlsplit(url)
+    return urlunsplit(partes._replace(netloc=f"{usuario}@{partes.hostname}" + (f":{partes.port}" if partes.port else "")))
+
+
 @unittest.skipUnless(DENO and HAY_ORIGINALES, "Faltan Deno, xlrd o DATOS_IPC_ORIGINALES_DIR")
 class ColectaDePuntaAPuntaTests(BaseEsquema):
+    def setUp(self):
+        super().setUp()
+        # Como en Supabase: la función entra con el rol de la colecta, que solo ejecuta las funciones de su esquema.
+        self.api, self.rol = f"{self.schema}_colecta", f"colector_{self.schema}"
+        self.addCleanup(self.aparte, f"DROP SCHEMA IF EXISTS {self.api} CASCADE", f"DROP ROLE IF EXISTS {self.rol}")
+        api_colecta.instalar(self.conn, api=self.api, rol=self.rol)
+        self.conn.execute(f"ALTER ROLE {self.rol} LOGIN")
+
+    def aparte(self, *sentencias):
+        with psycopg.connect(URL, autocommit=True) as conn:
+            for sentencia in sentencias:
+                conn.execute(sentencia)
+
     def test_la_primera_deja_un_candidato_y_la_segunda_no_cambia_nada(self):
         proceso = deno("test", *PERMISOS, "colectar-ipc/integracion_test.ts",
-                       entorno={"DATOS_COLECTA_URL": URL, "DATOS_COLECTA_ESQUEMA": self.schema, "DATOS_IPC_ORIGINALES_DIR": str(ORIGINALES)})
+                       entorno={"DATOS_COLECTA_URL": como_usuario(URL, self.rol), "DATOS_COLECTA_ESQUEMA": self.api,
+                                "DATOS_IPC_ORIGINALES_DIR": str(ORIGINALES)})
         self.assertEqual(proceso.returncode, 0, proceso.stdout[-3000:] + proceso.stderr[-3000:])
         self.assertIn("1 passed", proceso.stdout)  # que no se haya salteado
 

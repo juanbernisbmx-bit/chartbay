@@ -1,6 +1,9 @@
-// Dónde se guarda el crudo: un bucket privado de Supabase Storage. El nombre es el hash del contenido (`ab/ab12…ef.xls`), así
-// que guardar dos veces lo mismo no duplica nada y un archivo no puede cambiar sin cambiar de nombre.
+// Dónde se guarda el crudo: el bucket privado `economia-crudos` de Supabase Storage. El nombre es el hash del contenido
+// (`ab/ab12…ef.xls`), así que guardar dos veces lo mismo no duplica nada y un archivo no puede cambiar sin cambiar de nombre.
+// La procedencia (URL, hash, tamaño, Last-Modified) queda en la tabla `descarga`, con esta ruta en `ruta_crudo`.
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+
+export const BUCKET_CRUDO = "economia-crudos";
 
 export interface Almacen {
   guardar(ruta: string, contenido: Uint8Array, tipo: string): Promise<void>;
@@ -15,7 +18,7 @@ export async function sha256Hex(contenido: Uint8Array): Promise<string> {
   return Array.from(new Uint8Array(digesto), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function almacenSupabase(url: string, clave: string, bucket = "crudo"): Almacen {
+export function almacenSupabase(url: string, clave: string, bucket = BUCKET_CRUDO): Almacen {
   const cliente = createClient(url, clave, { auth: { persistSession: false, autoRefreshToken: false } });
   return {
     async guardar(ruta, contenido, tipo) {
