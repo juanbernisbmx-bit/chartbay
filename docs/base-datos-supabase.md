@@ -1,6 +1,6 @@
 # Base de datos: todo dentro de Supabase (plan)
 
-Estado: plan, sin código todavía (2026-10-07).
+Estado: plan aprobado; paso 0 hecho (2026-10-07).
 
 ## La decisión
 
@@ -54,9 +54,9 @@ funciones de un esquema `revision` expuesto, que solo tiene funciones `SECURITY 
 esté en una lista de revisores y recién ahí revisa o publica. Las tablas siguen en `economia`, que no se expone (como pidió
 Codex). Es un cambio respecto de hoy: ChartBay pasa a tener una página con login.
 
-### Respaldo: lo que hay que decidir
+### Respaldo: exportar desde afuera
 
-Dentro de Supabase solo no hay un respaldo independiente:
+Juani eligió la opción 2 (2026-10-07): un GitHub Action exporta la base y el bucket del crudo cada tanto. Las tres que había:
 
 1. **Plan Pro**: 7 días de copias de la base. El crudo de Storage sigue sin copia.
 2. **Exportar desde afuera** cada tanto (`supabase db dump` y el bucket) desde una computadora o un GitHub Action. Es lo único que
@@ -70,8 +70,11 @@ pipeline, revisión Flask, despliegue en Ubuntu, modelo local, respaldo a disco 
 
 ## Orden propuesto
 
-0. **Medir** la lectura de los `.xls` reales con SheetJS en Deno: si entra en 2 s de CPU. Hace falta instalar Deno y la CLI de
-   Supabase en esta computadora.
+0. **Medir** la lectura de los `.xls` reales con SheetJS en Deno. **Hecho**: con SheetJS 0.20.3 en Deno 2.9.7, leer el nacional
+   (2,4 MB) y las aperturas (1,2 MB) cuesta ~0,5 s de CPU en frío y ~0,3 s en caliente en esta Mac, contra 2 s de límite; cargar
+   SheetJS, unos milisegundos. Las 819 observaciones coinciden una por una con las del parser de Python (solo cambia escribir `100`
+   en vez de `100.0`, que la base trata igual). Leer solo la hoja necesaria no ahorra: el `.xls` se recorre entero. Si el servidor de
+   Supabase resultara bastante más lento, cada archivo puede ir en su propio pedido.
 1. **Revisión y publicación como funciones SQL**, con el esquema `revision` y la lista de revisores. Es la base de la página de
    ChartBay y no depende de nada más.
 2. **Validación y carga del candidato como funciones SQL.**
@@ -81,7 +84,7 @@ pipeline, revisión Flask, despliegue en Ubuntu, modelo local, respaldo a disco 
 6. **El analista con la API.**
 7. **El respaldo**, según lo que se decida.
 
-## Reparto propuesto con Codex
+## Reparto con Codex (aprobado por Juani)
 
 - **Claude**: las funciones SQL (pasos 1, 2 y la detección de avisos) con pruebas contra Postgres, y las Edge Functions (3, 5 y 6)
   con pruebas de su lógica.
