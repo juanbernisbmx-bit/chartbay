@@ -347,7 +347,8 @@ class LineaDeComandosTests(ConBase, ConServidores):
         self.monitor_externo = self.servidor({"/ping/abc": (200, "OK"), "/ping/abc/fail": (200, "OK")})
         self.tareas, self.crudo = self.carpeta(), self.carpeta()
         for nombre in ("ejecutar", "avisar", "respaldar"):
-            fin = (AHORA - timedelta(minutes=30)).isoformat(timespec="seconds")
+            # La hora de ahora y no la de cuando se importó el módulo: el latido compara con el reloj real.
+            fin = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat(timespec="seconds")
             tarea.ruta_estado(self.tareas, nombre).write_text(json.dumps({"tarea": nombre, "fin": fin, "codigo": 0, "fallas_seguidas": 0}))
 
     def entorno(self, **cambios):
