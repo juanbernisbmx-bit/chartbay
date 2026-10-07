@@ -287,8 +287,11 @@ Verificadas contra el servidor de INDEC el 2026-10-06:
   quedó un mes atrás. Se corrigió el 2026-10-06 regenerándolo con `09_26` (819
   observaciones; las 116 anteriores del nacional no cambiaron). La regla de
   cobertura existe para detectar esto antes de que llegue a la base.
-- `published_at` sale del encabezado `Last-Modified` del servidor, que viene en
-  los archivos reales. El colector lo guarda en `descarga.publicada_en`.
+- El encabezado `Last-Modified` del servidor viene en los archivos reales y el colector lo guarda en
+  `descarga.publicada_en`, pero dice cuándo cambió el archivo en el servidor, no cuándo se publicó: la hora
+  oficial no consta (auditoría de Codex, 2026-10-07). En la procedencia del release va como `http_last_modified`,
+  separado de la captura (`retrieved_at`), y `published_at` queda vacío. El nombre de la columna quedó del
+  diseño original; cambiarlo pide una migración.
 - INDEC no responde 404 a un archivo inexistente: contesta 200 con una página
   HTML (`sh_ipc_10_26.xls`). El colector decide por el contenido (firma de
   archivo `.xls` y tamaño mínimo), nunca por el código de estado.

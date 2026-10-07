@@ -46,7 +46,7 @@ EXPLICACION_REQUISITOS: Mapping[str, str] = {
     "dato_real": "que el movimiento se ve en varias series a la vez, que el nivel se mantiene o que una persona ya lo aceptó antes",
     "cosmetico": "que es una nota del parser sobre cómo leyó el archivo, o que una persona ya la aceptó antes",
     "posible_error_de_carga": "que el salto es propio de esta serie o que se revierte",
-    "desfase_de_archivo": "que el archivo de esta serie se publicó antes que el de las demás",
+    "desfase_de_archivo": "que el archivo de esta serie es más viejo que el de las demás",
     "cambio_de_base": "que la serie ya no arranca en la base de referencia",
 }
 MAX_RAZONAMIENTO = 600

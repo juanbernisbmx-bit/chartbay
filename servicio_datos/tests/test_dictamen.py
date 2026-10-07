@@ -10,7 +10,7 @@ HECHOS = [
     Hecho(2, "Las otras 6 series suben entre 24% y 28% el mismo mes.", frozenset({"sistemico"})),
     Hecho(3, "El nivel nuevo se mantiene: al mes siguiente varía 20,6%.", frozenset({"persistente"})),
     Hecho(4, "Ninguna otra serie se movió más de 2%.", frozenset({"aislado"})),
-    Hecho(5, "El archivo de esta serie se publicó 28 días antes que el de las otras.", frozenset({"archivo"})),
+    Hecho(5, "Según el servidor, el archivo de esta serie es 28 días más viejo que el de las otras.", frozenset({"archivo"})),
     Hecho(6, "El parser registró: encabezado 2026-03-26 interpretado como 2026-03.", frozenset({"cosmetico"})),
     Hecho(7, "La serie ya no inicia en dic 2016 con índice 100: el primer valor es 1.000.", frozenset({"base"})),
 ]

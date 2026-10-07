@@ -33,7 +33,7 @@ Colectado = list[tuple[str, set[str]]]  # (texto, etiquetas)
 @dataclass(frozen=True)
 class Archivo:
     nombre: str
-    publicada_en: datetime | None
+    publicada_en: datetime | None  # el Last-Modified del servidor: cuándo cambió el archivo ahí, no la publicación oficial
 
 
 @dataclass(frozen=True)
@@ -146,7 +146,7 @@ def _historia_intacta(ctx: Contexto, h: Mapping) -> Colectado:
         hechos.append((f"Cambian datos ya publicados en {len(con_cambios)} de las {len(ctx.vigente)} series.", {"sistemico"}))
     archivo = ctx.archivos.get(serie)
     if archivo and archivo.publicada_en and ctx.release_vigente:
-        hechos.append((f"El archivo del dato nuevo ({archivo.nombre}) lo publicó INDEC el {fecha_larga(archivo.publicada_en)}; el release vigente se publicó el {fecha_larga(ctx.release_vigente[1])}.", set()))
+        hechos.append((f"Según el servidor de INDEC, el archivo del dato nuevo ({archivo.nombre}) cambió por última vez el {fecha_larga(archivo.publicada_en)}; el release vigente se publicó el {fecha_larga(ctx.release_vigente[1])}.", set()))
     return hechos
 
 
@@ -162,13 +162,13 @@ def _cobertura(ctx: Contexto, h: Mapping) -> Colectado:
     if mia and otra and mia.publicada_en and otra.publicada_en:
         dias = (otra.publicada_en - mia.publicada_en).days
         if mia.nombre != otra.nombre and dias >= 1:
-            hechos.append((f"El archivo de esta serie ({mia.nombre}) se publicó el {fecha_larga(mia.publicada_en)} y el de las que están al día ({otra.nombre}) el {fecha_larga(otra.publicada_en)}, {dias} días después.", {"archivo"}))
+            hechos.append((f"Según el servidor de INDEC, el archivo de esta serie ({mia.nombre}) cambió por última vez el {fecha_larga(mia.publicada_en)} y el de las que están al día ({otra.nombre}) el {fecha_larga(otra.publicada_en)}, {dias} días después.", {"archivo"}))
         elif mia.nombre == otra.nombre:
             hechos.append((f"Las dos salen del mismo archivo ({mia.nombre}): el desfase no se explica por archivos distintos.", set()))
         else:
-            hechos.append((f"Los dos archivos ({mia.nombre} y {otra.nombre}) se publicaron el mismo día o con el de esta serie después: no hay un desfase de publicación que explique la diferencia.", set()))
+            hechos.append((f"Según el servidor de INDEC, los dos archivos ({mia.nombre} y {otra.nombre}) cambiaron el mismo día o el de esta serie después: no hay un archivo más viejo que explique la diferencia.", set()))
     else:
-        hechos.append(("No hay fechas de publicación de los archivos para comparar.", set()))
+        hechos.append(("No hay fechas de los archivos para comparar.", set()))
     return hechos
 
 
@@ -199,7 +199,7 @@ def _generico(ctx: Contexto, h: Mapping) -> Colectado:
         hechos.append(("Últimos valores de la serie: " + ", ".join(f"{_mes(p)} {_num(valores[p])}" for p in sorted(valores)[-3:]) + ".", set()))
     archivo = ctx.archivos.get(h["serie_id"] or "")
     if archivo and archivo.publicada_en:
-        hechos.append((f"El archivo de esta serie ({archivo.nombre}) lo publicó INDEC el {fecha_larga(archivo.publicada_en)}.", set()))
+        hechos.append((f"Según el servidor de INDEC, el archivo de esta serie ({archivo.nombre}) cambió por última vez el {fecha_larga(archivo.publicada_en)}.", set()))
     return hechos
 
 

@@ -42,7 +42,7 @@ Respondé SOLO con un objeto JSON con estas claves:
   - "dato_real": el movimiento es real. Hace falta un hecho que lo muestre en varias series a la vez o que el nivel se mantenga en los meses siguientes. Acción: "aceptar".
   - "cosmetico": solo cambia cómo se interpretó un encabezado o un formato; ningún valor cambia. Acción: "aceptar".
   - "posible_error_de_carga": el valor parece un error: salta solo esta serie, o el salto se revierte. Acción: "rechazar".
-  - "desfase_de_archivo": la serie llega más corta porque su archivo se publicó antes que el de las demás. Acción: "rechazar".
+  - "desfase_de_archivo": la serie llega más corta porque su archivo es más viejo que el de las demás. Acción: "rechazar".
   - "cambio_de_base": la serie cambió de base o de nivel de referencia. Acción: "investigar".
   - "requiere_revision_humana": los hechos no alcanzan para concluir. Acción: "investigar".
 - "accion_sugerida": "aceptar", "rechazar" o "investigar".

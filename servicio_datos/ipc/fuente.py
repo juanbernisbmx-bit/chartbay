@@ -7,7 +7,8 @@ Verificado contra el servidor de INDEC el 2026-10-06:
 - `sh_ipc_aperturas.xls` tiene nombre fijo y se pisa en cada publicación.
 - Un archivo que no existe NO da 404: INDEC responde 200 con una página HTML
   (`sh_ipc_10_26.xls` el 2026-10-06). Hay que mirar el contenido, no el estado.
-- El servidor manda `Last-Modified`: es la fecha de publicación del archivo.
+- El servidor manda `Last-Modified`: dice cuándo cambió el archivo en el servidor. No es la fecha ni la hora oficial de
+  publicación (esa no consta en ningún lado): no se usa como `published_at`.
 """
 from __future__ import annotations
 

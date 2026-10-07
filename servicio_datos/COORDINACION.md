@@ -72,8 +72,9 @@ Esto cambia lo que dice el documento de diseño sobre el "desfase de cobertura":
    último período del nacional debe coincidir con el de las regiones.
 4. Un archivo inexistente (`sh_ipc_10_26.xls`) no da 404: INDEC responde 200 con
    una página HTML. El colector lo trata como "no publicado" mirando el contenido.
-5. `Last-Modified` viene en los archivos reales: es la fecha de publicación
-   (`published_at`, hoy `null` en el piloto).
+5. `Last-Modified` viene en los archivos reales, pero dice cuándo cambió el archivo en el servidor, no cuándo se publicó
+   oficialmente (la auditoría de Codex del 2026-10-07 lo confirmó: la hora oficial no consta). Va a la procedencia como
+   `http_last_modified`; `published_at` queda `null`.
 
 ## Qué entrega el colector
 

@@ -133,20 +133,21 @@ def _utc(momento: datetime | None) -> str | None:
 def procedencia_de(conn: psycopg.Connection, corrida_id: int) -> dict:
     """Qué archivos y qué hoja, fila y notas respaldan a cada serie de una corrida.
 
-    La captura es la primera vez que se vio el archivo (no cuando se lo volvió a ver idéntico),
-    y la publicación es la fecha que informa la fuente.
+    Tres fechas que no se mezclan: `retrieved_at` es la primera vez que se vio el archivo (no cuando se lo volvió a ver
+    idéntico); `http_last_modified` es lo que declara el servidor HTTP (`Last-Modified`), que dice cuándo cambió el archivo
+    ahí y no cuándo se publicó oficialmente; y `published_at` queda vacía porque la fuente no informa la hora oficial.
     """
     resumen = conn.execute("SELECT resumen FROM corrida WHERE id = %s", (corrida_id,)).fetchone()[0]
     archivos = []
     for archivo in resumen.get("archivos", []):
-        captura, publicada = conn.execute(
+        captura, modificada = conn.execute(
             "SELECT min(descargada_en), max(publicada_en) FROM descarga "
             "WHERE url = %s AND sha256 = %s AND estado IN ('nueva', 'identica')",
             (archivo["url"], archivo["sha256"]),
         ).fetchone()
         archivos.append({
             "clave": archivo["clave"], "file": archivo["url"].rsplit("/", 1)[-1], "url": archivo["url"],
-            "sha256": archivo["sha256"], "retrieved_at": _utc(captura), "published_at": _utc(publicada),
+            "sha256": archivo["sha256"], "retrieved_at": _utc(captura), "http_last_modified": _utc(modificada), "published_at": None,
         })
     return {"archivos": archivos, "series": resumen.get("detalle_series", {})}
 

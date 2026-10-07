@@ -156,7 +156,7 @@ class HistoriaIntactaTests(BaseEvidencia):
     def test_dice_cuando_se_publico_el_archivo_y_cuando_el_release(self):
         self.publicado(todas(meses(100, 101, 102), meses(100, 101, 102)))
         texto = self.textos(self.hechos(todas(meses(100, "101.5", 102), meses(100, 101, 102)), self.hallazgo()))
-        self.assertRegex(texto, r"El archivo del dato nuevo \(sh_ipc_08_26\.xls\) lo publicó INDEC el 13 de agosto de 2026; el release vigente se publicó el \d+ de \w+ de 20\d\d\.")
+        self.assertRegex(texto, r"Según el servidor de INDEC, el archivo del dato nuevo \(sh_ipc_08_26\.xls\) cambió por última vez el 13 de agosto de 2026; el release vigente se publicó el \d+ de \w+ de 20\d\d\.")
 
     def test_sin_valor_publicado_para_comparar_no_afirma_nada(self):
         hechos = self.hechos(todas(meses(100, 101, 102), meses(100, 101, 102)), self.hallazgo())
@@ -172,7 +172,7 @@ class CoberturaTests(BaseEvidencia):
     def test_un_archivo_publicado_antes_que_el_de_las_series_al_dia_explica_el_desfase(self):
         hechos = self.hechos(self.series(), self.HALLAZGO)
         self.assertEqual(hechos[0].texto, "La serie IPC nivel general - Argentina termina en jul 2026; las que más avanzan llegan a ago 2026.")
-        self.assertEqual(hechos[1].texto, "El archivo de esta serie (sh_ipc_08_26.xls) se publicó el 13 de agosto de 2026 y el de las que están al día "
+        self.assertEqual(hechos[1].texto, "Según el servidor de INDEC, el archivo de esta serie (sh_ipc_08_26.xls) cambió por última vez el 13 de agosto de 2026 y el de las que están al día "
                                           "(sh_ipc_aperturas.xls) el 14 de septiembre de 2026, 32 días después.")
         self.assertEqual(hechos[1].etiquetas, {"archivo"})
 
@@ -184,12 +184,12 @@ class CoberturaTests(BaseEvidencia):
     def test_si_el_archivo_de_esta_serie_es_el_mas_nuevo_tampoco_es_desfase_de_publicacion(self):
         hechos = self.hechos(self.series(), self.HALLAZGO, detalle={"ipc_ng_nacional": "aperturas", **{sid: "nacional" for sid in REGIONES}})
         self.assertNotIn("archivo", self.etiquetas(hechos))
-        self.assertIn("no hay un desfase de publicación que explique la diferencia", self.textos(hechos))
+        self.assertIn("no hay un archivo más viejo que explique la diferencia", self.textos(hechos))
 
     def test_sin_fechas_de_publicacion_no_hay_nada_que_comparar(self):
         hechos = self.hechos(self.series(), self.HALLAZGO, con_fechas=False)
         self.assertNotIn("archivo", self.etiquetas(hechos))
-        self.assertIn("No hay fechas de publicación de los archivos para comparar.", self.textos(hechos))
+        self.assertIn("No hay fechas de los archivos para comparar.", self.textos(hechos))
 
     def test_una_serie_sin_datos_en_el_candidato(self):
         hechos = self.hechos({"ipc_ng_gba": meses(100, 101)}, self.HALLAZGO)
@@ -216,7 +216,7 @@ class OtrasReglasTests(BaseEvidencia):
             "frescura", "ipc_ng_nacional", date(2026, 4, 1), "ipc_ng_nacional llega a 2026-04; al 2026-10-06 se esperaba al menos 2026-09."))
         self.assertEqual(hechos[0].texto, "La validación informó: ipc_ng_nacional llega a 2026-04; al 2026-10-06 se esperaba al menos 2026-09.")
         self.assertEqual(hechos[1].texto, "Últimos valores de la serie: feb 2026 101,00, mar 2026 102,00, abr 2026 103,00.")
-        self.assertIn("lo publicó INDEC el 13 de agosto de 2026", hechos[2].texto)
+        self.assertIn("cambió por última vez el 13 de agosto de 2026", hechos[2].texto)
         self.assertEqual(self.etiquetas(hechos), {"valor"})
 
     def test_el_texto_que_viene_del_archivo_se_limpia_y_se_corta(self):

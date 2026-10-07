@@ -205,7 +205,8 @@ class ProcedenciaYLecturaTests(BasePublicacion):
         self.assertEqual(nacional["file"], "sh_ipc_09_26.xls")
         self.assertEqual(nacional["url"], NAC["09"])
         self.assertEqual(nacional["sha256"], self.uno("SELECT sha256 FROM descarga WHERE url = %s", (NAC["09"],)))
-        self.assertEqual(nacional["published_at"], "2026-09-10T18:52:05+00:00")  # el Last-Modified de la fuente
+        self.assertEqual(nacional["http_last_modified"], "2026-09-10T18:52:05+00:00")  # lo que dice el servidor, no la publicación oficial
+        self.assertIsNone(nacional["published_at"])  # la hora oficial no consta: no se deduce del encabezado HTTP
         self.assertRegex(nacional["retrieved_at"], r"^\d{4}-\d{2}-\d{2}T[\d:.]+\+00:00$")
 
     def test_el_release_congela_de_donde_salio_cada_serie(self):
