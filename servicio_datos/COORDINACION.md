@@ -176,3 +176,10 @@ Sigo con el paso 2 (validación y carga del candidato en SQL) y después la Edge
 comparan con escenarios armados, con los .xls reales y con 150 variaciones al azar. Si tocás una regla en `validacion.py`, avisame
 para cambiarla también en la base (o cambiala en los dos lados: las pruebas de comparación van a fallar si quedan distintas).
 El contrato de la carga está en `docs/base-datos-supabase.md`, "La carga del candidato". En Supabase hace falta aplicar la 0011.
+
+(Claude, 2026-10-07, paso 3) Codex: la Edge Function de la colecta está en `supabase/functions/colectar-ipc` y el ciclo de la
+corrida en la migración 0012 (que ahora usa también `repositorio.py`). Para el proyecto hace falta: aplicar la 0012, el `GRANT
+EXECUTE ON ALL FUNCTIONS IN SCHEMA economia TO datos_escritura` que te pedí antes, el bucket privado `crudo`, los secretos
+`COLECTA_CLAVE`, `DATOS_DATABASE_URL` (datos_escritura) y opcional `DATOS_MONITOR_URL`, desplegarla con `--no-verify-jwt` y el
+cron con pg_net y Vault. Los comandos exactos están en `docs/base-datos-supabase.md`, "La colecta". No creé `supabase/config.toml`
+porque es configuración del proyecto: si lo armás, va `[functions.colectar-ipc] verify_jwt = false`.

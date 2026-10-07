@@ -1,6 +1,6 @@
 # Base de datos: todo dentro de Supabase (plan)
 
-Estado: plan aprobado; pasos 0, 1 y 2 hechos (2026-10-07).
+Estado: plan aprobado; pasos 0 a 3 hechos (2026-10-07).
 
 ## La decisión
 
@@ -78,7 +78,7 @@ pipeline, revisión Flask, despliegue en Ubuntu, modelo local, respaldo a disco 
 1. **Revisión y publicación como funciones SQL**, con el esquema `revision` y la lista de revisores. **Hecho**: ver "La API de
    revisión" abajo.
 2. **Validación y carga del candidato como funciones SQL.** **Hecho**: ver "La carga del candidato" abajo.
-3. **Edge Function `colectar-ipc`**, el bucket del crudo y pg_cron.
+3. **Edge Function `colectar-ipc`**, el bucket del crudo y pg_cron. **Hecho** (el código): ver "La colecta" abajo.
 4. **La página de revisión en ChartBay.**
 5. **Avisos.**
 6. **El analista con la API.**
@@ -137,6 +137,48 @@ La validación es `validar_ipc`, que replica regla por regla y con los mismos te
 par de la variación). Las pruebas lo comparan con Python en escenarios armados, con los `.xls` reales y con 150 variaciones al azar,
 y comparan `cargar_candidato` con el orquestador de Python de punta a punta con los archivos reales: mismas observaciones, mismos
 hallazgos en el mismo orden y el mismo resumen. Mientras exista el Python, una regla nueva va en los dos lados.
+
+## La colecta (paso 3)
+
+`supabase/functions/colectar-ipc` es la Edge Function. Hace lo que la base no puede: bajar los archivos de INDEC (del nombre más
+nuevo al más viejo, rechazando la página HTML que INDEC devuelve por un archivo que no existe y sin caer al mes anterior ante un
+error de red), guardar cada original en el bucket privado `crudo` con el hash como nombre, leer los `.xls` con SheetJS y llamar
+a `cargar_candidato`. El ciclo de la corrida (abrirla de forma exclusiva, saber si un archivo ya se conocía, registrar descargas y
+cerrarla) son funciones de la base (migración 0012), las mismas que usa ahora el colector de Python. Si algo falla, la corrida
+queda cerrada como fallida, nunca a medias. Al terminar, le late al monitor externo si `DATOS_MONITOR_URL` está puesto.
+
+Lo que comparte con las funciones que vengan está en `supabase/functions/_compartido/`: la fuente, el lector, la carga, el
+cliente HTTP (solo `www.indec.gob.ar`, reintentos, tope de 40 MB, redirecciones solo al mismo host), la base (postgres.js con
+conexión directa: `economia` sigue sin exponerse) y Storage.
+
+Para ponerla en marcha (Codex, en el proyecto):
+
+```bash
+supabase secrets set COLECTA_CLAVE=<una clave larga al azar> DATOS_DATABASE_URL='<la de datos_escritura>' DATOS_MONITOR_URL='<opcional>'
+supabase functions deploy colectar-ipc --no-verify-jwt   # la protege COLECTA_CLAVE, no la clave pública de Supabase
+```
+
+Además: aplicar la migración 0012, dar a `datos_escritura` permiso de ejecutar las funciones de `economia`, crear el bucket privado
+`crudo`, y programarla con pg_cron (las horas van en UTC: 12:30 y 20:30 son las 9:30 y 17:30 de Argentina):
+
+```sql
+SELECT vault.create_secret('https://<proyecto>.supabase.co', 'project_url');
+SELECT vault.create_secret('<la misma COLECTA_CLAVE>', 'colecta_clave');
+SELECT cron.schedule('colectar-ipc', '30 12,20 * * *', $$
+  SELECT net.http_post(
+    url := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'project_url') || '/functions/v1/colectar-ipc',
+    headers := jsonb_build_object('Content-Type', 'application/json',
+                                  'x-chartbay-clave', (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'colecta_clave')),
+    body := '{}'::jsonb, timeout_milliseconds := 150000)
+$$);
+```
+
+Qué se verificó: con Deno 2.9 en esta computadora, las pruebas de la función (cliente HTTP contra un servidor local, lector con
+libros armados y con los archivos reales, y cada final posible de la colecta); que el lector de TypeScript arma **exactamente** la
+misma carga que el de Python con los `.xls` reales; y la colecta de punta a punta contra Postgres (primera corrida: candidato de
+819 observaciones; segunda: sin cambios). Las corre `servicio_datos/tests/test_funciones_supabase.py`. **No se probó**: el
+runtime de Edge Functions de Supabase, Storage de verdad (el guardado del bucket solo se probó con un doble), la conexión por el
+pooler de Supabase ni pg_cron.
 
 ## Reparto con Codex (aprobado por Juani)
 
