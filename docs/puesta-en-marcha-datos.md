@@ -35,14 +35,18 @@ más la página de revisión de Codex.
 
 - [ ] **Aplicar las migraciones 0015, 0016 y 0017**, en orden y con `search_path` en `economia`, como las anteriores. No activan nada
   por sí solas (las funciones del analista, los textos de los avisos del respaldo y la exportación).
+- [ ] **Instalar la lectura pública** aplicando `servicio_datos/api_publica.sql` después de 0017. Su función de solo lectura
+  muestra exclusivamente releases vigentes de fuentes con licencia y atribución; ChartBay la usa con la clave publicable.
 - [ ] **Volver a correr el SQL de `python -m servicio_datos.api_servicio`**: le suma al rol `servicio_datos` las funciones del analista.
 - [ ] **Volver a desplegar `avisar`** desde la rama de Claude, para tener el modo de prueba que usa el paso 4:
   `supabase functions deploy avisar --no-verify-jwt`. Sin la clave tiene que seguir dando 401:
   `curl -sS -o /dev/null -w '%{http_code}' -X POST https://oqbqdngieifjlgbppvey.supabase.co/functions/v1/avisar`.
-- [ ] **Commitear la página de revisión** y lo que la acompaña. En `THIRD_PARTY_NOTICES.md`, sumar SheetJS CE 0.20.3 (Apache-2.0,
-  licencia en `supabase/functions/_vendor/xlsx-0.20.3/LICENSE`).
+- [ ] **Commitear la página de revisión**, `servicio_datos/api_publica.sql` y lo que los acompaña. En `THIRD_PARTY_NOTICES.md`,
+  sumar SheetJS CE 0.20.3 (Apache-2.0, licencia en `supabase/functions/_vendor/xlsx-0.20.3/LICENSE`).
 
 Comprobación: `SELECT version FROM economia.schema_migrations ORDER BY 1;` llega a `0017`.
+`SELECT public.catalogo_economico_publicado();` devuelve `{"schema_version":1,"sources":[]}` hasta el primer release de una fuente con licencia
+y atribución (pasos 6 y 7).
 
 ## 2. Integrar y desplegar ChartBay (Juani)
 
