@@ -66,7 +66,7 @@ class CandidatoNuevoTests(BaseAvisos):
         self.conn.execute("UPDATE corrida SET resumen = resumen || '{\"periodos_nuevos\": 1, \"periodos_cambiados\": 1, \"periodos_faltantes\": 1}'")
         self.procesar()
         self.assertIn("1 período nuevo, 1 dato ya publicado que cambia, 1 que falta.", self.canal.mensajes[0].cuerpo)
-        self.assertEqual(avisos._cantidad(0, "dato", "datos"), "0 datos")
+        self.assertEqual(self.uno("SELECT plural(0, 'dato', 'datos')"), "0 datos")
 
     def test_marca_como_atencion_lo_que_tiene_hallazgos_graves_o_cambia_lo_publicado(self):
         self.candidato(hallazgos=[C])  # severidad alta
@@ -337,12 +337,28 @@ class EntregaTests(BaseAvisos):
 
     def test_si_otra_corrida_de_avisos_esta_entregando_no_se_duplica(self):
         self.candidato(hallazgos=[B])
-        with psycopg.connect(URL, autocommit=True) as otra:
-            otra.execute("SELECT pg_advisory_lock(%s)", (avisos.CANDADO,))
-            self.avisos_creados = avisos.detectar(self.conn, HOY, AHORA)
-            resultado = avisos.entregar(self.conn, [self.canal], BASE, HOY, AHORA)
-        self.assertEqual((resultado.ocupado, self.canal.mensajes), (True, []))
+        avisos.detectar(self.conn, HOY, AHORA)
+        with psycopg.connect(URL, autocommit=True) as otra:  # otra entrega los toma y todavía no terminó
+            otra.execute(f"SET search_path TO {self.schema}")
+            tomados = otra.execute("SELECT tomar_avisos(%s)", (HOY,)).fetchone()[0]
+        self.assertEqual(len(tomados["avisos"]), 1)
+        resultado = avisos.entregar(self.conn, [self.canal], BASE, HOY, AHORA)
+        self.assertEqual((resultado.ocupado, resultado.enviados, self.canal.mensajes), (True, 0, []))
+        # Si esa entrega se cayó, al vencer la reserva el aviso lo toma otra.
+        self.conn.execute("UPDATE aviso SET tomado_hasta = now() - interval '1 second'")
         self.assertEqual(avisos.entregar(self.conn, [self.canal], BASE, HOY, AHORA).enviados, 1)
+
+    def test_lo_que_registra_otra_entrega_no_se_vuelve_a_mandar(self):
+        self.candidato(hallazgos=[B])
+        avisos.detectar(self.conn, HOY, AHORA)
+        aviso = self.conn.execute("SELECT tomar_avisos(%s)", (HOY,)).fetchone()[0]["avisos"][0]
+        self.assertEqual(self.uno("SELECT registrar_entrega(%s, '{\"slack\": {\"ok\": true}}', true)", (aviso["id"],)), "enviado")
+        self.assertEqual(self.uno("SELECT registrar_entrega(%s, '{}', false)", (aviso["id"],)), "enviado")  # ya estaba: no lo toca
+        self.assertEqual(self.conn.execute("SELECT intentos, tomado_hasta FROM aviso").fetchone(), (1, None))
+        self.assertEqual(avisos.entregar(self.conn, [self.canal], BASE, HOY, AHORA).enviados, 0)
+        with self.assertRaises(psycopg.Error) as contexto:
+            self.conn.execute("SELECT registrar_entrega(99999, '{}', true)")
+        self.assertEqual(contexto.exception.diag.message_detail, "no_existe")
 
     def test_sin_url_base_el_aviso_va_sin_enlace(self):
         self.candidato(hallazgos=[B])
@@ -384,7 +400,8 @@ class RecordatoriosTests(BaseAvisos):
         return [m for m in self.canal.mensajes if "sin cerrarse" in m.asunto]
 
     def test_el_calendario_de_hitos(self):
-        hito = avisos.hito_de_recordatorio
+        def hito(edad, primero=avisos.RECORDATORIO_DIAS):
+            return self.uno("SELECT hito_de_recordatorio(%s, %s)", (edad, primero))
         self.assertEqual([hito(e) for e in (0, 2, 3, 6, 7, 13, 14, 20, 21, 100)], [None, None, 3, 3, 7, 7, 14, 14, 21, 98])
         self.assertEqual([hito(e, 1) for e in (0, 1, 6, 7, 8)], [None, 1, 1, 7, 7])
         self.assertEqual([hito(e, 10) for e in (9, 10, 13, 14)], [None, 10, 10, 14])
