@@ -1,6 +1,6 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
-// @deno-types="https://cdn.sheetjs.com/xlsx-0.20.3/package/types/index.d.ts"
-import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs";
+// @deno-types="../_vendor/xlsx-0.20.3/index.d.ts"
+import * as XLSX from "../_vendor/xlsx-0.20.3/xlsx.mjs";
 import { archivos } from "./fuente_ipc.ts";
 import { ErrorParseo, leerArchivo } from "./parser_ipc.ts";
 

@@ -2,6 +2,12 @@
 
 Estado: plan aprobado; pasos 0 a 3 y 5 a 7 hechos (2026-10-07). Falta el 4 (Codex).
 
+**En producción** (Codex, 2026-10-08, proyecto `oqbqdngieifjlgbppvey`): migraciones 0011 a 0014, el rol `servicio_datos`, la colecta
+(`colectar-ipc`, con cron a las 9:30 y 17:30) y `avisar` (desplegada, todavía sin canal ni cron). La primera colecta dejó el candidato 1
+(819 observaciones, 19 hallazgos). Faltan desplegar: el analista (0015, espera la clave de la API y la autorización de Juani), el
+respaldo (0016, espera las claves S3 y el rol), la copia pública (0017, espera la licencia y que los flujos lleguen a `main`) y la
+página de revisión de ChartBay con su usuario de Auth.
+
 ## La decisión
 
 Juani decidió el 2026-10-07, a partir de la nota de Codex en `servicio_datos/NOTAS_CODEX.md`:
@@ -244,9 +250,15 @@ los archivos reales, y cada final posible de la colecta); que el lector de TypeS
 Python con los `.xls` reales; y la colecta de punta a punta contra Postgres **entrando como el rol de la colecta** (primera corrida:
 candidato de 819 observaciones; segunda: sin cambios). Las corre `servicio_datos/tests/test_funciones_supabase.py`. Los permisos del
 rol se prueban en `test_api_servicio.py`, incluso con los roles de la API de Supabase y permisos por defecto que les darían las
-funciones nuevas; el search_path, en `test_search_path.py`. **No se probó**: el runtime de Edge Functions de Supabase, Storage de
-verdad (el guardado del bucket solo se probó con un doble), la conexión por el pooler de Supabase con un rol propio, una clave
-`sb_secret_…` con supabase-js ni pg_cron.
+funciones nuevas; el search_path, en `test_search_path.py`.
+
+**En Supabase** (Codex, 2026-10-08): sin la clave contesta 401; la primera llamada dejó `con_candidato` (corrida 1, candidato 1,
+19 hallazgos, 819 observaciones) y la segunda `sin_cambios`; los dos originales quedaron en `economia-crudos`; y la misma llamada que
+hace el cron (Vault → pg_net → la función → la base) contestó 200. Con eso quedaron comprobados el runtime de Edge Functions, Storage,
+la conexión por el pooler de transacciones con el rol `servicio_datos` y pg_cron. Una cosa que apareció recién ahí: el empaquetador
+de Supabase no baja código de una URL, así que SheetJS está copiado tal cual en `supabase/functions/_vendor/xlsx-0.20.3/` (con su
+licencia Apache-2.0; una prueba comprueba que sea la copia oficial y que ninguna función importe de una URL). **Sigue sin probarse**:
+una clave `sb_secret_…` con supabase-js (el proyecto usa la `SUPABASE_SERVICE_ROLE_KEY`).
 
 ## El analista (paso 6)
 
@@ -335,9 +347,10 @@ $$);
 Qué se verificó: que la detección en la base da lo mismo que daba Python (las pruebas de siempre, ahora contra la base); las
 pruebas de la función (entrega por cada canal, reintentos, un canal que se rompe sin frenar al resto ni filtrar su error, el
 enlace, la configuración) y del canal de Slack contra un servidor local (escape, corte, errores sin la URL, sin seguir
-redirecciones); y los avisos de punta a punta contra Postgres entrando con el rol de las Edge Functions y un Slack local. **No se
-probó**: el runtime de Supabase, el Slack de verdad ni pg_cron. Los textos del respaldo todavía hablan del equipo Ubuntu
-(`respaldar estado`, el disco de destino): se ajustan con el paso 7.
+redirecciones); y los avisos de punta a punta contra Postgres entrando con el rol de las Edge Functions y un Slack local. En Supabase
+(Codex, 2026-10-08) está desplegada y contesta `sin_canales: true`: falta el webhook de Slack, y el cron espera ese webhook y la
+dirección pública de la página de revisión. **No se probó** el Slack de verdad. Los textos de los avisos del respaldo ya hablan del
+flujo de GitHub (migración 0016).
 
 ## El respaldo (paso 7)
 

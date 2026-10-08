@@ -186,6 +186,10 @@ DO $$ BEGIN
     EXECUTE 'REVOKE ALL ON ALL FUNCTIONS IN SCHEMA {api} FROM anon';
     EXECUTE 'REVOKE ALL ON SCHEMA {api} FROM anon';
   END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    EXECUTE 'REVOKE ALL ON ALL FUNCTIONS IN SCHEMA {api} FROM service_role';
+    EXECUTE 'REVOKE ALL ON SCHEMA {api} FROM service_role';
+  END IF;
 END $$;
 GRANT USAGE ON SCHEMA {api} TO authenticated;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA {api} TO authenticated;

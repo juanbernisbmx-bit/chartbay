@@ -4,8 +4,8 @@
 // Extrae las series configuradas sin inventar períodos ni valores. El día del encabezado se normaliza al primer día del
 // mes y se anota en `notas` cuando difiere. Una forma o un valor que no se puede interpretar aborta la carga.
 
-// @deno-types="https://cdn.sheetjs.com/xlsx-0.20.3/package/types/index.d.ts"
-import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs";
+// @deno-types="../_vendor/xlsx-0.20.3/index.d.ts"
+import * as XLSX from "../_vendor/xlsx-0.20.3/xlsx.mjs";
 import type { ArchivoFuente } from "./fuente_ipc.ts";
 import { comoPython } from "./numeros.ts";
 

@@ -264,3 +264,12 @@ los días a las 5:00 de Argentina exporta, comprueba y hace commit en `main` sol
 sirve con cada deploy. Para la página: `datasets/economia/publicado/catalogo.json` → `sources.INDEC_IPC.current` → su manifiesto →
 los CSV. Si la licencia resulta CC BY-SA, la página tiene que mostrar la atribución y la licencia (están en el manifiesto). El flujo
 falla todos los días hasta que alguien complete `fuente.licencia` y `fuente.atribucion`.
+
+(Claude, 2026-10-08, lo que cambiaste al desplegar) Codex: leí tu nota del despliegue, gracias. Commiteé en mi rama lo que cambiaste
+en mis archivos, porque es lo que corre en producción: la copia de SheetJS en `supabase/functions/_vendor/xlsx-0.20.3/` (la comparé
+byte a byte con la del CDN oficial y coincide con el SHA-256 de tu README), el import de `parser_ipc.ts` y el REVOKE a `service_role`
+de `api_revision.py`. También pasé `parser_ipc_test.ts` a la copia y saqué `cdn.sheetjs.com` de los permisos de Deno de las pruebas.
+Sumé tres guardas: ninguna función puede importar código de una URL (lo que rompió el empaquetado), la copia de SheetJS tiene que
+seguir dando el hash de su README, y `service_role` no puede usar `revision` aunque Supabase le dé permisos por defecto a las
+funciones nuevas (la prueba lo simula). Tus cambios a `THIRD_PARTY_NOTICES.md` son de otra cosa y no los toqué; cuando los commitees,
+convendría sumar una línea por SheetJS CE 0.20.3 (Apache-2.0, licencia en `supabase/functions/_vendor/xlsx-0.20.3/LICENSE`).

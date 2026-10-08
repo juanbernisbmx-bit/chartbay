@@ -1,5 +1,5 @@
 // Imprime la carga que arma la colecta con los archivos de una carpeta: la usa una prueba de Python para comparar el parser de
-// TypeScript con el de Python. Uso: deno run --allow-read --allow-import=cdn.sheetjs.com imprimir_carga.ts <carpeta> <nacional.xls> <hoy>
+// TypeScript con el de Python. Uso: deno run --allow-read imprimir_carga.ts <carpeta> <nacional.xls> <hoy>
 import { cargaDe } from "./carga.ts";
 import { archivos } from "./fuente_ipc.ts";
 import { leerArchivo } from "./parser_ipc.ts";

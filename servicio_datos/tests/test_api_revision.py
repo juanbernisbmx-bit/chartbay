@@ -52,7 +52,8 @@ class FuncionesSqlTests(BasePublicacion):
 class BaseApi(BasePublicacion):
     def setUp(self):
         super().setUp()
-        self.conn.execute("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon NOLOGIN; END IF; END $$")
+        for rol in ("anon", "service_role"):  # los de Supabase que no tienen que poder usar la revisión
+            self.conn.execute(f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{rol}') THEN CREATE ROLE {rol} NOLOGIN; END IF; END $$")
         self.api = f"{self.schema}_api"
         api_revision.instalar(self.conn, api=self.api)
         self.addCleanup(self.aparte, f"DROP SCHEMA IF EXISTS {self.api} CASCADE")
@@ -98,9 +99,20 @@ class AutorizacionTests(BaseApi):
         self.assertEqual((self.contar("revision_hallazgo"), self.uno("SELECT estado FROM candidato WHERE id = %s", (candidato,))), (0, "abierto"))
 
     def test_sin_iniciar_sesion_ni_siquiera_se_llega_a_las_funciones(self):
-        conn = self.sesion("juani@club.org", rol="anon")
-        with self.assertRaises(psycopg.errors.InsufficientPrivilege):
-            self.llamar(conn, "cola")
+        # Como en Supabase, donde las funciones nuevas les dan permiso por defecto a los roles de su API.
+        roles_api = "anon, authenticated, service_role"
+        self.conn.execute(f"ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO {roles_api}")
+        self.addCleanup(self.aparte, f"ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM {roles_api}")
+        self.conn.execute(f"DROP SCHEMA {self.api} CASCADE")
+        api_revision.instalar(self.conn, api=self.api)
+        for rol in ("anon", "service_role"):  # tampoco con la clave de servidor: la revisión es de una persona con sesión
+            with self.subTest(rol=rol):
+                self.assertFalse(self.uno("SELECT has_schema_privilege(%s, %s, 'USAGE')", (rol, self.api)))
+                self.assertEqual(self.conn.execute("SELECT p.proname FROM pg_proc p WHERE p.pronamespace = %s::regnamespace "
+                                                   "AND has_function_privilege(%s, p.oid, 'EXECUTE')", (self.api, rol)).fetchall(), [])
+                conn = self.sesion("juani@club.org", rol=rol)
+                with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                    self.llamar(conn, "cola")
 
     def test_una_sesion_no_ve_las_tablas_ni_las_funciones_internas(self):
         conn = self.sesion()

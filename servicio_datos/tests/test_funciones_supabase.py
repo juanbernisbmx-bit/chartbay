@@ -24,13 +24,37 @@ from servicio_datos.tests.test_pipeline import HAY_PARSER, HOY, ORIGINALES
 RAIZ = Path(__file__).resolve().parents[2]
 FUNCIONES = RAIZ / "supabase" / "functions"
 DENO = shutil.which("deno")
-PERMISOS = ["--allow-net=127.0.0.1", "--allow-import=cdn.sheetjs.com,jsr.io", "--allow-read", "--allow-env"]
+PERMISOS = ["--allow-net=127.0.0.1", "--allow-import=jsr.io", "--allow-read", "--allow-env"]  # jsr.io: solo las aserciones de las pruebas
 HAY_ORIGINALES = HAY_PARSER and all((ORIGINALES / n).is_file() for n in ("sh_ipc_08_26.xls", "sh_ipc_09_26.xls", "sh_ipc_aperturas.xls"))
 
 
 def deno(*argumentos, entorno=None):
     return subprocess.run([DENO, *argumentos], cwd=FUNCIONES, capture_output=True, text=True, timeout=600,
                           env={**os.environ, "NO_COLOR": "1", **(entorno or {})})
+
+
+class DependenciasTests(unittest.TestCase):
+    """Lo que aprendió el despliegue: el empaquetador de Supabase no baja código de una URL, así que nada se importa así."""
+
+    def test_ninguna_funcion_importa_codigo_de_una_url(self):
+        import re
+        remotos = []
+        for ruta in FUNCIONES.rglob("*.ts"):
+            if "_vendor" in ruta.parts:
+                continue
+            for numero, linea in enumerate(ruta.read_text(encoding="utf-8").splitlines(), 1):
+                if re.search(r'(\bfrom\s+|\bimport\s*\(?\s*|@deno-types=)"https?://', linea):
+                    remotos.append(f"{ruta.relative_to(FUNCIONES)}:{numero}")
+        self.assertEqual(remotos, [])
+
+    def test_sheetjs_es_la_copia_oficial_que_dice_su_leeme(self):
+        import hashlib
+        import re
+        carpeta = FUNCIONES / "_vendor" / "xlsx-0.20.3"
+        anotado = re.search(r"SHA-256 `xlsx.mjs`: `([0-9a-f]{64})`", (carpeta / "README.md").read_text(encoding="utf-8")).group(1)
+        self.assertEqual(hashlib.sha256((carpeta / "xlsx.mjs").read_bytes()).hexdigest(), anotado)
+        self.assertTrue((carpeta / "LICENSE").is_file())  # Apache-2.0: la licencia viaja con la copia
+        self.assertIn('from "../_vendor/xlsx-0.20.3/xlsx.mjs"', (FUNCIONES / "_compartido" / "parser_ipc.ts").read_text(encoding="utf-8"))
 
 
 @unittest.skipUnless(DENO, "Falta Deno")
@@ -48,7 +72,7 @@ class ParserDeTypeScriptTests(unittest.TestCase):
     def test_arma_la_misma_carga_que_el_de_python_con_los_archivos_reales(self):
         from servicio_datos.ipc import parser
         for nacional in ("sh_ipc_09_26.xls", "sh_ipc_08_26.xls"):
-            proceso = deno("run", "--allow-read", "--allow-import=cdn.sheetjs.com", "_compartido/imprimir_carga.ts", str(ORIGINALES), nacional, HOY.isoformat())
+            proceso = deno("run", "--allow-read", "_compartido/imprimir_carga.ts", str(ORIGINALES), nacional, HOY.isoformat())
             self.assertEqual(proceso.returncode, 0, proceso.stderr[-2000:])
             series = {}
             for archivo in fuente.archivos(HOY):
