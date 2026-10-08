@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
-import { CanalSlack, ErrorEnvio } from "./slack.ts";
+import { ErrorEnvio } from "./canales.ts";
+import { CanalSlack } from "./slack.ts";
 
 type Recibido = { tipo: string | null; cuerpo: { text: string } };
 

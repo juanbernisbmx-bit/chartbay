@@ -3,7 +3,8 @@
 Estado: plan aprobado; pasos 0 a 3 y 5 a 7 hechos (2026-10-07). Falta el 4 (Codex).
 
 **En producción** (Codex, 2026-10-08, proyecto `oqbqdngieifjlgbppvey`): migraciones 0011 a 0014, el rol `servicio_datos`, la colecta
-(`colectar-ipc`, con cron a las 9:30 y 17:30) y `avisar` (desplegada, todavía sin canal ni cron). La primera colecta dejó el candidato 1
+(`colectar-ipc`, con cron a las 9:30 y 17:30) y `avisar` (desplegada en una versión anterior a Discord; el webhook ya está cargado
+y falta volver a desplegarla; sin cron). La primera colecta dejó el candidato 1
 (819 observaciones, 19 hallazgos). Faltan desplegar: el analista (0015, espera la clave de la API y la autorización de Juani), el
 respaldo (0016, espera las claves S3 y el rol), la copia pública (0017, espera la licencia y que los flujos lleguen a `main`) y la
 página de revisión de ChartBay con su usuario de Auth.
@@ -47,7 +48,7 @@ Fuentes: [límites de Edge Functions](https://supabase.com/docs/guides/functions
 | Candidato, diferencias y publicación | `pipeline.py`, `publicacion.py` | **Funciones SQL**: cargar corrida, revisar, aceptar pendientes, publicar, descartar | Casi todo ya es SQL dentro de Python |
 | Colecta y lectura de los `.xls` | `colector.py`, `ipc/parser.py` | **Edge Function `colectar-ipc`** (TypeScript): baja, detecta la página HTML en vez del archivo, guarda el crudo en un bucket privado (nombre = hash, como hoy), lee con SheetJS y llama a la función SQL que carga la corrida | Las reglas de nombres de archivo y lo aprendido de INDEC |
 | Programación | cron en Ubuntu | pg_cron + pg_net, secretos en Vault | Los horarios |
-| Avisos | `avisos.py`, `avisar.py` | **Función SQL** que detecta (las consultas de hoy) + **Edge Function `avisar`** que entrega por Slack | La detección y la bandeja de salida (`aviso`) |
+| Avisos | `avisos.py`, `avisar.py` | **Función SQL** que detecta (las consultas de hoy) + **Edge Function `avisar`** que entrega por Discord (o Slack) | La detección y la bandeja de salida (`aviso`) |
 | Analista | `agente/`, modelo local | **Edge Function `analizar`** con la API de Claude (SDK oficial), cuando aparece un candidato | El diseño: hechos que reúne el código, validador que decide, solo escribe `propuesta`. Se traduce a TypeScript |
 | Revisión | app Flask aparte, login Basic | **Página dentro de ChartBay**, login con Supabase Auth en el navegador | La pantalla y sus textos |
 | Respaldo | `pg_dump` y copia del crudo a otro disco | **Un flujo de GitHub Actions** que baja el bucket, vuelca la base, ensaya la restauración y guarda un artefacto | `respaldo.py` entero: volcado, verificación, ensayo |
@@ -158,7 +159,7 @@ a medias. Al terminar, le late al monitor externo si `DATOS_MONITOR_COLECTA_URL`
 
 Lo que comparte con las funciones que vengan está en `supabase/functions/_compartido/`: la fuente, el lector, la carga, el
 cliente HTTP (solo `www.indec.gob.ar`, reintentos, tope de 40 MB, redirecciones solo al mismo host), la base (postgres.js con
-conexión directa: `economia` sigue sin exponerse), Storage, Slack, el latido y la autorización.
+conexión directa: `economia` sigue sin exponerse), Storage, los canales de aviso (Discord y Slack), el latido y la autorización.
 
 ### Con qué permisos entran a la base las Edge Functions
 
@@ -200,7 +201,7 @@ Sirve también para los avisos (paso 5) y el analista (paso 6), que usan el mism
    ```
    DATOS_CLAVE_CRON=<una clave larga al azar>
    DATOS_DATABASE_URL=postgresql://servicio_datos.<ref del proyecto>:<contraseña>@<host del pooler>:6543/postgres
-   DATOS_AVISOS_SLACK_URL=<el webhook de Slack>
+   DATOS_AVISOS_DISCORD_URL=<el webhook del canal privado de Discord>
    DATOS_REVISION_URL=https://<chartbay>/base-de-datos/revision
    DATOS_MONITOR_COLECTA_URL=<opcional: un latido de Healthchecks para la colecta>
    DATOS_MONITOR_AVISAR_URL=<opcional: otro, para los avisos>
@@ -319,18 +320,27 @@ minutos, para que dos entregas a la vez no manden lo mismo dos veces y, si una s
 cómo le fue a cada canal y, después de cinco intentos, da el aviso por perdido. `avisos.py` usa estas mismas funciones, así que las
 ~60 pruebas de los avisos las cubren.
 
-`supabase/functions/avisar` es la Edge Function: detecta, toma, manda por Slack y anota. Sin un canal configurado no hace nada (ni
-siquiera detecta: si no, al configurar uno llegaría de golpe todo lo acumulado) y se lo dice al monitor. Lo que viene de la base
-se escapa para que no pueda armar enlaces ni menciones (`<!channel>`), y ningún error repite el webhook. El enlace de cada aviso va
+`supabase/functions/avisar` es la Edge Function: detecta, toma, manda y anota. Sin un canal configurado no hace nada (ni siquiera
+detecta: si no, al configurar uno llegaría de golpe todo lo acumulado) y se lo dice al monitor. Juani eligió **Discord**
+(2026-10-08): un canal privado, `#alertas-datos`, con su webhook en `DATOS_AVISOS_DISCORD_URL`. Slack sigue disponible
+(`DATOS_AVISOS_SLACK_URL`), y con los dos puestos llega a los dos; cada uno se anota aparte en `aviso.entregas` (`discord`, `slack`),
+así que uno caído se reintenta sin repetir en el otro.
+
+En Discord el texto va en `content`, cortado en el cuerpo para entrar en los 2000 caracteres sin perder el enlace, con
+`allowed_mentions` vacío (nadie puede ser mencionado) y sin vista previa de enlaces. Lo que viene de la base se escapa: no puede armar
+enlaces con formato, menciones, encabezados, citas ni listas, y a las direcciones se les rompe el `://` para que no se conviertan en
+enlaces. Solo se acepta un webhook de `discord.com` (o `discordapp.com`) con la forma `/api/webhooks/<id>/<token>`; no se siguen
+redirecciones; cualquier respuesta que no sea 204 o 200 (un 429 por límite, por ejemplo) es una entrega fallida que se reintenta; y
+ningún error repite la URL, que es una credencial. En Slack, lo mismo con sus reglas (`<!channel>` no puede armarse). El enlace de cada aviso va
 a la página de revisión de ChartBay con un ancla: `#candidato=<id>` o `#corrida=<id>` (la página puede usarla para abrir ese
 candidato; si no la usa, abre la cola).
 
-**Solo Slack.** El correo por SMTP no sale desde Supabase: las Edge Functions no pueden conectarse a los puertos 25 ni 587
+**Sin correo.** El correo por SMTP no sale desde Supabase: las Edge Functions no pueden conectarse a los puertos 25 ni 587
 ([límites](https://supabase.com/docs/guides/functions/limits)). Si hace falta correo, va por la API HTTP de un proveedor.
 
-Para ponerla en marcha, además de lo de la colecta (mismo rol, misma clave y mismo archivo de secretos, con `DATOS_AVISOS_SLACK_URL`
+Para ponerla en marcha, además de lo de la colecta (mismo rol, misma clave y mismo archivo de secretos, con `DATOS_AVISOS_DISCORD_URL`
 y `DATOS_REVISION_URL`): la prueba a mano es `curl -sS -X POST -H @encabezado-cron.txt https://<ref>.supabase.co/functions/v1/avisar`
-después de la colecta de prueba. Tiene que contestar `"creados":1,"enviados":1` y llegar el aviso del candidato a Slack. La segunda
+después de la colecta de prueba. Tiene que contestar `"creados":1,"enviados":1` y llegar el aviso del candidato a `#alertas-datos`. La segunda
 vez, `"creados":0,"enviados":0`. Después, el cron (cada hora a los 45 minutos, así un candidato nuevo avisa un cuarto de hora
 después de la colecta):
 
@@ -346,10 +356,13 @@ $$);
 
 Qué se verificó: que la detección en la base da lo mismo que daba Python (las pruebas de siempre, ahora contra la base); las
 pruebas de la función (entrega por cada canal, reintentos, un canal que se rompe sin frenar al resto ni filtrar su error, el
-enlace, la configuración) y del canal de Slack contra un servidor local (escape, corte, errores sin la URL, sin seguir
-redirecciones); y los avisos de punta a punta contra Postgres entrando con el rol de las Edge Functions y un Slack local. En Supabase
-(Codex, 2026-10-08) está desplegada y contesta `sin_canales: true`: falta el webhook de Slack, y el cron espera ese webhook y la
-dirección pública de la página de revisión. **No se probó** el Slack de verdad. Los textos de los avisos del respaldo ya hablan del
+enlace, la configuración) y de los canales contra un servidor local: Slack (escape, corte, errores sin la URL, sin seguir
+redirecciones) y Discord (formato, menciones bloqueadas, texto hostil que no arma enlaces ni formato, corte en el límite sin perder el
+enlace, 204/200 como entrega y todo lo demás como falla, sin seguir redirecciones, la URL validada y nunca repetida); y los avisos de
+punta a punta contra Postgres entrando con el rol de las Edge Functions, con un Slack y un Discord locales a la vez. En Supabase
+(Codex, 2026-10-08) está desplegada la versión anterior, que contesta `sin_canales: true` porque todavía no lee
+`DATOS_AVISOS_DISCORD_URL` (el secreto ya está cargado): hay que volver a desplegarla. El cron espera, además, la dirección pública de
+la página de revisión y una prueba manual de punta a punta. **No se probó** el Discord de verdad. Los textos de los avisos del respaldo ya hablan del
 flujo de GitHub (migración 0016).
 
 ## El respaldo (paso 7)
@@ -365,7 +378,7 @@ flujo de GitHub (migración 0016).
 5. Empaqueta el volcado, su manifiesto y el crudo en un `.tar.gz` con un índice (`respaldo.json`), cifrado con age si hay clave pública,
    y lo guarda como artefacto de la corrida durante 7 días.
 6. Anota la corrida en `economia.respaldo`: si falla, o si pasan dos días sin uno bueno (el flujo dejó de correr, se vencieron sus
-   claves), `avisar` lo dice por Slack (migración 0016: los textos ahora hablan del flujo, no del equipo Ubuntu). GitHub además le
+   claves), `avisar` lo dice por Discord (migración 0016: los textos ahora hablan del flujo, no del equipo Ubuntu). GitHub además le
    avisa por correo de las corridas fallidas a quien cambió por última vez el horario del flujo.
 
 **Tamaño y conservación.** El crudo comprimido son unos 0,9 MB por cada par de archivos nuevos de INDEC, así que cada paquete crece

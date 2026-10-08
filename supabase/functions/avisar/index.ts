@@ -1,10 +1,11 @@
 // Edge Function `avisar`: la llama pg_cron cada hora (ver docs/base-datos-supabase.md, paso 5). Detecta lo que merece un aviso
-// (un candidato para revisar, una corrida fallida, un dato que no llegó, la colecta parada...) y lo manda por Slack.
+// (un candidato para revisar, una corrida fallida, un dato que no llegó, la colecta parada...) y lo manda por Discord o Slack.
 //
 // Secretos que necesita (`supabase secrets set --env-file ...`, compartidos con `colectar-ipc`):
 //   DATOS_CLAVE_CRON                lo que tiene que mandar quien la llama, en el encabezado `x-chartbay-clave`
 //   DATOS_DATABASE_URL              la base, con el rol `servicio_datos` (ver `servicio_datos/api_servicio.py`)
-//   DATOS_AVISOS_SLACK_URL          el webhook de Slack (https://hooks.slack.com/...). Sin él no avisa ni acumula avisos
+//   DATOS_AVISOS_DISCORD_URL        el webhook de un canal de Discord (https://discord.com/api/webhooks/...)
+//   DATOS_AVISOS_SLACK_URL          o el de Slack (https://hooks.slack.com/...). Sin ninguno no avisa ni acumula avisos
 //   DATOS_REVISION_URL              la página de revisión de ChartBay, para los enlaces
 //   DATOS_AVISOS_RECORDATORIO_DIAS  opcional: días hasta el primer recordatorio de un candidato abierto (3); 0 los apaga
 //   DATOS_MONITOR_AVISAR_URL        opcional: el latido de Healthchecks de esta función (no el de la colecta: si fuera el

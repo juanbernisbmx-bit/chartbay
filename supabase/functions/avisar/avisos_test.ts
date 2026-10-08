@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1";
 import type { AvisoTomado, BaseAvisos, Entrega, Tomados } from "../_compartido/base.ts";
-import { type Canal, ErrorEnvio, type Mensaje } from "../_compartido/slack.ts";
+import { type Canal, ErrorEnvio, type Mensaje } from "../_compartido/canales.ts";
 import { avisar, type Configuracion, configuracionDesdeEntorno, enlace } from "./avisos.ts";
 
 const HOY = "2026-10-06";
@@ -92,6 +92,12 @@ Deno.test("la configuración sale del entorno y sus errores no repiten secretos"
   assertEquals([conf.canales.map((c) => c.nombre), conf.urlRevision, conf.recordatorioDias], [["slack"], REVISION, 0]);
   const error = assertThrows(() => configuracionDesdeEntorno({ DATOS_AVISOS_SLACK_URL: "https://otro.example/secreto" }));
   assert(!(error as Error).message.includes("secreto"));
+  const discord = "https://discord.com/api/webhooks/123456789012345678/token-secreto-abcdefghijklmn";
+  assertEquals(configuracionDesdeEntorno({ DATOS_AVISOS_DISCORD_URL: discord }).canales.map((c) => c.nombre), ["discord"]);
+  assertEquals(configuracionDesdeEntorno({ DATOS_AVISOS_DISCORD_URL: discord, DATOS_AVISOS_SLACK_URL: "https://hooks.slack.com/services/T/B/x" })
+    .canales.map((c) => c.nombre), ["slack", "discord"]);
+  const mala = assertThrows(() => configuracionDesdeEntorno({ DATOS_AVISOS_DISCORD_URL: "https://discord.com/api/webhooks/1/token-secreto-corto?x=1" }));
+  assert(!(mala as Error).message.includes("token-secreto"));
   assertThrows(() => configuracionDesdeEntorno({ DATOS_REVISION_URL: "chartbay.example" }), Error, "https://");
   for (const dias of ["-1", "61", "tres", "2.5"]) {
     assertThrows(() => configuracionDesdeEntorno({ DATOS_AVISOS_RECORDATORIO_DIAS: dias }), Error, "entre 0 (sin recordatorios) y 60");

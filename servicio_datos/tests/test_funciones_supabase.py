@@ -128,15 +128,15 @@ class ColectaDePuntaAPuntaTests(BaseFunciones):
 
 @unittest.skipUnless(DENO, "Falta Deno")
 class AvisosDePuntaAPuntaTests(BaseFunciones):
-    def test_el_candidato_abierto_llega_a_slack_y_queda_anotado(self):
+    def test_el_candidato_abierto_llega_a_slack_y_a_discord_y_queda_anotado(self):
         corrida = repositorio.abrir_corrida_exclusiva(self.conn, fuente.FUENTE_ID, 1800)
         candidato = self.conn.execute("SELECT cargar_candidato(%s, %s, %s)", (corrida, HOY, Jsonb(carga_sintetica()))).fetchone()[0]["candidato_id"]
         proceso = deno("test", *PERMISOS, "avisar/integracion_test.ts",
                        entorno={"DATOS_AVISAR_URL": como_usuario(URL, self.rol), "DATOS_AVISAR_ESQUEMA": self.api})
         self.assertEqual(proceso.returncode, 0, proceso.stdout[-3000:] + proceso.stderr[-3000:])
         self.assertIn("1 passed", proceso.stdout)  # que no se haya salteado
-        fila = self.conn.execute("SELECT clave, estado, intentos, entregas -> 'slack' ->> 'ok', tomado_hasta FROM aviso").fetchall()
-        self.assertEqual(fila, [(f"candidato_nuevo:{candidato}", "enviado", 1, "true", None)])
+        fila = self.conn.execute("SELECT clave, estado, intentos, entregas -> 'slack' ->> 'ok', entregas -> 'discord' ->> 'ok', tomado_hasta FROM aviso").fetchall()
+        self.assertEqual(fila, [(f"candidato_nuevo:{candidato}", "enviado", 1, "true", "true", None)])
 
 
 @unittest.skipUnless(DENO, "Falta Deno")

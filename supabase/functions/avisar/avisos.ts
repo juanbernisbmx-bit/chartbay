@@ -2,7 +2,9 @@
 // `entregar` de `servicio_datos/avisos.py`; detectar, comprobar que un aviso siga siendo cierto y anotar las entregas son
 // funciones de la base (migración 0014), las mismas que usa Python.
 import type { AvisoTomado, BaseAvisos, Entrega } from "../_compartido/base.ts";
-import { type Canal, CanalSlack, ErrorEnvio } from "../_compartido/slack.ts";
+import { type Canal, ErrorEnvio } from "../_compartido/canales.ts";
+import { CanalDiscord } from "../_compartido/discord.ts";
+import { CanalSlack } from "../_compartido/slack.ts";
 
 export const RESERVA_SEGUNDOS = 300; // cuánto queda reservado un aviso tomado, por si esta función se cae a mitad de camino
 
@@ -27,6 +29,7 @@ export interface Resultado {
 export function configuracionDesdeEntorno(env: Record<string, string | undefined>): Configuracion {
   const canales: Canal[] = [];
   if (env.DATOS_AVISOS_SLACK_URL) canales.push(new CanalSlack(env.DATOS_AVISOS_SLACK_URL));
+  if (env.DATOS_AVISOS_DISCORD_URL) canales.push(new CanalDiscord(env.DATOS_AVISOS_DISCORD_URL));
   const url = (env.DATOS_REVISION_URL ?? "").trim().replace(/\/+$/, "") || null;
   if (url && !/^https?:\/\//.test(url)) throw new Error("DATOS_REVISION_URL tiene que empezar con https:// (o http:// en una prueba local)");
   const texto = (env.DATOS_AVISOS_RECORDATORIO_DIAS ?? "3").trim();

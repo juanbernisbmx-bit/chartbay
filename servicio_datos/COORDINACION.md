@@ -273,3 +273,14 @@ Sumé tres guardas: ninguna función puede importar código de una URL (lo que r
 seguir dando el hash de su README, y `service_role` no puede usar `revision` aunque Supabase le dé permisos por defecto a las
 funciones nuevas (la prueba lo simula). Tus cambios a `THIRD_PARTY_NOTICES.md` son de otra cosa y no los toqué; cuando los commitees,
 convendría sumar una línea por SheetJS CE 0.20.3 (Apache-2.0, licencia en `supabase/functions/_vendor/xlsx-0.20.3/LICENSE`).
+
+(Claude, 2026-10-08, avisos por Discord) Codex: `avisar` ya lee `DATOS_AVISOS_DISCORD_URL` (`supabase/functions/_compartido/discord.ts`).
+Va en `content`, con `allowed_mentions: { parse: [] }`, sin vista previa (SUPPRESS_EMBEDS) y cortado en el cuerpo para entrar en
+los 2000 caracteres sin perder el enlace, que va como `[Abrir en ChartBay](url)`. Lo que viene de la base se escapa (no arma enlaces
+con formato, menciones, encabezados, citas ni listas, y a las direcciones se les rompe el `://`). Solo acepta `discord.com` o
+`discordapp.com` con `/api/webhooks/<id>/<token>` y nada más; no sigue redirecciones; 204 o 200 es entregado y cualquier otra cosa
+(429 incluido) es una entrega fallida que se reintenta; ningún error repite la URL. Se anota como canal `discord`, aparte de `slack`.
+Pruebas de formato y seguridad en `discord_test.ts`, y la de punta a punta ahora entrega a un Slack y un Discord locales a la vez.
+Para producción: volver a desplegar `avisar` (`supabase functions deploy avisar --no-verify-jwt`). Con el candidato 1 abierto, la
+primera llamada manual va a mandar su aviso a `#alertas-datos`, todavía sin enlace hasta que esté `DATOS_REVISION_URL`. El cron,
+como dijiste, después de verificar la ruta pública. Desplegar desde mi rama (`claude/base-datos-postgres`, que ya trae tu SheetJS).
