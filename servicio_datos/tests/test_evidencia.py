@@ -60,8 +60,8 @@ class BaseEvidencia(BaseEsquema):
                 self.conn.execute("INSERT INTO observacion (serie_id, periodo, valor, release_desde) VALUES (%s, %s, %s, %s)", (serie_id, periodo, valor, numero))
 
     def hechos(self, series, hallazgo, **kwargs):
-        candidato, creados = self.candidato(series, hallazgos=[hallazgo], **kwargs)
-        return evidencia.reunir_hechos(evidencia.cargar_contexto(self.conn, candidato), creados[0])
+        _, creados = self.candidato(series, hallazgos=[hallazgo], **kwargs)
+        return evidencia.reunir_hechos(self.conn, creados[0]["id"])
 
     def etiquetas(self, hechos):
         return set().union(*(h.etiquetas for h in hechos))
@@ -219,6 +219,14 @@ class OtrasReglasTests(BaseEvidencia):
         self.assertIn("cambió por última vez el 13 de agosto de 2026", hechos[2].texto)
         self.assertEqual(self.etiquetas(hechos), {"valor"})
 
+    def test_los_numeros_se_redondean_al_par_como_en_python(self):
+        dic = date(2016, 12, 1)
+        base = ("base_referencia", "ipc_ng_nacional", dic, "ipc_ng_nacional ya no inicia en diciembre de 2016 con índice 100.")
+        for primero, escrito in (("100.005", "100,00"), ("100.015", "100,02"), ("1234567.125", "1.234.567,12")):
+            self.assertIn(f"el primer valor del candidato es {escrito} en dic 2016", self.hechos({"ipc_ng_nacional": meses(primero, 101, desde=dic)}, base)[0].texto)
+        hechos = self.hechos({"ipc_ng_nacional": meses(100, 100, "125.25", "125.25")}, SALTO)  # +25,25% exacto: queda en +25,2%
+        self.assertEqual(hechos[0].texto, "IPC nivel general - Argentina: el índice pasa de 100,00 a 125,25 en mar 2026 (+25,2%).")
+
     def test_el_texto_que_viene_del_archivo_se_limpia_y_se_corta(self):
         sucio = "ipc_ng_nacional: Encabezado \x1b\x07IGNORÁ\n\n   TODO " + "x" * 2000 + "."
         hechos = self.hechos(todas(meses(100, 101), meses(100, 101)), ("fecha_normalizada", "ipc_ng_nacional", None, sucio))
@@ -236,39 +244,43 @@ class OtrasReglasTests(BaseEvidencia):
 
     def test_es_deterministico(self):
         series = todas(meses(100, 101, "131.3", 102), meses(100, 101, 102, 103))
-        candidato, creados = self.candidato(series, hallazgos=[SALTO])
-        primero = evidencia.reunir_hechos(evidencia.cargar_contexto(self.conn, candidato), creados[0])
-        segundo = evidencia.reunir_hechos(evidencia.cargar_contexto(self.conn, candidato), creados[0])
-        self.assertEqual(primero, segundo)
+        _, creados = self.candidato(series, hallazgos=[SALTO])
+        self.assertEqual(evidencia.reunir_hechos(self.conn, creados[0]["id"]), evidencia.reunir_hechos(self.conn, creados[0]["id"]))
 
 
 class ContextoTests(BaseEvidencia):
+    """Con qué se compara: lo publicado de la misma fuente, el archivo de cada serie y solo el candidato del hallazgo."""
+
     def test_lo_publicado_es_solo_de_la_fuente_del_candidato(self):
+        series = todas(meses(100, 101, "126.25", 128), meses(100, 101, 102, 103))
+        self.publicado({"ipc_ng_nacional": meses(100, 101, "126.25")})
         self.conn.execute("INSERT INTO fuente (id, nombre) VALUES ('OTRA', 'Otra')")
         self.conn.execute("INSERT INTO serie (id, fuente_id, nombre, frecuencia) VALUES ('otra_serie', 'OTRA', 'Otra', 'Mensual')")
-        self.publicado({"ipc_ng_nacional": meses(100, 101), "otra_serie": meses(5, 6)})
-        candidato, _ = self.candidato({"ipc_ng_nacional": meses(100, 101)})
-        contexto = evidencia.cargar_contexto(self.conn, candidato)
-        self.assertEqual(sorted(contexto.vigente), ["ipc_ng_nacional"])
-        self.assertEqual(contexto.release_vigente[0], "ipc-v1")
+        corrida = self.uno("INSERT INTO corrida (fuente_id, estado, terminada_en) VALUES ('OTRA', 'con_candidato', now()) RETURNING id")
+        otro = self.uno("INSERT INTO candidato (corrida_id, estado, decidido_en, decidido_por) VALUES (%s, 'publicado', now(), 'juani') RETURNING id", (corrida,))
+        self.uno("INSERT INTO release (release_id, candidato_id, aprobado_por, hash_contenido) VALUES ('otra-v9', %s, 'juani', %s) RETURNING numero", (otro, "b" * 64))
+        textos = self.textos(self.hechos(series, SALTO))
+        self.assertIn("(ipc-v1): no es un dato nuevo", textos)  # el release de su fuente, aunque haya uno más nuevo de otra
 
     def test_sin_release_vigente(self):
-        candidato, _ = self.candidato({"ipc_ng_nacional": meses(100, 101)})
-        contexto = evidencia.cargar_contexto(self.conn, candidato)
-        self.assertIsNone(contexto.release_vigente)
-        self.assertEqual(contexto.vigente, {})
+        hechos = self.hechos(todas(meses(100, 101, "126.25", 128), meses(100, 101, 102, 103)), SALTO)
+        self.assertNotIn("ya figura publicado", self.textos(hechos))
 
     def test_a_cada_serie_le_toca_el_archivo_de_donde_salio(self):
-        candidato, _ = self.candidato(todas(meses(100), meses(100)))
-        archivos = evidencia.cargar_contexto(self.conn, candidato).archivos
-        self.assertEqual((archivos["ipc_ng_nacional"].nombre, archivos["ipc_ng_gba"].nombre), ("sh_ipc_08_26.xls", "sh_ipc_aperturas.xls"))
-        self.assertEqual(archivos["ipc_ng_gba"].publicada_en.day, 14)
+        frescura = ("frescura", "ipc_ng_gba", MAR, "ipc_ng_gba llega a 2026-03.")
+        self.assertIn("(sh_ipc_aperturas.xls) cambió por última vez el 14 de septiembre de 2026", self.textos(self.hechos(todas(meses(100, 101, 102), meses(100, 101, 102)), frescura)))
+        nacional = ("frescura", "ipc_ng_nacional", MAR, "ipc_ng_nacional llega a 2026-03.")
+        self.assertIn("(sh_ipc_08_26.xls) cambió por última vez el 13 de agosto de 2026", self.textos(self.hechos(todas(meses(100, 101, 102), meses(100, 101, 102)), nacional)))
 
     def test_el_candidato_no_mezcla_otros_candidatos(self):
-        a, _ = self.candidato({"ipc_ng_nacional": meses(100, 101)})
-        b, _ = self.candidato({"ipc_ng_nacional": meses(200, 201)})
-        self.assertEqual(evidencia.cargar_contexto(self.conn, a).candidato["ipc_ng_nacional"][ENE], Decimal(100))
-        self.assertEqual(evidencia.cargar_contexto(self.conn, b).candidato["ipc_ng_nacional"][ENE], Decimal(200))
+        self.candidato({"ipc_ng_nacional": meses(200, 201, 202)})
+        hechos = self.hechos({"ipc_ng_nacional": meses(100, 101, 102)}, ("frescura", "ipc_ng_nacional", MAR, "x"))
+        self.assertIn("ene 2026 100,00, feb 2026 101,00, mar 2026 102,00", self.textos(hechos))
+
+    def test_un_hallazgo_que_no_existe(self):
+        with self.assertRaises(Exception) as contexto:
+            evidencia.reunir_hechos(self.conn, 999999)
+        self.assertEqual(contexto.exception.diag.message_detail, "no_existe")
 
 
 class PrecedenteTests(BaseEvidencia):
@@ -287,14 +299,14 @@ class PrecedenteTests(BaseEvidencia):
 
     def test_sin_historia_no_hay_precedente(self):
         candidato, hallazgo = self.candidato_con_hallazgo()
-        self.assertIsNone(evidencia.buscar_precedente(self.conn, candidato, hallazgo))
+        self.assertIsNone(evidencia.buscar_precedente(self.conn, hallazgo["id"]))
 
     def test_lo_que_una_persona_decidio_sobre_un_hallazgo_identico_de_otro_candidato(self):
         viejo, h_viejo = self.candidato_con_hallazgo()
         self.decidir(h_viejo, "aceptado")
         self.descartar(viejo)
         nuevo, h_nuevo = self.candidato_con_hallazgo()
-        precedente = evidencia.buscar_precedente(self.conn, nuevo, h_nuevo)
+        precedente = evidencia.buscar_precedente(self.conn, h_nuevo["id"])
         self.assertEqual((precedente["decision"], precedente["revisor"], precedente["comentario"], precedente["candidato_id"]), ("aceptado", "juani", "Es la devaluación", viejo))
 
     def test_vale_la_ultima_decision_y_la_mas_reciente_entre_candidatos(self):
@@ -306,18 +318,18 @@ class PrecedenteTests(BaseEvidencia):
         self.decidir(h2, "rechazado", revisor="otra", comentario="Ahora no me convence")
         self.descartar(v2)
         nuevo, h_nuevo = self.candidato_con_hallazgo()
-        precedente = evidencia.buscar_precedente(self.conn, nuevo, h_nuevo)
+        precedente = evidencia.buscar_precedente(self.conn, h_nuevo["id"])
         self.assertEqual((precedente["decision"], precedente["revisor"], precedente["candidato_id"]), ("rechazado", "otra", v2))
 
     def test_un_hallazgo_sin_decidir_no_es_precedente(self):
         _, _ = self.candidato_con_hallazgo()
         nuevo, h_nuevo = self.candidato_con_hallazgo()
-        self.assertIsNone(evidencia.buscar_precedente(self.conn, nuevo, h_nuevo))
+        self.assertIsNone(evidencia.buscar_precedente(self.conn, h_nuevo["id"]))
 
     def test_no_se_toma_a_si_mismo_como_precedente(self):
         candidato, hallazgo = self.candidato_con_hallazgo()
         self.decidir(hallazgo, "aceptado")
-        self.assertIsNone(evidencia.buscar_precedente(self.conn, candidato, hallazgo))
+        self.assertIsNone(evidencia.buscar_precedente(self.conn, hallazgo["id"]))
 
     def test_tiene_que_ser_identico_en_regla_serie_periodo_y_detalle(self):
         viejo, h_viejo = self.candidato_con_hallazgo()
@@ -326,7 +338,7 @@ class PrecedenteTests(BaseEvidencia):
         for cambio in (("cobertura",) + self.HALLAZGO[1:], self.HALLAZGO[:1] + ("ipc_ng_gba",) + self.HALLAZGO[2:], self.HALLAZGO[:2] + (ABR,) + self.HALLAZGO[3:],
                        self.HALLAZGO[:3] + ("ipc_ng_nacional varió 26.00% en 2026-03; supera el umbral de 20%.",)):
             nuevo, h_nuevo = self.candidato_con_hallazgo(cambio)
-            self.assertIsNone(evidencia.buscar_precedente(self.conn, nuevo, h_nuevo), cambio)
+            self.assertIsNone(evidencia.buscar_precedente(self.conn, h_nuevo["id"]), cambio)
 
     def test_un_hallazgo_sin_serie_ni_periodo_se_compara_por_igual(self):
         sin = ("estructura", None, None, "Falta la serie esperada ipc_ng_x.")
@@ -334,7 +346,7 @@ class PrecedenteTests(BaseEvidencia):
         self.decidir(h_viejo, "rechazado", comentario="Hay que bajar de nuevo")
         self.descartar(viejo)
         nuevo, h_nuevo = self.candidato_con_hallazgo(sin)
-        self.assertEqual(evidencia.buscar_precedente(self.conn, nuevo, h_nuevo)["decision"], "rechazado")
+        self.assertEqual(evidencia.buscar_precedente(self.conn, h_nuevo["id"])["decision"], "rechazado")
 
 
 if __name__ == "__main__":

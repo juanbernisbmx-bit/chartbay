@@ -1,9 +1,16 @@
-"""El validador del dictamen: lo que dice el modelo se acepta solo en la medida en que la evidencia lo sostiene."""
+"""El validador del dictamen: lo que dice el modelo se acepta solo en la medida en que la evidencia lo sostiene.
+
+El que guarda las propuestas es el de la base (`validar_dictamen`, migración 0015); el de Python queda para la autoprueba del
+modelo local. `ValidadorDeLaBaseTests` comprueba que los dos dicen exactamente lo mismo.
+"""
 import random
 import unittest
 
+from psycopg.types.json import Jsonb
+
 from servicio_datos.agente.dictamen import (ACCIONES, ACCIONES_COHERENTES, CLASIFICACIONES, CONFIANZAS, EXPLICACION_REQUISITOS, MAX_RAZONAMIENTO,
                                             REQUISITOS, Hecho, validar_dictamen)
+from servicio_datos.tests.base import BaseEsquema
 
 HECHOS = [
     Hecho(1, "El índice sube 25,5% en dic 2023.", frozenset({"valor"})),
@@ -148,6 +155,54 @@ class InvariantesTests(unittest.TestCase):
                 self.assertEqual((d.accion_sugerida, d.confianza), ("investigar", "baja"))
             if not d.hechos_citados:
                 self.assertEqual(d.clasificacion, "requiere_revision_humana")
+
+
+
+# Con una clase de hecho por cada cosa que puede sostener una conclusión, para que ninguna regla del validador quede sin probar.
+HECHOS_PARIDAD = HECHOS + [Hecho(8, "Al mes siguiente el valor vuelve al nivel anterior.", frozenset({"revierte"})),
+                           Hecho(9, "Juani decidió «aceptado» sobre un hallazgo idéntico.", frozenset({"precedente"})),
+                           Hecho(10, "Ese mes ya figura publicado con este mismo valor.", frozenset({"ya_publicado", "valor"}))]
+
+
+class ValidadorDeLaBaseTests(BaseEsquema):
+    """El validador de la base da lo mismo que el de Python: clasificación, acción, confianza, razonamiento, citas y notas."""
+
+    def en_la_base(self, crudo, hechos=HECHOS_PARIDAD):
+        como_json = [{"id": h.id, "texto": h.texto, "etiquetas": sorted(h.etiquetas)} for h in hechos]
+        d = self.uno("SELECT validar_dictamen(%s, %s)", (Jsonb(crudo), Jsonb(como_json)))
+        return (d["clasificacion"], d["accion_sugerida"], d["confianza"], d["razonamiento"], tuple(d["hechos_citados"]), tuple(d["notas"]))
+
+    def en_python(self, crudo, hechos=HECHOS_PARIDAD):
+        d = validar_dictamen(crudo, hechos)
+        return (d.clasificacion, d.accion_sugerida, d.confianza, d.razonamiento, d.hechos_citados, d.notas)
+
+    def comparar(self, crudo, hechos=HECHOS_PARIDAD):
+        self.assertEqual(self.en_la_base(crudo, hechos), self.en_python(crudo, hechos), crudo)
+
+    def test_los_casos_de_siempre(self):
+        for cambios in ({}, {"hechos_citados": [2]}, {"hechos_citados": [1, 99, 1, "1", 2.0, True]}, {"hechos_citados": []},
+                        {"clasificacion": "posible_error_de_carga", "accion_sugerida": "rechazar", "hechos_citados": [2, 3]},
+                        {"clasificacion": "desfase_de_archivo", "accion_sugerida": "aceptar", "hechos_citados": [5]},
+                        {"clasificacion": "cosmetico", "hechos_citados": [6, 6]}, {"clasificacion": "cambio_de_base", "accion_sugerida": "aceptar", "hechos_citados": [7]},
+                        {"clasificacion": "requiere_revision_humana", "confianza": "alta", "hechos_citados": [1, 2]},
+                        {"clasificacion": "inventada", "accion_sugerida": "publicar", "confianza": "total"},
+                        {"razonamiento": "  Una\n\tfrase\x07 con\x1b basura  " + "larga " * 200}, {"razonamiento": 42}, {"hechos_citados": "1, 2"},
+                        {"clasificacion": "posible_error_de_carga", "accion_sugerida": "rechazar", "hechos_citados": [8, 1]},
+                        {"clasificacion": "dato_real", "hechos_citados": [9, 10]}, {"clasificacion": "cosmetico", "hechos_citados": [9]}):
+            with self.subTest(cambios=cambios):
+                self.comparar(crudo(**cambios))
+        for raro in (None, [], "texto", 3, True, [crudo()]):
+            with self.subTest(raro=raro):
+                self.comparar(raro)
+        self.comparar(crudo(), [])  # sin hechos no hay nada que citar
+
+    def test_con_miles_de_salidas_al_azar_da_lo_mismo(self):
+        azar = random.Random(20261007)
+        valores = [None, True, False, 0, 1, 2, 3, 99, -1, 1.5, "", "x", "dato_real", "aceptar", "alta", "baja", [], [1], [1, 2], [2, 99], ["1"], {}, {"a": 1}]
+        for _ in range(1500):
+            entrada = {k: azar.choice(valores + [azar.choice(CLASIFICACIONES), azar.choice(ACCIONES), azar.choice(CONFIANZAS), [azar.randint(0, 11) for _ in range(azar.randint(0, 4))]])
+                       for k in ("clasificacion", "accion_sugerida", "confianza", "hechos_citados", "razonamiento") if azar.random() < 0.9}
+            self.comparar(entrada if azar.random() < 0.95 else azar.choice(valores))
 
 
 if __name__ == "__main__":
