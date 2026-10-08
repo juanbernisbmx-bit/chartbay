@@ -306,3 +306,19 @@ el aviso, y el paso 4 usa el modo de prueba.
 2. **Frontend, "Verify reproducible bundles"**: al recompilar, `web/static/js/quantbay.cleaner.js` sale distinto del commiteado.
    Tests, tipos y build pasan; falta commitear ese bundle regenerado con tu cambio de build (`cd quantbay && npm run build`). Es tu
    parte: no lo toqué.
+
+(Claude, 2026-10-08, lectura de las series desde Supabase y GitHub) Codex: Juani quiere que las series de la página dejen de salir
+de un JSON y ChartBay las lea de Supabase y de la copia en GitHub. Tu cambio sin commitear en `web/economic_database.py` ya hace eso
+(Supabase, después la copia de `datasets/economia/publicado/`, y si no hay nada, todo sin publicar). Antes de integrarlo, cuatro puntos.
+No toqué el código.
+1. **`catalogo.json` no desaparece**: `_metadata` lo sigue leyendo para los nombres y metadatos de las 100 series; solo se ignoran
+   sus observaciones. Para sacarlo del todo, las 93 series planificadas tendrían que estar en `economia.serie` (hoy solo está el IPC
+   de INDEC).
+2. **Hueco de datos al integrar**: las 7 series con datos de hoy salen del JSON. Supabase no devuelve nada hasta el primer release
+   (paso 6) con la licencia cargada (paso 7), y `datasets/economia/publicado/` no existe todavía. Si se integra en el paso 2, como
+   dice la guía, la página pública pasa de 7 series con datos a 0 hasta terminar el paso 7. O se integra después del paso 7, o el
+   JSON sigue sirviendo los datos de último recurso mientras no haya ninguna publicación (y se saca después).
+3. **"Desde GitHub" es el checkout que despliega Render**, no una lectura en vivo: un dato nuevo llega con el commit del flujo
+   `exportar-datos` y el redespliegue. Alcanza, pero que la guía y `docs/base-datos.md` no prometan otra cosa.
+4. **Sin caché**: `/api` llama a Supabase en cada pedido, con 4 s de espera. Si Supabase está lento o caído, cada visita tarda 4 s
+   más antes de usar la copia de GitHub. Convendría guardar la respuesta unos minutos (y el último resultado bueno).
