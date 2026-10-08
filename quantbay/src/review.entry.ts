@@ -89,7 +89,9 @@ let panel: Panel | null = null;
 let selectedId: number | null = null;
 let currentTab: 'attention' | 'history' = 'attention';
 let busy = false;
-const invitation = /(?:^|[&#])type=(?:invite|recovery)(?:&|$)/.test(window.location.hash);
+const redirect = new URLSearchParams(window.location.hash.slice(1));
+let passwordSetupRequired = redirect.get('type') === 'invite' || redirect.get('type') === 'recovery';
+const redirectFailed = redirect.has('error') || new URLSearchParams(window.location.search).has('error');
 
 function message(text = '', tone = ''): void {
   const target = $('message');
@@ -328,15 +330,31 @@ async function start(): Promise<void> {
   const key = body.dataset.supabaseKey || '';
   if (!url || !key) { message('Falta configurar la clave publicable de Supabase para habilitar la revisión.', 'error'); return; }
   client = createClient(url, key, { auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true } });
+  client.auth.onAuthStateChange((event, session) => {
+    if (!busy && (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') && session?.user) {
+      queueMicrotask(() => showAuthenticated(session.user.email || '', passwordSetupRequired || event === 'PASSWORD_RECOVERY'));
+    }
+  });
   const { data, error } = await client.auth.getUser();
   if (error && error.name !== 'AuthSessionMissingError') console.error('Supabase Auth:', error);
   if (data.user) {
-    $('login').hidden = true;
-    $('account').hidden = false;
-    $('email').textContent = data.user.email || '';
-    if (invitation) $('password-setup').hidden = false;
-    else await loadPanel();
-  } else $('login').hidden = false;
+    showAuthenticated(data.user.email || '', passwordSetupRequired);
+  } else if ($('account').hidden) {
+    $('login').hidden = false;
+    if (redirectFailed) message('El enlace ya se usó o venció. Pedí uno nuevo para crear tu contraseña.', 'error');
+  }
+}
+
+function showAuthenticated(email: string, setupPassword: boolean): void {
+  if (!$('account').hidden && !setupPassword) return;
+  $('login').hidden = true;
+  $('account').hidden = false;
+  $('email').textContent = email;
+  if (setupPassword) {
+    $('workspace').hidden = true;
+    $('password-setup').hidden = false;
+    message();
+  } else void loadPanel();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -350,11 +368,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const result = await client.auth.signInWithPassword({ email, password: password.value });
     password.value = '';
     setBusy(false);
-    if (result.error) { message('No se pudo ingresar. Revisá el correo y la contraseña.', 'error'); return; }
-    $('login').hidden = true;
-    $('account').hidden = false;
-    $('email').textContent = result.data.user.email || '';
-    await loadPanel();
+    if (result.error) { message('No se pudo ingresar. Revisá el correo y la contraseña, o creá una con el enlace.', 'error'); return; }
+    showAuthenticated(result.data.user.email || '', false);
+  });
+  $('recover').addEventListener('click', async () => {
+    if (!client || busy) return;
+    const email = ($('login-email') as HTMLInputElement).value.trim();
+    if (!email || !($('login-email') as HTMLInputElement).checkValidity()) {
+      ($('login-email') as HTMLInputElement).reportValidity();
+      return;
+    }
+    setBusy(true);
+    const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}${window.location.pathname}` });
+    setBusy(false);
+    message(error ? 'No se pudo enviar el enlace. Esperá unos minutos y volvé a intentar.' : 'Te enviamos un enlace para crear o restablecer tu contraseña. Usá el correo más reciente.', error ? 'error' : '');
   });
   $('password-form').addEventListener('submit', async event => {
     event.preventDefault();
@@ -368,6 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
     repeat.value = '';
     setBusy(false);
     if (result.error) { message('No se pudo guardar la contraseña. Probá con una más larga.', 'error'); return; }
+    passwordSetupRequired = false;
     $('password-setup').hidden = true;
     message('Contraseña creada.');
     await loadPanel();
