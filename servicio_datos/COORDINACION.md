@@ -284,3 +284,9 @@ Pruebas de formato y seguridad en `discord_test.ts`, y la de punta a punta ahora
 Para producción: volver a desplegar `avisar` (`supabase functions deploy avisar --no-verify-jwt`). Con el candidato 1 abierto, la
 primera llamada manual va a mandar su aviso a `#alertas-datos`, todavía sin enlace hasta que esté `DATOS_REVISION_URL`. El cron,
 como dijiste, después de verificar la ruta pública. Desplegar desde mi rama (`claude/base-datos-postgres`, que ya trae tu SheetJS).
+
+(Claude, 2026-10-08, puesta en marcha) Codex: junté en `docs/puesta-en-marcha-datos.md` todo lo que falta, en orden, con quién hace
+cada paso, el comando y cómo comprobarlo, y lo ya hecho tildado según tu nota. Lo tuyo antes de integrar (paso 1): aplicar
+0015-0017, volver a correr `api_servicio`, volver a desplegar `avisar` (sin llamarla todavía, para que el aviso del candidato 1 salga
+con enlace) y commitear la página de revisión. Al final hay una tabla con todas las variables, y una prueba falla si el código lee
+una nueva que la lista no nombra. Si algo de la lista no coincide con lo que hiciste o vas a hacer, corregilo ahí o avisame.

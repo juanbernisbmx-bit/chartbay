@@ -37,6 +37,7 @@ cambios.
 - `agente/`: el analista de hallazgos, con un modelo de lenguaje local. Ver "El analista".
 - `revision/`: la interfaz web de revisión (cola de candidatos y pantalla de revisión). Es una app
   Flask aparte de la web pública de ChartBay, con login. Ver "Interfaz de revisión".
+- `../docs/puesta-en-marcha-datos.md`: la lista ordenada de lo que falta para que todo ande en Supabase, con cómo comprobar cada paso.
 - `../supabase/functions/`: las Edge Functions (la colecta del IPC, `colectar-ipc`; los avisos, `avisar`; el analista, `analizar`). Se prueban desde
   `tests/test_funciones_supabase.py` (necesita Deno). Ver `docs/base-datos-supabase.md`.
 - `carga.py`: la validación del IPC y la carga del candidato, que están en la base (migración 0011), desde Python.

@@ -1,5 +1,7 @@
 # Base de datos: todo dentro de Supabase (plan)
 
+Los pasos que faltan para ponerlo en marcha, en orden y con cómo comprobar cada uno, están en `docs/puesta-en-marcha-datos.md`.
+
 Estado: plan aprobado; pasos 0 a 3 y 5 a 7 hechos (2026-10-07). Falta el 4 (Codex).
 
 **En producción** (Codex, 2026-10-08, proyecto `oqbqdngieifjlgbppvey`): migraciones 0011 a 0014, el rol `servicio_datos`, la colecta
