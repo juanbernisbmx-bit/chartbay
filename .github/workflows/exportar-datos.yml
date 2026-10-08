@@ -1,0 +1,61 @@
+# Copia de las series aprobadas en este repositorio (datasets/economia/publicado/), para que ChartBay las sirva con cada deploy.
+# Una vez por día (y a mano): exporta los releases publicados que falten, comprueba la copia y hace commit en main solo de esa
+# carpeta, y solo si cambió algo. Supabase sigue siendo la fuente de verdad; acá solo llega lo publicado (ver
+# docs/base-datos-supabase.md, "La copia pública de lo aprobado").
+#
+# Usa el secreto del flujo de respaldo, DATOS_RESPALDO_DATABASE_URL: el rol datos_respaldo puede leer lo publicado.
+# Una fuente sin licencia y atribución revisadas no se exporta, y la corrida falla diciendo cuál.
+name: Copia pública de los datos
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # 5:00 de Argentina, después del respaldo
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: exportar-datos
+  cancel-in-progress: false
+
+jobs:
+  exportar:
+    name: Exportar, comprobar y subir
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # el commit de la copia, y nada más
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Código
+        uses: actions/checkout@v4
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependencias
+        run: python -m pip install -r servicio_datos/requirements.txt
+
+      # Si algo queda pendiente, lo que sí salió se sube igual y la corrida falla al final.
+      - name: Exportar lo aprobado
+        id: exportar
+        continue-on-error: true
+        env:
+          DATOS_EXPORTACION_DATABASE_URL: ${{ secrets.DATOS_RESPALDO_DATABASE_URL }}
+        run: python -m servicio_datos.exportar --destino datasets/economia/publicado
+
+      - name: Comprobar y subir
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python -m servicio_datos.exportar subir --destino datasets/economia/publicado
+
+      - name: Lo pendiente
+        if: ${{ steps.exportar.outcome == 'failure' }}
+        run: |
+          echo "La exportación dejó releases pendientes: el motivo está en el paso «Exportar lo aprobado»." >&2
+          exit 1

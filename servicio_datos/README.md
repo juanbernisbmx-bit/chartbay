@@ -29,7 +29,8 @@ cambios.
   migración 0014). Ver "Avisos".
 - `respaldo.py`, `respaldar.py`: el respaldo diario de la base y del crudo. Ver "Respaldos".
 - `exportacion.py`, `exportar.py`: la copia pública de lo aprobado (un CSV por serie y release, con su manifiesto y un catálogo),
-  para el repositorio de GitHub donde se publique. Ver `docs/base-datos-supabase.md`, "La copia pública de lo aprobado".
+  que el flujo `.github/workflows/exportar-datos.yml` sube a `datasets/economia/publicado/`. Ver `docs/base-datos-supabase.md`,
+  "La copia pública de lo aprobado".
 - `monitor.py`, `latido.py`: el latido hacia un monitor externo. Ver "El latido".
 - `tarea.py` y `despliegue/`: cómo se instala todo en el equipo Ubuntu: el lanzador de las tareas de cron y los archivos de
   cron, systemd, HTTPS (Caddy), secretos y registros. La guía es `docs/despliegue-servicio-datos.md`.

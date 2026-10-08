@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import patch
 
@@ -263,3 +264,128 @@ class LineaDeComandosTests(BaseExportacion):
         codigo, _, errores = self.cli("--destino", str(self.destino), entorno={})
         self.assertEqual(codigo, 1)
         self.assertIn("Falta DATOS_EXPORTACION_DATABASE_URL", errores)
+
+
+CARPETA = "datasets/economia/publicado"
+
+
+def git(repo, *argumentos):
+    import subprocess
+    return subprocess.run(["git", *argumentos], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+
+@unittest.skipUnless(shutil.which("git"), "Falta git")
+class SubirTests(BaseExportacion):
+    """El commit y el push de la copia, contra repositorios de git de verdad: uno remoto (como GitHub) y su clon (como Actions)."""
+
+    def setUp(self):
+        super().setUp()
+        raiz = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, raiz, ignore_errors=True)
+        self.remoto, self.repo = raiz / "remoto.git", raiz / "clon"
+        git(raiz, "init", "--bare", "--initial-branch=main", str(self.remoto))
+        git(raiz, "clone", str(self.remoto), str(self.repo))
+        self.identidad(self.repo)
+        (self.repo / "README.md").write_text("ChartBay\n")
+        git(self.repo, "add", "README.md")
+        git(self.repo, "commit", "-m", "inicio")
+        git(self.repo, "push", "origin", "main")
+        self.destino = self.repo / CARPETA
+
+    def identidad(self, repo):
+        git(repo, "config", "user.name", "github-actions[bot]")
+        git(repo, "config", "user.email", "bot@example.com")
+
+    def en_el_remoto(self):
+        return git(self.remoto, "log", "--format=%s", "main").splitlines()
+
+    def test_sube_solo_la_carpeta_de_la_copia_con_los_releases_en_el_mensaje(self):
+        publicado = self.aprobado()
+        self.exportar()
+        resultado = exportacion.subir(self.repo, CARPETA)
+        self.assertEqual(resultado["releases"], [publicado.release_id])
+        self.assertEqual(self.en_el_remoto(), [f"datos: copia pública de {publicado.release_id}", "inicio"])
+        cambiados = git(self.remoto, "show", "--name-only", "--format=", "main").splitlines()
+        self.assertTrue(cambiados and all(r.startswith(CARPETA + "/") for r in cambiados), cambiados)
+        self.assertEqual(resultado["commit"], git(self.remoto, "rev-parse", "main"))
+
+    def test_sin_novedades_no_hace_ningun_commit(self):
+        self.aprobado()
+        self.exportar()
+        exportacion.subir(self.repo, CARPETA)
+        self.exportar()
+        self.assertEqual(exportacion.subir(self.repo, CARPETA), {"commit": None, "releases": []})
+        self.assertEqual(len(self.en_el_remoto()), 2)
+
+    def test_un_release_nuevo_es_otro_commit_que_nombra_solo_el_nuevo(self):
+        self.aprobado()
+        self.exportar()
+        exportacion.subir(self.repo, CARPETA)
+        segundo = self.aprobado(self.mes_nuevo(), valor=200)
+        self.exportar()
+        self.assertEqual(exportacion.subir(self.repo, CARPETA)["releases"], [segundo.release_id])
+        self.assertEqual(self.en_el_remoto()[0], f"datos: copia pública de {segundo.release_id}")
+
+    def test_no_mezcla_otros_cambios_con_la_copia(self):
+        self.aprobado()
+        self.exportar()
+        (self.repo / "web.py").write_text("print('otra cosa')\n")
+        with self.assertRaisesRegex(exportacion.ErrorExportacion, "cambios fuera de datasets/economia/publicado.*web.py"):
+            exportacion.subir(self.repo, CARPETA)
+        self.assertEqual(self.en_el_remoto(), ["inicio"])
+
+    def test_no_sube_una_copia_que_no_pasa_la_comprobacion(self):
+        publicado = self.aprobado()
+        self.exportar()
+        csv = self.destino / "releases" / publicado.release_id / "ipc_ng_gba.csv"
+        csv.write_text(csv.read_text().replace("2026-03-01,100", "2026-03-01,999"))
+        with self.assertRaisesRegex(exportacion.ErrorExportacion, "no pasa la comprobación"):
+            exportacion.subir(self.repo, CARPETA)
+        self.assertEqual(self.en_el_remoto(), ["inicio"])
+
+    def test_si_main_avanzo_mientras_tanto_rebasea_y_sube(self):
+        publicado = self.aprobado()
+        self.exportar()
+        otro = self.repo.parent / "otro-clon"
+        git(self.repo.parent, "clone", str(self.remoto), str(otro))
+        self.identidad(otro)
+        (otro / "otra.txt").write_text("cambio de otra persona\n")
+        git(otro, "add", "otra.txt")
+        git(otro, "commit", "-m", "otro cambio")
+        git(otro, "push", "origin", "main")
+        exportacion.subir(self.repo, CARPETA)
+        self.assertEqual(self.en_el_remoto(), [f"datos: copia pública de {publicado.release_id}", "otro cambio", "inicio"])
+
+    def test_desde_la_linea_de_comandos(self):
+        self.aprobado()
+        self.exportar()
+        salida, errores = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(salida), contextlib.redirect_stderr(errores):
+            codigo = exportar.main(["subir", "--repo", str(self.repo), "--destino", CARPETA])
+        self.assertEqual(codigo, 0, errores.getvalue())
+        self.assertIsNotNone(json.loads(salida.getvalue())["commit"])
+
+
+class FlujoDeGitHubTests(unittest.TestCase):
+    """El flujo `.github/workflows/exportar-datos.yml` no se puede correr acá: se comprueba que use lo que el código espera."""
+
+    RAIZ = Path(__file__).resolve().parents[2]
+
+    def setUp(self):
+        self.flujo = (self.RAIZ / ".github" / "workflows" / "exportar-datos.yml").read_text(encoding="utf-8")
+
+    def test_exporta_comprueba_y_sube_la_misma_carpeta(self):
+        self.assertIn(f"python -m servicio_datos.exportar --destino {CARPETA}\n", self.flujo)
+        self.assertIn(f"python -m servicio_datos.exportar subir --destino {CARPETA}\n", self.flujo)
+        self.assertLess(self.flujo.index("exportar --destino"), self.flujo.index("exportar subir"))
+
+    def test_solo_el_trabajo_puede_escribir_y_lee_la_base_con_el_rol_de_los_respaldos(self):
+        self.assertIn("permissions:\n  contents: read\n", self.flujo)
+        self.assertIn("    permissions:\n      contents: write", self.flujo)
+        self.assertIn("DATOS_EXPORTACION_DATABASE_URL: ${{ secrets.DATOS_RESPALDO_DATABASE_URL }}", self.flujo)
+        respaldo = (self.RAIZ / ".github" / "workflows" / "respaldo-datos.yml").read_text(encoding="utf-8")
+        self.assertIn("secrets.DATOS_RESPALDO_DATABASE_URL", respaldo)
+
+    def test_no_pisa_el_catalogo_del_piloto(self):
+        self.assertNotIn("--destino datasets/economia\n", self.flujo)
+        self.assertTrue(CARPETA.startswith("datasets/economia/"))

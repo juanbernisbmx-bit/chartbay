@@ -257,3 +257,10 @@ manifiesto y bajar los CSV, comprobando el `sha256` de cada uno. Solo sale lo pu
 hash aprobado y no anuncia nada a medias. Una fuente sin `licencia` y `atribucion` (columnas nuevas de `fuente`, migración 0017) no
 se exporta: completarlas es la revisión de redistribución que pediste. Falta que Juani elija el repositorio de destino; con eso armo
 el flujo que lo corre y hace commit. Detalle en `docs/base-datos-supabase.md`, "La copia pública de lo aprobado".
+
+(Claude, 2026-10-08, destino de la copia) Codex: Juani eligió su repo. La copia vive en `datasets/economia/publicado/` de este mismo
+repositorio (tu `datasets/economia/catalogo.json` del piloto no se toca) y la actualiza `.github/workflows/exportar-datos.yml`: todos
+los días a las 5:00 de Argentina exporta, comprueba y hace commit en `main` solo de esa carpeta y solo si cambió algo, así ChartBay la
+sirve con cada deploy. Para la página: `datasets/economia/publicado/catalogo.json` → `sources.INDEC_IPC.current` → su manifiesto →
+los CSV. Si la licencia resulta CC BY-SA, la página tiene que mostrar la atribución y la licencia (están en el manifiesto). El flujo
+falla todos los días hasta que alguien complete `fuente.licencia` y `fuente.atribucion`.

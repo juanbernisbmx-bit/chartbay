@@ -451,17 +451,35 @@ Lo que garantiza:
 
 Para leer la base sirve el rol de los respaldos (`datos_respaldo`), en `DATOS_EXPORTACION_DATABASE_URL`.
 
-**Lo que falta, y depende de Juani:** elegir el repositorio de destino (el propio, el de la facultad o los dos) y revisar la licencia.
-Con eso se arma el flujo de GitHub Actions que corre la exportación todos los días (o después de cada publicación), comprueba la copia
-y hace commit en el repositorio elegido solo si cambió algo. Como `catalogo.json` y los releases no llevan la hora de la corrida,
-correrlo sin novedades no cambia ningún archivo.
+### Dónde se publica
+
+Juani eligió su repositorio (2026-10-08): la copia vive en el de ChartBay, en `datasets/economia/publicado/`, al lado del catálogo del
+piloto (`datasets/economia/catalogo.json`, que no se toca). Así ChartBay la sirve con cada deploy, sin claves ni pedidos a GitHub.
+
+`.github/workflows/exportar-datos.yml` corre todos los días a las 5:00 de Argentina, después del respaldo, y a mano desde Actions.
+Exporta lo que falte, comprueba la copia y hace commit en `main` **solo de esa carpeta y solo si cambió algo**
+(`python -m servicio_datos.exportar subir`). No sube nada si hay otros cambios en el árbol o si la copia no pasa la comprobación, y si
+`main` avanzó mientras tanto, rebasea y vuelve a subir. El mensaje del commit nombra los releases nuevos. Si un release queda
+pendiente, lo que sí salió se sube igual y la corrida falla diciendo por qué. Usa el mismo secreto que el respaldo
+(`DATOS_RESPALDO_DATABASE_URL`) y el permiso de escribir en el repo solo lo tiene ese trabajo.
+
+Tres cosas a tener en cuenta:
+
+- **El repo es privado**: la copia la ven ChartBay (y quien la use) y quien tenga acceso al repo, pero no cualquiera en GitHub. Si
+  algún día se quiere pública en GitHub, se hace público el repo o se suma otro destino.
+- **Cada commit de datos redespliega ChartBay en Render** (el push a `main` dispara el deploy). Pasa solo cuando hay un release
+  nuevo, en la práctica una vez por mes.
+- **Primero la licencia**: hasta que `fuente.licencia` y `fuente.atribucion` estén completas, el flujo falla todos los días diciendo
+  que la fuente no tiene licencia revisada. Conviene completarlas antes de que el flujo llegue a `main`. Si es CC BY-SA, la página
+  que muestre los datos tiene que citar la fuente y la licencia, que vienen en el manifiesto.
 
 Qué se verificó: con releases publicados de verdad (pipeline, revisión y publicación) contra PostgreSQL, que sale cada release con sus
-CSV y su manifiesto y que da el hash aprobado; que no sale nada sin publicar ni quién aprobó; que repetirlo no cambia ningún archivo;
+CSV y su manifiesto y que da el hash aprobado; la subida contra repositorios de git de verdad (un remoto y su clon: solo la carpeta,
+nada sin novedades, no mezcla otros cambios, no sube una copia alterada, rebasea si `main` avanzó); que no sale nada sin publicar ni quién aprobó; que repetirlo no cambia ningún archivo;
 que un release nuevo se suma sin tocar el anterior y que la historia completa sale aunque se exporte tarde; que el vigente es el
 último publicado y no el que ordena primero o último por nombre; y lo que no debe pasar (sin licencia, un hash que no coincide, una
 corrida cortada sin poder limpiar, una copia alterada, un manifiesto que apunta fuera de su carpeta). También que alcanza con el rol
-de los respaldos.
+de los respaldos. **No se probó**: el flujo en GitHub Actions (llega a correr cuando esté en `main`) ni contra la base de Supabase.
 
 ## Reparto con Codex (aprobado por Juani)
 

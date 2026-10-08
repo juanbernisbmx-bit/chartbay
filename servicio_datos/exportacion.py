@@ -15,6 +15,9 @@ GitHub. Solo sale lo publicado: nada de candidatos, hallazgos, decisiones, corri
 
 `comprobar` verifica una copia sin la base: cada CSV contra su manifiesto, y el hash de contenido recalculado desde los CSV, así
 que cualquiera puede comprobar que la copia es exactamente lo aprobado.
+
+`subir` hace commit de la copia en el repositorio (el de ChartBay, en `datasets/economia/publicado/`) y la sube. Lo corre el flujo
+`.github/workflows/exportar-datos.yml`: solo toca esa carpeta, y no sube una copia que no pase la comprobación.
 """
 from __future__ import annotations
 
@@ -25,6 +28,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -262,3 +266,46 @@ def exportar(conn: psycopg.Connection, destino: Path) -> dict:
     resultado["vigentes"] = {fid: f["current"] for fid, f in json.loads(catalogo)["sources"].items()}
     resultado["errores"] = problemas
     return resultado
+
+
+# --- Subir -------------------------------------------------------------------------------------------
+
+def _git(repo: Path, *argumentos: str, chequear: bool = True) -> subprocess.CompletedProcess:
+    proceso = subprocess.run(["git", *argumentos], cwd=repo, capture_output=True, text=True, timeout=120)
+    if chequear and proceso.returncode != 0:
+        raise ErrorExportacion(f"git {argumentos[0]} falló: {(proceso.stderr or proceso.stdout).strip()[:300]}")
+    return proceso
+
+
+def _releases_del_catalogo(contenido: str) -> list[str]:
+    try:
+        return [r["release_id"] for r in json.loads(contenido).get("releases", [])]
+    except (ValueError, AttributeError, KeyError, TypeError):
+        return []
+
+
+def subir(repo: Path, carpeta: str) -> dict:
+    """Hace commit de la copia (solo de `carpeta`, relativa al repositorio) y la sube a la rama en la que está. No hace nada si no
+    cambió; se niega si hay cambios fuera de la carpeta o si la copia no pasa `comprobar`. Si la rama avanzó mientras tanto, rebasea
+    y vuelve a intentar. Devuelve {commit (o None), releases nuevos}."""
+    carpeta = carpeta.strip("/")
+    prefijo = carpeta + "/"
+    cambiados = [r for r in (_git(repo, "diff", "--name-only", "HEAD").stdout + _git(repo, "ls-files", "--others", "--exclude-standard").stdout).splitlines() if r]
+    ajenos = sorted({r for r in cambiados if not r.startswith(prefijo)})
+    if ajenos:
+        raise ErrorExportacion(f"Hay cambios fuera de {carpeta}, que no se mezclan con la copia: {', '.join(ajenos[:5])}")
+    if not cambiados:
+        return {"commit": None, "releases": []}
+    errores = comprobar(repo / carpeta)
+    if errores:
+        raise ErrorExportacion("La copia no pasa la comprobación, no se sube: " + "; ".join(errores[:3]))
+    antes = _git(repo, "show", f"HEAD:{carpeta}/catalogo.json", chequear=False)
+    previos = set(_releases_del_catalogo(antes.stdout)) if antes.returncode == 0 else set()
+    nuevos = [r for r in _releases_del_catalogo((repo / carpeta / "catalogo.json").read_text(encoding="utf-8")) if r not in previos]
+    _git(repo, "add", "-A", "--", carpeta)
+    _git(repo, "commit", "-m", ("datos: copia pública de " + ", ".join(nuevos)) if nuevos else "datos: copia pública actualizada")
+    if _git(repo, "push", chequear=False).returncode != 0:  # la rama avanzó: lo de la copia no choca con nada, se rebasea
+        _git(repo, "pull", "--rebase")
+        _git(repo, "push")
+    return {"commit": _git(repo, "rev-parse", "HEAD").stdout.strip(), "releases": nuevos}
+

@@ -2,6 +2,7 @@
 
     python -m servicio_datos.exportar --destino DIR             # exporta los releases publicados que falten y rehace el catálogo
     python -m servicio_datos.exportar comprobar --destino DIR   # verifica una copia, sin la base
+    python -m servicio_datos.exportar subir --destino DIR       # commit de la copia (solo esa carpeta) y push; DIR relativa al repo
 
 Se configura por entorno:
 
@@ -24,10 +25,20 @@ from servicio_datos import exportacion
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="La copia pública de lo aprobado.")
-    parser.add_argument("comando", nargs="?", choices=["exportar", "comprobar"], default="exportar")
+    parser.add_argument("comando", nargs="?", choices=["exportar", "comprobar", "subir"], default="exportar")
+    parser.add_argument("--repo", default=".", help="Para subir: el repositorio donde está la copia (por defecto, el actual)")
     parser.add_argument("--destino", required=True, help="La carpeta de la copia (por ejemplo, el repositorio donde se publica)")
     args = parser.parse_args(argv)
     destino = Path(args.destino)
+
+    if args.comando == "subir":
+        try:
+            resultado = exportacion.subir(Path(args.repo), args.destino)
+        except exportacion.ErrorExportacion as error:
+            print(f"Error: {error}", file=sys.stderr)
+            return 1
+        print(json.dumps(resultado, ensure_ascii=False))
+        return 0
 
     if args.comando == "comprobar":
         errores = exportacion.comprobar(destino)
