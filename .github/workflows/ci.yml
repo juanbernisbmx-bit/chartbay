@@ -153,6 +153,8 @@ jobs:
         image: postgres:17
         env:
           POSTGRES_PASSWORD: pruebas
+          # Like a local initdb: the roles the tests create log in without a password.
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -162,7 +164,8 @@ jobs:
           --health-retries 12
     env:
       # The tests create a schema per test, and some create roles and databases: postgres is a superuser.
-      DATOS_TEST_DATABASE_URL: postgresql://postgres:pruebas@localhost:5432/postgres
+      # 127.0.0.1 and not localhost: the Deno tests may only reach --allow-net=127.0.0.1.
+      DATOS_TEST_DATABASE_URL: postgresql://postgres:pruebas@127.0.0.1:5432/postgres
       DATOS_PG_BIN: /usr/lib/postgresql/17/bin
     steps:
       - name: Checkout
