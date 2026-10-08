@@ -10,11 +10,13 @@
 //   DATOS_AVISOS_RECORDATORIO_DIAS  opcional: días hasta el primer recordatorio de un candidato abierto (3); 0 los apaga
 //   DATOS_MONITOR_AVISAR_URL        opcional: el latido de Healthchecks de esta función (no el de la colecta: si fuera el
 //                                   mismo, que esta ande taparía que la otra se cayó)
+//
+// Con el cuerpo `{"probar": true}` no mira la base: manda un mensaje de prueba por cada canal, con el enlace a la revisión.
 import { autorizado, responder } from "../_compartido/autorizacion.ts";
 import { baseAvisosPostgres } from "../_compartido/base.ts";
 import { hoyEnArgentina } from "../_compartido/fechas.ts";
 import { latir } from "../_compartido/latido.ts";
-import { avisar, type Configuracion, configuracionDesdeEntorno } from "./avisos.ts";
+import { avisar, type Configuracion, configuracionDesdeEntorno, probarCanales } from "./avisos.ts";
 
 Deno.serve(async (pedido) => {
   if (pedido.method !== "POST") return responder({ error: "Usar POST" }, 405);
@@ -27,6 +29,13 @@ Deno.serve(async (pedido) => {
     const mensaje = `Error de configuración: ${(error as Error).message}`;
     await latir(monitor, `Avisos: ${mensaje}`, true);
     return responder({ error: mensaje }, 500);
+  }
+  const cuerpo = await pedido.json().catch(() => ({}));
+  if (cuerpo?.probar === true) {
+    if (configuracion.canales.length === 0) return responder({ probar: true, sin_canales: true }, 500);
+    const canales = await probarCanales(configuracion);
+    return responder({ probar: true, enlace: configuracion.urlRevision !== null, canales },
+                     Object.values(canales).every((r) => r === "ok") ? 200 : 500);
   }
   if (configuracion.canales.length === 0) {
     // No es un error de la función, pero nadie se entera de nada: que el monitor lo diga.

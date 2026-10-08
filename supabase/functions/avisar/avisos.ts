@@ -66,6 +66,23 @@ async function entregarUno(aviso: AvisoTomado, canales: Canal[], urlRevision: st
   return { entregas, completo };
 }
 
+export const PRUEBA = { asunto: "Prueba de avisos de ChartBay", cuerpo: "Si ves este mensaje, el canal funciona. No hay que hacer nada." };
+
+/** Manda un mensaje de prueba por cada canal, con el enlace a la revisión, sin tocar la base: para comprobar un canal o el enlace
+ * cuando no hay ningún aviso nuevo. Devuelve, por canal, "ok" o el error (sin secretos). */
+export async function probarCanales(configuracion: Configuracion): Promise<Record<string, string>> {
+  const resultado: Record<string, string> = {};
+  for (const canal of configuracion.canales) {
+    try {
+      await canal.enviar({ ...PRUEBA, enlace: configuracion.urlRevision });
+      resultado[canal.nombre] = "ok";
+    } catch (error) {
+      resultado[canal.nombre] = error instanceof ErrorEnvio ? error.message : `Falló la entrega (${(error as Error)?.name ?? "Error"})`;
+    }
+  }
+  return resultado;
+}
+
 /** Detecta y entrega. Sin canales no hace nada, ni siquiera detecta: si no, al configurar uno se mandaría de golpe lo acumulado. */
 export async function avisar(base: BaseAvisos, configuracion: Configuracion, hoy: string): Promise<Resultado> {
   const resultado: Resultado = { creados: 0, enviados: 0, descartados: 0, fallidos: 0, pendientes: 0, ocupado: false, errores: [] };

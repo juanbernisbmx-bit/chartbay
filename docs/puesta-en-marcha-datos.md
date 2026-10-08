@@ -25,16 +25,20 @@ más la página de revisión de Codex.
 - [x] Bucket privado `economia-crudos`, pg_cron, pg_net y Vault (`project_url`, `clave_cron`). (Codex)
 - [x] Secretos de las Edge Functions `DATOS_CLAVE_CRON`, `DATOS_DATABASE_URL` y `DATOS_AVISOS_DISCORD_URL`. (Codex)
 - [x] `colectar-ipc` desplegada, probada y con cron a las 9:30 y 17:30 de Argentina. Dejó el candidato 1. (Codex)
-- [x] `avisar` desplegada, en una versión anterior a Discord. (Codex)
+- [x] `avisar` desplegada con Discord y probada a mano: creó y entregó el aviso del candidato 1 (todavía **sin enlace**: la dirección
+  de la revisión no estaba cargada, y ese aviso no se repite; el recordatorio de los tres días sí lo va a traer). La segunda llamada no
+  lo duplicó. (Codex)
+- [ ] **Mirar en `#alertas-datos` que llegó ese aviso.** Codex no lo pudo ver en Discord, porque se le había vencido la sesión: lo
+  confirma la respuesta de la función. (Juani)
 
 ## 1. Antes de integrar (Codex)
 
 - [ ] **Aplicar las migraciones 0015, 0016 y 0017**, en orden y con `search_path` en `economia`, como las anteriores. No activan nada
   por sí solas (las funciones del analista, los textos de los avisos del respaldo y la exportación).
 - [ ] **Volver a correr el SQL de `python -m servicio_datos.api_servicio`**: le suma al rol `servicio_datos` las funciones del analista.
-- [ ] **Volver a desplegar `avisar`** desde la rama de Claude: `supabase functions deploy avisar --no-verify-jwt`.
-  Se comprueba con `curl -sS -o /dev/null -w '%{http_code}' -X POST https://oqbqdngieifjlgbppvey.supabase.co/functions/v1/avisar`,
-  que tiene que dar 401. **Todavía sin una llamada autorizada**: mandaría el aviso del candidato 1 sin enlace, y ese aviso no se repite.
+- [ ] **Volver a desplegar `avisar`** desde la rama de Claude, para tener el modo de prueba que usa el paso 4:
+  `supabase functions deploy avisar --no-verify-jwt`. Sin la clave tiene que seguir dando 401:
+  `curl -sS -o /dev/null -w '%{http_code}' -X POST https://oqbqdngieifjlgbppvey.supabase.co/functions/v1/avisar`.
 - [ ] **Commitear la página de revisión** y lo que la acompaña. En `THIRD_PARTY_NOTICES.md`, sumar SheetJS CE 0.20.3 (Apache-2.0,
   licencia en `supabase/functions/_vendor/xlsx-0.20.3/LICENSE`).
 
@@ -70,9 +74,14 @@ Comprobación: con la sesión iniciada se ve la cola con el candidato 1 (19 hall
 ## 4. Avisos con enlace (Codex)
 
 - [ ] **Secreto `DATOS_REVISION_URL`** = `https://chartbay.onrender.com/base-de-datos/revision` (con `--env-file`, como arriba).
-- [ ] **Un aviso a mano**: `curl -sS -X POST -H @encabezado-cron.txt https://oqbqdngieifjlgbppvey.supabase.co/functions/v1/avisar`.
-  Tiene que contestar `"creados"` y `"enviados"` de al menos 1, sin `errores`, y llegar a `#alertas-datos` el aviso del candidato 1
-  con su enlace (abre la revisión en `#candidato=1`). Si llega sin enlace, volver a desplegar `avisar` y probar con el próximo aviso.
+- [ ] **Una prueba con el enlace**: el aviso del candidato 1 ya salió, así que se comprueba con el modo de prueba, que no mira la base:
+
+  ```bash
+  curl -sS -X POST -H @encabezado-cron.txt -H 'Content-Type: application/json' -d '{"probar": true}' https://oqbqdngieifjlgbppvey.supabase.co/functions/v1/avisar
+  ```
+
+  Tiene que contestar `"enlace": true` y `"canales": {"discord": "ok"}`, y llegar a `#alertas-datos` «Prueba de avisos de ChartBay»
+  con un enlace que abre la página de revisión. Si dice `"enlace": false`, volver a desplegar `avisar` para que tome el secreto.
 - [ ] **Su cron**, cada hora a los 45 minutos:
 
   ```sql
@@ -85,8 +94,8 @@ Comprobación: con la sesión iniciada se ve la cola con el candidato 1 (19 hall
   $$);
   ```
 
-Comprobación: `SELECT tipo, estado, entregas FROM economia.aviso ORDER BY id DESC LIMIT 5;` muestra `enviado` con
-`"discord": {"ok": true, ...}`.
+Comprobación: con el cron andando, `SELECT tipo, estado, entregas FROM economia.aviso ORDER BY id DESC LIMIT 5;` muestra los
+avisos `enviado`, con `"discord": {"ok": true, ...}`.
 
 ## 5. El analista (Juani autoriza, Codex instala). Opcional antes del paso 6
 

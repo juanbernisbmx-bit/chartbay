@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1";
 import type { AvisoTomado, BaseAvisos, Entrega, Tomados } from "../_compartido/base.ts";
 import { type Canal, ErrorEnvio, type Mensaje } from "../_compartido/canales.ts";
-import { avisar, type Configuracion, configuracionDesdeEntorno, enlace } from "./avisos.ts";
+import { avisar, type Configuracion, configuracionDesdeEntorno, enlace, PRUEBA, probarCanales } from "./avisos.ts";
 
 const HOY = "2026-10-06";
 const REVISION = "https://chartbay.example/base-de-datos/revision";
@@ -102,4 +102,14 @@ Deno.test("la configuración sale del entorno y sus errores no repiten secretos"
   for (const dias of ["-1", "61", "tres", "2.5"]) {
     assertThrows(() => configuracionDesdeEntorno({ DATOS_AVISOS_RECORDATORIO_DIAS: dias }), Error, "entre 0 (sin recordatorios) y 60");
   }
+});
+
+Deno.test("la prueba de canales manda un mensaje por cada uno, con el enlace a la revisión, y dice cómo le fue a cada uno", async () => {
+  const bueno = new CanalFalso("discord"), roto = new CanalFalso("slack", new ErrorEnvio("Slack respondió HTTP 404")),
+    explota = new CanalFalso("otro", new TypeError("clave-secreta"));
+  const resultado = await probarCanales(configuracion([bueno, roto, explota]));
+  assertEquals(resultado, { discord: "ok", slack: "Slack respondió HTTP 404", otro: "Falló la entrega (TypeError)" });
+  assertEquals(bueno.mensajes, [{ ...PRUEBA, enlace: REVISION }]);
+  assertEquals(await probarCanales(configuracion([bueno], { urlRevision: null })), { discord: "ok" });
+  assertEquals(bueno.mensajes[1].enlace, null);
 });

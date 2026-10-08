@@ -5,8 +5,7 @@ Los pasos que faltan para ponerlo en marcha, en orden y con cómo comprobar cada
 Estado: plan aprobado; pasos 0 a 3 y 5 a 7 hechos (2026-10-07). Falta el 4 (Codex).
 
 **En producción** (Codex, 2026-10-08, proyecto `oqbqdngieifjlgbppvey`): migraciones 0011 a 0014, el rol `servicio_datos`, la colecta
-(`colectar-ipc`, con cron a las 9:30 y 17:30) y `avisar` (desplegada en una versión anterior a Discord; el webhook ya está cargado
-y falta volver a desplegarla; sin cron). La primera colecta dejó el candidato 1
+(`colectar-ipc`, con cron a las 9:30 y 17:30) y `avisar` (con Discord; ya entregó el aviso del candidato 1, sin enlace; sin cron). La primera colecta dejó el candidato 1
 (819 observaciones, 19 hallazgos). Faltan desplegar: el analista (0015, espera la clave de la API y la autorización de Juani), el
 respaldo (0016, espera las claves S3 y el rol), la copia pública (0017, espera la licencia y que los flujos lleguen a `main`) y la
 página de revisión de ChartBay con su usuario de Auth.
@@ -362,9 +361,11 @@ enlace, la configuración) y de los canales contra un servidor local: Slack (esc
 redirecciones) y Discord (formato, menciones bloqueadas, texto hostil que no arma enlaces ni formato, corte en el límite sin perder el
 enlace, 204/200 como entrega y todo lo demás como falla, sin seguir redirecciones, la URL validada y nunca repetida); y los avisos de
 punta a punta contra Postgres entrando con el rol de las Edge Functions, con un Slack y un Discord locales a la vez. En Supabase
-(Codex, 2026-10-08) está desplegada la versión anterior, que contesta `sin_canales: true` porque todavía no lee
-`DATOS_AVISOS_DISCORD_URL` (el secreto ya está cargado): hay que volver a desplegarla. El cron espera, además, la dirección pública de
-la página de revisión y una prueba manual de punta a punta. **No se probó** el Discord de verdad. Los textos de los avisos del respaldo ya hablan del
+(Codex, 2026-10-08) está desplegada con Discord: una llamada a mano creó y entregó el aviso del candidato 1 (sin enlace, porque la
+dirección de la revisión todavía no estaba cargada) y la segunda no lo duplicó. Que el mensaje se vea bien en Discord no lo pudo
+mirar todavía nadie. Para comprobar un canal o el enlace sin esperar un aviso nuevo, `avisar` tiene un modo de prueba: con el cuerpo
+`{"probar": true}` manda «Prueba de avisos de ChartBay» por cada canal, con el enlace, sin tocar la base. El cron espera la dirección
+pública de la página de revisión. Los textos de los avisos del respaldo ya hablan del
 flujo de GitHub (migración 0016).
 
 ## El respaldo (paso 7)
