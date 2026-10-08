@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es" data-skin="v2">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay - Revisión de datos</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/chartbay-logo.png') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='redesign.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='database.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='database-review.css') }}">
+  <script defer src="{{ url_for('static', filename='js/chartbay.review.js') }}"></script>
+</head>
+<body data-review-page data-supabase-url="{{ supabase_url }}" data-supabase-key="{{ supabase_key }}">
+  {% set active = 'base_datos' %}
+  {% include '_topbar_v2.html' with context %}
+  <main class="db-page rv-page">
+    <header class="db-heading rv-heading">
+      <div><p class="db-eyebrow"><a href="{{ url_for('economic_database') }}">Base de datos</a> / Administración</p><h1>Revisión de datos</h1></div>
+      <div class="rv-account" id="rv-account" hidden><span id="rv-email"></span><button type="button" id="rv-sign-out" class="db-icon" title="Cerrar sesión" aria-label="Cerrar sesión"><i data-lucide="log-out"></i></button></div>
+    </header>
+    <p id="rv-message" class="rv-message" role="status" aria-live="polite" hidden></p>
+    <section id="rv-login" class="rv-login" aria-labelledby="rv-login-heading" hidden>
+      <h2 id="rv-login-heading">Ingresar</h2>
+      <form id="rv-login-form">
+        <label>Correo electrónico<input type="email" id="rv-login-email" autocomplete="username" required></label>
+        <label>Contraseña<input type="password" id="rv-login-password" autocomplete="current-password" required></label>
+        <button type="submit" class="btnp" id="rv-login-submit">Ingresar</button>
+      </form>
+    </section>
+    <section id="rv-password-setup" class="rv-login" aria-labelledby="rv-password-heading" hidden>
+      <h2 id="rv-password-heading">Crear contraseña</h2>
+      <form id="rv-password-form">
+        <label>Nueva contraseña<input type="password" id="rv-new-password" autocomplete="new-password" minlength="12" required></label>
+        <label>Repetir contraseña<input type="password" id="rv-repeat-password" autocomplete="new-password" minlength="12" required></label>
+        <button type="submit" class="btnp">Guardar contraseña</button>
+      </form>
+    </section>
+    <section id="rv-workspace" hidden>
+      <div class="rv-toolbar"><div class="db-tabs" role="tablist" aria-label="Candidatos"><button type="button" id="rv-tab-attention" role="tab" aria-selected="true">Requieren atención</button><button type="button" id="rv-tab-history" role="tab" aria-selected="false">Historial</button></div><button type="button" id="rv-refresh" class="db-icon" title="Actualizar cola" aria-label="Actualizar cola"><i data-lucide="rotate-cw"></i></button></div>
+      <dl class="rv-summary" id="rv-summary"></dl>
+      <div class="rv-layout">
+        <section class="rv-queue" aria-labelledby="rv-queue-heading"><h2 id="rv-queue-heading">Cola</h2><div id="rv-items"></div></section>
+        <section class="rv-detail" id="rv-detail" aria-labelledby="rv-detail-heading"><h2 id="rv-detail-heading">Seleccioná un candidato</h2><p class="db-muted">La revisión humana decide qué se publica.</p></section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

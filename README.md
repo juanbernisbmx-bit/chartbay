@@ -82,6 +82,7 @@ a ningún servidor.
 |---|---|---|
 | Inicio | `/` | Presentación, acceso al laboratorio y recorrido de módulos activos |
 | Econometría | `/econometria` | OLS, RLS con test de Wald, inferencia t/F, intervalos al 95%, diagnósticos de residuos y colinealidad (VIF), series de tiempo (ADF, ACF, PACF, Ljung-Box) |
+| Base de datos | `/base-de-datos` | Piloto argentino: 100 series catalogadas, 7 IPC cargadas; selección, transformaciones, procedencia y envío directo a Econometría. [Alcance y pruebas](docs/base-datos.md) |
 | Limpiador | `/limpiador` | Inspección y limpieza de CSV con motor C++/WebAssembly |
 | ChartPython | `/chartpython` | Notebook de Python en el navegador: celdas de código y de texto, estado compartido, archivos en `/mnt/data`, import y export `.ipynb`. Manual de uso en `/chartpython/manual`. En beta, apagable con `SECCIONES["chartpython"]` |
 | Datos | `/data` | **Escondida por ahora** (`SECCIONES["datos"]` en `web/app.py`): sin pestaña y con sus rutas en 404. El código sigue: 49 indicadores macro (37 de FRED, 12 de World Bank), con caché diaria y descarga en CSV o JSON con atribución de origen |
@@ -190,8 +191,13 @@ Variables del `.env`:
 | Variable | Para qué | ¿Obligatoria? |
 |---|---|---|
 | `FRED_API_KEY` | descargas FRED de Datos ([clave gratuita](https://fredaccount.stlouisfed.org/apikeys)) | opcional, y hoy Datos está escondida; sin ella World Bank y el catálogo siguen disponibles |
+| `CHARTBAY_DATA_DIR` | carpeta con `catalogo.json` para Base de datos | opcional; por defecto `datasets/economia` |
+| `SUPABASE_URL` | proyecto que atiende la revisión privada | necesaria para habilitar la página de revisión |
+| `SUPABASE_PUBLISHABLE_KEY` | clave pública del navegador para Supabase Auth y la API `revision` | necesaria para habilitar la página de revisión |
 
-La app no lee ninguna otra variable: no hay login, sesión ni clave de IA.
+El catálogo público de Base de datos no requiere credenciales. La revisión sí
+exige una cuenta invitada de Supabase Auth; no se usa una clave secreta en el
+navegador ni en el servidor de ChartBay.
 
 ## Compilar el motor
 

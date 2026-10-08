@@ -5,7 +5,8 @@ import { jsPDF } from 'jspdf';
 import { applyPlugin as applyAutoTablePlugin } from 'jspdf-autotable';
 import { type BridgedDataset } from './services/cleanerBridge';
 import { loadCsv, type LoadResult } from './services/cleanerLoader';
-import { takeHandoff } from './services/datasetHandoff';
+import { takeHandoffDataset, type DatabaseHandoff } from './services/datasetHandoff';
+import { downloadBlob } from './database/dataset';
 import { renderDeviceProfile } from '../../cleaner/js/deviceProfileView';
 import { detectDeviceProfile } from '../../cleaner/js/deviceProfiler';
 
@@ -561,6 +562,9 @@ async function warmupActiveProEngine(generation: number): Promise<void> {
 async function loadDemoCase(id: string): Promise<void> {
   const demo = DEMO_CASES[id];
   if (!demo) return;
+  databaseOrigin = null;
+  const originPanel = $('qb-data-origin');
+  if (originPanel) originPanel.hidden = true;
   showError('');
   hideProPanel();
   clearLoadWarnings();
@@ -631,11 +635,46 @@ async function loadDemoCase(id: string): Promise<void> {
  * loadFile — en vez de tener una segunda ruta de carga que después haya que
  * mantener en paralelo. Limpiar algo ya limpio es rápido e idempotente.
  */
+let databaseOrigin: DatabaseHandoff | null = null;
+
 async function consumeHandoff(): Promise<void> {
-  const file = await takeHandoff();
-  if (!file) return;
-  await loadFile(file);
-  writeRunLog(['Dataset recibido desde el Limpiador.']);
+  const handoff = await takeHandoffDataset();
+  if (!handoff) return;
+  const metadata = handoff.metadata;
+  if (metadata?.source === 'database') setActiveMode(metadata.mode);
+  if (!await loadFile(handoff.file)) return;
+  if (metadata?.source !== 'database') {
+    writeRunLog(['Dataset recibido desde el Limpiador.']);
+    return;
+  }
+  databaseOrigin = metadata;
+  const columns = appState.csvData!.numericColumns;
+  const requiredColumns = metadata.mode === 'regression' ? [metadata.yName, ...metadata.xNames] : [metadata.yName];
+  const missingColumns = requiredColumns.filter(name => !columns.includes(name));
+  if (metadata.mode === 'regression') {
+    setVariableSelection(metadata.yName, missingColumns.length ? [] : metadata.xNames);
+    scheduleFormRecommendation();
+  } else {
+    for (const id of ['qb-ts-value', 'qb-pro-ts-value']) {
+      const select = $(id) as HTMLSelectElement | null;
+      if (select) select.value = columns.includes(metadata.yName) ? metadata.yName : '';
+    }
+  }
+  const origin = $('qb-data-origin');
+  if (origin) origin.hidden = false;
+  setText('qb-data-origin-summary', `${metadata.releaseId} · ${metadata.rows} observaciones · ${metadata.start.slice(0, 7)} a ${metadata.end.slice(0, 7)}`);
+  const list = $('qb-data-origin-series');
+  if (list) {
+    list.replaceChildren();
+    for (const series of metadata.series) {
+      const item = document.createElement('li');
+      item.textContent = `${series.name}: ${series.transform}${series.lag ? `, rezago ${series.lag}` : ''}. Fuente: ${series.source}.`;
+      list.append(item);
+    }
+  }
+  if (missingColumns.length) showError(`El limpiador no conservó estas variables: ${missingColumns.join(', ')}. Revisá la selección antes de calcular.`);
+  writeRunLog(['Conjunto recibido desde Base de datos.', `Versión: ${metadata.releaseId}`, `Meses excluidos: ${metadata.excludedMonths.length}`, missingColumns.length ? 'La selección requiere revisión: faltan columnas.' : 'Variables listas para el análisis.']);
+  renderGuided();
 }
 
 async function onFileChange(e: Event): Promise<void> {
@@ -644,15 +683,17 @@ async function onFileChange(e: Event): Promise<void> {
   await loadFile(file);
 }
 
-async function loadFile(file: File): Promise<void> {
+async function loadFile(file: File): Promise<boolean> {
 
   const sizeCheck = validateCsvFileSize(file.size, getVersionConfig(appState.activeVersion));
   if (!sizeCheck.ok) {
     showError(sizeCheck.message);
-    return;
+    return false;
   }
 
   showError('');
+  databaseOrigin = null;
+  if ($('qb-data-origin')) $('qb-data-origin')!.hidden = true;
   clearLoadWarnings();
   hideProPanel();
   appState.activeDemoId = null;
@@ -687,7 +728,7 @@ async function loadFile(file: File): Promise<void> {
     showLoadWarnings(loaded);
     if (!isTimeSeriesMode() && appState.csvData.numericColumns.length < 2) {
       showError('El CSV necesita al menos 2 columnas numéricas.');
-      return;
+      return false;
     }
     beginModelComparisonDataset(file.name);
     setText('qb-status-obs', rowCountOf(appState.csvData));
@@ -714,9 +755,11 @@ async function loadFile(file: File): Promise<void> {
     resetForNewDataset(file.name);
     resetReproducibilityForDataset(file.name);
     renderGuided();
+    return true;
   } catch (err) {
     setEngineStatus('ERROR');
     showError(`Error al leer el archivo: ${(err as Error).message}`);
+    return false;
   }
 }
 
@@ -1342,6 +1385,9 @@ function runFormRecommendation(): void {
 }
 
 function init(): void {
+  $('qb-data-origin-download')?.addEventListener('click', () => {
+    if (databaseOrigin) downloadBlob(new Blob([JSON.stringify(databaseOrigin, null, 2)], { type: 'application/json' }), 'chartbay-procedencia.json');
+  });
   initGuided(focus => {
     const el = document.getElementById(focus);
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' });

@@ -9,6 +9,9 @@
   <nav class="cb-nav">
     {% if active == 'inicio' %}<strong>Inicio</strong>{% else %}<a href="{{ url_for('dashboard') }}">Inicio</a>{% endif %}
     {% if active == 'econometria' %}<strong>Econometría</strong>{% else %}<a href="{{ url_for('econometria') }}">Econometría</a>{% endif %}
+    {% if secciones.base_datos %}
+      {% if active == 'base_datos' %}<strong>Base de datos</strong>{% else %}<a href="{{ url_for('economic_database') }}">Base de datos</a>{% endif %}
+    {% endif %}
     {% if secciones.datos %}
       {% if active == 'datos' %}<strong>Datos</strong>{% else %}<a href="{{ url_for('frequent_data') }}">Datos</a>{% endif %}
     {% endif %}

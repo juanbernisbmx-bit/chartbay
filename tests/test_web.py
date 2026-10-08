@@ -621,7 +621,7 @@ def test_la_memoria_del_limitador_esta_acotada():
 
 def test_los_flags_por_defecto_son_el_alcance_publicado():
     modulo = _cargar_app()
-    assert modulo.SECCIONES == {"datos": False, "chartpython": True}
+    assert modulo.SECCIONES == {"datos": False, "chartpython": True, "base_datos": True}
 
 
 # ── ChartPython ──────────────────────────────────────────────────────────────

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es" data-skin="v2">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChartBay - Base de datos</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/chartbay-logo.png') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='redesign.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='database.css') }}">
+  <script defer src="{{ url_for('static', filename='js/chartbay.database.js') }}"></script>
+</head>
+<body data-db-page>
+  {% set active = 'base_datos' %}
+  {% include '_topbar_v2.html' with context %}
+  <main class="db-page">
+    <header class="db-heading">
+      <div><p class="db-eyebrow">Argentina / Series económicas</p><h1>Base de datos</h1></div>
+      <div class="db-release"><span class="db-pilot">Piloto local</span><span id="db-release"></span></div>
+    </header>
+    <div id="db-load-status" role="status" aria-live="polite">Cargando catálogo...</div>
+    <button type="button" id="db-retry" class="btns" hidden><i data-lucide="rotate-ccw" aria-hidden="true"></i>Reintentar</button>
+    <div class="db-layout" id="db-content" hidden>
+      <section class="db-catalog" aria-labelledby="db-catalog-title">
+        <div class="db-section-heading"><h2 id="db-catalog-title">Catálogo</h2><span id="db-count" class="db-muted" aria-live="polite"></span></div>
+        <div class="db-filters">
+          <label class="db-search"><span class="db-sr-only">Buscar series</span><i data-lucide="search" aria-hidden="true"></i><input id="db-search" type="search" placeholder="Buscar indicador o territorio" autocomplete="off"></label>
+          <label><span class="db-sr-only">Tema</span><select id="db-topic"><option value="">Todos los temas</option></select></label>
+          <label><span class="db-sr-only">Cobertura</span><select id="db-level"><option value="">Todas las coberturas</option><option>Nacional</option><option>Provincial</option><option>Regional</option></select></label>
+        </div>
+        <div class="db-catalog-meta"><label class="db-checkbox"><input id="db-ready" type="checkbox" checked>Solo series cargadas</label><span id="db-filter-count" class="db-muted"></span></div>
+        <div class="db-catalog-scroll">
+          <table class="db-table db-series-table"><thead><tr><th scope="col"><span class="db-sr-only">Seleccionar</span></th><th scope="col">Serie / territorio</th><th scope="col">Frecuencia</th><th scope="col">Cobertura temporal</th><th scope="col"><span class="db-sr-only">Ficha</span></th></tr></thead><tbody id="db-series"></tbody></table>
+          <p id="db-empty" class="db-empty" hidden>Sin series para estos filtros.</p>
+        </div>
+      </section>
+      <aside class="db-selection" aria-labelledby="db-selection-title">
+        <div class="db-section-heading"><h2 id="db-selection-title">Conjunto de trabajo <span id="db-selection-count">0</span></h2><button type="button" id="db-clear" class="db-icon" title="Vaciar selección" aria-label="Vaciar selección" disabled><i data-lucide="trash-2" aria-hidden="true"></i></button></div>
+        <div id="db-selection-empty" class="db-empty"><i data-lucide="database" aria-hidden="true"></i><p>Sin series seleccionadas</p><button type="button" id="db-example" class="btns">Cargar ejemplo IPC</button></div>
+        <ol id="db-selected" class="db-selected"></ol>
+        <fieldset id="db-options" disabled>
+          <legend class="db-sr-only">Preparación del conjunto</legend>
+          <div class="db-dates"><label>Desde<input id="db-start" type="month"></label><label>Hasta<input id="db-end" type="month"></label></div>
+          <label class="db-checkbox db-complete"><input id="db-complete" type="checkbox" checked>Excluir meses con datos faltantes</label>
+          <fieldset class="db-modes"><legend>Análisis</legend><label><input type="radio" name="db-mode" value="regression" checked>Regresión</label><label><input type="radio" name="db-mode" value="timeseries">Serie de tiempo</label></fieldset>
+          <label class="db-y"><span id="db-y-label">Variable dependiente (Y)</span><select id="db-y"></select></label>
+          <p id="db-x-label" class="db-muted"></p>
+        </fieldset>
+        <p id="db-prepare-error" class="db-error" role="status" aria-live="polite" hidden></p>
+        <div class="db-actions"><button type="button" id="db-apply" class="btnp" disabled>Usar en Econometría<i data-lucide="arrow-right" aria-hidden="true"></i></button><button type="button" id="db-csv" class="db-icon" title="Descargar CSV" aria-label="Descargar CSV" disabled><i data-lucide="download" aria-hidden="true"></i></button><button type="button" id="db-manifest" class="db-icon" title="Descargar ficha del conjunto" aria-label="Descargar ficha del conjunto" disabled><i data-lucide="file-json" aria-hidden="true"></i></button></div>
+      </aside>
+      <section class="db-preview" aria-labelledby="db-preview-title">
+        <div class="db-section-heading"><h2 id="db-preview-title">Vista previa</h2><div class="db-tabs" role="tablist" aria-label="Vista del conjunto"><button type="button" id="db-tab-table" role="tab" aria-selected="true" aria-controls="db-table-panel">Tabla</button><button type="button" id="db-tab-chart" role="tab" aria-selected="false" aria-controls="db-chart-panel">Gráfico</button></div></div>
+        <p id="db-preview-empty" class="db-empty">Sin conjunto preparado.</p>
+        <div id="db-preview-content" hidden>
+          <dl class="db-summary"><div><dt>Observaciones</dt><dd id="db-observations"></dd></div><div><dt>Período efectivo</dt><dd id="db-period"></dd></div><div><dt>Meses excluidos</dt><dd id="db-excluded"></dd></div></dl>
+          <div id="db-table-panel" role="tabpanel" aria-labelledby="db-tab-table" class="db-preview-scroll"><table class="db-table db-values"><thead id="db-preview-head"></thead><tbody id="db-preview-body"></tbody></table><p class="db-muted" id="db-preview-caption"></p></div>
+          <div id="db-chart-panel" role="tabpanel" aria-labelledby="db-tab-chart" hidden><div class="db-chart-wrap"><canvas id="db-chart" role="img" aria-label="Evolución temporal de las series seleccionadas"></canvas></div></div>
+          <details id="db-missing-details" class="db-missing" hidden><summary id="db-missing-summary"></summary><p id="db-missing-months" class="db-muted"></p></details>
+          <p id="db-overlap" class="db-caution" hidden>Las regiones integran el IPC nacional. Su relación estadística no demuestra causalidad.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+  <dialog id="db-detail" class="db-dialog" aria-labelledby="db-detail-title"><div class="db-section-heading"><h2 id="db-detail-title"></h2><button type="button" id="db-detail-close" class="db-icon" title="Cerrar ficha" aria-label="Cerrar ficha"><i data-lucide="x" aria-hidden="true"></i></button></div><div id="db-detail-body"></div></dialog>
+</body>
+</html>

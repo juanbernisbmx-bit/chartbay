@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const outputDirectory = resolve(import.meta.dirname, '../../web/static/js');
 const bundles = [
   'quantbay.bundle.js',
+  'chartbay.database.js',
   'quantbay.worker.js',
   'quantbay.cleaner.js',
   'quantbay.data-cleaner.worker.js',

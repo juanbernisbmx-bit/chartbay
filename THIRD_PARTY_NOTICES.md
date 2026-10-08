@@ -6,6 +6,11 @@ archivo documenta las excepciones y atribuciones que deben conservarse.
 
 ## Dependencias de software
 
+- Base de datos usa Lucide 1.52.0 (ISC, con iconos derivados de Feather bajo
+  MIT). Los avisos se conservan en `web/static/licenses/LICENSE.LUCIDE`.
+- La colecta del IPC usa SheetJS CE 0.20.3 (Apache-2.0), incluido localmente
+  en `supabase/functions/_vendor/xlsx-0.20.3/` con su archivo `LICENSE`.
+
 - El bundle local del frontend incorpora Papa Parse 5.4.1, Chart.js 4.5.1,
   jsPDF 4.2.1 y jsPDF-AutoTable 5.0.8. Esos proyectos se distribuyen bajo MIT y
   conservan sus avisos en `quantbay/package-lock.json`; la AGPL de ChartBay no
@@ -38,6 +43,12 @@ archivo documenta las excepciones y atribuciones que deben conservarse.
   repositorio.
 
 ## Datos
+
+- `datasets/economia/catalogo.json` incluye una copia de prueba del IPC de
+  INDEC: nivel general nacional y seis regiones, con URLs originales y SHA-256
+  por archivo. Las otras 93 entradas son metadatos, sin observaciones. Los
+  datos no se relicencian bajo AGPL; la revisión integral y de condiciones
+  de reutilización para una entrega sigue pendiente. Ver `docs/base-datos.md`.
 
 - Las series de World Bank se consultan en tiempo de ejecución desde World
   Development Indicators. No se incluyen en el repositorio ni quedan cubiertas

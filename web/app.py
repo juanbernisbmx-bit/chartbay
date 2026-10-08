@@ -22,6 +22,7 @@ import time
 from datetime import date, datetime
 from functools import wraps
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from flask import (
@@ -39,6 +40,7 @@ import providers        # noqa: E402
 from chartpython_manual import notebook_de_practica  # noqa: E402
 from rate_limit import Limitador, Regla, ip_del_cliente  # noqa: E402
 from source_archive import build_source_archive  # noqa: E402
+from economic_database import read_snapshot  # noqa: E402
 
 CACHE_DIR = HERE / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
@@ -77,6 +79,7 @@ app = Flask(__name__)
 # devolver 404 y sus enlaces desaparecen del menú, pero las vistas, las
 # plantillas y los tests siguen en el repo.
 SECCIONES = {
+    "base_datos": True,
     # Escondida por ahora: sin pestaña ni enlaces y con sus rutas en 404. El
     # código, la plantilla y los tests siguen (los tests la encienden).
     "datos": False,
@@ -113,7 +116,7 @@ _FONT_STYLE_SRC = "fonts.googleapis.com"
 _FONT_SRC = "'self' fonts.gstatic.com"
 
 
-def _csp(*, nonce: str, wasm: bool = False) -> str:
+def _csp(*, nonce: str, wasm: bool = False, connect_origin: str = "") -> str:
     """Arma el CSP de una página a partir de lo que esa página realmente carga.
 
     `wasm` habilita compilar WebAssembly ('wasm-unsafe-eval', que NO habilita
@@ -129,7 +132,7 @@ def _csp(*, nonce: str, wasm: bool = False) -> str:
         "style-src-attr 'unsafe-inline'; "
         f"font-src {_FONT_SRC}; "
         "img-src 'self' data: blob:; "
-        "connect-src 'self'; "
+        f"connect-src 'self'{(' ' + connect_origin) if connect_origin else ''}; "
         "worker-src 'self'; "
         "frame-src 'none'; "
         "object-src 'none'; "
@@ -203,6 +206,10 @@ def add_security_headers(response):
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     profile = _CSP_PERFIL_POR_RUTA.get(request.path, {})
+    if request.path == "/base-de-datos/revision":
+        url = _supabase_public_config()[0]
+        if url:
+            profile = {"connect_origin": url}
     response.headers.setdefault("Content-Security-Policy", _csp(nonce=g.csp_nonce, **profile))
     if request.path.startswith("/static/vendor/pyodide/0.26.4/"):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
@@ -346,6 +353,46 @@ def quantbay_dataset(name):
     if not fp.exists():
         abort(404)
     return Response(fp.read_text(encoding="utf-8"), mimetype="text/csv")
+
+
+@app.route("/base-de-datos")
+@seccion("base_datos")
+def economic_database():
+    return render_template("economic_database.html")
+
+
+def _supabase_public_config() -> tuple[str, str]:
+    """Only a publishable browser key may leave the server."""
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname != "oqbqdngieifjlgbppvey.supabase.co" or parsed.path:
+        return "", ""
+    if not key.startswith("sb_publishable_"):
+        return url, ""
+    return url, key
+
+
+@app.route("/base-de-datos/revision")
+@seccion("base_datos")
+def economic_database_review():
+    url, key = _supabase_public_config()
+    response = Response(render_template("economic_database_review.html", supabase_url=url, supabase_key=key))
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/base-datos/catalogo")
+@seccion("base_datos")
+def api_economic_database():
+    try:
+        payload = read_snapshot(ROOT)
+    except (OSError, ValueError, KeyError, TypeError):
+        app.logger.exception("No se pudo abrir la instantánea económica")
+        return jsonify({"ok": False, "error": "La base de datos no está disponible. Volvé a intentar."}), 503
+    response = jsonify({"ok": True, **payload})
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 # ─── Datos Frecuentes ────────────────────────────────────────────────────────

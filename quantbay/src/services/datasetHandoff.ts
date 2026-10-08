@@ -17,10 +17,30 @@ const DB_NAME = 'chartbay';
 const STORE = 'handoff';
 const KEY = 'dataset';
 
+export interface DatabaseHandoff {
+  source: 'database';
+  mode: 'regression' | 'timeseries';
+  yName: string;
+  xNames: string[];
+  releaseId: string;
+  preparedAt: string;
+  rows: number;
+  start: string;
+  end: string;
+  excludedMonths: string[];
+  incompleteMonths: string[];
+  series: Array<{
+    id: string; name: string; column: string; unit: string; transform: string; lag: number;
+    source: string; sourceUrl: string; originalUrl: string | null; sha256: string | null;
+    retrievedAt: string | null; publishedAt: string | null; normalizationNotes: string[];
+  }>;
+}
+
 interface HandoffRecord {
   name: string;
   csv: Blob;
   savedAt: number;
+  metadata?: DatabaseHandoff;
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -53,11 +73,12 @@ function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequ
 }
 
 /** Deja el CSV limpio listo para que lo levante la otra sección. */
-export async function putHandoff(name: string, csv: string | Blob): Promise<void> {
+export async function putHandoff(name: string, csv: string | Blob, metadata?: DatabaseHandoff): Promise<void> {
   const record: HandoffRecord = {
     name,
     csv: new Blob([csv], { type: 'text/csv' }),
     savedAt: Date.now(),
+    metadata,
   };
   await tx('readwrite', store => store.put(record, KEY));
 }
@@ -69,6 +90,10 @@ export async function putHandoff(name: string, csv: string | Blob): Promise<void
  * cargar un archivo que el usuario ya no está esperando.
  */
 export async function takeHandoff(): Promise<File | null> {
+  return (await takeHandoffDataset())?.file ?? null;
+}
+
+export async function takeHandoffDataset(): Promise<{ file: File; metadata?: DatabaseHandoff } | null> {
   let record: HandoffRecord | undefined;
   try {
     record = await tx<HandoffRecord | undefined>('readonly', store => store.get(KEY));
@@ -77,7 +102,7 @@ export async function takeHandoff(): Promise<File | null> {
   }
   if (!record) return null;
   await tx('readwrite', store => store.delete(KEY)).catch(() => undefined);
-  return new File([record.csv], record.name, { type: 'text/csv' });
+  return { file: new File([record.csv], record.name, { type: 'text/csv' }), metadata: record.metadata };
 }
 
 export async function hasHandoff(): Promise<boolean> {
