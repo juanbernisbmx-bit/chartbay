@@ -455,7 +455,12 @@ _CLAVE_FALSA = "sk-ant-api03-" + "x" * 40 + "-FALSA"
 
 
 def test_ningun_archivo_versionado_lee_ni_contiene_una_clave_de_anthropic():
-    """El código que leía ANTHROPIC_API_KEY se borró con Mercados; que no vuelva."""
+    """El código de ChartBay que leía ANTHROPIC_API_KEY se borró con Mercados; que no vuelva.
+
+    La única excepción es el servicio de datos: el analista de hallazgos (supabase/functions/analizar) usa la API
+    de Claude por decisión de Juani, corre en Supabase y nunca en ChartBay, y sus pruebas y guías nombran la
+    variable. Una clave de verdad no puede aparecer en ningún archivo, tampoco ahí."""
+    servicio_de_datos = ("supabase/functions/", "servicio_datos/")
     patron = re.compile(r"sk-ant-[A-Za-z0-9_-]{20,}")
     salida = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True).stdout
     for crudo in filter(None, salida.split(b"\0")):
@@ -467,7 +472,7 @@ def test_ningun_archivo_versionado_lee_ni_contiene_una_clave_de_anthropic():
             continue
         texto = ruta.read_text(encoding="utf-8", errors="ignore")
         assert not patron.search(texto), f"{rel} contiene algo con forma de clave de Anthropic"
-        if ruta.suffix in {".py", ".ts", ".js", ".html"} and ruta.name != "test_web.py":
+        if ruta.suffix in {".py", ".ts", ".js", ".html"} and ruta.name != "test_web.py" and not rel.startswith(servicio_de_datos):
             assert "ANTHROPIC_API_KEY" not in texto, rel
             assert not re.search(r"^\s*(import|from)\s+anthropic\b", texto, re.M), rel
 
