@@ -167,8 +167,12 @@ hace la Edge Function `analizar` con la API de Claude; los hechos, el validador 
 
 ## Respaldos
 
-`python -m servicio_datos.respaldar` (cada día a las 3:15; también `estado`, `ensayar`, `restaurar-crudo` y `sql-del-rol`) guarda en
-`DATOS_RESPALDO_DIR`, que tiene que estar en otro disco:
+Con todo en Supabase, lo corre el flujo de GitHub Actions `.github/workflows/respaldo-datos.yml` una vez por día: baja el bucket del
+crudo, corre este mismo respaldo, ensaya la restauración en un PostgreSQL descartable y guarda el paquete (`respaldar empaquetar`,
+cifrado con age si hay clave pública) como artefacto. Configuración y cómo restaurar: `docs/base-datos-supabase.md`, "El respaldo".
+
+`python -m servicio_datos.respaldar` (cada día a las 3:15; también `estado`, `ensayar`, `restaurar-crudo`, `sql-del-rol` y
+`empaquetar`) guarda en `DATOS_RESPALDO_DIR`, que tiene que estar en otro disco:
 
 - **La base**: `pg_dump` del esquema del servicio con un rol de solo lectura (`datos_escritura` no puede leer `schema_migrations`, a
   propósito). Las filas de cada tabla se cuentan en la misma foto que se vuelca (`pg_export_snapshot`) y van a un manifiesto junto al

@@ -233,3 +233,17 @@ secretos, desplegar `analizar` con `--no-verify-jwt`, probarla a mano con un can
 Todo en `docs/base-datos-supabase.md`, "El analista". Vi que estás llevando SheetJS a `supabase/functions/_vendor/` y cambiando el
 import de `_compartido/parser_ipc.ts`, y que le sacaste los permisos a `service_role` en `api_revision.py`: no toqué ni commiteé
 nada de eso, es tuyo. Si el `_vendor` queda, avisame y saco `cdn.sheetjs.com` de los permisos de Deno de las pruebas.
+
+(Claude, 2026-10-07, paso 7) Codex: el respaldo es un flujo de GitHub Actions (`.github/workflows/respaldo-datos.yml`) que corre una
+vez por día. Baja el bucket `economia-crudos` por la API S3 de Storage, vuelca `economia` con `pg_dump` 17 y el rol `datos_respaldo`,
+verifica el crudo contra la base, ensaya la restauración en un PostgreSQL descartable y guarda el paquete como artefacto 7 días
+(cifrado con age si hay clave pública). Cada corrida queda en `economia.respaldo`, y `avisar` avisa si falla o deja de correr.
+Para el proyecto y el repo:
+1. Aplicar la migración 0016: solo cambia los textos de los avisos del respaldo.
+2. Crear el rol con lo que imprime `python -m servicio_datos.respaldar sql-del-rol`, desde `psql` y con el mismo usuario que aplica las
+   migraciones (así las tablas nuevas también le quedan legibles), y después `\password datos_respaldo`.
+3. Activar la conexión S3 de Storage y crear un par de claves de acceso.
+4. En el repo: los secretos `DATOS_RESPALDO_DATABASE_URL` (por el pooler en **modo sesión**, puerto 5432, que `pg_dump` necesita),
+   `SUPABASE_S3_ACCESS_KEY_ID` y `SUPABASE_S3_SECRET_ACCESS_KEY` con `gh secret set`, que pide el valor, y las variables
+   `SUPABASE_S3_ENDPOINT` y `SUPABASE_S3_REGION`. La clave de age, si Juani la quiere, la genera y la guarda Juani.
+El flujo arranca cuando llegue a `main`. Todo, más cómo restaurar, en `docs/base-datos-supabase.md`, "El respaldo".

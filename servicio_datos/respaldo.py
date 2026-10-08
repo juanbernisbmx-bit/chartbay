@@ -12,6 +12,9 @@ cada mes) y el crudo solo no dice qué se revisó ni qué se publicó. El plan g
 - **Ensayo**: restaura el último volcado en una base de ESTE equipo, dedicada a eso, y compara tabla por tabla. Un respaldo
   que nunca se restauró es una esperanza, no un respaldo.
 - **Conservación**: todos los volcados de los últimos días y, de los más viejos, el primero de cada mes. Nunca el último bueno.
+- **Paquete**: el último volcado y la copia del crudo, verificados, en un solo archivo (cifrado con age si hay una clave
+  pública). Es lo que guarda el flujo de GitHub Actions que respalda Supabase (`.github/workflows/respaldo-datos.yml`), que
+  baja el bucket del crudo, corre este mismo respaldo y ensaya la restauración en un PostgreSQL descartable.
 
 La clave de la base nunca va en la línea de comandos de pg_dump (cualquier usuario del equipo la vería con `ps`): va en
 variables de entorno del proceso, que solo ve el mismo usuario. Los errores no la repiten.
@@ -19,11 +22,13 @@ variables de entorno del proceso, que solo ve el mismo usuario. Los errores no l
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
+import tarfile
 import tempfile
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -40,6 +45,7 @@ LOCALES = ("localhost", "127.0.0.1", "::1")
 MARCA_ENSAYO = "Restauración de ensayo del servicio de datos de ChartBay: se borra y se vuelve a crear en cada ensayo."
 CRUDO = re.compile(r"^([0-9a-f]{2})/([0-9a-f]{64})\.[a-z0-9]{1,5}$")
 VOLCADO = re.compile(r"^(?P<esquema>[a-z_][a-z0-9_]*)-(?P<momento>\d{8}T\d{6}Z)\.dump$")
+DESTINATARIO_AGE = re.compile(r"^age1[0-9a-z]{20,}$")
 # Cómo se le pasa a pg_dump cada parámetro de la URL sin ponerlo en la línea de comandos.
 LIBPQ_ENTORNO: Mapping[str, str] = {
     "host": "PGHOST", "hostaddr": "PGHOSTADDR", "port": "PGPORT", "dbname": "PGDATABASE", "user": "PGUSER", "password": "PGPASSWORD",
@@ -363,13 +369,83 @@ def ensayar(url_ensayo: str, volcado: Path, *, url_produccion: str | None = None
     return {"volcado": volcado.name, "tablas": len(cuentas), "filas": sum(cuentas.values())}
 
 
+# --- Paquete ---------------------------------------------------------------------------------------
+
+def _agregar(tar: tarfile.TarFile, nombre: str, ruta: Path | None = None, contenido: bytes | None = None) -> None:
+    info = tarfile.TarInfo(nombre)
+    info.mode, info.uid, info.gid, info.uname, info.gname = 0o600, 0, 0, "", ""
+    if contenido is not None:
+        info.size, info.mtime = len(contenido), int(datetime.now(timezone.utc).timestamp())
+        tar.addfile(info, io.BytesIO(contenido))
+        return
+    estado = ruta.stat()
+    info.size, info.mtime = estado.st_size, int(estado.st_mtime)
+    with open(ruta, "rb") as archivo:
+        tar.addfile(info, archivo)
+
+
+def empaquetar(destino: Path, salida: Path, ahora: datetime, *, destinatario_age: str | None = None, age_bin: str | None = None) -> dict:
+    """El último volcado, su manifiesto y la copia del crudo en un solo `.tar.gz`, verificados antes de entrar, con un índice
+    (`respaldo.json`). Con `destinatario_age` sale cifrado con age para esa clave pública (`.tar.gz.age`): lo abre solo quien
+    tenga la clave privada. Devuelve qué se empaquetó."""
+    if destinatario_age and not DESTINATARIO_AGE.match(destinatario_age):
+        raise ErrorRespaldo("La clave pública de age tiene que empezar con age1 (la que imprime age-keygen)")
+    completos = volcados(destino / "base")
+    if not completos:
+        raise ErrorRespaldo("No hay ningún volcado completo para empaquetar")
+    volcado = completos[-1][1]
+    manifiesto = json.loads(volcado.with_suffix(".json").read_text(encoding="utf-8"))
+    if _hash(volcado) != manifiesto["sha256"]:
+        raise ErrorRespaldo(f"El volcado {volcado.name} está dañado: su hash no coincide con el del manifiesto")
+    crudo = archivos_de_crudo(destino / "crudo")
+    danados = [r for r, ruta in sorted(crudo.items()) if _hash(ruta) != CRUDO.match(r).group(2)]
+    if danados:
+        raise ErrorRespaldo(f"Hay copias del crudo dañadas, no se empaquetan: {', '.join(danados[:5])}")
+    programa = None
+    if destinatario_age:
+        programa = shutil.which(age_bin or "age")
+        if programa is None:
+            raise ErrorRespaldo("No se encontró age para cifrar el paquete: instalalo (apt install age) o sacá la clave pública")
+
+    salida.mkdir(parents=True, exist_ok=True)
+    nombre = f"respaldo-datos-{ahora.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}.tar.gz"
+    indice = {"creado_en": ahora.astimezone(timezone.utc).isoformat(timespec="seconds"), "esquema": manifiesto["esquema"],
+              "volcado": {"archivo": f"base/{volcado.name}", "manifiesto": f"base/{volcado.with_suffix('.json').name}",
+                          "sha256": manifiesto["sha256"], "bytes": manifiesto["bytes"]},
+              "crudo": sorted(crudo)}
+    descriptor, temporal = tempfile.mkstemp(dir=salida, suffix=".tmp")
+    os.close(descriptor)
+    final = salida / (nombre + ".age" if destinatario_age else nombre)
+    try:
+        with tarfile.open(temporal, "w:gz", compresslevel=9) as tar:
+            _agregar(tar, "respaldo.json", contenido=json.dumps(indice, ensure_ascii=False, indent=1).encode("utf-8"))
+            _agregar(tar, indice["volcado"]["archivo"], volcado)
+            _agregar(tar, indice["volcado"]["manifiesto"], volcado.with_suffix(".json"))
+            for relativa, ruta in sorted(crudo.items()):
+                _agregar(tar, f"crudo/{relativa}", ruta)
+        if programa:
+            cifrado = Path(temporal + ".age")
+            try:
+                _correr([programa, "--recipient", destinatario_age, "--output", str(cifrado), temporal], {}, limite=600)
+                os.replace(cifrado, final)
+            finally:
+                cifrado.unlink(missing_ok=True)
+        else:
+            os.replace(temporal, final)
+        os.chmod(final, 0o600)
+    finally:
+        Path(temporal).unlink(missing_ok=True)
+    return {"archivo": final.name, "bytes": final.stat().st_size, "sha256": _hash(final), "cifrado": bool(destinatario_age),
+            "volcado": volcado.name, "crudo": len(crudo)}
+
+
 # --- El rol del respaldo ----------------------------------------------------------------------------
 
 NOMBRE_SQL = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 
 def sql_del_rol(rol: str = "datos_respaldo", esquema: str = "economia", base: str = "postgres") -> str:
-    """El SQL que crea un rol que puede leer todo el esquema y nada más: es lo que necesita pg_dump. Sin clave."""
+    """El SQL que crea un rol que puede leer todo el esquema (lo que necesita pg_dump) y anotar sus corridas, nada más. Sin clave."""
     for nombre in (rol, esquema, base):
         if not NOMBRE_SQL.match(nombre):
             raise ValueError(f"Nombre inválido para SQL: {nombre!r}")
@@ -379,8 +455,12 @@ def sql_del_rol(rol: str = "datos_respaldo", esquema: str = "economia", base: st
             f"GRANT USAGE ON SCHEMA {esquema} TO {rol};\n"
             f"GRANT SELECT ON ALL TABLES IN SCHEMA {esquema} TO {rol};\n"
             f"GRANT SELECT ON ALL SEQUENCES IN SCHEMA {esquema} TO {rol};\n"
+            f"-- Lo único que escribe: anota cada corrida en `respaldo` (de solo agregar), de donde salen los avisos.\n"
+            f"GRANT INSERT ON {esquema}.respaldo TO {rol};\n"
             f"ALTER ROLE {rol} IN DATABASE {base} SET search_path TO {esquema}, extensions;\n"
-            f"-- Después de cada migración nueva, repetir los dos GRANT SELECT: valen para las tablas que ya existen.\n")
+            f"-- Las tablas que creen las migraciones que vengan (corridas por este mismo usuario) también se van a poder leer.\n"
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA {esquema} GRANT SELECT ON TABLES TO {rol};\n"
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA {esquema} GRANT SELECT ON SEQUENCES TO {rol};\n")
 
 
 # --- Todo junto -------------------------------------------------------------------------------------
@@ -394,6 +474,7 @@ class Configuracion:
     url_ensayo: str | None = None  # DATOS_RESPALDO_ENSAYO_URL: base local, dedicada al ensayo
     dias: int = DIAS_POR_DEFECTO
     pg_bin: str | None = None  # DATOS_PG_BIN: carpeta de pg_dump/pg_restore si no son los del PATH
+    crudo_descargado: bool = False  # DATOS_CRUDO_DESCARGADO=1: el crudo es una descarga recién hecha del bucket (GitHub Actions)
 
 
 def configuracion_desde_entorno(env: Mapping[str, str]) -> Configuracion:
@@ -408,7 +489,7 @@ def configuracion_desde_entorno(env: Mapping[str, str]) -> Configuracion:
     texto = lambda nombre: (env.get(nombre) or "").strip() or None  # noqa: E731
     crudo = texto("DATOS_CRUDO_DIR")
     return Configuracion(Path(destino), Path(crudo) if crudo else None, texto("DATOS_RESPALDO_DATABASE_URL"), texto("DATOS_DATABASE_URL"),
-                         texto("DATOS_RESPALDO_ENSAYO_URL"), int(dias), texto("DATOS_PG_BIN"))
+                         texto("DATOS_RESPALDO_ENSAYO_URL"), int(dias), texto("DATOS_PG_BIN"), texto("DATOS_CRUDO_DESCARGADO") == "1")
 
 
 def _crudos_esperados(url: str) -> list[str]:
@@ -435,7 +516,8 @@ def respaldar(conf: Configuracion, ahora: datetime) -> tuple[bool, dict]:
             errores.append(f"Base: {error}")
 
     if conf.crudo is None:
-        errores.append("Crudo: falta DATOS_CRUDO_DIR")
+        errores.append("Crudo: no se pudo bajar el bucket (mirá el paso «Bajar el bucket del crudo» de la corrida)" if conf.crudo_descargado
+                       else "Crudo: falta DATOS_CRUDO_DIR")
     else:
         esperados: list[str] = []
         if conf.url_registro:
@@ -446,11 +528,15 @@ def respaldar(conf: Configuracion, ahora: datetime) -> tuple[bool, dict]:
         try:
             crudo = respaldar_crudo(conf.crudo, conf.destino / "crudo", esperados)
             resumen["crudo"] = asdict(crudo)
-            for clave, texto in (("danados_origen", "originales dañados"), ("faltan_en_origen", "faltan en el crudo y están en la copia (restaurar-crudo los recupera)"),
-                                 ("perdidos", "faltan en el crudo y en la copia")):
+            textos = ((("danados_origen", "dañados en el bucket"), ("faltan_en_origen", "faltan en el bucket"), ("perdidos", "faltan en el bucket"))
+                      if conf.crudo_descargado else
+                      (("danados_origen", "originales dañados"), ("faltan_en_origen", "faltan en el crudo y están en la copia (restaurar-crudo los recupera)"),
+                       ("perdidos", "faltan en el crudo y en la copia")))
+            for clave, texto in textos:
                 if getattr(crudo, clave):
                     errores.append(f"Crudo: {len(getattr(crudo, clave))} {texto}: {', '.join(getattr(crudo, clave)[:5])}")
-            if conf.crudo.is_dir() and conf.destino.is_dir() and os.stat(conf.crudo).st_dev == os.stat(conf.destino).st_dev:
+            # Una descarga del bucket en la misma máquina no es el original: que estén en el mismo disco no importa.
+            if not conf.crudo_descargado and conf.crudo.is_dir() and conf.destino.is_dir() and os.stat(conf.crudo).st_dev == os.stat(conf.destino).st_dev:
                 avisos.append("El respaldo está en el mismo disco que el crudo: si ese disco falla, se pierden los dos")
         except (ErrorRespaldo, OSError) as error:
             errores.append(f"Crudo: {error}")

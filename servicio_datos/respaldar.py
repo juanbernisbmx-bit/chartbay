@@ -5,6 +5,7 @@
     python -m servicio_datos.respaldar ensayar            # restaura el último volcado en la base de ensayo y compara
     python -m servicio_datos.respaldar restaurar-crudo    # devuelve al crudo, desde la copia, lo que falte o esté dañado
     python -m servicio_datos.respaldar sql-del-rol        # el SQL para crear el rol de solo lectura del respaldo (sin clave)
+    python -m servicio_datos.respaldar empaquetar --salida DIR   # el último volcado y el crudo en un solo archivo, para guardarlo afuera
 
 Se configura por entorno:
 
@@ -15,6 +16,8 @@ Se configura por entorno:
     DATOS_RESPALDO_DIAS           cuántos días se conservan todos los volcados (30); de los más viejos, uno por mes
     DATOS_RESPALDO_ENSAYO_URL     base local, vacía y dedicada, donde ensayar la restauración (opcional, recomendado)
     DATOS_PG_BIN                  carpeta de pg_dump y pg_restore, si no son los del PATH
+    DATOS_CRUDO_DESCARGADO        1 si DATOS_CRUDO_DIR es una descarga recién hecha del bucket (el flujo de GitHub Actions)
+    DATOS_RESPALDO_AGE_DESTINATARIO  para empaquetar: la clave pública de age (age1...) con la que se cifra el paquete
 
 Cada respaldo queda anotado en la tabla `respaldo`; de ahí salen los avisos si falla o deja de correr.
 Sale con código 1 si algo falló, para que el cron lo marque.
@@ -27,6 +30,7 @@ import os
 import shutil
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 import psycopg
 from psycopg.rows import dict_row
@@ -90,9 +94,12 @@ def _estado(conf: respaldo.Configuracion) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Respaldo de la base y del crudo.")
-    parser.add_argument("comando", nargs="?", choices=["hacer", "estado", "ensayar", "restaurar-crudo", "sql-del-rol"], default="hacer")
+    parser.add_argument("comando", nargs="?", choices=["hacer", "estado", "ensayar", "restaurar-crudo", "sql-del-rol", "empaquetar"], default="hacer")
     parser.add_argument("--esquema", default="economia", help="Para sql-del-rol: el esquema del servicio (economia en Supabase)")
+    parser.add_argument("--salida", help="Para empaquetar: la carpeta donde queda el paquete")
     args = parser.parse_args(argv)
+    if args.comando == "empaquetar" and not args.salida:
+        parser.error("empaquetar necesita --salida: la carpeta donde queda el paquete")
     if args.comando == "sql-del-rol":  # no necesita ninguna configuración: es texto para el administrador
         print(respaldo.sql_del_rol(esquema=args.esquema), end="")
         return 0
@@ -107,6 +114,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.comando == "estado":
         return _estado(conf)
     try:
+        if args.comando == "empaquetar":
+            destinatario = (os.environ.get("DATOS_RESPALDO_AGE_DESTINATARIO") or "").strip() or None
+            resultado = respaldo.empaquetar(conf.destino, Path(args.salida), datetime.now(timezone.utc), destinatario_age=destinatario)
+            if not destinatario:
+                print("Aviso: el paquete no va cifrado (no hay DATOS_RESPALDO_AGE_DESTINATARIO)", file=sys.stderr)
+            print(json.dumps(resultado, ensure_ascii=False))
+            return 0
         if args.comando == "ensayar":
             if not conf.url_ensayo:
                 print("Falta DATOS_RESPALDO_ENSAYO_URL: una base local, vacía y dedicada al ensayo.", file=sys.stderr)

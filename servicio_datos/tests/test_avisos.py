@@ -243,7 +243,7 @@ class RespaldosTests(BaseAvisos):
         self.assertEqual(self.de_respaldo(), [("respaldo_fallido", "enviado", 1, str(primera))])
         mensaje = self.canal.mensajes[0]
         self.assertIn("pg_dump 16 no puede respaldar PostgreSQL 17", mensaje.cuerpo)
-        self.assertIn("respaldar estado", mensaje.cuerpo)
+        self.assertIn("la última corrida del flujo «Respaldo de datos» de GitHub Actions", mensaje.cuerpo)
         self.assertIsNone(mensaje.enlace)
         # Uno bueno corta la racha: la falla siguiente es otra.
         self.respaldo(1)
@@ -265,7 +265,7 @@ class RespaldosTests(BaseAvisos):
         self.procesar()
         self.assertEqual(self.de_respaldo(), [("respaldo_atrasado", "enviado", 1, str(bueno))])
         self.assertIn("No hay un respaldo bueno hace 3 días", self.canal.mensajes[0].asunto)
-        self.assertIn("¿Está montado el disco de destino?", self.canal.mensajes[0].cuerpo)
+        self.assertIn("¿Sigue activo el flujo «Respaldo de datos» de GitHub Actions?", self.canal.mensajes[0].cuerpo)
 
     def test_un_dia_sin_respaldo_todavia_no_es_un_atraso(self):
         self.respaldo(30)

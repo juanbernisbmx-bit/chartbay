@@ -1,0 +1,117 @@
+# Respaldo de la base de datos económica y del crudo, que viven en Supabase (plan gratuito: sin copias propias, y Storage no
+# entra en ninguna). Una vez por día: baja el bucket del crudo, vuelca el esquema `economia` con un rol que solo lee (y anota
+# sus corridas), verifica el crudo contra lo que nombra la base, ensaya la restauración en un PostgreSQL descartable y guarda
+# todo en un artefacto (cifrado con age si hay clave pública). Cada corrida queda en la tabla `respaldo`: si falla o deja de
+# correr, la Edge Function `avisar` lo dice por Slack.
+#
+# Configuración (Settings → Secrets and variables → Actions), explicada en docs/base-datos-supabase.md, "El respaldo":
+#   secretos   DATOS_RESPALDO_DATABASE_URL       el rol datos_respaldo, por el pooler de Supabase en modo sesión (puerto 5432)
+#              SUPABASE_S3_ACCESS_KEY_ID         clave de acceso S3 de Storage (solo Storage; no sirve para la base)
+#              SUPABASE_S3_SECRET_ACCESS_KEY
+#   variables  SUPABASE_S3_ENDPOINT              https://<ref>.supabase.co/storage/v1/s3
+#              SUPABASE_S3_REGION                la región del proyecto
+#              DATOS_RESPALDO_AGE_DESTINATARIO   opcional, recomendado: la clave pública de age (age1...) con la que se cifra
+name: Respaldo de datos
+
+on:
+  schedule:
+    - cron: "15 7 * * *" # 4:15 de Argentina, lejos de la colecta (9:30 y 17:30)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: respaldo-datos
+  cancel-in-progress: false
+
+jobs:
+  respaldar:
+    name: Base y crudo de Supabase
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      # Donde se ensaya la restauración: se crea vacío en cada corrida y desaparece con ella.
+      ensayo:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ensayo
+          POSTGRES_DB: ensayo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Código
+        uses: actions/checkout@v4
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependencias
+        run: python -m pip install -r servicio_datos/requirements.txt
+
+      # pg_dump tiene que ser de la versión del servidor o más nuevo: el de Supabase es 17 o anterior.
+      - name: Cliente de PostgreSQL 17
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -q postgresql-client-17
+
+      # Si falla (claves del bucket vencidas, por ejemplo), el respaldo de la base corre igual y anota la falla del crudo.
+      - name: Bajar el bucket del crudo
+        id: bucket
+        continue-on-error: true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ vars.SUPABASE_S3_REGION }}
+          SUPABASE_S3_ENDPOINT: ${{ vars.SUPABASE_S3_ENDPOINT }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/bucket"
+          aws configure set default.s3.addressing_style path
+          aws s3 sync "s3://economia-crudos" "$RUNNER_TEMP/bucket" --endpoint-url "$SUPABASE_S3_ENDPOINT" --only-show-errors
+
+      - name: Respaldar, verificar y ensayar la restauración
+        id: respaldo
+        if: ${{ !cancelled() }}
+        env:
+          DATOS_RESPALDO_DIR: ${{ runner.temp }}/respaldo
+          # Sin la descarga, no se le pasa la carpeta: el respaldo anota que no se pudo bajar el bucket (y no que falta todo en él).
+          DATOS_CRUDO_DIR: ${{ steps.bucket.outcome == 'success' && format('{0}/bucket', runner.temp) || '' }}
+          DATOS_CRUDO_DESCARGADO: "1"
+          DATOS_RESPALDO_DATABASE_URL: ${{ secrets.DATOS_RESPALDO_DATABASE_URL }}
+          DATOS_DATABASE_URL: ${{ secrets.DATOS_RESPALDO_DATABASE_URL }}
+          DATOS_RESPALDO_ENSAYO_URL: postgresql://postgres:ensayo@localhost:5432/ensayo
+          DATOS_PG_BIN: /usr/lib/postgresql/17/bin
+        run: |
+          mkdir -p "$DATOS_RESPALDO_DIR"
+          python -m servicio_datos.respaldar
+
+      # Lo que haya salido bien se guarda aunque otra parte haya fallado: un volcado bueno sirve aunque el crudo no.
+      - name: Empaquetar
+        id: paquete
+        if: ${{ !cancelled() && steps.respaldo.outcome != 'skipped' }}
+        env:
+          DATOS_RESPALDO_DIR: ${{ runner.temp }}/respaldo
+          DATOS_RESPALDO_AGE_DESTINATARIO: ${{ vars.DATOS_RESPALDO_AGE_DESTINATARIO }}
+        run: |
+          if [ -n "$DATOS_RESPALDO_AGE_DESTINATARIO" ]; then sudo apt-get install -y -q age; fi
+          python -m servicio_datos.respaldar empaquetar --salida "$RUNNER_TEMP/paquete"
+
+      # 7 días: con el crudo entero en cada paquete, más no entra por años en los 500 MB de Actions de un repo privado gratuito.
+      - name: Guardar el paquete
+        if: ${{ !cancelled() && steps.paquete.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: respaldo-datos-${{ github.run_id }}
+          path: ${{ runner.temp }}/paquete/
+          retention-days: 7
+          compression-level: 0 # ya va comprimido
+          if-no-files-found: error

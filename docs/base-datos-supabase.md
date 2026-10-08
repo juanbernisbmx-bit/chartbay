@@ -1,6 +1,6 @@
 # Base de datos: todo dentro de Supabase (plan)
 
-Estado: plan aprobado; pasos 0 a 3, 5 y 6 hechos (2026-10-07).
+Estado: plan aprobado; pasos 0 a 3 y 5 a 7 hechos (2026-10-07). Falta el 4 (Codex).
 
 ## La decisión
 
@@ -44,7 +44,7 @@ Fuentes: [límites de Edge Functions](https://supabase.com/docs/guides/functions
 | Avisos | `avisos.py`, `avisar.py` | **Función SQL** que detecta (las consultas de hoy) + **Edge Function `avisar`** que entrega por Slack | La detección y la bandeja de salida (`aviso`) |
 | Analista | `agente/`, modelo local | **Edge Function `analizar`** con la API de Claude (SDK oficial), cuando aparece un candidato | El diseño: hechos que reúne el código, validador que decide, solo escribe `propuesta`. Se traduce a TypeScript |
 | Revisión | app Flask aparte, login Basic | **Página dentro de ChartBay**, login con Supabase Auth en el navegador | La pantalla y sus textos |
-| Respaldo | `pg_dump` y copia del crudo a otro disco | **A decidir** (ver abajo) | La idea del ensayo de restauración |
+| Respaldo | `pg_dump` y copia del crudo a otro disco | **Un flujo de GitHub Actions** que baja el bucket, vuelca la base, ensaya la restauración y guarda un artefacto | `respaldo.py` entero: volcado, verificación, ensayo |
 | Monitor externo | latido cada 10 minutos | Cada función programada le late a Healthchecks al terminar: si pg_cron o una función dejan de andar, avisa él | `monitor.Monitor` como modelo |
 
 ### La revisión dentro de ChartBay, sin darle credenciales a ChartBay
@@ -56,7 +56,8 @@ Codex). Es un cambio respecto de hoy: ChartBay pasa a tener una página con logi
 
 ### Respaldo: exportar desde afuera
 
-Juani eligió la opción 2 (2026-10-07): un GitHub Action exporta la base y el bucket del crudo cada tanto. Las tres que había:
+Juani eligió la opción 2 (2026-10-07): un GitHub Action exporta la base y el bucket del crudo cada tanto (hecho: ver "El respaldo"
+abajo). Las tres que había:
 
 1. **Plan Pro**: 7 días de copias de la base. El crudo de Storage sigue sin copia.
 2. **Exportar desde afuera** cada tanto (`supabase db dump` y el bucket) desde una computadora o un GitHub Action. Es lo único que
@@ -83,7 +84,7 @@ pipeline, revisión Flask, despliegue en Ubuntu, modelo local, respaldo a disco 
 4. **La página de revisión en ChartBay.**
 5. **Avisos.** **Hecho** (el código): ver "Los avisos" abajo.
 6. **El analista con la API.** **Hecho** (el código): ver "El analista" abajo.
-7. **El respaldo**, según lo que se decida.
+7. **El respaldo.** **Hecho** (el código): ver "El respaldo" abajo.
 
 ## La API de revisión (paso 1)
 
@@ -337,6 +338,77 @@ enlace, la configuración) y del canal de Slack contra un servidor local (escape
 redirecciones); y los avisos de punta a punta contra Postgres entrando con el rol de las Edge Functions y un Slack local. **No se
 probó**: el runtime de Supabase, el Slack de verdad ni pg_cron. Los textos del respaldo todavía hablan del equipo Ubuntu
 (`respaldar estado`, el disco de destino): se ajustan con el paso 7.
+
+## El respaldo (paso 7)
+
+`.github/workflows/respaldo-datos.yml` corre todos los días a las 4:15 de Argentina (y a mano, desde Actions). Usa el mismo
+`servicio_datos/respaldo.py` que se había hecho para el equipo Ubuntu:
+
+1. Baja el bucket `economia-crudos` con la API S3 de Supabase Storage.
+2. Vuelca el esquema `economia` con `pg_dump` 17 y un rol que solo puede leer y anotar sus corridas (`datos_respaldo`), sobre la misma
+   foto de la base en la que cuenta las filas de cada tabla.
+3. Verifica el crudo: cada archivo contra su hash, y que esté todo lo que nombra la base.
+4. **Ensaya la restauración** en un PostgreSQL 17 descartable dentro de la misma corrida y compara tabla por tabla con lo volcado.
+5. Empaqueta el volcado, su manifiesto y el crudo en un `.tar.gz` con un índice (`respaldo.json`), cifrado con age si hay clave pública,
+   y lo guarda como artefacto de la corrida durante 7 días.
+6. Anota la corrida en `economia.respaldo`: si falla, o si pasan dos días sin uno bueno (el flujo dejó de correr, se vencieron sus
+   claves), `avisar` lo dice por Slack (migración 0016: los textos ahora hablan del flujo, no del equipo Ubuntu). GitHub además le
+   avisa por correo de las corridas fallidas a quien cambió por última vez el horario del flujo.
+
+**Tamaño y conservación.** El crudo comprimido son unos 0,9 MB por cada par de archivos nuevos de INDEC, así que cada paquete crece
+unos 20 MB por año. Con 7 días de conservación, el total entra por varios años en los 500 MB de almacenamiento de Actions de un repo
+privado gratuito. La historia de las decisiones está adentro de la base (lo publicado y las revisiones son de solo agregar), así que no
+hace falta guardar volcados viejos: hace falta uno reciente que se pueda restaurar, y eso es lo que se ensaya cada día. Si algún día
+no alcanza, se cambia `retention-days` o se separa el crudo.
+
+**Quién ve el respaldo.** El repo es privado: los artefactos los ve solo quien tiene acceso. Adentro hay lo que no es público (candidatos,
+hallazgos, decisiones, los correos de los revisores), por eso conviene cifrarlo: con `DATOS_RESPALDO_AGE_DESTINATARIO` puesto, el
+paquete sale cifrado para esa clave pública y solo lo abre quien tenga la privada, aunque el repo se haga público o alguien entre a la
+cuenta. La clave privada no la tiene GitHub: si se pierde, los paquetes cifrados no se pueden abrir.
+
+### Para ponerlo en marcha (Codex o Juani)
+
+1. **El rol**: correr en `psql` lo que imprime `python -m servicio_datos.respaldar sql-del-rol` (con la conexión de administrador, el
+   mismo usuario que aplica las migraciones) y después `\password datos_respaldo`. Puede leer todo `economia` (también lo que creen
+   las migraciones siguientes) y escribir solo en `respaldo`.
+2. **Las claves S3 del bucket**: en la configuración de Storage del proyecto, la sección de conexión S3: activarla y crear un par de
+   claves de acceso. Sirven solo para Storage, no para la base. Ahí mismo figuran el endpoint y la región.
+3. **Los secretos y variables del repo**, sin que pasen por la línea de comandos (`gh secret set` pide el valor):
+
+   ```bash
+   gh secret set DATOS_RESPALDO_DATABASE_URL
+   ```
+
+   El valor es `postgresql://datos_respaldo.<ref>:<contraseña>@<host del pooler>:5432/postgres?sslmode=require`: el pooler en
+   **modo sesión** (puerto 5432; `pg_dump` no anda en modo transacción) y no la conexión directa (en el plan gratuito es solo IPv6, y las
+   máquinas de GitHub no tienen IPv6). Lo mismo con `SUPABASE_S3_ACCESS_KEY_ID` y `SUPABASE_S3_SECRET_ACCESS_KEY`. Las variables no
+   son secretas: `gh variable set SUPABASE_S3_ENDPOINT --body https://<ref>.supabase.co/storage/v1/s3` y `gh variable set
+   SUPABASE_S3_REGION --body <región>`.
+4. **Recomendado, el cifrado**: `age-keygen -o chartbay-respaldo.key` en una computadora propia (con `brew install age`). Guardar ese
+   archivo en un lugar seguro y fuera del repo, por ejemplo un gestor de contraseñas. La clave pública que imprime (`age1...`) va en
+   `gh variable set DATOS_RESPALDO_AGE_DESTINATARIO --body age1...`.
+5. **Arranca cuando el flujo llegue a `main`**: GitHub solo programa los flujos de la rama principal. La primera vez conviene correrlo a
+   mano (Actions → "Respaldo de datos" → Run workflow). Sale bien si la corrida termina en verde con un artefacto
+   `respaldo-datos-<número>`, y si en `economia.respaldo` hay una fila con `ok = true` y el ensayo en su `detalle`.
+
+### Para restaurar
+
+```bash
+gh run download <número de corrida> -n respaldo-datos-<número de corrida>
+age -d -i chartbay-respaldo.key -o respaldo.tar.gz respaldo-datos-*.tar.gz.age   # si va cifrado
+tar -xzf respaldo.tar.gz
+```
+
+Quedan `respaldo.json` (qué hay y sus hashes), `base/economia-<fecha>.dump` con su manifiesto y `crudo/`. La base vuelve con `pg_restore
+--no-owner --no-acl` en el proyecto nuevo, después de `CREATE EXTENSION IF NOT EXISTS btree_gist` (es lo que hace el ensayo de cada
+día); después se reinstalan `api_revision`, `api_servicio` y los roles, que no van en el volcado del esquema. El crudo vuelve al bucket
+con `aws s3 sync crudo/ s3://economia-crudos --endpoint-url <endpoint>`.
+
+Qué se verificó: el respaldo, el ensayo, el empaquetado y que lo empaquetado se restaura, contra PostgreSQL 17 con `pg_dump` y
+`pg_restore` 17 reales; una corrida armada igual que la del flujo (el crudo como descarga del bucket y el rol de la guía volcando y
+anotando, sin ningún otro permiso); el cifrado con un age falso que comprueba cómo se lo llama; y que el flujo use lo que el código
+espera (`test_respaldo.py`, `FlujoDeGitHubTests`). **No se probó**: el flujo en GitHub Actions, la API S3 de Supabase, `pg_dump` por el
+pooler de Supabase, el age de verdad ni una restauración en un proyecto de Supabase.
 
 ## Reparto con Codex (aprobado por Juani)
 

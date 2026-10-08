@@ -248,6 +248,16 @@ class BaseRespaldo(BaseEsquema, Carpetas):
     def volcar(self, **kwargs):
         return respaldo.respaldar_base(self.url, self.destino / "base", AHORA, pg_bin=PG_BIN, **kwargs)
 
+    def rol_de_respaldo(self):
+        """Crea el rol con el SQL de la guía, que puede iniciar sesión sin clave (el Postgres de las pruebas confía en la conexión local)."""
+        rol = "t_respaldo_" + uuid.uuid4().hex[:8]
+        self.addCleanup(self.aparte, f"DROP OWNED BY {rol}; DROP ROLE IF EXISTS {rol}")  # también sus permisos por defecto
+        for sentencia in respaldo.sql_del_rol(rol, self.schema, "postgres").split(";"):
+            codigo = "\n".join(linea for linea in sentencia.splitlines() if not linea.startswith("--")).strip()
+            if codigo:
+                self.conn.execute(codigo)
+        return make_conninfo(URL, user=rol)  # sin options: el search_path lo pone el rol, como en Supabase
+
 
 class VolcadoTests(BaseRespaldo):
     def test_vuelca_el_esquema_con_un_manifiesto_que_dice_que_hay_adentro(self):
@@ -287,19 +297,19 @@ class VolcadoTests(BaseRespaldo):
                 self.volcar()
         self.assertEqual(list((self.destino / "base").iterdir()), [])
 
-    def test_el_rol_de_solo_lectura_de_la_guia_alcanza_para_volcar_y_no_puede_escribir(self):
-        rol = "t_respaldo_" + uuid.uuid4().hex[:8]
-        self.addCleanup(self.aparte, f"DROP OWNED BY {rol}; DROP ROLE IF EXISTS {rol}")
-        for sentencia in respaldo.sql_del_rol(rol, self.schema, "postgres").split(";"):
-            codigo = "\n".join(linea for linea in sentencia.splitlines() if not linea.startswith("--")).strip()
-            if codigo:
-                self.conn.execute(codigo)
-        url_del_rol = make_conninfo(URL, user=rol)  # sin options: el search_path lo pone el rol, como en Supabase
+    def test_el_rol_de_la_guia_alcanza_para_volcar_y_anotar_y_no_escribe_nada_mas(self):
+        url_del_rol = self.rol_de_respaldo()
         volcado, manifiesto = respaldo.respaldar_base(url_del_rol, self.destino / "base", AHORA, pg_bin=PG_BIN)
         self.assertEqual(manifiesto["esquema"], self.schema)
         self.assertEqual(respaldo.ensayar(self.base_de_ensayo(), volcado, pg_bin=PG_BIN)["tablas"], len(manifiesto["tablas"]))
-        with psycopg.connect(url_del_rol, autocommit=True) as conn, self.assertRaises(psycopg.errors.InsufficientPrivilege):
-            conn.execute("INSERT INTO fuente (id, nombre) VALUES ('X', 'x')")
+        self.conn.execute("CREATE TABLE de_una_migracion_nueva (x int)")  # quien migra crea una tabla después
+        with psycopg.connect(url_del_rol, autocommit=True) as conn:
+            self.assertEqual(conn.execute("SELECT count(*) FROM de_una_migracion_nueva").fetchone()[0], 0)  # y el respaldo la puede leer
+            conn.execute("INSERT INTO respaldo (iniciado_en, ok) VALUES (now(), true)")  # anota su corrida
+            for sentencia in ("INSERT INTO fuente (id, nombre) VALUES ('X', 'x')", "UPDATE descarga SET bytes = 0",
+                              "INSERT INTO candidato (corrida_id) VALUES (1)", "DELETE FROM respaldo"):
+                with self.subTest(sentencia=sentencia), self.assertRaises((psycopg.errors.InsufficientPrivilege, psycopg.errors.RaiseException)):
+                    conn.execute(sentencia)
 
     def test_un_rol_que_no_puede_leer_todo_el_esquema_se_informa(self):
         # Es lo que pasaría con datos_escritura, que no puede leer schema_migrations.
@@ -450,6 +460,167 @@ class LineaDeComandosTests(BaseRespaldo):
         codigo, salida, _ = self.cli("restaurar-crudo")
         self.assertEqual((codigo, json.loads(salida)["restaurados"]), (0, [self.relativa]))
         self.assertEqual((self.crudo / self.relativa).read_bytes(), b"contenido del xls")
+
+
+class PaqueteTests(BaseRespaldo):
+    def setUp(self):
+        super().setUp()
+        self.volcado, self.manifiesto = self.volcar()
+        respaldo.respaldar_crudo(self.crudo, self.destino / "crudo")
+        self.salida = self.carpeta()
+
+    def contenido(self, archivo):
+        import tarfile
+        with tarfile.open(archivo) as tar:
+            return {m.name: tar.extractfile(m).read() for m in tar.getmembers()}
+
+    def test_junta_el_ultimo_volcado_su_manifiesto_y_el_crudo_con_un_indice(self):
+        resultado = respaldo.empaquetar(self.destino, self.salida, AHORA)
+        archivo = self.salida / resultado["archivo"]
+        self.assertEqual((archivo.name, resultado["cifrado"], resultado["crudo"]), ("respaldo-datos-20261007T061500Z.tar.gz", False, 1))
+        self.assertEqual(resultado["sha256"], respaldo._hash(archivo))
+        self.assertEqual(list(self.salida.iterdir()), [archivo])  # sin temporales
+        adentro = self.contenido(archivo)
+        indice = json.loads(adentro["respaldo.json"])
+        self.assertEqual(sorted(adentro), sorted(["respaldo.json", indice["volcado"]["archivo"], indice["volcado"]["manifiesto"], f"crudo/{self.relativa}"]))
+        self.assertEqual(adentro[indice["volcado"]["archivo"]], self.volcado.read_bytes())
+        self.assertEqual((indice["volcado"]["sha256"], indice["crudo"]), (self.manifiesto["sha256"], [self.relativa]))
+        self.assertEqual(adentro[f"crudo/{self.relativa}"], b"contenido del xls")
+        self.assertEqual(stat.S_IMODE(archivo.stat().st_mode), 0o600)
+
+    def test_lo_empaquetado_se_restaura(self):
+        import tarfile
+        archivo = self.salida / respaldo.empaquetar(self.destino, self.salida, AHORA)["archivo"]
+        abierto = self.carpeta()
+        with tarfile.open(archivo) as tar:
+            tar.extractall(abierto, filter="data")
+        indice = json.loads((abierto / "respaldo.json").read_text())
+        resultado = respaldo.ensayar(self.base_de_ensayo(), abierto / indice["volcado"]["archivo"], pg_bin=PG_BIN)
+        self.assertEqual(resultado["tablas"], len(self.manifiesto["tablas"]))
+        devuelto = self.carpeta()
+        self.assertEqual(respaldo.restaurar_crudo(abierto / "crudo", devuelto)["restaurados"], [self.relativa])
+
+    def test_con_una_clave_publica_sale_cifrado_con_age(self):
+        # Un age falso que anota cómo lo llamaron y "cifra" anteponiendo una marca: lo que importa acá es cómo se lo usa.
+        programas = self.carpeta()
+        age = programas / "age"
+        age.write_text("#!/usr/bin/env python3\nimport sys, pathlib\n"
+                       "a = sys.argv[1:]\npathlib.Path(a[3]).write_bytes(b'CIFRADO:' + pathlib.Path(a[4]).read_bytes())\n"
+                       f"pathlib.Path({str(programas / 'argumentos')!r}).write_text(' '.join(a[:3]))\n")
+        age.chmod(0o755)
+        clave = "age1" + "q" * 58
+        resultado = respaldo.empaquetar(self.destino, self.salida, AHORA, destinatario_age=clave, age_bin=str(age))
+        archivo = self.salida / resultado["archivo"]
+        self.assertEqual((archivo.name, resultado["cifrado"]), ("respaldo-datos-20261007T061500Z.tar.gz.age", True))
+        self.assertEqual(list(self.salida.iterdir()), [archivo])  # el paquete sin cifrar no queda
+        self.assertEqual((programas / "argumentos").read_text(), f"--recipient {clave} --output")
+        self.assertTrue(archivo.read_bytes().startswith(b"CIFRADO:\x1f\x8b"))  # adentro, un .tar.gz
+
+    def test_una_clave_rara_o_sin_age_instalado_no_empaqueta_nada(self):
+        with self.assertRaisesRegex(ErrorRespaldo, "tiene que empezar con age1"):
+            respaldo.empaquetar(self.destino, self.salida, AHORA, destinatario_age="--output=/etc/passwd")
+        with self.assertRaisesRegex(ErrorRespaldo, "No se encontró age"):
+            respaldo.empaquetar(self.destino, self.salida, AHORA, destinatario_age="age1" + "q" * 58, age_bin="/no/existe/age")
+        self.assertEqual(list(self.salida.iterdir()), [])
+
+    def test_lo_danado_no_se_empaqueta(self):
+        copia = self.destino / "crudo" / self.relativa
+        self.danar(copia)
+        with self.assertRaisesRegex(ErrorRespaldo, "copias del crudo dañadas"):
+            respaldo.empaquetar(self.destino, self.salida, AHORA)
+        self.danar(self.volcado, b"no es un volcado")
+        with self.assertRaisesRegex(ErrorRespaldo, "está dañado"):
+            respaldo.empaquetar(self.destino, self.salida, AHORA)
+        with self.assertRaisesRegex(ErrorRespaldo, "No hay ningún volcado"):
+            respaldo.empaquetar(self.carpeta(), self.salida, AHORA)
+        self.assertEqual(list(self.salida.iterdir()), [])
+
+
+class ComoEnGitHubTests(BaseRespaldo):
+    """Lo mismo que corre el flujo de GitHub Actions: el crudo es una descarga del bucket y un solo rol, el de la guía, vuelca y anota."""
+
+    def setUp(self):
+        super().setUp()
+        self.ensayo, self.url_del_rol = self.base_de_ensayo(), self.rol_de_respaldo()
+
+    def entorno(self, **cambios):
+        entorno = {"DATOS_RESPALDO_DIR": str(self.destino), "DATOS_CRUDO_DIR": str(self.crudo), "DATOS_CRUDO_DESCARGADO": "1",
+                   "DATOS_RESPALDO_DATABASE_URL": self.url_del_rol, "DATOS_DATABASE_URL": self.url_del_rol,
+                   "DATOS_RESPALDO_ENSAYO_URL": self.ensayo, "DATOS_PG_BIN": PG_BIN or "", **cambios}
+        return {k: v for k, v in entorno.items() if v is not None}
+
+    cli = LineaDeComandosTests.cli
+    registros = LineaDeComandosTests.registros
+
+    def test_respalda_anota_con_el_mismo_rol_y_empaqueta(self):
+        codigo, salida, errores = self.cli()
+        self.assertEqual(codigo, 0, errores)
+        self.assertNotIn("mismo disco", errores)  # la descarga del bucket no es el original
+        resumen = json.loads(salida)
+        ((ok, error, detalle),) = self.registros()
+        self.assertEqual((ok, error, detalle["base"]["archivo"]), (True, None, resumen["base"]["archivo"]))
+        paquete = self.carpeta()
+        codigo, salida, errores = self.cli("empaquetar", "--salida", str(paquete))
+        self.assertEqual(codigo, 0, errores)
+        self.assertIn("no va cifrado", errores)
+        self.assertTrue((paquete / json.loads(salida)["archivo"]).is_file())
+
+    def test_lo_que_falta_en_el_bucket_o_si_no_se_pudo_bajar(self):
+        (self.crudo / self.relativa).unlink()
+        codigo, _, errores = self.cli()
+        self.assertEqual(codigo, 1)
+        self.assertIn(f"Crudo: 1 faltan en el bucket: {self.relativa}", errores)
+        codigo, _, errores = self.cli(entorno=self.entorno(DATOS_CRUDO_DIR=None))
+        self.assertEqual(codigo, 1)
+        self.assertIn("no se pudo bajar el bucket", errores)
+        self.assertEqual([ok for ok, _, _ in self.registros()], [False, False])
+
+    def test_empaquetar_sin_salida_no_arranca(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            respaldar.main(["empaquetar"])
+
+
+class FlujoDeGitHubTests(unittest.TestCase):
+    """El flujo `.github/workflows/respaldo-datos.yml` no se puede correr acá: se comprueba que use lo que el código espera."""
+
+    RAIZ = Path(__file__).resolve().parents[2]
+
+    def setUp(self):
+        self.flujo = (self.RAIZ / ".github" / "workflows" / "respaldo-datos.yml").read_text(encoding="utf-8")
+
+    def test_corre_el_respaldo_y_el_empaquetado_de_este_modulo(self):
+        self.assertIn("python -m servicio_datos.respaldar\n", self.flujo)
+        self.assertIn('python -m servicio_datos.respaldar empaquetar --salida "$RUNNER_TEMP/paquete"', self.flujo)
+        self.assertIn("pip install -r servicio_datos/requirements.txt", self.flujo)
+
+    def test_las_variables_son_las_que_lee_el_respaldo(self):
+        import re
+        usadas = set(re.findall(r"^\s+(DATOS_[A-Z_]+):", self.flujo, re.MULTILINE))
+        documentadas = set(re.findall(r"^\s+(DATOS_[A-Z_]+)\s", respaldar.__doc__, re.MULTILINE))
+        self.assertEqual(usadas - documentadas, set())
+        self.assertGreaterEqual(usadas, {"DATOS_RESPALDO_DIR", "DATOS_CRUDO_DIR", "DATOS_CRUDO_DESCARGADO", "DATOS_RESPALDO_DATABASE_URL",
+                                         "DATOS_DATABASE_URL", "DATOS_RESPALDO_ENSAYO_URL", "DATOS_PG_BIN", "DATOS_RESPALDO_AGE_DESTINATARIO"})
+
+    def test_ensaya_en_un_postgres_descartable_de_la_misma_version_que_el_cliente(self):
+        self.assertIn("DATOS_RESPALDO_ENSAYO_URL: postgresql://postgres:ensayo@localhost:5432/ensayo", self.flujo)
+        self.assertIn("image: postgres:17", self.flujo)
+        self.assertIn("postgresql-client-17", self.flujo)
+        self.assertIn("DATOS_PG_BIN: /usr/lib/postgresql/17/bin", self.flujo)
+
+    def test_baja_el_bucket_de_la_colecta_y_no_pide_mas_permisos_que_leer_el_codigo(self):
+        almacen = (self.RAIZ / "supabase" / "functions" / "_compartido" / "almacen.ts").read_text(encoding="utf-8")
+        self.assertIn('BUCKET_CRUDO = "economia-crudos"', almacen)
+        self.assertIn('"s3://economia-crudos"', self.flujo)
+        self.assertIn("permissions:\n  contents: read\n", self.flujo)
+        self.assertNotIn("write", self.flujo.split("jobs:")[0])
+
+    def test_los_secretos_y_variables_estan_explicados_en_la_guia(self):
+        import re
+        guia = (self.RAIZ / "docs" / "base-datos-supabase.md").read_text(encoding="utf-8")
+        for nombre in set(re.findall(r"\$\{\{ (?:secrets|vars)\.([A-Z0-9_]+) \}\}", self.flujo)):
+            with self.subTest(nombre=nombre):
+                self.assertIn(nombre, guia)
+                self.assertIn(nombre, self.flujo.split("name: Respaldo de datos")[0])  # y en el encabezado del flujo
 
 
 if __name__ == "__main__":

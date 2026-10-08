@@ -227,8 +227,9 @@ psql "postgresql://postgres.PROJECT_REF@HOST_DEL_POOLER:5432/postgres?sslmode=re
 ```
 
 En psql se pega ese SQL y después `\password datos_respaldo`, que pide la clave nueva sin que quede escrita en ningún lado. La URL va
-en `DATOS_RESPALDO_DATABASE_URL`, con el usuario `datos_respaldo.PROJECT_REF`. Después de cada migración nueva hay que repetir los dos
-`GRANT SELECT` (igual que se repite `preparar_supabase` para los otros roles); si no, el respaldo falla diciendo qué tabla no puede leer.
+en `DATOS_RESPALDO_DATABASE_URL`, con el usuario `datos_respaldo.PROJECT_REF`. Las tablas que creen las migraciones siguientes se pueden
+leer solas si las corre el mismo usuario que corrió ese SQL (lo deja dicho con `ALTER DEFAULT PRIVILEGES`); si las corre otro, el
+respaldo falla diciendo qué tabla no puede leer y hay que repetir los `GRANT SELECT`.
 
 ### pg_dump de la versión del servidor
 

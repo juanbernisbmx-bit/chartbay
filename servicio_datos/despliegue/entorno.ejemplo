@@ -56,6 +56,10 @@ DATOS_RESPALDO_DIAS=30
 DATOS_RESPALDO_ENSAYO_URL=
 # Carpeta de pg_dump y pg_restore si los del PATH no son de la versión del servidor (p. ej. /usr/lib/postgresql/17/bin)
 DATOS_PG_BIN=
+# Solo para el flujo de GitHub Actions que respalda Supabase (en este equipo quedan vacías): 1 si DATOS_CRUDO_DIR es una descarga del
+# bucket, y la clave pública de age (age1...) con la que se cifra el paquete de `respaldar empaquetar`
+DATOS_CRUDO_DESCARGADO=
+DATOS_RESPALDO_AGE_DESTINATARIO=
 
 # --- Monitor externo: el latido (ver docs/despliegue-servicio-datos.md, sección 9) ---
 # Dirección de latido del servicio de afuera (Healthchecks.io: https://hc-ping.com/...). Es una credencial: quien la tenga
