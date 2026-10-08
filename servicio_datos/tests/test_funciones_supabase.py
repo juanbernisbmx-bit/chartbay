@@ -1,5 +1,6 @@
 """Las Edge Functions de `supabase/functions`, desde la suite de Python: sus pruebas de Deno, que el parser de TypeScript arme la
-misma carga que el de Python con los archivos reales, y la colecta de punta a punta contra una base de verdad.
+misma carga que el de Python con los archivos reales, y la colecta y los avisos de punta a punta contra una base de verdad, entrando
+con el rol de las Edge Functions.
 
 Necesitan Deno (se saltean sin él). Lo que usa los .xls de INDEC necesita DATOS_IPC_ORIGINALES_DIR.
 """
@@ -12,10 +13,12 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
+from psycopg.types.json import Jsonb
 
-from servicio_datos import api_colecta, carga
+from servicio_datos import api_servicio, carga, repositorio
 from servicio_datos.ipc import fuente
 from servicio_datos.tests.base import URL, BaseEsquema
+from servicio_datos.tests.test_api_servicio import carga_sintetica
 from servicio_datos.tests.test_pipeline import HAY_PARSER, HOY, ORIGINALES
 
 RAIZ = Path(__file__).resolve().parents[2]
@@ -33,7 +36,8 @@ def deno(*argumentos, entorno=None):
 @unittest.skipUnless(DENO, "Falta Deno")
 class PruebasDeDenoTests(unittest.TestCase):
     def test_pasan_todas(self):
-        entorno = {k: v for k, v in os.environ.items() if not k.startswith("DATOS_COLECTA_")}  # la de integración la corre la clase de abajo
+        # Las de integración las corren las clases de abajo, con su base.
+        entorno = {k: v for k, v in os.environ.items() if not k.startswith(("DATOS_COLECTA_", "DATOS_AVISAR_"))}
         proceso = subprocess.run([DENO, "test", *PERMISOS, "."], cwd=FUNCIONES, capture_output=True, text=True, timeout=600, env={**entorno, "NO_COLOR": "1"})
         self.assertEqual(proceso.returncode, 0, proceso.stdout[-3000:] + proceso.stderr[-3000:])
         self.assertRegex(proceso.stdout, r"ok \| \d+ passed \| 0 failed")
@@ -59,14 +63,14 @@ def como_usuario(url, usuario):
     return urlunsplit(partes._replace(netloc=f"{usuario}@{partes.hostname}" + (f":{partes.port}" if partes.port else "")))
 
 
-@unittest.skipUnless(DENO and HAY_ORIGINALES, "Faltan Deno, xlrd o DATOS_IPC_ORIGINALES_DIR")
-class ColectaDePuntaAPuntaTests(BaseEsquema):
+class BaseFunciones(BaseEsquema):
+    """Un esquema migrado, con el de las Edge Functions y su rol, que puede iniciar sesión (como en Supabase)."""
+
     def setUp(self):
         super().setUp()
-        # Como en Supabase: la función entra con el rol de la colecta, que solo ejecuta las funciones de su esquema.
-        self.api, self.rol = f"{self.schema}_colecta", f"colector_{self.schema}"
+        self.api, self.rol = f"{self.schema}_servicio", f"servicio_{self.schema}"
         self.addCleanup(self.aparte, f"DROP SCHEMA IF EXISTS {self.api} CASCADE", f"DROP ROLE IF EXISTS {self.rol}")
-        api_colecta.instalar(self.conn, api=self.api, rol=self.rol)
+        api_servicio.instalar(self.conn, api=self.api, rol=self.rol)
         self.conn.execute(f"ALTER ROLE {self.rol} LOGIN")
 
     def aparte(self, *sentencias):
@@ -74,6 +78,9 @@ class ColectaDePuntaAPuntaTests(BaseEsquema):
             for sentencia in sentencias:
                 conn.execute(sentencia)
 
+
+@unittest.skipUnless(DENO and HAY_ORIGINALES, "Faltan Deno, xlrd o DATOS_IPC_ORIGINALES_DIR")
+class ColectaDePuntaAPuntaTests(BaseFunciones):
     def test_la_primera_deja_un_candidato_y_la_segunda_no_cambia_nada(self):
         proceso = deno("test", *PERMISOS, "colectar-ipc/integracion_test.ts",
                        entorno={"DATOS_COLECTA_URL": como_usuario(URL, self.rol), "DATOS_COLECTA_ESQUEMA": self.api,
@@ -93,3 +100,16 @@ class ColectaDePuntaAPuntaTests(BaseEsquema):
         self.assertEqual([a["publicada_en"] for a in resumen["archivos"]], ["2026-09-10T18:52:05+00:00"] * 2)
         self.assertEqual(self.conn.execute("SELECT nombre, hoja_origen FROM serie WHERE id = 'ipc_ng_cuyo'").fetchone(),
                          ("IPC nivel general - Cuyo", "Índices aperturas"))
+
+
+@unittest.skipUnless(DENO, "Falta Deno")
+class AvisosDePuntaAPuntaTests(BaseFunciones):
+    def test_el_candidato_abierto_llega_a_slack_y_queda_anotado(self):
+        corrida = repositorio.abrir_corrida_exclusiva(self.conn, fuente.FUENTE_ID, 1800)
+        candidato = self.conn.execute("SELECT cargar_candidato(%s, %s, %s)", (corrida, HOY, Jsonb(carga_sintetica()))).fetchone()[0]["candidato_id"]
+        proceso = deno("test", *PERMISOS, "avisar/integracion_test.ts",
+                       entorno={"DATOS_AVISAR_URL": como_usuario(URL, self.rol), "DATOS_AVISAR_ESQUEMA": self.api})
+        self.assertEqual(proceso.returncode, 0, proceso.stdout[-3000:] + proceso.stderr[-3000:])
+        self.assertIn("1 passed", proceso.stdout)  # que no se haya salteado
+        fila = self.conn.execute("SELECT clave, estado, intentos, entregas -> 'slack' ->> 'ok', tomado_hasta FROM aviso").fetchall()
+        self.assertEqual(fila, [(f"candidato_nuevo:{candidato}", "enviado", 1, "true", None)])

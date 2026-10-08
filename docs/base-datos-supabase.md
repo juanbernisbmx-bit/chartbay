@@ -1,6 +1,6 @@
 # Base de datos: todo dentro de Supabase (plan)
 
-Estado: plan aprobado; pasos 0 a 3 hechos (2026-10-07).
+Estado: plan aprobado; pasos 0 a 3 y 5 hechos (2026-10-07).
 
 ## La decisión
 
@@ -78,10 +78,10 @@ pipeline, revisión Flask, despliegue en Ubuntu, modelo local, respaldo a disco 
 1. **Revisión y publicación como funciones SQL**, con el esquema `revision` y la lista de revisores. **Hecho**: ver "La API de
    revisión" abajo.
 2. **Validación y carga del candidato como funciones SQL.** **Hecho**: ver "La carga del candidato" abajo.
-3. **Edge Function `colectar-ipc`**, el bucket del crudo y pg_cron. **Hecho** (el código, con el rol `colector` y el
-   `search_path` fijo que pidió Codex): ver "La colecta" abajo.
+3. **Edge Function `colectar-ipc`**, el bucket del crudo y pg_cron. **Hecho** (el código, con el rol de mínimo privilegio y
+   el `search_path` fijo que pidió Codex): ver "La colecta" abajo.
 4. **La página de revisión en ChartBay.**
-5. **Avisos.**
+5. **Avisos.** **Hecho** (el código): ver "Los avisos" abajo.
 6. **El analista con la API.**
 7. **El respaldo**, según lo que se decida.
 
@@ -147,21 +147,26 @@ error de red), guardar cada original en el bucket privado `economia-crudos` con 
 el hash, el tamaño y el `Last-Modified` quedan en `descarga`), leer los `.xls` con SheetJS y llamar a `cargar_candidato`. El ciclo
 de la corrida (abrirla de forma exclusiva, saber si un archivo ya se conocía, registrar descargas y cerrarla) son funciones de la
 base (migración 0012), las mismas que usa ahora el colector de Python. Si algo falla, la corrida queda cerrada como fallida, nunca
-a medias. Al terminar, le late al monitor externo si `DATOS_MONITOR_URL` está puesto.
+a medias. Al terminar, le late al monitor externo si `DATOS_MONITOR_COLECTA_URL` está puesto.
 
 Lo que comparte con las funciones que vengan está en `supabase/functions/_compartido/`: la fuente, el lector, la carga, el
 cliente HTTP (solo `www.indec.gob.ar`, reintentos, tope de 40 MB, redirecciones solo al mismo host), la base (postgres.js con
-conexión directa: `economia` sigue sin exponerse) y Storage.
+conexión directa: `economia` sigue sin exponerse), Storage, Slack, el latido y la autorización.
 
-### Con qué permisos entra a la base
+### Con qué permisos entran a la base las Edge Functions
 
-Con un rol propio, `colector`, que no ve ninguna tabla: solo puede ejecutar las siete funciones del esquema `colecta`
-(`api_colecta.py`), que envuelven las del servicio. Puede abrir, anotar y cerrar corridas (sin candidato: `sin_cambios` o
-`fallida`), registrar descargas y dejar un candidato con `cargar_candidato`. No puede leer lo publicado, revisar, publicar ni usar
-la API de la revisión. Si su contraseña se filtrara, lo peor que se puede hacer es dejar un candidato falso, que igual pasa por la
-revisión de una persona. Las funciones son `SECURITY DEFINER` con `search_path` fijo, como las de `revision`; el esquema `colecta`
-**no** se expone en la API de Supabase. Para Storage usa la clave de servidor que Supabase le pone a la función
-(`SUPABASE_SERVICE_ROLE_KEY`, o una `sb_secret_…` en `DATOS_CLAVE_SERVIDOR` si el proyecto apagó la vieja), nunca la publicable.
+Con un rol propio, `servicio_datos`, que no ve ninguna tabla: solo puede ejecutar las funciones del esquema `servicio`
+(`api_servicio.py`), que envuelven las del servicio. Para la colecta: abrir, anotar y cerrar corridas (sin candidato:
+`sin_cambios` o `fallida`), registrar descargas y dejar un candidato con `cargar_candidato`. Para los avisos: detectarlos, tomar los
+pendientes y anotar cómo fue cada entrega. No puede leer lo publicado, revisar, publicar ni usar la API de la revisión. Si su
+contraseña se filtrara, lo peor que se puede hacer es dejar un candidato falso (que igual pasa por la revisión de una persona) o
+callar un aviso. Las funciones son `SECURITY DEFINER` con `search_path` fijo, como las de `revision`; el esquema `servicio` **no** se
+expone en la API de Supabase.
+
+Es un solo rol para todas las Edge Functions porque sus secretos son de todo el proyecto: cada función ve los de las otras, así que
+un rol por función no aislaría nada y sumaría contraseñas. Por lo mismo comparten la clave con la que las llama pg_cron
+(`DATOS_CLAVE_CRON`). Para Storage, la colecta usa la clave de servidor que Supabase le pone (`SUPABASE_SERVICE_ROLE_KEY`, o una
+`sb_secret_…` en `DATOS_CLAVE_SERVIDOR` si el proyecto apagó la vieja), nunca la publicable.
 
 ### El search_path de las funciones (migración 0013)
 
@@ -173,49 +178,56 @@ publica un candidato con hallazgos pendientes; con él, no. Las migraciones que 
 
 ### Para ponerla en marcha (Codex, en el proyecto)
 
-1. Aplicar las migraciones 0011, 0012 y 0013, en orden y con `search_path` en `economia`, como las anteriores.
-2. Correr en el SQL Editor lo que imprime `python -m servicio_datos.api_colecta`: crea el rol `colector` sin poder iniciar sesión, el
-   esquema `colecta`, sus funciones y los permisos (revoca todo a `anon`, `authenticated` y `service_role`). Se puede volver a correr.
+Sirve también para los avisos (paso 5), que usan el mismo rol, la misma clave y el mismo archivo de secretos.
+
+1. Aplicar las migraciones 0011 a 0014, en orden y con `search_path` en `economia`, como las anteriores.
+2. Correr en el SQL Editor lo que imprime `python -m servicio_datos.api_servicio`: crea el rol `servicio_datos` sin poder iniciar
+   sesión, el esquema `servicio`, sus funciones y los permisos (revoca todo a `anon`, `authenticated` y `service_role`). Se puede
+   volver a correr.
 3. Darle al rol una contraseña al azar que no quede en ningún lado: desde `psql` con la conexión de administrador,
-   `ALTER ROLE colector LOGIN;` y después `\password colector` (la pide dos veces y solo manda el hash). No en el SQL Editor, que
-   guarda las consultas.
+   `ALTER ROLE servicio_datos LOGIN;` y después `\password servicio_datos` (la pide dos veces y solo manda el hash). No en el SQL
+   Editor, que guarda las consultas.
 4. Cargar los secretos desde un archivo, no en la línea de comandos (queda en el historial). El archivo, con permisos 600, que se
    borra al terminar:
 
    ```
-   COLECTA_CLAVE=<una clave larga al azar>
-   DATOS_DATABASE_URL=postgresql://colector.<ref del proyecto>:<contraseña>@<host del pooler>:6543/postgres
-   DATOS_MONITOR_URL=<opcional: el latido de Healthchecks>
+   DATOS_CLAVE_CRON=<una clave larga al azar>
+   DATOS_DATABASE_URL=postgresql://servicio_datos.<ref del proyecto>:<contraseña>@<host del pooler>:6543/postgres
+   DATOS_AVISOS_SLACK_URL=<el webhook de Slack>
+   DATOS_REVISION_URL=https://<chartbay>/base-de-datos/revision
+   DATOS_MONITOR_COLECTA_URL=<opcional: un latido de Healthchecks para la colecta>
+   DATOS_MONITOR_AVISAR_URL=<opcional: otro, para los avisos>
    ```
 
    ```bash
-   supabase secrets set --env-file colecta.env
+   supabase secrets set --env-file datos.env
    ```
 
-5. Desplegarla: `supabase functions deploy colectar-ipc --no-verify-jwt`. La protege `COLECTA_CLAVE`, no la clave pública de
-   Supabase (que tiene cualquiera). Si se arma `supabase/config.toml`: `[functions.colectar-ipc] verify_jwt = false`.
+5. Desplegarlas: `supabase functions deploy colectar-ipc --no-verify-jwt` y `supabase functions deploy avisar --no-verify-jwt`. Las
+   protege `DATOS_CLAVE_CRON`, no la clave pública de Supabase (que tiene cualquiera). Si se arma `supabase/config.toml`:
+   `verify_jwt = false` en `[functions.colectar-ipc]` y en `[functions.avisar]`.
 6. **La prueba a mano**, antes de programarla. El endpoint es `POST https://<ref>.supabase.co/functions/v1/colectar-ipc` y la
-   autenticación es el encabezado `x-chartbay-clave` con la `COLECTA_CLAVE`. Con la clave en un archivo de encabezados, para que no
-   aparezca en la línea de comandos (`x-chartbay-clave: <clave>`, permisos 600):
+   autenticación es el encabezado `x-chartbay-clave` con la `DATOS_CLAVE_CRON`. Con la clave en un archivo de encabezados, para que
+   no aparezca en la línea de comandos (`x-chartbay-clave: <clave>`, permisos 600):
 
    ```bash
-   curl -sS -X POST -H @encabezado-colecta.txt https://<ref>.supabase.co/functions/v1/colectar-ipc
+   curl -sS -X POST -H @encabezado-cron.txt https://<ref>.supabase.co/functions/v1/colectar-ipc
    ```
 
    Sale bien si: sin el encabezado contesta 401; la primera llamada contesta `{"estado":"con_candidato", ...}` con un
    `candidato_id` (en una base sin publicaciones); la segunda, `{"estado":"sin_cambios"}`; en `economia.corrida` quedan las dos
    corridas con esos estados; en `economia.descarga`, dos `nueva` y dos `identica`; y en el bucket `economia-crudos`, dos archivos.
-   El candidato aparece en la cola de la página de revisión.
-7. Recién entonces, programarla con pg_cron (las horas van en UTC: 12:30 y 20:30 son las 9:30 y 17:30 de Argentina):
+   El candidato aparece en la cola de la página de revisión. Después, lo mismo con `avisar` (ver "Los avisos").
+7. Recién entonces, programarlas con pg_cron (las horas van en UTC: 12:30 y 20:30 son las 9:30 y 17:30 de Argentina):
 
 ```sql
 SELECT vault.create_secret('https://<proyecto>.supabase.co', 'project_url');
-SELECT vault.create_secret('<la misma COLECTA_CLAVE>', 'colecta_clave');
+SELECT vault.create_secret('<la misma DATOS_CLAVE_CRON>', 'clave_cron');
 SELECT cron.schedule('colectar-ipc', '30 12,20 * * *', $$
   SELECT net.http_post(
     url := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'project_url') || '/functions/v1/colectar-ipc',
     headers := jsonb_build_object('Content-Type', 'application/json',
-                                  'x-chartbay-clave', (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'colecta_clave')),
+                                  'x-chartbay-clave', (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'clave_cron')),
     body := '{}'::jsonb, timeout_milliseconds := 150000)
 $$);
 ```
@@ -226,10 +238,53 @@ Con Deno 2.9 en esta computadora: las pruebas de la función (cliente HTTP contr
 los archivos reales, y cada final posible de la colecta); que el lector de TypeScript arma **exactamente** la misma carga que el de
 Python con los `.xls` reales; y la colecta de punta a punta contra Postgres **entrando como el rol de la colecta** (primera corrida:
 candidato de 819 observaciones; segunda: sin cambios). Las corre `servicio_datos/tests/test_funciones_supabase.py`. Los permisos del
-rol se prueban en `test_api_colecta.py`, incluso con los roles de la API de Supabase y permisos por defecto que les darían las
+rol se prueban en `test_api_servicio.py`, incluso con los roles de la API de Supabase y permisos por defecto que les darían las
 funciones nuevas; el search_path, en `test_search_path.py`. **No se probó**: el runtime de Edge Functions de Supabase, Storage de
 verdad (el guardado del bucket solo se probó con un doble), la conexión por el pooler de Supabase con un rol propio, una clave
 `sb_secret_…` con supabase-js ni pg_cron.
+
+## Los avisos (paso 5)
+
+Detectar es de la base (migración 0014): `detectar_avisos(hoy, ahora, dia_limite, recordatorio_dias)` mira el estado y anota en la
+bandeja `aviso` lo que falte, con una clave única, así que se puede correr cuantas veces se quiera. Avisa, con los mismos textos que
+antes: un candidato para revisar; recordatorios si sigue abierto (a los 3 días, a los 7, a los 14 y uno por semana); una corrida
+fallida (una vez por racha); un dato que no llegó pasada la ventana del mes; la colecta parada hace dos días; y un respaldo fallido
+o atrasado. Antes de entregar, `tomar_avisos` descarta lo que dejó de ser cierto (un candidato ya resuelto) y reserva el resto cinco
+minutos, para que dos entregas a la vez no manden lo mismo dos veces y, si una se cae, otra lo retome; `registrar_entrega` anota
+cómo le fue a cada canal y, después de cinco intentos, da el aviso por perdido. `avisos.py` usa estas mismas funciones, así que las
+~60 pruebas de los avisos las cubren.
+
+`supabase/functions/avisar` es la Edge Function: detecta, toma, manda por Slack y anota. Sin un canal configurado no hace nada (ni
+siquiera detecta: si no, al configurar uno llegaría de golpe todo lo acumulado) y se lo dice al monitor. Lo que viene de la base
+se escapa para que no pueda armar enlaces ni menciones (`<!channel>`), y ningún error repite el webhook. El enlace de cada aviso va
+a la página de revisión de ChartBay con un ancla: `#candidato=<id>` o `#corrida=<id>` (la página puede usarla para abrir ese
+candidato; si no la usa, abre la cola).
+
+**Solo Slack.** El correo por SMTP no sale desde Supabase: las Edge Functions no pueden conectarse a los puertos 25 ni 587
+([límites](https://supabase.com/docs/guides/functions/limits)). Si hace falta correo, va por la API HTTP de un proveedor.
+
+Para ponerla en marcha, además de lo de la colecta (mismo rol, misma clave y mismo archivo de secretos, con `DATOS_AVISOS_SLACK_URL`
+y `DATOS_REVISION_URL`): la prueba a mano es `curl -sS -X POST -H @encabezado-cron.txt https://<ref>.supabase.co/functions/v1/avisar`
+después de la colecta de prueba. Tiene que contestar `"creados":1,"enviados":1` y llegar el aviso del candidato a Slack. La segunda
+vez, `"creados":0,"enviados":0`. Después, el cron (cada hora a los 45 minutos, así un candidato nuevo avisa un cuarto de hora
+después de la colecta):
+
+```sql
+SELECT cron.schedule('avisar', '45 * * * *', $$
+  SELECT net.http_post(
+    url := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'project_url') || '/functions/v1/avisar',
+    headers := jsonb_build_object('Content-Type', 'application/json',
+                                  'x-chartbay-clave', (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'clave_cron')),
+    body := '{}'::jsonb, timeout_milliseconds := 60000)
+$$);
+```
+
+Qué se verificó: que la detección en la base da lo mismo que daba Python (las pruebas de siempre, ahora contra la base); las
+pruebas de la función (entrega por cada canal, reintentos, un canal que se rompe sin frenar al resto ni filtrar su error, el
+enlace, la configuración) y del canal de Slack contra un servidor local (escape, corte, errores sin la URL, sin seguir
+redirecciones); y los avisos de punta a punta contra Postgres entrando con el rol de las Edge Functions y un Slack local. **No se
+probó**: el runtime de Supabase, el Slack de verdad ni pg_cron. Los textos del respaldo todavía hablan del equipo Ubuntu
+(`respaldar estado`, el disco de destino): se ajustan con el paso 7.
 
 ## Reparto con Codex (aprobado por Juani)
 

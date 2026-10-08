@@ -25,7 +25,8 @@ cambios.
 - `pipeline.py`, `ejecutar.py`: el orquestador. Corre colecta, parseo, validación y
   deja un candidato abierto, o cierra la corrida como `sin_cambios` o `fallida`.
   Recibe el parser y la validación por parámetro.
-- `avisos.py`, `canales.py`, `avisar.py`: los avisos por Slack o correo. Ver "Avisos".
+- `avisos.py`, `canales.py`, `avisar.py`: los avisos por Slack o correo (detectar y anotar las entregas está en la base,
+  migración 0014). Ver "Avisos".
 - `respaldo.py`, `respaldar.py`: el respaldo diario de la base y del crudo. Ver "Respaldos".
 - `monitor.py`, `latido.py`: el latido hacia un monitor externo. Ver "El latido".
 - `tarea.py` y `despliegue/`: cómo se instala todo en el equipo Ubuntu: el lanzador de las tareas de cron y los archivos de
@@ -33,13 +34,13 @@ cambios.
 - `agente/`: el analista de hallazgos, con un modelo de lenguaje local. Ver "El analista".
 - `revision/`: la interfaz web de revisión (cola de candidatos y pantalla de revisión). Es una app
   Flask aparte de la web pública de ChartBay, con login. Ver "Interfaz de revisión".
-- `../supabase/functions/`: las Edge Functions (la colecta del IPC, `colectar-ipc`). Se prueban desde
+- `../supabase/functions/`: las Edge Functions (la colecta del IPC, `colectar-ipc`, y los avisos, `avisar`). Se prueban desde
   `tests/test_funciones_supabase.py` (necesita Deno). Ver `docs/base-datos-supabase.md`.
 - `carga.py`: la validación del IPC y la carga del candidato, que están en la base (migración 0011), desde Python.
 - `api_revision.py`: el esquema `revision` que ve la página de revisión de ChartBay, con sesión de Supabase Auth. Ver
   `docs/base-datos-supabase.md`.
-- `api_colecta.py`: el esquema `colecta` y el rol `colector`, lo único que puede tocar la Edge Function de la colecta: corridas,
-  descargas y candidatos, sin ver las tablas ni publicar. Ver `docs/base-datos-supabase.md`.
+- `api_servicio.py`: el esquema `servicio` y el rol `servicio_datos`, lo único que pueden tocar las Edge Functions: corridas,
+  descargas, candidatos y avisos, sin ver las tablas ni publicar. Ver `docs/base-datos-supabase.md`.
 - `publicacion.py`, `publicar.py`: la revisión y la publicación de un candidato (la lógica está en funciones de la base,
   migración 0010; este módulo las llama). Publicar es
   la única forma de que un dato llegue a lo vigente, y exige que cada hallazgo esté aceptado.

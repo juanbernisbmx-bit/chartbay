@@ -1,20 +1,24 @@
-"""El esquema `colecta` y el rol `colector`: lo único que puede tocar la colecta automática (la Edge Function `colectar-ipc`).
+"""El esquema `servicio` y el rol `servicio_datos`: lo único que pueden tocar las Edge Functions (la colecta y los avisos).
 
-La Edge Function se conecta a Postgres con un rol propio que no ve las tablas. Solo puede ejecutar estas funciones, que
-envuelven las del servicio (migraciones 0011 y 0012):
+Las Edge Functions se conectan a Postgres con un rol propio que no ve las tablas. Solo puede ejecutar estas funciones, que
+envuelven las del servicio:
 
-- abrir una corrida, registrar lo que bajó, anotarla y cerrarla sin candidato (`sin_cambios` o `fallida`);
-- dejar un candidato con `cargar_candidato`, que valida y anota los hallazgos;
-- saber si un archivo ya se conocía (`ultima_descarga`).
+- la colecta (migraciones 0011 y 0012): abrir una corrida, registrar lo que bajó, anotarla y cerrarla sin candidato
+  (`sin_cambios` o `fallida`), saber si un archivo ya se conocía y dejar un candidato con `cargar_candidato`, que valida y
+  anota los hallazgos;
+- los avisos (migración 0014): detectarlos, tomar los pendientes para entregarlos y anotar cómo fue cada entrega.
 
-No puede leer ni cambiar lo publicado, revisar hallazgos ni publicar. Si su clave se filtrara, lo peor que se puede hacer con
-ella es dejar un candidato falso, que igual tiene que pasar por la revisión de una persona.
+No puede leer ni cambiar lo publicado, revisar hallazgos ni publicar. Si su contraseña se filtrara, lo peor que se puede hacer
+con ella es dejar un candidato falso (que igual tiene que pasar por la revisión de una persona) o callar un aviso.
+
+Un solo rol para todas las Edge Functions: sus secretos son de todo el proyecto (cada función ve los de las otras), así que un
+rol por función no aislaría nada y sumaría contraseñas.
 
 Cada función es `SECURITY DEFINER` con `search_path` fijo, como las de `revision`. El esquema no se expone en la API de
-Supabase: la Edge Function llega directo a Postgres.
+Supabase: las Edge Functions llegan directo a Postgres.
 
 No es una migración porque crea un rol (que es de todo el servidor, no de un esquema) y se puede reinstalar entera. Para el
-panel de Supabase: `python -m servicio_datos.api_colecta` imprime el SQL. El rol se crea sin poder iniciar sesión; se habilita
+panel de Supabase: `python -m servicio_datos.api_servicio` imprime el SQL. El rol se crea sin poder iniciar sesión; se habilita
 aparte, con una contraseña que no pasa por este código (ver docs/base-datos-supabase.md).
 """
 from __future__ import annotations
@@ -33,11 +37,13 @@ DO $$ BEGIN
     CREATE ROLE {rol} NOLOGIN;
   END IF;
 END $$;
-COMMENT ON ROLE {rol} IS 'La colecta automática: solo ejecuta las funciones del esquema {api}.';
+COMMENT ON ROLE {rol} IS 'Las Edge Functions del servicio de datos: solo ejecutan las funciones del esquema {api}.';
 ALTER ROLE {rol} SET statement_timeout = '60s';  -- una carga tarda milisegundos: lo que pase de un minuto está trabado
 
 CREATE SCHEMA IF NOT EXISTS {api};
-COMMENT ON SCHEMA {api} IS 'Lo que puede hacer la colecta automática: corridas, descargas y candidatos. No publica ni lee lo publicado.';
+COMMENT ON SCHEMA {api} IS 'Lo que pueden hacer las Edge Functions: corridas, descargas, candidatos y avisos. No publican ni leen lo publicado.';
+
+-- La colecta ---------------------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION {api}.asegurar_fuente(p_fuente text, p_nombre text, p_url_base text) RETURNS void
 LANGUAGE sql SECURITY DEFINER SET search_path = {datos}, pg_temp AS $$
@@ -82,7 +88,25 @@ LANGUAGE sql SECURITY DEFINER SET search_path = {datos}, pg_temp AS $$
   SELECT {datos}.cargar_candidato(p_corrida, p_hoy, p_carga)
 $$;
 
--- Permisos: el rol de la colecta y nadie más (tampoco los de la API de Supabase).
+-- Los avisos ----------------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION {api}.detectar_avisos(p_hoy date, p_ahora timestamptz DEFAULT now(), p_dia_limite integer DEFAULT 25,
+                                                 p_recordatorio_dias integer DEFAULT 3) RETURNS integer
+LANGUAGE sql SECURITY DEFINER SET search_path = {datos}, pg_temp AS $$
+  SELECT {datos}.detectar_avisos(p_hoy, p_ahora, p_dia_limite, p_recordatorio_dias)
+$$;
+
+CREATE OR REPLACE FUNCTION {api}.tomar_avisos(p_hoy date, p_dia_limite integer DEFAULT 25, p_segundos integer DEFAULT 300) RETURNS jsonb
+LANGUAGE sql SECURITY DEFINER SET search_path = {datos}, pg_temp AS $$
+  SELECT {datos}.tomar_avisos(p_hoy, p_dia_limite, p_segundos)
+$$;
+
+CREATE OR REPLACE FUNCTION {api}.registrar_entrega(p_aviso bigint, p_entregas jsonb, p_completo boolean) RETURNS text
+LANGUAGE sql SECURITY DEFINER SET search_path = {datos}, pg_temp AS $$
+  SELECT {datos}.registrar_entrega(p_aviso, p_entregas, p_completo)
+$$;
+
+-- Permisos: el rol de las Edge Functions y nadie más (tampoco los de la API de Supabase).
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA {api} FROM PUBLIC;
 REVOKE ALL ON SCHEMA {api} FROM PUBLIC;
 DO $$
@@ -101,17 +125,17 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA {api} TO {rol};
 """
 
 
-def sql_api(datos: str = "economia", api: str = "colecta", rol: str = "colector") -> str:
-    """El SQL que instala el esquema y el rol de la colecta, para `datos` (el esquema del servicio)."""
+def sql_api(datos: str = "economia", api: str = "servicio", rol: str = "servicio_datos") -> str:
+    """El SQL que instala el esquema y el rol de las Edge Functions, para `datos` (el esquema del servicio)."""
     for nombre in (datos, api, rol):
         if not NOMBRE.match(nombre):
             raise ValueError(f"Nombre inválido: {nombre!r}")
     if datos == api:
-        raise ValueError("La API tiene que ir en otro esquema que los datos: el rol de la colecta no ve el de los datos")
+        raise ValueError("La API tiene que ir en otro esquema que los datos: el rol de las Edge Functions no ve el de los datos")
     return SQL.replace("{api}", api).replace("{datos}", datos).replace("{rol}", rol)
 
 
-def instalar(conn: psycopg.Connection, api: str = "colecta", rol: str = "colector", datos: str | None = None) -> str:
+def instalar(conn: psycopg.Connection, api: str = "servicio", rol: str = "servicio_datos", datos: str | None = None) -> str:
     """Instala (o reinstala) la API. Sin `datos`, usa el esquema donde está `schema_migrations`. Devuelve el esquema de datos."""
     if datos is None:
         fila = conn.execute("SELECT n.nspname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
@@ -125,10 +149,10 @@ def instalar(conn: psycopg.Connection, api: str = "colecta", rol: str = "colecto
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Imprime el SQL del esquema y el rol de la colecta, para el SQL Editor de Supabase.")
+    parser = argparse.ArgumentParser(description="Imprime el SQL del esquema y el rol de las Edge Functions, para el SQL Editor de Supabase.")
     parser.add_argument("--esquema-datos", default="economia")
-    parser.add_argument("--esquema-api", default="colecta")
-    parser.add_argument("--rol", default="colector")
+    parser.add_argument("--esquema-api", default="servicio")
+    parser.add_argument("--rol", default="servicio_datos")
     args = parser.parse_args(argv)
     try:
         print(sql_api(args.esquema_datos, args.esquema_api, args.rol).strip())

@@ -1,5 +1,5 @@
-// La base del servicio, por las funciones del esquema `colecta` (`servicio_datos/api_colecta.py`), que envuelven las de las
-// migraciones 0011 y 0012. La conexión es directa a Postgres (no por la API de Supabase) y con el rol `colector`, que solo puede
+// La base del servicio, por las funciones del esquema `servicio` (`servicio_datos/api_servicio.py`), que envuelven las de las
+// migraciones. La conexión es directa a Postgres (no por la API de Supabase) y con el rol `servicio_datos`, que solo puede
 // ejecutar esas funciones: no ve las tablas, no revisa ni publica. El esquema `economia` sigue sin exponerse.
 import postgres from "npm:postgres@3.4.5";
 
@@ -33,8 +33,33 @@ export interface Base {
   cerrar(): Promise<void>;
 }
 
-/** `esquema`: donde están las funciones; cada llamada lo nombra, sin depender del search_path de la conexión. */
-export function basePostgres(url: string, esquema = "colecta"): Base {
+export interface Tomados {
+  descartados: number; // dejaron de ser ciertos antes de entregarse
+  en_curso: number; // reservados por otra entrega que todavía no terminó
+  avisos: AvisoTomado[];
+}
+
+export interface AvisoTomado {
+  id: number;
+  asunto: string;
+  cuerpo: string;
+  ruta: string | null;
+  entregas: Record<string, Entrega>;
+  intentos: number;
+}
+
+/** Cómo le fue a un canal con un aviso. El error nunca lleva secretos. */
+export type Entrega = { ok: true; en: string } | { ok: false; error: string };
+
+export interface BaseAvisos {
+  detectar(hoy: string, recordatorioDias: number): Promise<number>;
+  tomar(hoy: string, segundos: number): Promise<Tomados>;
+  registrarEntrega(aviso: number, entregas: Record<string, Entrega>, completo: boolean): Promise<string>;
+  cerrar(): Promise<void>;
+}
+
+/** La conexión y lo que comparten las dos bases: `api` es el esquema, que cada llamada nombra sin depender del search_path. */
+function conectar(url: string, esquema: string) {
   const sql = postgres(url, {
     prepare: false, // el pooler de Supabase en modo transacción no admite sentencias preparadas
     max: 1,
@@ -42,15 +67,23 @@ export function basePostgres(url: string, esquema = "colecta"): Base {
     connect_timeout: 15,
     onnotice: () => {},
   });
-  const api = sql(esquema);
   // deno-lint-ignore no-explicit-any
   const traducir = (error: any): never => {
     if (error?.code === "CB001") throw new ErrorNegocio(error.detail ?? "error", error.message);
     throw error;
   };
-  // deno-lint-ignore no-explicit-any
-  const una = async (consulta: Promise<any>) => (await consulta.catch(traducir))[0];
-  const json = (valor: unknown) => sql.json(valor as never);
+  return {
+    sql,
+    api: sql(esquema),
+    // deno-lint-ignore no-explicit-any
+    una: async (consulta: Promise<any>) => (await consulta.catch(traducir))[0],
+    json: (valor: unknown) => sql.json(valor as never),
+    cerrar: () => sql.end({ timeout: 5 }),
+  };
+}
+
+export function basePostgres(url: string, esquema = "servicio"): Base {
+  const { sql, api, una, json, cerrar } = conectar(url, esquema);
   return {
     async asegurarFuente(id, nombre, urlBase) {
       await una(sql`SELECT ${api}.asegurar_fuente(${id}, ${nombre}, ${urlBase})`);
@@ -80,7 +113,29 @@ export function basePostgres(url: string, esquema = "colecta"): Base {
       return fila.resultado;
     },
     async cerrar() {
-      await sql.end({ timeout: 5 });
+      await cerrar();
+    },
+  };
+}
+
+export function baseAvisosPostgres(url: string, esquema = "servicio"): BaseAvisos {
+  const { sql, api, una, json, cerrar } = conectar(url, esquema);
+  return {
+    async detectar(hoy, recordatorioDias) {
+      const fila = await una(sql`SELECT ${api}.detectar_avisos(${hoy}::date, now(), 25, ${recordatorioDias}) AS creados`);
+      return Number(fila.creados);
+    },
+    async tomar(hoy, segundos) {
+      const fila = await una(sql`SELECT ${api}.tomar_avisos(${hoy}::date, 25, ${segundos}) AS tomados`);
+      const tomados = fila.tomados as Tomados;
+      return { ...tomados, avisos: tomados.avisos.map((a) => ({ ...a, id: Number(a.id) })) };
+    },
+    async registrarEntrega(aviso, entregas, completo) {
+      const fila = await una(sql`SELECT ${api}.registrar_entrega(${aviso}, ${json(entregas)}, ${completo}) AS estado`);
+      return String(fila.estado);
+    },
+    async cerrar() {
+      await cerrar();
     },
   };
 }
