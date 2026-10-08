@@ -1,6 +1,6 @@
 """Las Edge Functions de `supabase/functions`, desde la suite de Python: sus pruebas de Deno, que el parser de TypeScript arme la
-misma carga que el de Python con los archivos reales, y la colecta y los avisos de punta a punta contra una base de verdad, entrando
-con el rol de las Edge Functions.
+misma carga que el de Python con los archivos reales, y la colecta, los avisos y el analista de punta a punta contra una base de
+verdad, entrando con el rol de las Edge Functions.
 
 Necesitan Deno (se saltean sin él). Lo que usa los .xls de INDEC necesita DATOS_IPC_ORIGINALES_DIR.
 """
@@ -37,7 +37,7 @@ def deno(*argumentos, entorno=None):
 class PruebasDeDenoTests(unittest.TestCase):
     def test_pasan_todas(self):
         # Las de integración las corren las clases de abajo, con su base.
-        entorno = {k: v for k, v in os.environ.items() if not k.startswith(("DATOS_COLECTA_", "DATOS_AVISAR_"))}
+        entorno = {k: v for k, v in os.environ.items() if not k.startswith(("DATOS_COLECTA_", "DATOS_AVISAR_", "DATOS_ANALIZAR_"))}
         proceso = subprocess.run([DENO, "test", *PERMISOS, "."], cwd=FUNCIONES, capture_output=True, text=True, timeout=600, env={**entorno, "NO_COLOR": "1"})
         self.assertEqual(proceso.returncode, 0, proceso.stdout[-3000:] + proceso.stderr[-3000:])
         self.assertRegex(proceso.stdout, r"ok \| \d+ passed \| 0 failed")
@@ -113,3 +113,21 @@ class AvisosDePuntaAPuntaTests(BaseFunciones):
         self.assertIn("1 passed", proceso.stdout)  # que no se haya salteado
         fila = self.conn.execute("SELECT clave, estado, intentos, entregas -> 'slack' ->> 'ok', tomado_hasta FROM aviso").fetchall()
         self.assertEqual(fila, [(f"candidato_nuevo:{candidato}", "enviado", 1, "true", None)])
+
+
+@unittest.skipUnless(DENO, "Falta Deno")
+class AnalistaDePuntaAPuntaTests(BaseFunciones):
+    def test_cada_hallazgo_queda_con_una_propuesta_validada_por_la_base(self):
+        corrida = repositorio.abrir_corrida_exclusiva(self.conn, fuente.FUENTE_ID, 1800)
+        self.conn.execute("SELECT cargar_candidato(%s, %s, %s)", (corrida, HOY, Jsonb(carga_sintetica())))
+        proceso = deno("test", *PERMISOS, "analizar/integracion_test.ts",
+                       entorno={"DATOS_ANALIZAR_URL": como_usuario(URL, self.rol), "DATOS_ANALIZAR_ESQUEMA": self.api})
+        self.assertEqual(proceso.returncode, 0, proceso.stdout[-3000:] + proceso.stderr[-3000:])
+        self.assertIn("1 passed", proceso.stdout)  # que no se haya salteado
+        filas = self.conn.execute("SELECT tipo, accion_sugerida, confianza, origen, modelo, notas, hechos -> 0 -> 'etiquetas', estado FROM propuesta").fetchall()
+        self.assertEqual(len(filas), 7)
+        for fila in filas:
+            self.assertEqual(fila[:5], ("cambio_de_base", "investigar", "media", "agente", "claude-de-prueba"))
+            self.assertEqual(fila[5], ["Se descartaron citas a hechos que no existen.", "La confianza alta exige al menos dos hechos citados."])
+            self.assertEqual((fila[6], fila[7]), (["base"], "pendiente"))
+

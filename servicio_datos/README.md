@@ -34,13 +34,13 @@ cambios.
 - `agente/`: el analista de hallazgos, con un modelo de lenguaje local. Ver "El analista".
 - `revision/`: la interfaz web de revisión (cola de candidatos y pantalla de revisión). Es una app
   Flask aparte de la web pública de ChartBay, con login. Ver "Interfaz de revisión".
-- `../supabase/functions/`: las Edge Functions (la colecta del IPC, `colectar-ipc`, y los avisos, `avisar`). Se prueban desde
+- `../supabase/functions/`: las Edge Functions (la colecta del IPC, `colectar-ipc`; los avisos, `avisar`; el analista, `analizar`). Se prueban desde
   `tests/test_funciones_supabase.py` (necesita Deno). Ver `docs/base-datos-supabase.md`.
 - `carga.py`: la validación del IPC y la carga del candidato, que están en la base (migración 0011), desde Python.
 - `api_revision.py`: el esquema `revision` que ve la página de revisión de ChartBay, con sesión de Supabase Auth. Ver
   `docs/base-datos-supabase.md`.
 - `api_servicio.py`: el esquema `servicio` y el rol `servicio_datos`, lo único que pueden tocar las Edge Functions: corridas,
-  descargas, candidatos y avisos, sin ver las tablas ni publicar. Ver `docs/base-datos-supabase.md`.
+  descargas, candidatos, avisos y propuestas, sin ver las tablas ni publicar. Ver `docs/base-datos-supabase.md`.
 - `publicacion.py`, `publicar.py`: la revisión y la publicación de un candidato (la lógica está en funciones de la base,
   migración 0010; este módulo las llama). Publicar es
   la única forma de que un dato llegue a lo vigente, y exige que cada hallazgo esté aceptado.
@@ -142,11 +142,14 @@ gunicorn "servicio_datos.revision.__main__:app_desde_entorno()" --bind 127.0.0.1
 
 `python -m servicio_datos.agente` (`analizar`, `probar` y `estado`; es una tarea de cron más) deja, junto a cada hallazgo de un
 candidato abierto, una `propuesta` con qué es, qué haría, con qué hechos y con qué confianza. **Solo escribe propuestas**: no decide
-hallazgos, no toca el candidato y no publica. Diseño y operación: `docs/despliegue-servicio-datos.md` (sección 7).
+hallazgos, no toca el candidato y no publica. Diseño y operación: `docs/despliegue-servicio-datos.md` (sección 7). En Supabase lo
+hace la Edge Function `analizar` con la API de Claude; los hechos, el validador y el guardado son funciones de la base (migración
+0015) que usan las dos (ver `docs/base-datos-supabase.md`, "El analista").
 
 - **Por qué se puede confiar sin confiar en el modelo.** El modelo no consulta nada: recibe una lista numerada de hechos que
-  comprobó el código (`agente/evidencia.py`: comparación con las demás series del mes, con el mes siguiente, con lo ya publicado
-  y con las fechas de los archivos) y solo puede citarlos. El validador (`agente/dictamen.py`) descarta citas inexistentes, exige para
+  comprobó el código (`hechos_de` en la base, que consulta `agente/evidencia.py`: comparación con las demás series del mes, con el
+  mes siguiente, con lo ya publicado y con las fechas de los archivos) y solo puede citarlos. El validador (`validar_dictamen` en la
+  base, que vuelve a reunir los hechos al guardar; `agente/dictamen.py` es el mismo, para la autoprueba) descarta citas inexistentes, exige para
   cada clasificación un hecho de la clase que la sostiene (no puede decir "error de carga" si el salto no resultó aislado ni se
   revirtió), pide coherencia entre clasificación y acción, y no deja subir la confianza más de lo que la evidencia permite. Lo que
   corrige queda en `propuesta.notas`.

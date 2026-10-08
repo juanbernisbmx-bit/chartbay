@@ -1,6 +1,6 @@
 # Base de datos: todo dentro de Supabase (plan)
 
-Estado: plan aprobado; pasos 0 a 3 y 5 hechos (2026-10-07).
+Estado: plan aprobado; pasos 0 a 3, 5 y 6 hechos (2026-10-07).
 
 ## La decisión
 
@@ -82,7 +82,7 @@ pipeline, revisión Flask, despliegue en Ubuntu, modelo local, respaldo a disco 
    el `search_path` fijo que pidió Codex): ver "La colecta" abajo.
 4. **La página de revisión en ChartBay.**
 5. **Avisos.** **Hecho** (el código): ver "Los avisos" abajo.
-6. **El analista con la API.**
+6. **El analista con la API.** **Hecho** (el código): ver "El analista" abajo.
 7. **El respaldo**, según lo que se decida.
 
 ## La API de revisión (paso 1)
@@ -178,9 +178,9 @@ publica un candidato con hallazgos pendientes; con él, no. Las migraciones que 
 
 ### Para ponerla en marcha (Codex, en el proyecto)
 
-Sirve también para los avisos (paso 5), que usan el mismo rol, la misma clave y el mismo archivo de secretos.
+Sirve también para los avisos (paso 5) y el analista (paso 6), que usan el mismo rol, la misma clave y el mismo archivo de secretos.
 
-1. Aplicar las migraciones 0011 a 0014, en orden y con `search_path` en `economia`, como las anteriores.
+1. Aplicar las migraciones 0011 a 0015, en orden y con `search_path` en `economia`, como las anteriores.
 2. Correr en el SQL Editor lo que imprime `python -m servicio_datos.api_servicio`: crea el rol `servicio_datos` sin poder iniciar
    sesión, el esquema `servicio`, sus funciones y los permisos (revoca todo a `anon`, `authenticated` y `service_role`). Se puede
    volver a correr.
@@ -197,15 +197,18 @@ Sirve también para los avisos (paso 5), que usan el mismo rol, la misma clave y
    DATOS_REVISION_URL=https://<chartbay>/base-de-datos/revision
    DATOS_MONITOR_COLECTA_URL=<opcional: un latido de Healthchecks para la colecta>
    DATOS_MONITOR_AVISAR_URL=<opcional: otro, para los avisos>
+   ANTHROPIC_API_KEY=<la clave de la API de Claude, para el analista>
+   DATOS_ANALISTA_MODELO=<opcional: el modelo; por defecto claude-opus-5-5>
+   DATOS_MONITOR_ANALIZAR_URL=<opcional: otro latido, para el analista>
    ```
 
    ```bash
    supabase secrets set --env-file datos.env
    ```
 
-5. Desplegarlas: `supabase functions deploy colectar-ipc --no-verify-jwt` y `supabase functions deploy avisar --no-verify-jwt`. Las
-   protege `DATOS_CLAVE_CRON`, no la clave pública de Supabase (que tiene cualquiera). Si se arma `supabase/config.toml`:
-   `verify_jwt = false` en `[functions.colectar-ipc]` y en `[functions.avisar]`.
+5. Desplegarlas: `supabase functions deploy colectar-ipc --no-verify-jwt`, y lo mismo con `avisar` y `analizar`. Las protege
+   `DATOS_CLAVE_CRON`, no la clave pública de Supabase (que tiene cualquiera). Si se arma `supabase/config.toml`: `verify_jwt = false`
+   en `[functions.colectar-ipc]`, `[functions.avisar]` y `[functions.analizar]`.
 6. **La prueba a mano**, antes de programarla. El endpoint es `POST https://<ref>.supabase.co/functions/v1/colectar-ipc` y la
    autenticación es el encabezado `x-chartbay-clave` con la `DATOS_CLAVE_CRON`. Con la clave en un archivo de encabezados, para que
    no aparezca en la línea de comandos (`x-chartbay-clave: <clave>`, permisos 600):
@@ -217,7 +220,8 @@ Sirve también para los avisos (paso 5), que usan el mismo rol, la misma clave y
    Sale bien si: sin el encabezado contesta 401; la primera llamada contesta `{"estado":"con_candidato", ...}` con un
    `candidato_id` (en una base sin publicaciones); la segunda, `{"estado":"sin_cambios"}`; en `economia.corrida` quedan las dos
    corridas con esos estados; en `economia.descarga`, dos `nueva` y dos `identica`; y en el bucket `economia-crudos`, dos archivos.
-   El candidato aparece en la cola de la página de revisión. Después, lo mismo con `avisar` (ver "Los avisos").
+   El candidato aparece en la cola de la página de revisión. Después, lo mismo con `analizar` y `avisar` (ver "El analista" y "Los
+   avisos").
 7. Recién entonces, programarlas con pg_cron (las horas van en UTC: 12:30 y 20:30 son las 9:30 y 17:30 de Argentina):
 
 ```sql
@@ -242,6 +246,54 @@ rol se prueban en `test_api_servicio.py`, incluso con los roles de la API de Sup
 funciones nuevas; el search_path, en `test_search_path.py`. **No se probó**: el runtime de Edge Functions de Supabase, Storage de
 verdad (el guardado del bucket solo se probó con un doble), la conexión por el pooler de Supabase con un rol propio, una clave
 `sb_secret_…` con supabase-js ni pg_cron.
+
+## El analista (paso 6)
+
+Para cada hallazgo sin decidir de un candidato abierto, el analista deja una propuesta: qué es, qué haría, con qué hechos y con qué
+confianza. **Solo propone**: no decide hallazgos, no toca el candidato y no publica; la decisión de la persona resuelve la propuesta
+y deja medido cuánto acertó.
+
+La base hace todo lo que importa (migración 0015): elige los hallazgos pendientes, propone sin modelo lo que tiene un precedente (una
+persona ya decidió sobre uno idéntico), reúne los hechos (`hechos_de`: el mismo trabajo que hacía `agente/evidencia.py`, con los
+mismos textos) y, al guardar, valida lo que dijo el modelo (`validar_dictamen`, el mismo validador de `agente/dictamen.py`) contra los
+hechos que vuelve a reunir ella. Quien llama al modelo solo le entrega a `proponer` lo que contestó: no puede inventar hechos ni
+guardar una propuesta que no pasó por el validador. El analista de Python con modelo local usa estas mismas funciones.
+
+`supabase/functions/analizar` es la Edge Function: llama a Claude con el SDK oficial (`@anthropic-ai/sdk` 0.128.0), con
+*structured outputs* (`output_config.format`) para que la respuesta tenga siempre las claves y los valores permitidos, y el prompt en
+caché. Lo que se le manda es el hallazgo y los hechos, todos datos públicos de INDEC; el prompt le dice que lo que viene en el pedido
+son datos y no instrucciones, y aunque lo ignorara, el validador no deja pasar nada que los hechos no sostengan. Hace hasta tres
+consultas a la vez, deja de empezar hallazgos a los 90 segundos (la función tiene 150) y lo que no llegó queda para la hora siguiente;
+si la API falla tres veces seguidas, corta. Sin `ANTHROPIC_API_KEY` solo propone por precedente.
+
+**Modelo y costo.** Por defecto `claude-opus-5-5` (USD 4 por millón de tokens de entrada y 20 de salida; el prompt en caché sale
+mucho menos). Cada hallazgo son unos pocos miles de tokens, así que un candidato como el de septiembre (19 hallazgos) debería costar
+del orden de un dólar, y con uno o dos candidatos por mes, poco más. Con `DATOS_ANALISTA_MODELO=claude-sonnet-5-5` cuesta la mitad.
+Son estimaciones: el costo real se ve en la consola de Anthropic después de la primera corrida.
+
+Para ponerla en marcha, además de lo de la colecta (mismo rol, misma clave, mismo archivo de secretos con `ANTHROPIC_API_KEY`): la
+prueba a mano es `curl -sS -X POST -H @encabezado-cron.txt https://<ref>.supabase.co/functions/v1/analizar` con un candidato abierto.
+Tiene que contestar cuántas propuestas dejó (`por_modelo`, `sin_respaldo`, `por_precedente`) sin `fallidos`, y en la página de
+revisión cada hallazgo tiene que aparecer con su propuesta. La segunda vez no deja nada nuevo. Después, el cron (cada hora a los 35
+minutos: cinco después de la colecta y antes del aviso de los 45; si no hay nada pendiente no consulta a la API):
+
+```sql
+SELECT cron.schedule('analizar', '35 * * * *', $$
+  SELECT net.http_post(
+    url := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'project_url') || '/functions/v1/analizar',
+    headers := jsonb_build_object('Content-Type', 'application/json',
+                                  'x-chartbay-clave', (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'clave_cron')),
+    body := '{}'::jsonb, timeout_milliseconds := 150000)
+$$);
+```
+
+Qué se verificó: que los hechos, el validador y el guardado en la base dan lo mismo que el analista de Python (sus ~80 pruebas, ahora
+contra la base, más una comparación del validador con el de Python en 1.500 respuestas al azar); las pruebas de la función (orden,
+concurrencia, límite de tiempo, fallos de la API) y del cliente de Claude con el SDK de verdad contra un servidor local que imita la
+API (qué pide, structured outputs, caché, respuestas rechazadas o cortadas, errores sin la clave); y el analista de punta a punta
+contra Postgres entrando con el rol de las Edge Functions, con un modelo falso. **No se probó**: la API real de Claude (no hay clave en
+las pruebas), y por lo tanto cuánto acierta Claude con estos hallazgos, cuánto tarda y cuánto cuesta de verdad; tampoco el runtime de
+Supabase ni pg_cron.
 
 ## Los avisos (paso 5)
 

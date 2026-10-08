@@ -103,6 +103,32 @@ class AvisosTests(BaseServicio):
         self.negado(funcion, f"UPDATE {self.schema}.aviso SET estado = 'enviado'")
 
 
+class AnalistaTests(BaseServicio):
+    def test_ve_los_hallazgos_con_sus_hechos_y_solo_deja_propuestas_validadas(self):
+        funcion = self.como()
+        corrida = self.llamar(funcion, "abrir_corrida", "INDEC_IPC", 1800.0)
+        self.llamar(funcion, "cargar_candidato", corrida, HOY, Jsonb(carga_sintetica()))
+        self.assertEqual(self.llamar(funcion, "proponer_por_precedentes"), 0)
+        hallazgos = self.llamar(funcion, "hallazgos_para_el_modelo", 50)
+        self.assertEqual(len(hallazgos), 7)  # las siete series sintéticas no arrancan en dic 2016
+        primero = hallazgos[0]
+        self.assertEqual(primero["pedido"]["hallazgo"]["regla"], "base_referencia")
+        self.assertEqual([h["id"] for h in primero["pedido"]["hechos"]], [h["id"] for h in primero["hechos"]])
+        self.assertNotIn("etiquetas", primero["pedido"]["hechos"][0])  # el modelo ve los hechos, no cómo los clasifica el validador
+        respuesta = {"clasificacion": "cambio_de_base", "accion_sugerida": "investigar", "confianza": "alta", "hechos_citados": [1, 9],
+                     "razonamiento": "El primer valor no es 100 en dic 2016."}
+        self.assertEqual(self.llamar(funcion, "proponer", primero["hallazgo_id"], Jsonb(respuesta), "claude-de-prueba", Jsonb(primero["hechos"])), "por_modelo")
+        fila = self.conn.execute("SELECT tipo, accion_sugerida, confianza, origen, modelo, notas FROM propuesta").fetchone()
+        self.assertEqual(fila[:5], ("cambio_de_base", "investigar", "media", "agente", "claude-de-prueba"))  # 1 sola cita válida: media
+        self.assertEqual(fila[5], ["Se descartaron citas a hechos que no existen.", "La confianza alta exige al menos dos hechos citados."])
+        self.assertEqual(len(self.llamar(funcion, "hallazgos_para_el_modelo", 50)), 6)
+        with self.assertRaises(psycopg.Error) as contexto:  # hechos que no son los de la base: no se guarda nada
+            self.llamar(funcion, "proponer", hallazgos[1]["hallazgo_id"], Jsonb(respuesta), "claude-de-prueba", Jsonb([{"id": 1, "texto": "inventado", "etiquetas": ["base"]}]))
+        self.assertEqual(contexto.exception.diag.message_detail, "hechos_distintos")
+        self.negado(funcion, f"INSERT INTO {self.schema}.propuesta (hallazgo_id, tipo, confianza) VALUES ({hallazgos[1]['hallazgo_id']}, 'x', 'alta')")
+        self.negado(funcion, f"SELECT {self.schema}.guardar_propuesta(1, 'x', 'alta', 'aceptar', '', '[]', '[]', 'agente', 'x')")
+
+
 class LoQueNoPuedeTests(BaseServicio):
     def test_no_cierra_una_corrida_como_si_hubiera_dejado_un_candidato(self):
         funcion = self.como()
@@ -159,7 +185,8 @@ class InstalacionTests(BaseServicio):
         filas = self.conn.execute("SELECT proname, prosecdef, proconfig FROM pg_proc WHERE pronamespace = %s::regnamespace ORDER BY proname",
                                   (self.api,)).fetchall()
         self.assertEqual([f[0] for f in filas], ["abrir_corrida", "anotar_corrida", "asegurar_fuente", "cargar_candidato", "cerrar_corrida",
-                                                 "detectar_avisos", "registrar_descarga", "registrar_entrega", "tomar_avisos", "ultima_descarga"])
+                                                 "detectar_avisos", "hallazgos_para_el_modelo", "proponer", "proponer_por_precedentes",
+                                                 "registrar_descarga", "registrar_entrega", "tomar_avisos", "ultima_descarga"])
         for nombre, definer, config in filas:
             self.assertEqual((nombre, definer, config), (nombre, True, [f"search_path={self.schema}, pg_temp"]))
 

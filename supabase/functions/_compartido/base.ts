@@ -58,7 +58,31 @@ export interface BaseAvisos {
   cerrar(): Promise<void>;
 }
 
-/** La conexión y lo que comparten las dos bases: `api` es el esquema, que cada llamada nombra sin depender del search_path. */
+/** Un hecho que la base comprobó sobre un hallazgo (`hechos_de`, migración 0015). El modelo lo cita por `id`. */
+export interface Hecho {
+  id: number;
+  texto: string;
+  etiquetas: string[];
+}
+
+/** Un hallazgo esperando la opinión del modelo: lo que se le muestra (`pedido`) y los hechos completos, que vuelven al proponer. */
+export interface ParaElModelo {
+  hallazgo_id: number;
+  candidato_id: number;
+  pedido: { hallazgo: Record<string, string | null>; hechos: { id: number; texto: string }[] };
+  hechos: Hecho[];
+}
+
+export type Guardada = "por_modelo" | "sin_respaldo" | "omitido";
+
+export interface BaseAnalista {
+  proponerPorPrecedentes(): Promise<number>;
+  hallazgosParaElModelo(limite: number): Promise<ParaElModelo[]>;
+  proponer(hallazgo: number, respuesta: unknown, modelo: string, hechosVistos: Hecho[]): Promise<Guardada>;
+  cerrar(): Promise<void>;
+}
+
+/** La conexión y lo que comparten las bases: `api` es el esquema, que cada llamada nombra sin depender del search_path. */
 function conectar(url: string, esquema: string) {
   const sql = postgres(url, {
     prepare: false, // el pooler de Supabase en modo transacción no admite sentencias preparadas
@@ -139,3 +163,26 @@ export function baseAvisosPostgres(url: string, esquema = "servicio"): BaseAviso
     },
   };
 }
+
+export function baseAnalistaPostgres(url: string, esquema = "servicio"): BaseAnalista {
+  const { sql, api, una, json, cerrar } = conectar(url, esquema);
+  return {
+    async proponerPorPrecedentes() {
+      const fila = await una(sql`SELECT ${api}.proponer_por_precedentes() AS dejadas`);
+      return Number(fila.dejadas);
+    },
+    async hallazgosParaElModelo(limite) {
+      const fila = await una(sql`SELECT ${api}.hallazgos_para_el_modelo(${limite}) AS hallazgos`);
+      return (fila.hallazgos as ParaElModelo[]).map((h) => ({ ...h, hallazgo_id: Number(h.hallazgo_id), candidato_id: Number(h.candidato_id) }));
+    },
+    async proponer(hallazgo, respuesta, modelo, hechosVistos) {
+      // Lo que dijo el modelo va tal cual: lo valida la base contra los hechos que reúne ella.
+      const fila = await una(sql`SELECT ${api}.proponer(${hallazgo}, ${json(respuesta ?? null)}, ${modelo}, ${json(hechosVistos)}) AS guardada`);
+      return fila.guardada as Guardada;
+    },
+    async cerrar() {
+      await cerrar();
+    },
+  };
+}
+

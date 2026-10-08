@@ -1,4 +1,4 @@
-"""El esquema `servicio` y el rol `servicio_datos`: lo único que pueden tocar las Edge Functions (la colecta y los avisos).
+"""El esquema `servicio` y el rol `servicio_datos`: lo único que pueden tocar las Edge Functions (colecta, avisos y analista).
 
 Las Edge Functions se conectan a Postgres con un rol propio que no ve las tablas. Solo puede ejecutar estas funciones, que
 envuelven las del servicio:
@@ -6,10 +6,13 @@ envuelven las del servicio:
 - la colecta (migraciones 0011 y 0012): abrir una corrida, registrar lo que bajó, anotarla y cerrarla sin candidato
   (`sin_cambios` o `fallida`), saber si un archivo ya se conocía y dejar un candidato con `cargar_candidato`, que valida y
   anota los hallazgos;
-- los avisos (migración 0014): detectarlos, tomar los pendientes para entregarlos y anotar cómo fue cada entrega.
+- los avisos (migración 0014): detectarlos, tomar los pendientes para entregarlos y anotar cómo fue cada entrega;
+- el analista (migración 0015): proponer por precedente, ver los hallazgos con sus hechos y entregar lo que dijo el modelo, que la
+  base valida contra los hechos que reúne ella antes de guardarlo como propuesta.
 
 No puede leer ni cambiar lo publicado, revisar hallazgos ni publicar. Si su contraseña se filtrara, lo peor que se puede hacer
-con ella es dejar un candidato falso (que igual tiene que pasar por la revisión de una persona) o callar un aviso.
+con ella es dejar un candidato falso (que igual tiene que pasar por la revisión de una persona), callar un aviso o dejar una
+propuesta tonta (que pasa por el validador y que una persona igual decide).
 
 Un solo rol para todas las Edge Functions: sus secretos son de todo el proyecto (cada función ve los de las otras), así que un
 rol por función no aislaría nada y sumaría contraseñas.
@@ -41,7 +44,7 @@ COMMENT ON ROLE {rol} IS 'Las Edge Functions del servicio de datos: solo ejecuta
 ALTER ROLE {rol} SET statement_timeout = '60s';  -- una carga tarda milisegundos: lo que pase de un minuto está trabado
 
 CREATE SCHEMA IF NOT EXISTS {api};
-COMMENT ON SCHEMA {api} IS 'Lo que pueden hacer las Edge Functions: corridas, descargas, candidatos y avisos. No publican ni leen lo publicado.';
+COMMENT ON SCHEMA {api} IS 'Lo que pueden hacer las Edge Functions: corridas, descargas, candidatos, avisos y propuestas. No publican ni leen lo publicado.';
 
 -- La colecta ---------------------------------------------------------------------------------------
 
@@ -104,6 +107,24 @@ $$;
 CREATE OR REPLACE FUNCTION {api}.registrar_entrega(p_aviso bigint, p_entregas jsonb, p_completo boolean) RETURNS text
 LANGUAGE sql SECURITY DEFINER SET search_path = {datos}, pg_temp AS $$
   SELECT {datos}.registrar_entrega(p_aviso, p_entregas, p_completo)
+$$;
+
+-- El analista --------------------------------------------------------------------------------------
+-- Solo deja propuestas: los hechos los reúne la base y lo que dice el modelo lo valida la base antes de guardarlo.
+
+CREATE OR REPLACE FUNCTION {api}.proponer_por_precedentes() RETURNS integer
+LANGUAGE sql SECURITY DEFINER SET search_path = {datos}, pg_temp AS $$
+  SELECT {datos}.proponer_por_precedentes()
+$$;
+
+CREATE OR REPLACE FUNCTION {api}.hallazgos_para_el_modelo(p_limite integer DEFAULT 50) RETURNS jsonb
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = {datos}, pg_temp AS $$
+  SELECT {datos}.hallazgos_para_el_modelo(p_limite)
+$$;
+
+CREATE OR REPLACE FUNCTION {api}.proponer(p_hallazgo bigint, p_respuesta jsonb, p_modelo text, p_hechos_vistos jsonb) RETURNS text
+LANGUAGE sql SECURITY DEFINER SET search_path = {datos}, pg_temp AS $$
+  SELECT {datos}.proponer(p_hallazgo, p_respuesta, p_modelo, p_hechos_vistos)
 $$;
 
 -- Permisos: el rol de las Edge Functions y nadie más (tampoco los de la API de Supabase).
