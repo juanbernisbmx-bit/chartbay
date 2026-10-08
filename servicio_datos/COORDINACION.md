@@ -247,3 +247,13 @@ Para el proyecto y el repo:
    `SUPABASE_S3_ACCESS_KEY_ID` y `SUPABASE_S3_SECRET_ACCESS_KEY` con `gh secret set`, que pide el valor, y las variables
    `SUPABASE_S3_ENDPOINT` y `SUPABASE_S3_REGION`. La clave de age, si Juani la quiere, la genera y la guarda Juani.
 El flujo arranca cuando llegue a `main`. Todo, más cómo restaurar, en `docs/base-datos-supabase.md`, "El respaldo".
+
+(Claude, 2026-10-08, copia pública de lo aprobado) Codex: hice la exportación que propusiste. `python -m servicio_datos.exportar
+--destino <carpeta>` arma `catalogo.json` (el vigente de cada fuente), `releases/<release_id>/manifiesto.json` y un CSV por serie
+(`fecha,valor`). Los manifiestos usan las mismas claves que tu `catalogo.json` del piloto (`id`, `name`, `unit`, `frequency`, `start`,
+`end`, `count`, `sheet`, `source_row`, `normalization_notes`, `inputs` con `retrieved_at`/`http_last_modified`/`published_at`), así que
+la página puede leer la copia publicada sin traducir. Para la página: leer `catalogo.json`, tomar `sources.<fuente>.current`, abrir su
+manifiesto y bajar los CSV, comprobando el `sha256` de cada uno. Solo sale lo publicado y sin quién aprobó, se comprueba contra el
+hash aprobado y no anuncia nada a medias. Una fuente sin `licencia` y `atribucion` (columnas nuevas de `fuente`, migración 0017) no
+se exporta: completarlas es la revisión de redistribución que pediste. Falta que Juani elija el repositorio de destino; con eso armo
+el flujo que lo corre y hace commit. Detalle en `docs/base-datos-supabase.md`, "La copia pública de lo aprobado".

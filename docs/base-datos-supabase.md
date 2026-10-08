@@ -410,6 +410,59 @@ anotando, sin ningún otro permiso); el cifrado con un age falso que comprueba c
 espera (`test_respaldo.py`, `FlujoDeGitHubTests`). **No se probó**: el flujo en GitHub Actions, la API S3 de Supabase, `pg_dump` por el
 pooler de Supabase, el age de verdad ni una restauración en un proyecto de Supabase.
 
+## La copia pública de lo aprobado
+
+Juani decidió que GitHub tenga una copia versionada de las series **aprobadas**, para consultarlas y descargarlas. Supabase sigue
+siendo la fuente de verdad. `python -m servicio_datos.exportar --destino <carpeta>` (`exportacion.py`, migración 0017) arma esa copia:
+
+```
+catalogo.json                         los releases exportados y el vigente de cada fuente
+releases/<release_id>/manifiesto.json la fuente, la licencia, de qué archivos salió y el SHA-256 de cada CSV
+releases/<release_id>/<serie_id>.csv  fecha,valor (una fila por mes, la fecha como AAAA-MM-01)
+```
+
+Las claves de los manifiestos son las del catálogo del piloto que ya lee ChartBay (`id`, `name`, `unit`, `frequency`, `start`, `end`,
+`count`, `sheet`, `source_row`, `normalization_notes`, y en `inputs`, `retrieved_at`, `http_last_modified` y `published_at`), así que
+la página puede pasar a leer la copia publicada sin traducir nada. Para cada fuente, `catalogo.json` dice cuál es el release
+vigente (`current`); ese release tiene su manifiesto, y el manifiesto, los CSV con su hash.
+
+Lo que garantiza:
+
+- **Solo sale lo publicado.** Nada de candidatos, hallazgos, decisiones, corridas ni crudo, y tampoco quién aprobó.
+- **Exactamente lo que se aprobó.** Cada release se reconstruye tal cual quedó al publicarse (también los viejos), y antes de
+  escribirlo se comprueba que dé el mismo hash de contenido que se aprobó. `python -m servicio_datos.exportar comprobar --destino
+  <carpeta>` lo vuelve a verificar desde los CSV, sin la base: cualquiera puede comprobar que la copia es lo aprobado.
+- **Nada a medias.** Un release se escribe en una carpeta temporal que recién al final toma su nombre, y el catálogo se arma al final
+  con los releases completos y verificados. Si el último no pudo salir, el catálogo sigue anunciando el anterior.
+- **Los releases no cambian.** Uno ya exportado no se reescribe: si no coincide con su manifiesto (alguien lo tocó), queda pendiente
+  para que lo mire una persona.
+- **Sin licencia revisada, no se redistribuye.** La fuente tiene que tener `licencia` y `atribucion` (columnas nuevas de `fuente`).
+  Las completa una persona después de revisar los términos, por ejemplo:
+
+  ```sql
+  UPDATE economia.fuente SET licencia = '<licencia>', licencia_url = '<enlace a su texto>', atribucion = '<cómo citarla>'
+  WHERE id = 'INDEC_IPC';
+  ```
+
+  Según la auditoría de Codex, el sitio de INDEC declara CC BY-SA 4.0. Si es así, la copia tiene que mantener esa licencia y citar
+  la fuente, y para eso el manifiesto las lleva. Confirmarlo es parte de la revisión pendiente.
+- **Seguro de repetir.** Lo que ya está no se toca; lo que no salió queda pendiente con su motivo y se reintenta en la corrida
+  siguiente. Sale con código 1 si algo quedó pendiente.
+
+Para leer la base sirve el rol de los respaldos (`datos_respaldo`), en `DATOS_EXPORTACION_DATABASE_URL`.
+
+**Lo que falta, y depende de Juani:** elegir el repositorio de destino (el propio, el de la facultad o los dos) y revisar la licencia.
+Con eso se arma el flujo de GitHub Actions que corre la exportación todos los días (o después de cada publicación), comprueba la copia
+y hace commit en el repositorio elegido solo si cambió algo. Como `catalogo.json` y los releases no llevan la hora de la corrida,
+correrlo sin novedades no cambia ningún archivo.
+
+Qué se verificó: con releases publicados de verdad (pipeline, revisión y publicación) contra PostgreSQL, que sale cada release con sus
+CSV y su manifiesto y que da el hash aprobado; que no sale nada sin publicar ni quién aprobó; que repetirlo no cambia ningún archivo;
+que un release nuevo se suma sin tocar el anterior y que la historia completa sale aunque se exporte tarde; que el vigente es el
+último publicado y no el que ordena primero o último por nombre; y lo que no debe pasar (sin licencia, un hash que no coincide, una
+corrida cortada sin poder limpiar, una copia alterada, un manifiesto que apunta fuera de su carpeta). También que alcanza con el rol
+de los respaldos.
+
 ## Reparto con Codex (aprobado por Juani)
 
 - **Claude**: las funciones SQL (pasos 1, 2 y la detección de avisos) con pruebas contra Postgres, y las Edge Functions (3, 5 y 6)

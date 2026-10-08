@@ -60,6 +60,8 @@ DATOS_PG_BIN=
 # bucket, y la clave pública de age (age1...) con la que se cifra el paquete de `respaldar empaquetar`
 DATOS_CRUDO_DESCARGADO=
 DATOS_RESPALDO_AGE_DESTINATARIO=
+# Para la copia pública de lo aprobado (python -m servicio_datos.exportar): un rol que pueda leer lo publicado (sirve el de los respaldos)
+DATOS_EXPORTACION_DATABASE_URL=
 
 # --- Monitor externo: el latido (ver docs/despliegue-servicio-datos.md, sección 9) ---
 # Dirección de latido del servicio de afuera (Healthchecks.io: https://hc-ping.com/...). Es una credencial: quien la tenga
