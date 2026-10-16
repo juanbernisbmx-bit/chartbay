@@ -1,0 +1,11 @@
+[Unit]
+Description=Consultar cada hora las actualizaciones pendientes de series
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=300
+Persistent=true
+Unit=club-economia.service
+
+[Install]
+WantedBy=timers.target

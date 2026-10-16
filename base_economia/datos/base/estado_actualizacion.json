@@ -1,0 +1,17 @@
+{
+  "generado_en": "2026-10-15T21:03:53.572827+00:00",
+  "series_catalogadas": 49201,
+  "series_con_observaciones": 43599,
+  "observaciones": 7656792,
+  "trabajos": [
+    {
+      "id": "metadatos_globales",
+      "ultimo_intento": "2026-10-15T21:03:52.232999+00:00",
+      "ultimo_exito": "2026-10-15T21:03:53.426644+00:00",
+      "proxima_consulta": "2026-10-22T21:03:53.426644+00:00",
+      "fallos": 0,
+      "estado": "sin_cambios",
+      "error": null
+    }
+  ]
+}

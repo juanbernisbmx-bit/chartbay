@@ -7,23 +7,43 @@ llevar un conjunto a `/econometria`. Es independiente de la antigua sección
 ## Datos disponibles
 
 - 100 entradas de catálogo: nacionales, provinciales y regionales.
-- 7 series con valores reales: IPC general nacional y seis regiones de INDEC.
-- 819 observaciones mensuales, base diciembre de 2016 = 100.
-- Las 7 series cubren de diciembre de 2016 a agosto de 2026. El nacional sale de
-  `sh_ipc_09_26.xls` (publicado el 10 de septiembre); el de agosto, `08_26`, llegaba
-  hasta julio y dejaba al nacional un mes atrás de las regiones.
-- 93 entradas sin observaciones: visibles al desmarcar el filtro de cargadas,
-  pero no seleccionables. No se generan valores de ejemplo para ellas.
+- 31 series con valores: 7 IPC de INDEC y 24 TOP provinciales.
+- 1.592 observaciones: 819 IPC y 773 TOP.
+- IPC: diciembre de 2016 a agosto de 2026, base diciembre de 2016 = 100.
+- TOP: enero de 2024 a julio, agosto o septiembre de 2026 según jurisdicción,
+  en millones de pesos corrientes. La Pampa tiene un faltante en diciembre de 2024.
+- 69 entradas siguen sin observaciones y no se habilitan para análisis.
 
-Las coberturas corresponden al contenido de los archivos conservados, no al
-nombre del archivo ni a una promesa de actualización. La revisión humana
-integral sigue pendiente; el piloto no representa datos aprobados para entrega.
+Se conservan los valores y archivos de origen, sin redondear ni completar faltantes.
+Los ceros/vacíos del TOP se omiten como faltantes y su significado sigue pendiente
+de revisión. La captura y Last-Modified HTTP no se presentan como publicación oficial.
+La revisión humana integral sigue pendiente.
 
-El catálogo con observaciones está en `datasets/economia/catalogo.json`.
-Se genera desde el repositorio separado de la base mediante
-`scripts/preparar_piloto.py --chartbay /ruta/chartbay`. No editar esa copia a mano.
-`CHARTBAY_DATA_DIR` permite usar otra carpeta que contenga `catalogo.json`.
-La API de lectura es `GET /api/base-datos/catalogo`; no descarga datos de INDEC.
+El catálogo del piloto está en `datasets/economia/catalogo.json`.
+`CHARTBAY_DATA_DIR` permite leer otro directorio. La API
+`GET /api/base-datos/catalogo` no inicia descargas.
+
+## Recolección y actualización en Python
+
+El módulo [base_economia](../base_economia/README.md) contiene los importadores,
+originales del piloto, pruebas, catálogo masivo y actualizador periódico.
+El catálogo masivo SQLite se consulta con su buscador/exportador; la web sigue
+usando el piloto JSON de 31 series. Los archivos masivos y SQLite se conservan
+fuera de Git.
+
+Para generar la copia del piloto desde los TOP conservados, desde esta raíz:
+
+```bash
+python base_economia/scripts/importar_top.py \
+  --manifiesto base_economia/datos/originales/top_candidato_20261015T202113657342Z.json \
+  --chartbay .
+```
+
+El [actualizador Python](../base_economia/scripts/actualizar_base.py) decide qué
+fuentes consultar por frecuencia, conserva revisiones, reintenta fallos y evita
+duplicados. La [guía de servidor](../base_economia/despliegue/README.md) incluye
+las unidades systemd preparadas; todavía no están instaladas en un servidor.
+Esta carga no activa el agente, no limpia datos ni publica releases en Supabase.
 
 ## Preparación y análisis
 
@@ -77,5 +97,5 @@ de tiempo, capturas y dimensiones del gráfico en escritorio y móvil.
 ## Pendiente
 
 PostgreSQL, recolección programada, historial de revisiones, aprobación humana
-en una interfaz, permisos de acceso y ampliación provincial. El JSON actual es
+en una interfaz, permisos de acceso y activación del actualizador. El JSON actual es
 un contrato de lectura para probar la experiencia, no el almacenamiento final.

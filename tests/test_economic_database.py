@@ -23,14 +23,15 @@ class EconomicDatabaseTests(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(len(payload['series']), 100)
         loaded = [s for s in payload['series'] if s['available']]
-        self.assertEqual(len(loaded), 7)
-        self.assertEqual(sum(s['count'] for s in loaded), 819)
+        self.assertEqual(len(loaded), 31)
+        self.assertEqual(sum(s['count'] for s in loaded), 1592)
         for series in payload['series']:
             self.assertEqual(series['count'], len(series['observations']))
             self.assertEqual(series['available'], bool(series['observations']))
             if series['available']:
                 self.assertEqual(len(series['original']['sha256']), 64)
-                self.assertTrue(series['original']['url'].startswith('https://www.indec.gob.ar/'))
+                expected_host = 'https://www.indec.gob.ar/' if series['source_id'] == 'INDEC_IPC' else 'https://www.argentina.gob.ar/'
+                self.assertTrue(series['original']['url'].startswith(expected_host))
 
     def test_page_navigation_and_security_headers(self):
         response = self.client.get('/base-de-datos')

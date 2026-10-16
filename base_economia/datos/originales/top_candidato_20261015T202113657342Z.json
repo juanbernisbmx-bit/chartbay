@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "source_page": "https://www.argentina.gob.ar/economia/sechacienda/asuntosprovinciales/direccion-de-recursos-provinciales/recursos-tributarios-de-origen-provincial-top",
+  "files": [
+    {
+      "year": 2024,
+      "file": "top_2024_a97a5bf2dea2aa0b1d842c9f167b46515ccaad3d7563b77c972f1013aa9faa88.xlsx",
+      "url": "https://www.argentina.gob.ar/sites/default/files/top_mensual_2024_0.xlsx",
+      "sha256": "a97a5bf2dea2aa0b1d842c9f167b46515ccaad3d7563b77c972f1013aa9faa88",
+      "retrieved_at": "2026-10-15T20:21:13.193503+00:00",
+      "http_last_modified_at": "2025-08-19T19:06:22+00:00"
+    },
+    {
+      "year": 2025,
+      "file": "top_2025_35a5488012267388a2c71255504b9cd93ae93970e1b3fb6173bb81b7abdfbe86.xlsx",
+      "url": "https://www.argentina.gob.ar/sites/default/files/top_mensual_2025_12.xlsx",
+      "sha256": "35a5488012267388a2c71255504b9cd93ae93970e1b3fb6173bb81b7abdfbe86",
+      "retrieved_at": "2026-10-15T20:21:13.514288+00:00",
+      "http_last_modified_at": "2026-09-16T17:25:27+00:00"
+    },
+    {
+      "year": 2026,
+      "file": "top_2026_bce20120f76048feeb15dbc31a987ac8f516aecd05762cfefd97632d4b255b06.xlsx",
+      "url": "https://www.argentina.gob.ar/sites/default/files/top_mensual_2026_19.xlsx",
+      "sha256": "bce20120f76048feeb15dbc31a987ac8f516aecd05762cfefd97632d4b255b06",
+      "retrieved_at": "2026-10-15T20:21:13.655750+00:00",
+      "http_last_modified_at": "2026-10-07T20:11:13+00:00"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "consulta_horas_por_frecuencia": {
+    "R/P1D": 6,
+    "R/P1W": 24,
+    "R/P1M": 24,
+    "R/P3M": 168,
+    "R/P6M": 336,
+    "R/P1Y": 720,
+    "desconocida": 168
+  },
+  "catalogos_excluidos": ["test_node"],
+  "metadatos_globales_horas": 168,
+  "max_trabajos_por_ejecucion": 32,
+  "reintento_inicial_horas": 1,
+  "reintento_maximo_horas": 24,
+  "trabajos": {}
+}

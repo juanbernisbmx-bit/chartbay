@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "nota": "Ultima modificacion HTTP de cada original, tomada de Last-Modified. No prueba la fecha oficial de publicacion. Se asocia al SHA-256 porque sh_ipc_aperturas.xls se pisa en cada publicacion.",
+  "archivos": {
+    "9cb56c3b080123f5cdd87bb3d96a2854a62e17b22f7ba01666490593f54e847d": {
+      "file": "sh_ipc_08_26.xls",
+      "url": "https://www.indec.gob.ar/ftp/cuadros/economia/sh_ipc_08_26.xls",
+      "http_last_modified_at": "2026-08-13T19:08:09+00:00",
+      "verified_on": "2026-10-06"
+    },
+    "f57bf8516dd7e88c733d20d39941590e160f3825a4fe8f660fc6cd3d1c79197c": {
+      "file": "sh_ipc_09_26.xls",
+      "url": "https://www.indec.gob.ar/ftp/cuadros/economia/sh_ipc_09_26.xls",
+      "http_last_modified_at": "2026-09-10T18:52:05+00:00",
+      "retrieved_at": "2026-10-06T15:44:13.877248+00:00",
+      "verified_on": "2026-10-06"
+    },
+    "57870411c5f3ede32532c634cfd8258e58e222a03d5e3925189ff79542030eac": {
+      "file": "sh_ipc_aperturas.xls",
+      "url": "https://www.indec.gob.ar/ftp/cuadros/economia/sh_ipc_aperturas.xls",
+      "http_last_modified_at": "2026-09-10T18:52:08+00:00",
+      "retrieved_at": "2026-10-05T18:55:46.826347+00:00",
+      "verified_on": "2026-10-06"
+    }
+  }
+}

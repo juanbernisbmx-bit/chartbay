@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+.env.*
+!.env.example
+# Capturas y base masiva locales: conservar copias fuera de Git.
+datos/originales/masivo/[0-9a-f]*
+datos/base/*.sqlite*
+datos/actualizaciones/
+datos/base/.escritura.lock

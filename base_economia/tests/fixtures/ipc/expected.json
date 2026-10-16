@@ -1,0 +1,14 @@
+{
+  "start": "2016-12-01",
+  "end": "2026-08-01",
+  "count": 117,
+  "series": {
+    "ipc_ng_nacional": {"row": 10, "last_value": 12276.766},
+    "ipc_ng_gba": {"row": 8, "last_value": 12276.812},
+    "ipc_ng_pampeana": {"row": 58, "last_value": 12223.9951},
+    "ipc_ng_noa": {"row": 106, "last_value": 12397.9365},
+    "ipc_ng_nea": {"row": 154, "last_value": 12404.6845},
+    "ipc_ng_cuyo": {"row": 202, "last_value": 12360.9149},
+    "ipc_ng_patagonia": {"row": 250, "last_value": 12265.2749}
+  }
+}

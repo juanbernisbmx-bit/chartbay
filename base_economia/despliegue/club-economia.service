@@ -1,0 +1,19 @@
+[Unit]
+Description=Actualizar series del Club de Economia
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=club-economia
+Group=club-economia
+WorkingDirectory=/opt/club-economia
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/club-economia/.venv/bin/python /opt/club-economia/scripts/actualizar_base.py ejecutar
+TimeoutStartSec=50min
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/club-economia/datos /opt/club-economia/outputs
