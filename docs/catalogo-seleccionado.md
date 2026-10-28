@@ -79,6 +79,12 @@ identificador de release de cada serie en la ficha de procedencia. Su caché de
 metadatos está acotada a 128 búsquedas y cinco minutos. Ante una caída se informa
 el error; el modo seleccionado no usa la copia masiva de GitHub como respaldo.
 
+Al pasar a Econometría, la vista previa y los selectores de Y y X muestran los
+nombres de las series, con su transformación y rezago cuando corresponda. Los
+códigos se conservan como claves internas del CSV y en la procedencia para que
+la estimación y las recetas reproducibles mantengan la misma correspondencia.
+Solo se añade el identificador a la etiqueta si dos nombres resultan iguales.
+
 Las fichas sin clasificación territorial se muestran como `Sin clasificar`.
 El selector inicial usa los metadatos y popularidad del catálogo de origen;
 no equivale a una revisión metodológica ni completa licencias automáticamente.
