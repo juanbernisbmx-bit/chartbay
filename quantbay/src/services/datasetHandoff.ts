@@ -33,6 +33,8 @@ export interface DatabaseHandoff {
     id: string; name: string; column: string; unit: string; transform: string; lag: number;
     source: string; sourceUrl: string; originalUrl: string | null; sha256: string | null;
     retrievedAt: string | null; publishedAt: string | null; normalizationNotes: string[];
+    license?: string | null; licenseUrl?: string | null; attribution?: string | null;
+    releaseId?: string;
   }>;
 }
 

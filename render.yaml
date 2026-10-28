@@ -43,6 +43,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.5"
+      - key: CHARTBAY_DATABASE_MODE
+        value: selected
+      - key: SUPABASE_URL
+        value: https://oqbqdngieifjlgbppvey.supabase.co
+      # Clave publicable de lectura, configurada en el panel de Render.
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
       # Sólo la usa la sección Datos, que hoy está escondida (SECCIONES en
       # web/app.py). Con Datos encendida y sin la clave, la sección lista sus 49
       # indicadores y deja descargar los 12 de World Bank, pero los 37 de FRED
