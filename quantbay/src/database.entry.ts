@@ -2,7 +2,7 @@ import Chart from 'chart.js/auto';
 import { createIcons, Search, X, Database, ArrowRight, Download, Info, Trash2, RotateCcw, FileJson } from 'lucide';
 import { escapeHtml as esc } from './utils/format';
 import { putHandoff, type DatabaseHandoff } from './services/datasetHandoff';
-import { downloadBlob, prepareDataset, TRANSFORMS, type Selection, type Snapshot, type PreparedDataset, type Transform } from './database/dataset';
+import { downloadBlob, prepareDataset, TRANSFORMS, type EconomicSeries, type Selection, type Snapshot, type PreparedDataset, type Transform } from './database/dataset';
 
 const icons = { Search, X, Database, ArrowRight, Download, Info, Trash2, RotateCcw, FileJson };
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(`db-${id}`) as T;
@@ -19,6 +19,54 @@ let analysisMode: 'regression' | 'timeseries' = 'regression';
 let yId = '';
 let currentTab = 'table';
 let transferring = false;
+let pageSeries: EconomicSeries[] = [];
+let pageRequest = 0;
+let selectionRequest = 0;
+const loadingSeries = new Map<string, Promise<void>>();
+
+function mergeSeries(items: EconomicSeries[]): void {
+  const byId = new Map(snapshot.series.map(s => [s.id, s]));
+  for (const item of items) {
+    const previous = byId.get(item.id);
+    byId.set(item.id, previous?.release_id === item.release_id && previous?.observations.length && !item.observations.length
+      ? { ...item, observations: previous.observations } : item);
+  }
+  snapshot.series = [...byId.values()];
+}
+async function ensureSeries(id: string): Promise<void> {
+  if (snapshot.series.find(s => s.id === id)?.observations.length) return;
+  let pending = loadingSeries.get(id);
+  if (!pending) {
+    pending = (async () => {
+      const response = await fetch(`/api/base-datos/serie/${encodeURIComponent(id)}`);
+      const payload = await response.json();
+      if (!response.ok || !payload.ok || payload.series?.id !== id || !payload.series.observations?.length) {
+        throw Object.assign(new Error(payload.error || 'No se pudo cargar la serie seleccionada.'), { status: response.status });
+      }
+      mergeSeries([payload.series]);
+    })().finally(() => loadingSeries.delete(id));
+    loadingSeries.set(id, pending);
+  }
+  await pending;
+}
+async function requestPage(page = 1): Promise<void> {
+  const request = ++pageRequest;
+  $('catalog-status').hidden = false; $('catalog-status').textContent = 'Buscando series...';
+  const params = new URLSearchParams({ page: String(page), q: input('search').value.trim(), topic: select('topic').value, level: select('level').value });
+  try {
+    const response = await fetch(`/api/base-datos/catalogo?${params}`);
+    const payload: Snapshot & { ok: boolean; error?: string } = await response.json();
+    if (request !== pageRequest) return;
+    if (!response.ok || !payload.ok || !payload.paginated || !Array.isArray(payload.series)) throw new Error(payload.error || 'No se pudo buscar.');
+    pageSeries = payload.series;
+    mergeSeries(payload.series);
+    snapshot = { ...payload, series: snapshot.series };
+    renderCatalog();
+    $('catalog-status').hidden = true;
+  } catch (reason) {
+    if (request === pageRequest) $('catalog-status').textContent = (reason as Error).message;
+  }
+}
 
 function refreshIcons(): void { createIcons({ icons, attrs: { 'aria-hidden': 'true' } }); }
 function error(message = ''): void { $('prepare-error').textContent = message; $('prepare-error').hidden = !message; }
@@ -45,11 +93,18 @@ function restore(): void {
 function renderCatalog(): void {
   const query = input('search').value.trim().toLocaleLowerCase('es');
   const topic = select('topic').value, level = select('level').value;
-  const items = snapshot.series.filter(s => (!input('ready').checked || s.available) &&
+  const items = snapshot.paginated ? pageSeries : snapshot.series.filter(s => (!input('ready').checked || s.available) &&
     (!topic || s.topic === topic) && (!level || s.level === level) &&
     (!query || `${s.name} ${s.territory} ${s.source}`.toLocaleLowerCase('es').includes(query)));
-  $('filter-count').textContent = `${items.length} resultados`;
+  $('filter-count').textContent = `${snapshot.paginated ? snapshot.total : items.length} resultados`;
+  $('pagination').hidden = !snapshot.paginated;
+  if (snapshot.paginated) {
+    const page = snapshot.page ?? 1, pages = Math.max(1, Math.ceil((snapshot.total ?? 0) / (snapshot.page_size ?? 50)));
+    $('page-status').textContent = `Página ${page} de ${pages}`;
+    button('previous').disabled = page <= 1; button('next').disabled = page >= pages;
+  }
   $('empty').hidden = items.length > 0;
+  $('empty').textContent = snapshot.series.length ? 'Sin series para estos filtros.' : 'Todavía no hay series publicadas disponibles.';
   $('series').innerHTML = items.map(s => {
     const checked = selection.some(choice => choice.id === s.id);
     const coverage = s.available ? `${s.start!.slice(0, 7)} / ${s.end!.slice(0, 7)}` : 'Sin cargar';
@@ -120,7 +175,19 @@ function updatePreview(): void {
 }
 function changed(rebuildSelection = true): void {
   if (rebuildSelection) renderSelection();
-  updatePreview(); persist();
+  persist();
+  const request = ++selectionRequest;
+  if (snapshot.paginated && selection.some(s => !snapshot.series.find(item => item.id === s.id)?.observations.length)) {
+    prepared = null; chart?.destroy(); chart = null;
+    button('apply').disabled = true; button('csv').disabled = true; button('manifest').disabled = true;
+    $('preview-content').hidden = true; $('preview-empty').hidden = false;
+    error('Cargando las series seleccionadas...');
+    void Promise.all(selection.map(s => ensureSeries(s.id))).then(() => {
+      if (request === selectionRequest) { renderSelection(); updatePreview(); }
+    }).catch(reason => { if (request === selectionRequest) error((reason as Error).message); });
+    return;
+  }
+  updatePreview();
 }
 function metadata(): DatabaseHandoff {
   if (!prepared?.rows.length) throw new Error('No hay un conjunto preparado.');
@@ -135,7 +202,9 @@ function metadata(): DatabaseHandoff {
       return { ...column, transform: TRANSFORMS[column.transform], source: series.source,
         sourceUrl: series.source_url, originalUrl: series.original?.url ?? null,
         sha256: series.original?.sha256 ?? null, retrievedAt: series.original?.retrieved_at ?? null,
-        publishedAt: series.original?.published_at ?? null, normalizationNotes: series.normalization_notes };
+        publishedAt: series.original?.published_at ?? null, normalizationNotes: series.normalization_notes,
+        license: series.license ?? null, licenseUrl: series.license_url ?? null,
+        attribution: series.attribution ?? null, releaseId: series.release_id ?? snapshot.release_id };
     }),
   };
 }
@@ -144,12 +213,20 @@ function showDetail(id: string): void {
   if (!series) return;
   $('detail-title').textContent = series.name;
   const fields = [['Fuente', series.source], ['Territorio', `${series.territory} (${series.classification})`], ['Frecuencia', series.frequency], ['Unidad', series.unit], ['Base / ajuste', series.basis], ['Estado', series.status], ['Observaciones', String(series.count)], ['Cobertura', series.start ? `${series.start.slice(0, 7)} / ${series.end!.slice(0, 7)}` : 'Pendiente'], ['Pendientes', series.pending]];
-  if (series.original) fields.push(...(series.original.published_at ? [['Publicado por la fuente', series.original.published_at]] : []), ['Captura', series.original.retrieved_at], ['Archivo / hoja', `${series.sheet}, fila ${series.source_row}`]);
+  if (series.release_id) fields.push(['Release', series.release_id]);
+  if (series.original) {
+    if (series.original.published_at) fields.push(['Publicado por la fuente', series.original.published_at]);
+    if (series.original.retrieved_at) fields.push(['Captura', series.original.retrieved_at]);
+  }
+  if (series.sheet) fields.push(['Archivo / hoja', `${series.sheet}${series.source_row ? `, fila ${series.source_row}` : ''}`]);
   if (series.normalization_notes.length) fields.push(['Normalización', series.normalization_notes.join('. ')]);
+  if (series.attribution) fields.push(['Atribución', series.attribution]);
+  if (series.license) fields.push(['Licencia', series.license]);
   $('detail-body').innerHTML = `<dl>${fields.map(([label, value]) => `<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`).join('')}</dl>`;
   for (const [label, url] of [['Publicación de origen', series.source_url], ['Archivo original', series.original?.url]]) {
     if (url && /^https:\/\//.test(url)) { const p = document.createElement('p'), a = document.createElement('a'); a.textContent = label!; a.href = url; a.target = '_blank'; a.rel = 'noopener'; p.append(a); $('detail-body').append(p); }
   }
+  if (series.license_url && /^https:\/\//.test(series.license_url)) { const p = document.createElement('p'), a = document.createElement('a'); a.textContent = 'Texto de la licencia'; a.href = series.license_url; a.target = '_blank'; a.rel = 'noopener'; p.append(a); $('detail-body').append(p); }
   $<HTMLDialogElement>('detail').showModal();
 }
 async function load(): Promise<void> {
@@ -159,24 +236,54 @@ async function load(): Promise<void> {
     const payload = await response.json();
     if (!response.ok || !payload.ok || payload.schema_version !== 1 || !Array.isArray(payload.series)) throw new Error(payload.error || 'No se pudo cargar el catálogo.');
     snapshot = payload;
+    pageSeries = [...payload.series];
+    if (snapshot.paginated) {
+      // Restaurar hasta doce selecciones aunque sus fichas estén en otras páginas.
+      let saved: { selection?: Selection[] } | null = null;
+      try {
+        saved = JSON.parse(localStorage.getItem(STORAGE) ?? 'null');
+      } catch { /* A malformed saved selection does not prevent loading. */ }
+      const choices = Array.isArray(saved?.selection) ? saved.selection : [];
+      const ids = [...new Set<string>(choices.map(s => s?.id))]
+        .filter(id => typeof id === 'string' && /^[a-z0-9_]{1,100}$/.test(id)).slice(0, 12);
+      await Promise.all(ids.map(async id => {
+        try { await ensureSeries(id); }
+        catch (reason) {
+          // Conservar la selección guardada ante fallas transitorias; solo omitir una retirada real.
+          if ((reason as { status?: number }).status !== 404) throw reason;
+        }
+      }));
+    }
+    button('example').hidden = !['ipc_ng_nacional', 'ipc_ng_pampeana', 'ipc_ng_cuyo'].every(id => snapshot.series.some(s => s.id === id && s.available));
+    input('ready').closest('label')!.hidden = snapshot.source !== 'pilot';
+    $('origin').textContent = snapshot.source === 'pilot' ? 'Piloto local' : snapshot.source === 'supabase' ? 'Supabase · publicado' : snapshot.source === 'supabase_cache' ? 'Supabase · última lectura' : snapshot.source === 'github' ? 'Copia publicada · GitHub' : 'Sin publicaciones';
     $('release').textContent = snapshot.release_id;
-    $('count').textContent = `${snapshot.series.length} series · ${snapshot.series.filter(s => s.available).length} cargadas`;
-    select('topic').innerHTML = '<option value="">Todos los temas</option>' + [...new Set(snapshot.series.map(s => s.topic))].sort().map(topic => `<option>${esc(topic)}</option>`).join('');
-    restore(); renderCatalog(); renderSelection(); updatePreview();
+    $('count').textContent = snapshot.paginated ? `${snapshot.catalog_total ?? 0} series publicadas` : `${snapshot.series.length} series · ${snapshot.series.filter(s => s.available).length} cargadas`;
+    select('topic').innerHTML = '<option value="">Todos los temas</option>' + (snapshot.topics ?? [...new Set(snapshot.series.map(s => s.topic))].sort()).map(topic => `<option>${esc(topic)}</option>`).join('');
+    if (snapshot.paginated) select('level').innerHTML = '<option value="">Todas las coberturas</option>' + (snapshot.levels ?? []).map(level => `<option>${esc(level)}</option>`).join('');
+    restore(); renderCatalog(); changed();
     $('content').hidden = false; $('load-status').hidden = true;
   } catch (reason) { $('load-status').textContent = (reason as Error).message; button('retry').hidden = false; }
 }
 function init(): void {
   if (!document.querySelector('[data-db-page]')) return;
-  input('search').addEventListener('input', renderCatalog);
-  for (const id of ['topic', 'level', 'ready']) $(id).addEventListener('change', renderCatalog);
+  let searchTimer: ReturnType<typeof setTimeout>;
+  input('search').addEventListener('input', () => {
+    if (!snapshot?.paginated) { if (snapshot) renderCatalog(); return; }
+    clearTimeout(searchTimer); searchTimer = setTimeout(() => { void requestPage(); }, 250);
+  });
+  for (const id of ['topic', 'level', 'ready']) $(id).addEventListener('change', () => {
+    if (snapshot?.paginated) void requestPage(); else if (snapshot) renderCatalog();
+  });
+  button('previous').addEventListener('click', () => { void requestPage((snapshot.page ?? 1) - 1); });
+  button('next').addEventListener('click', () => { void requestPage((snapshot.page ?? 1) + 1); });
   $('series').addEventListener('change', event => {
     const checkbox = event.target as HTMLInputElement;
     const id = checkbox.dataset.series;
     if (!id) return;
     if (checkbox.checked) {
       if (selection.length >= 12) { checkbox.checked = false; error('El máximo es de 12 series por conjunto.'); return; }
-      selection.push({ id, transform: 'monthly', lag: 0 });
+      selection.push({ id, transform: snapshot.paginated ? 'level' : 'monthly', lag: 0 });
     } else selection = selection.filter(s => s.id !== id);
     renderCatalog(); changed();
   });

@@ -40,7 +40,8 @@ import providers        # noqa: E402
 from chartpython_manual import notebook_de_practica  # noqa: E402
 from rate_limit import Limitador, Regla, ip_del_cliente  # noqa: E402
 from source_archive import build_source_archive  # noqa: E402
-from economic_database import read_snapshot  # noqa: E402
+from economic_database import read_pilot_snapshot, read_snapshot  # noqa: E402
+from economic_catalogue import catalogue_page, selected_series  # noqa: E402
 
 CACHE_DIR = HERE / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
@@ -385,14 +386,52 @@ def economic_database_review():
 @app.route("/api/base-datos/catalogo")
 @seccion("base_datos")
 def api_economic_database():
+    if os.environ.get("CHARTBAY_DATABASE_MODE") == "selected":
+        try:
+            page = int(request.args.get('page', '1'))
+            text, topic, level = (request.args.get(k, '') for k in ('q', 'topic', 'level'))
+            if page < 1 or page > 100000 or len(text)>200 or len(topic)>100 or len(level)>100:
+                raise ValueError('Filtros inválidos')
+        except ValueError:
+            return jsonify(ok=False, error='Filtros o página inválidos.'), 400
+        try:
+            url, key = _supabase_public_config()
+            return jsonify(ok=True, **catalogue_page(url, key, text, topic, level, page))
+        except (OSError, ValueError, KeyError, TypeError):
+            app.logger.exception('No se pudo consultar el catálogo seleccionado')
+            return jsonify(ok=False, error='No se pudo consultar el catálogo. Volvé a intentar.'), 503
     try:
-        payload = read_snapshot(ROOT)
+        if os.environ.get("CHARTBAY_DATABASE_MODE") == "published":
+            url, key = _supabase_public_config()
+            payload = read_snapshot(ROOT, url, key)
+        else:
+            payload = read_pilot_snapshot(ROOT)
     except (OSError, ValueError, KeyError, TypeError):
         app.logger.exception("No se pudo abrir la instantánea económica")
         return jsonify({"ok": False, "error": "La base de datos no está disponible. Volvé a intentar."}), 503
     response = jsonify({"ok": True, **payload})
     response.headers["Cache-Control"] = "no-cache"
     return response
+
+
+@app.route('/api/base-datos/serie/<identifier>')
+@seccion('base_datos')
+def api_selected_economic_series(identifier):
+    if os.environ.get('CHARTBAY_DATABASE_MODE') != 'selected':
+        abort(404)
+    if not re.fullmatch(r'[a-z0-9_]{1,100}', identifier):
+        return jsonify(ok=False, error='Identificador inválido.'), 400
+    try:
+        url, key = _supabase_public_config()
+        payload = selected_series(url, key, identifier)
+        if payload is None:
+            return jsonify(ok=False, error='La serie no está publicada.'), 404
+        response = jsonify(ok=True, series=payload)
+        response.headers['Cache-Control'] = 'no-cache'
+        return response
+    except (OSError, ValueError, KeyError, TypeError):
+        app.logger.exception('No se pudo consultar la serie publicada')
+        return jsonify(ok=False, error='No se pudo cargar la serie. Volvé a intentar.'), 503
 
 
 # ─── Datos Frecuentes ────────────────────────────────────────────────────────

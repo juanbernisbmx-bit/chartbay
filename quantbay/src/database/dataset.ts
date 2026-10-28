@@ -6,12 +6,17 @@ export interface EconomicSeries {
   id: string; name: string; topic: string; level: string; territory: string;
   classification: string; frequency: string; unit: string; basis: string;
   source_id: string; source: string; source_url: string; pending: string;
+  release_id?: string;
   available: boolean; status: string; start: string | null; end: string | null; count: number;
-  original: { url: string; sha256: string; retrieved_at: string; published_at: string | null } | null;
+  original: { url: string | null; sha256: string | null; retrieved_at: string | null; published_at: string | null } | null;
+  license?: string | null; license_url?: string | null; attribution?: string | null;
   sheet: string | null; source_row: number | null; normalization_notes: string[];
   observations: Observation[];
 }
-export interface Snapshot { schema_version: number; release_id: string; series: EconomicSeries[] }
+export interface Snapshot {
+  schema_version: number; release_id: string; source?: 'pilot' | 'supabase' | 'supabase_cache' | 'github' | 'sin_publicaciones'; series: EconomicSeries[];
+  paginated?: boolean; page?: number; page_size?: number; total?: number; catalog_total?: number; topics?: string[]; levels?: string[];
+}
 export const TRANSFORMS = {
   level: 'Nivel original',
   monthly: 'Variación mensual (%)',
