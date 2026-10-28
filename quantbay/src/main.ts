@@ -5,7 +5,7 @@ import { jsPDF } from 'jspdf';
 import { applyPlugin as applyAutoTablePlugin } from 'jspdf-autotable';
 import { type BridgedDataset } from './services/cleanerBridge';
 import { loadCsv, type LoadResult } from './services/cleanerLoader';
-import { takeHandoffDataset, type DatabaseHandoff } from './services/datasetHandoff';
+import { databaseColumnLabels, takeHandoffDataset, type DatabaseHandoff } from './services/datasetHandoff';
 import { downloadBlob } from './database/dataset';
 import { renderDeviceProfile } from '../../cleaner/js/deviceProfileView';
 import { detectDeviceProfile } from '../../cleaner/js/deviceProfiler';
@@ -648,6 +648,10 @@ async function consumeHandoff(): Promise<void> {
     return;
   }
   databaseOrigin = metadata;
+  const labels = databaseColumnLabels(metadata);
+  renderPreview(appState.csvData!, labels);
+  const categoricalCols = categoricalColumnsFor(appState.csvData!);
+  renderVarSelectors([...appState.csvData!.numericColumns, ...categoricalCols], categoricalCols, labels);
   const columns = appState.csvData!.numericColumns;
   const requiredColumns = metadata.mode === 'regression' ? [metadata.yName, ...metadata.xNames] : [metadata.yName];
   const missingColumns = requiredColumns.filter(name => !columns.includes(name));
@@ -672,7 +676,8 @@ async function consumeHandoff(): Promise<void> {
       list.append(item);
     }
   }
-  if (missingColumns.length) showError(`El limpiador no conservó estas variables: ${missingColumns.join(', ')}. Revisá la selección antes de calcular.`);
+  if (missingColumns.length) showError(`El limpiador no conservó estas variables: ${missingColumns.map(name => labels.get(name) ?? name).join(', ')}. Revisá la selección antes de calcular.`);
+  recordReproducibilityAction('Variables seleccionadas desde Base de datos');
   writeRunLog(['Conjunto recibido desde Base de datos.', `Versión: ${metadata.releaseId}`, `Meses excluidos: ${metadata.excludedMonths.length}`, missingColumns.length ? 'La selección requiere revisión: faltan columnas.' : 'Variables listas para el análisis.']);
   renderGuided();
 }

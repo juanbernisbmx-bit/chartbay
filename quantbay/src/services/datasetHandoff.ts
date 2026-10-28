@@ -38,6 +38,22 @@ export interface DatabaseHandoff {
   }>;
 }
 
+/** Human labels for selectors; CSV keys remain stable for estimation and recipes. */
+export function databaseColumnLabels(metadata: DatabaseHandoff): ReadonlyMap<string, string> {
+  const entries = metadata.series.map(series => ({
+    ...series,
+    label: [series.name.trim() || series.column,
+      ...(series.transform && series.transform !== 'Nivel original' ? [series.transform] : []),
+      ...(series.lag ? [`Rezago ${series.lag} ${series.lag === 1 ? 'mes' : 'meses'}`] : []),
+    ].join(' · '),
+  }));
+  const counts = new Map<string, number>();
+  for (const { label } of entries) counts.set(label, (counts.get(label) ?? 0) + 1);
+  return new Map(entries.map(series => [series.column,
+    counts.get(series.label)! > 1 ? `${series.label} (${series.id})` : series.label,
+  ]));
+}
+
 interface HandoffRecord {
   name: string;
   csv: Blob;

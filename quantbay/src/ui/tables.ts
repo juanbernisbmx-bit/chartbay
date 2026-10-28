@@ -4,10 +4,10 @@ import type { LogisticResult } from '../services/analysisService';
 import { $ } from '../app/dom';
 import { escapeHtml, significanceBadge } from '../utils/format';
 
-export function renderPreview(data: ParsedCSV): void {
+export function renderPreview(data: ParsedCSV, labels: ReadonlyMap<string, string> = new Map()): void {
   const { headers, rows, numericColumns } = data;
   const preview = rows.slice(0, 6);
-  const thead = `<tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
+  const thead = `<tr>${headers.map(h => `<th title="${escapeHtml(h)}">${escapeHtml(labels.get(h) ?? h)}</th>`).join('')}</tr>`;
   const tbody = preview
     .map(row => `<tr>${headers.map(h => `<td>${escapeHtml(row[h])}</td>`).join('')}</tr>`)
     .join('');
@@ -24,18 +24,18 @@ export function renderPreview(data: ParsedCSV): void {
 }
 
 
-export function renderVarSelectors(cols: string[], categoricalCols: string[] = []): void {
+export function renderVarSelectors(cols: string[], categoricalCols: string[] = [], labels: ReadonlyMap<string, string> = new Map()): void {
   const yEl = $('qb-y') as HTMLSelectElement | null;
   const xEl = $('qb-x-checks');
   const categoricalSet = new Set(categoricalCols);
-  if (yEl) yEl.innerHTML = cols.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if (yEl) yEl.innerHTML = cols.map(c => `<option value="${escapeHtml(c)}" title="${escapeHtml(c)}">${escapeHtml(labels.get(c) ?? c)}</option>`).join('');
   const defaultY = cols[0] ?? '';
   if (xEl)
     xEl.innerHTML = cols
       .map((c, i) => {
         const isY = c === defaultY;
         const catBadge = categoricalSet.has(c) ? '<span class="qb-cat-badge" style="opacity:0.6;font-size:11px"> (categórica)</span>' : '';
-        return `<label class="qb-x-check" style="${isY ? 'opacity:0.4' : ''}"><input type="checkbox" class="qb-x-cb" value="${escapeHtml(c)}" ${i > 0 ? 'checked' : ''} ${isY ? 'disabled title="Ya seleccionada como variable Y"' : ''}> ${escapeHtml(c)}${catBadge}<span class="qb-y-badge"${isY ? '' : ' style="display:none"'}> (Y)</span></label>`;
+        return `<label class="qb-x-check" title="${escapeHtml(c)}" style="${isY ? 'opacity:0.4' : ''}"><input type="checkbox" class="qb-x-cb" value="${escapeHtml(c)}" ${i > 0 ? 'checked' : ''} ${isY ? 'disabled title="Ya seleccionada como variable Y"' : ''}> ${escapeHtml(labels.get(c) ?? c)}${catBadge}<span class="qb-y-badge"${isY ? '' : ' style="display:none"'}> (Y)</span></label>`;
       })
       .join('');
 }
