@@ -678,7 +678,7 @@ async function consumeHandoff(): Promise<void> {
   }
   if (missingColumns.length) showError(`El limpiador no conservó estas variables: ${missingColumns.map(name => labels.get(name) ?? name).join(', ')}. Revisá la selección antes de calcular.`);
   recordReproducibilityAction('Variables seleccionadas desde Base de datos');
-  writeRunLog(['Conjunto recibido desde Base de datos.', `Versión: ${metadata.releaseId}`, `Meses excluidos: ${metadata.excludedMonths.length}`, missingColumns.length ? 'La selección requiere revisión: faltan columnas.' : 'Variables listas para el análisis.']);
+  writeRunLog(['Conjunto recibido desde Base de datos.', `Versión: ${metadata.releaseId}`, `Períodos excluidos: ${metadata.excludedMonths.length}`, missingColumns.length ? 'La selección requiere revisión: faltan columnas.' : 'Variables listas para el análisis.']);
   renderGuided();
 }
 

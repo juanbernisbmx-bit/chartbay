@@ -6,6 +6,7 @@ import re
 import time
 from datetime import date
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 
 def rpc(url: str, key: str, name: str, parameters: dict):
@@ -14,8 +15,20 @@ def rpc(url: str, key: str, name: str, parameters: dict):
     request = Request(url.rstrip('/') + '/rest/v1/rpc/' + name,
                       data=json.dumps(parameters).encode(),
                       headers={'apikey': key, 'Content-Type': 'application/json'}, method='POST')
-    with urlopen(request, timeout=5) as response:
-        raw = response.read(2_000_001)
+    # Both RPCs are read-only. Retry one transient upstream failure without
+    # caching an error or changing the selected release.
+    for attempt in range(2):
+        try:
+            with urlopen(request, timeout=5) as response:
+                raw = response.read(2_000_001)
+            break
+        except HTTPError as error:
+            if attempt or error.code not in (500, 502, 503, 504):
+                raise
+        except (URLError, TimeoutError):
+            if attempt:
+                raise
+        time.sleep(0.2)
     if len(raw)>2_000_000:
         raise ValueError('La consulta excede el tamaño permitido')
     return json.loads(raw)

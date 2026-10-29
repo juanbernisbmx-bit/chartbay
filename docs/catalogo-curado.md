@@ -6,7 +6,7 @@ ChartBay consulta Supabase con el modo `selected`. El catálogo admite búsqueda
 
 ## Instalación y actualización
 
-Aplicar `servicio_datos/despliegue/supabase/06_catalogo_curado.sql` y `07_colecta_curada.sql` después de 01–05. Desplegar `supabase/functions/colectar-curado` con verificación JWT habilitada. Registrar las series verificadas y capturas originales, cargar las publicaciones y activar la selección al finalizar. `catalogo_curado_config.activo=false` conserva la lectura mensual anterior durante la transición.
+Aplicar `servicio_datos/despliegue/supabase/06_catalogo_curado.sql` y `07_colecta_curada.sql` después de 01–05. La instalación existente puede actualizar su índice y consulta con `08_optimizar_catalogo.sql`, que limita primero a las series elegidas. Desplegar `supabase/functions/colectar-curado` con verificación JWT habilitada. Registrar las series verificadas y capturas originales, cargar las publicaciones y activar la selección al finalizar. `catalogo_curado_config.activo=false` conserva la lectura mensual anterior durante la transición.
 
 El cron existente de series seleccionadas llama a `colectar-curado` cada dos minutos, un trabajo por invocación. Comprueba diarias cada seis horas, mensuales cada 24 horas y anuales cada siete días. Cada descarga valida identificador, definición, frecuencia, unidad, licencia y fechas, conserva cifras decimales originales y guarda la captura privada identificada por SHA-256. Las mensuales y anuales usan CSV oficiales de SSPM; las diarias, la API BCRA v4 paginada.
 
