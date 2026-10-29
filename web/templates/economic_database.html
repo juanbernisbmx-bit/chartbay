@@ -29,6 +29,7 @@
         <div class="db-filters">
           <label class="db-search"><span class="db-sr-only">Buscar series</span><i data-lucide="search" aria-hidden="true"></i><input id="db-search" type="search" placeholder="Buscar indicador o territorio" autocomplete="off" maxlength="200"></label>
           <label><span class="db-sr-only">Tema</span><select id="db-topic"><option value="">Todos los temas</option></select></label>
+          <label><span class="db-sr-only">Frecuencia</span><select id="db-frequency"><option value="">Todas las frecuencias</option></select></label>
           <label><span class="db-sr-only">Cobertura</span><select id="db-level"><option value="">Todas las coberturas</option><option>Nacional</option><option>Provincial</option><option>Regional</option></select></label>
         </div>
         <div class="db-catalog-meta"><label class="db-checkbox"><input id="db-ready" type="checkbox" checked>Solo series cargadas</label><span id="db-filter-count" class="db-muted"></span></div>
@@ -50,7 +51,7 @@
         <fieldset id="db-options" disabled>
           <legend class="db-sr-only">Preparación del conjunto</legend>
           <div class="db-dates"><label>Desde<input id="db-start" type="month"></label><label>Hasta<input id="db-end" type="month"></label></div>
-          <label class="db-checkbox db-complete"><input id="db-complete" type="checkbox" checked>Excluir meses con datos faltantes</label>
+          <label class="db-checkbox db-complete"><input id="db-complete" type="checkbox" checked>Excluir períodos con datos faltantes</label>
           <fieldset class="db-modes"><legend>Análisis</legend><label><input type="radio" name="db-mode" value="regression" checked>Regresión</label><label><input type="radio" name="db-mode" value="timeseries">Serie de tiempo</label></fieldset>
           <label class="db-y"><span id="db-y-label">Variable dependiente (Y)</span><select id="db-y"></select></label>
           <p id="db-x-label" class="db-muted"></p>
@@ -62,7 +63,7 @@
         <div class="db-section-heading"><h2 id="db-preview-title">Vista previa</h2><div class="db-tabs" role="tablist" aria-label="Vista del conjunto"><button type="button" id="db-tab-table" role="tab" aria-selected="true" aria-controls="db-table-panel">Tabla</button><button type="button" id="db-tab-chart" role="tab" aria-selected="false" aria-controls="db-chart-panel">Gráfico</button></div></div>
         <p id="db-preview-empty" class="db-empty">Sin conjunto preparado.</p>
         <div id="db-preview-content" hidden>
-          <dl class="db-summary"><div><dt>Observaciones</dt><dd id="db-observations"></dd></div><div><dt>Período efectivo</dt><dd id="db-period"></dd></div><div><dt>Meses excluidos</dt><dd id="db-excluded"></dd></div></dl>
+          <dl class="db-summary"><div><dt>Observaciones</dt><dd id="db-observations"></dd></div><div><dt>Período efectivo</dt><dd id="db-period"></dd></div><div><dt>Períodos excluidos</dt><dd id="db-excluded"></dd></div></dl>
           <div id="db-table-panel" role="tabpanel" aria-labelledby="db-tab-table" class="db-preview-scroll"><table class="db-table db-values"><thead id="db-preview-head"></thead><tbody id="db-preview-body"></tbody></table><p class="db-muted" id="db-preview-caption"></p></div>
           <div id="db-chart-panel" role="tabpanel" aria-labelledby="db-tab-chart" hidden><div class="db-chart-wrap"><canvas id="db-chart" role="img" aria-label="Evolución temporal de las series seleccionadas"></canvas></div></div>
           <details id="db-missing-details" class="db-missing" hidden><summary id="db-missing-summary"></summary><p id="db-missing-months" class="db-muted"></p></details>

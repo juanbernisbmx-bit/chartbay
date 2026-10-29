@@ -15,11 +15,11 @@
 .db-section-heading h2 { font-size: 15px; line-height: 1.35; font-weight: 600; font-family: var(--sans); margin: 0; letter-spacing: 0; }
 #db-selection-count { display: inline-block; margin-left: 5px; color: var(--ink-3); font-weight: 400; }
 .db-muted { color: var(--ink-3); font-size: 12px; overflow-wrap: anywhere; }
-.db-filters { display: grid; grid-template-columns: minmax(140px, 1fr) 165px 170px; gap: 8px; }
+.db-filters { display: grid; grid-template-columns: minmax(180px, 1fr) 165px 170px; gap: 8px; }
 .db-page input:not([type=checkbox]):not([type=radio]), .db-page select { font-family: var(--sans); font-size: 13px; color: var(--ink); border: 1px solid var(--line-2); border-radius: 4px; background: var(--paper); min-height: 36px; width: 100%; padding: 6px 9px; }
 .db-page input[type=checkbox], .db-page input[type=radio] { accent-color: var(--accent); width: 16px; height: 16px; flex: none; margin: 0; }
 .db-page label { font-size: 12px; color: var(--ink-2); }
-.db-search { position: relative; display: block; }
+.db-search { grid-column: 1 / -1; position: relative; display: block; }
 .db-search svg { position: absolute; left: 10px; top: 10px; width: 16px; height: 16px; color: var(--ink-3); }
 .db-page .db-search input { padding-left: 33px !important; }
 .db-catalog-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 12px 0; }

@@ -47,7 +47,7 @@ describe('economic database dataset', () => {
   it('rejects unavailable, duplicate and incompatible selections', () => {
     expect(() => prepareDataset(snapshot(a), [choice('missing')], options)).toThrow('todavía');
     expect(() => prepareDataset(snapshot(a), [choice('a'), choice('a')], options)).toThrow('diferentes');
-    expect(() => prepareDataset(snapshot({ ...a, frequency: 'Trimestral' }), [choice('a')], options)).toThrow('mensuales');
+    expect(() => prepareDataset(snapshot({ ...a, frequency: 'Trimestral' }), [choice('a')], options)).toThrow('Frecuencia');
     expect(() => prepareDataset(snapshot(a), [choice('a', 'toString' as never)], options)).toThrow('no válido');
     expect(() => prepareDataset(snapshot(a), [choice('a', 'level', -1)], options)).toThrow('no válido');
   });
@@ -57,4 +57,22 @@ describe('economic database dataset', () => {
     }
     expect(() => prepareDataset(snapshot(a), [choice('a')], { ...options, start: '2021-01', end: '2020-01' })).toThrow('anterior');
   });
+});
+
+it('prepara días reales sin inventar datos de fines de semana y no mezcla frecuencias', () => {
+  const daily = { ...series('diaria', [['2026-10-23', 10], ['2026-10-26', 12]]), frequency: 'Diaria' };
+  const result = prepareDataset(snapshot(daily), [choice('diaria')], options);
+  expect(result.frequency).toBe('Diaria');
+  expect(result.rows).toEqual([['2026-10-23',10],['2026-10-26',12]]);
+  expect(result.excludedMonths).toEqual(['2026-10-24','2026-10-25']);
+  expect(() => prepareDataset(snapshot(daily,a),[choice('diaria'),choice('a')],options)).toThrow('misma frecuencia');
+  expect(() => prepareDataset(snapshot({...daily,observations:[{date:'2026-02-30',value:1}]}),[choice('diaria')],options)).toThrow('inválida');
+});
+it('prepara años originales, calcula rezagos anuales y respeta el año solicitado', () => {
+  const annual = { ...series('pib',[['2023-01-01',100],['2024-01-01',110],['2025-01-01',121]]),frequency:'Anual' };
+  const data=prepareDataset(snapshot(annual),[choice('pib','monthly')],{...options,start:'2024',end:'2025'});
+  expect(data.frequency).toBe('Anual');
+  expect(data.rows).toEqual([['2024-01-01',10],['2025-01-01',10]]);
+  expect(prepareDataset(snapshot(annual),[choice('pib','level',1)],options).rows).toEqual([['2024-01-01',100],['2025-01-01',110]]);
+  expect(() => prepareDataset(snapshot({...annual,observations:[{date:'2025-02-01',value:1}]}),[choice('pib')],options)).toThrow('anual');
 });
