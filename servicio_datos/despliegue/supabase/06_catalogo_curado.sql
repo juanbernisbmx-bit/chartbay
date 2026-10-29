@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS economia.catalogo_curado(
  unidad text NOT NULL,nombre_verificado text NOT NULL,desde date NOT NULL,
  verificada_en date NOT NULL,criterio text NOT NULL
 );
+-- Consultar vigencia/cobertura sin recorrer versiones históricas cerradas.
+CREATE INDEX IF NOT EXISTS observacion_vigente_catalogo ON economia.observacion(serie_id,periodo) WHERE release_hasta IS NULL;
 ALTER TABLE economia.catalogo_curado ENABLE ROW LEVEL SECURITY;
 ALTER TABLE economia.catalogo_curado_config ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON economia.catalogo_curado,economia.catalogo_curado_config FROM PUBLIC,anon,authenticated,servicio_datos;
@@ -61,9 +63,12 @@ BEGIN
      OR length(coalesce(p_tema,''))>100 OR length(coalesce(p_cobertura,''))>100 OR coalesce(p_frecuencia,'') NOT IN ('','Diaria','Mensual','Anual') THEN
     RAISE EXCEPTION 'Filtros o página inválidos' USING ERRCODE='22023';
   END IF;
-  WITH disponibles AS MATERIALIZED (
+  WITH elegidas AS MATERIALIZED (
+    SELECT s.* FROM serie s WHERE NOT (SELECT activo FROM catalogo_curado_config WHERE id)
+      OR EXISTS(SELECT 1 FROM catalogo_curado c WHERE c.serie_id=s.id AND c.incluida)
+  ), disponibles AS MATERIALIZED (
     SELECT s.id,s.nombre,s.tema,s.nivel,s.territorio,s.frecuencia,f.nombre AS fuente
-    FROM serie s JOIN fuente f ON f.id=s.fuente_id JOIN publicado_release r ON r.fuente_id=f.id
+    FROM elegidas s JOIN fuente f ON f.id=s.fuente_id JOIN publicado_release r ON r.fuente_id=f.id
     WHERE nullif(btrim(f.licencia),'') IS NOT NULL AND nullif(btrim(f.atribucion),'') IS NOT NULL
       AND serie_en_catalogo(s.id,(SELECT max(periodo) FROM publicado_observaciones o WHERE o.serie_id=s.id))
   ), filtradas AS MATERIALIZED (
