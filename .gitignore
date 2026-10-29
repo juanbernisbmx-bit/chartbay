@@ -19,3 +19,6 @@ dist/
 
 # Permisos locales de Claude Code: cada máquina tiene los suyos.
 .claude/settings.local.json
+
+# Estado del CLI local, sin credenciales ni cachés en Git.
+supabase/.temp/

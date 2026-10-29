@@ -2,7 +2,7 @@ import Chart from 'chart.js/auto';
 import { createIcons, Search, X, Database, ArrowRight, Download, Info, Trash2, RotateCcw, FileJson } from 'lucide';
 import { escapeHtml as esc } from './utils/format';
 import { putHandoff, type DatabaseHandoff } from './services/datasetHandoff';
-import { downloadBlob, prepareDataset, TRANSFORMS, type EconomicSeries, type Selection, type Snapshot, type PreparedDataset, type Transform } from './database/dataset';
+import { downloadBlob, prepareDataset, periodLabel, transformLabel, TRANSFORMS, type EconomicSeries, type Selection, type Snapshot, type PreparedDataset, type Transform, type Frequency } from './database/dataset';
 
 const icons = { Search, X, Database, ArrowRight, Download, Info, Trash2, RotateCcw, FileJson };
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(`db-${id}`) as T;
@@ -52,7 +52,7 @@ async function ensureSeries(id: string): Promise<void> {
 async function requestPage(page = 1): Promise<void> {
   const request = ++pageRequest;
   $('catalog-status').hidden = false; $('catalog-status').textContent = 'Buscando series...';
-  const params = new URLSearchParams({ page: String(page), q: input('search').value.trim(), topic: select('topic').value, level: select('level').value });
+  const params = new URLSearchParams({ page: String(page), q: input('search').value.trim(), topic: select('topic').value, level: select('level').value, frequency: select('frequency').value });
   try {
     const response = await fetch(`/api/base-datos/catalogo?${params}`);
     const payload: Snapshot & { ok: boolean; error?: string } = await response.json();
@@ -85,6 +85,7 @@ function restore(): void {
     }).slice(0, 12);
     yId = typeof saved.yId === 'string' ? saved.yId : '';
     analysisMode = saved.analysisMode === 'timeseries' ? 'timeseries' : 'regression';
+    syncPeriodInputs();
     input('start').value = typeof saved.start === 'string' ? saved.start : '';
     input('end').value = typeof saved.end === 'string' ? saved.end : '';
     input('complete').checked = saved.completeOnly !== false;
@@ -92,9 +93,9 @@ function restore(): void {
 }
 function renderCatalog(): void {
   const query = input('search').value.trim().toLocaleLowerCase('es');
-  const topic = select('topic').value, level = select('level').value;
+  const topic = select('topic').value, level = select('level').value, frequency = select('frequency').value;
   const items = snapshot.paginated ? pageSeries : snapshot.series.filter(s => (!input('ready').checked || s.available) &&
-    (!topic || s.topic === topic) && (!level || s.level === level) &&
+    (!topic || s.topic === topic) && (!level || s.level === level) && (!frequency || s.frequency === frequency) &&
     (!query || `${s.name} ${s.territory} ${s.source}`.toLocaleLowerCase('es').includes(query)));
   $('filter-count').textContent = `${snapshot.paginated ? snapshot.total : items.length} resultados`;
   $('pagination').hidden = !snapshot.paginated;
@@ -107,12 +108,23 @@ function renderCatalog(): void {
   $('empty').textContent = snapshot.series.length ? 'Sin series para estos filtros.' : 'Todavía no hay series publicadas disponibles.';
   $('series').innerHTML = items.map(s => {
     const checked = selection.some(choice => choice.id === s.id);
-    const coverage = s.available ? `${s.start!.slice(0, 7)} / ${s.end!.slice(0, 7)}` : 'Sin cargar';
+    const coverage = s.available ? `${periodLabel(s.start!, s.frequency as Frequency)} / ${periodLabel(s.end!, s.frequency as Frequency)}` : 'Sin cargar';
     return `<tr data-selected="${checked}"><td><input type="checkbox" data-series="${esc(s.id)}" aria-label="Seleccionar ${esc(s.name)}" ${checked ? 'checked' : ''} ${s.available ? '' : 'disabled'}></td><td><label class="db-series-name">${esc(s.name)}</label><span class="db-series-sub">${esc(s.level)} · ${esc(s.source_id === 'INDEC_IPC' ? 'INDEC' : s.territory)}</span></td><td>${esc(s.frequency)}</td><td>${esc(coverage)}</td><td><button type="button" class="db-icon" data-detail="${esc(s.id)}" title="Ver ficha de ${esc(s.name)}" aria-label="Ver ficha de ${esc(s.name)}"><i data-lucide="info"></i></button></td></tr>`;
   }).join('');
   refreshIcons();
 }
+function syncPeriodInputs(): void {
+  const frequency = (snapshot.series.find(s => s.id === selection[0]?.id)?.frequency ?? 'Mensual') as Frequency;
+  for (const id of ['start', 'end']) {
+    const type = frequency === 'Diaria' ? 'date' : frequency === 'Anual' ? 'number' : 'month';
+    if (input(id).type !== type) { input(id).value = ''; input(id).type = type; }
+    if (frequency === 'Anual') { input(id).min = '1800'; input(id).max = String(new Date().getFullYear()); input(id).placeholder = 'AAAA'; }
+    else { input(id).removeAttribute('min'); input(id).removeAttribute('max'); }
+  }
+}
 function renderSelection(): void {
+  syncPeriodInputs();
+  const frequency = (snapshot.series.find(s => s.id === selection[0]?.id)?.frequency ?? 'Mensual') as Frequency;
   $('selection-count').textContent = String(selection.length);
   $('selection-empty').hidden = selection.length > 0;
   button('clear').disabled = selection.length === 0;
@@ -120,7 +132,7 @@ function renderSelection(): void {
   if (!selection.some(s => s.id === yId)) yId = selection[0]?.id ?? '';
   $('selected').innerHTML = selection.map(choice => {
     const series = snapshot.series.find(s => s.id === choice.id)!;
-    return `<li><div class="db-selected-name"><span>${esc(series.name)}</span><button type="button" class="db-icon" data-remove="${esc(choice.id)}" title="Quitar ${esc(series.name)}" aria-label="Quitar ${esc(series.name)}"><i data-lucide="x"></i></button></div><div class="db-transforms"><label>Transformación<select data-transform="${esc(choice.id)}" aria-label="Transformación de ${esc(series.name)}">${Object.entries(TRANSFORMS).map(([key, label]) => `<option value="${key}" ${choice.transform === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label>Rezago (meses)<input type="number" min="0" max="12" step="1" data-lag="${esc(choice.id)}" aria-label="Rezago de ${esc(series.name)}" value="${choice.lag}"></label></div></li>`;
+    return `<li><div class="db-selected-name"><span>${esc(series.name)}</span><button type="button" class="db-icon" data-remove="${esc(choice.id)}" title="Quitar ${esc(series.name)}" aria-label="Quitar ${esc(series.name)}"><i data-lucide="x"></i></button></div><div class="db-transforms"><label>Transformación<select data-transform="${esc(choice.id)}" aria-label="Transformación de ${esc(series.name)}">${Object.entries(TRANSFORMS).map(([key, label]) => `<option value="${key}" ${choice.transform === key ? 'selected' : ''}>${esc(transformLabel(key as Transform, frequency))}</option>`).join('')}</select></label><label>Rezago (${frequency === 'Diaria' ? 'días' : frequency === 'Anual' ? 'años' : 'meses'})<input type="number" min="0" max="12" step="1" data-lag="${esc(choice.id)}" aria-label="Rezago de ${esc(series.name)}" value="${choice.lag}"></label></div></li>`;
   }).join('');
   select('y').innerHTML = selection.map(choice => `<option value="${esc(choice.id)}">${esc(snapshot.series.find(s => s.id === choice.id)!.name)}</option>`).join('');
   select('y').value = yId;
@@ -135,7 +147,7 @@ function renderChart(): void {
   const palette = ['#1e5fa8', '#168268', '#be6542', '#9466a5', '#cc9d25', '#c14967', '#477d87'];
   chart = new Chart($<HTMLCanvasElement>('chart'), {
     type: 'line',
-    data: { labels: prepared.rows.map(r => String(r[0]).slice(0, 7)), datasets: prepared.columns.map((column, i) => ({
+    data: { labels: prepared.rows.map(r => periodLabel(String(r[0]), prepared!.frequency)), datasets: prepared.columns.map((column, i) => ({
       label: `${column.name.replace('IPC nivel general - ', '')} (${column.unit})`, data: prepared!.rows.map(r => r[i + 1] as number | null), borderColor: palette[i % palette.length], backgroundColor: palette[i % palette.length], borderWidth: 1.6, pointRadius: 0, spanGaps: false,
     })) },
     options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }, scales: { x: { ticks: { maxTicksLimit: 8 }, grid: { display: false } } } },
@@ -154,14 +166,14 @@ function updatePreview(): void {
     }
     $('preview-empty').hidden = true; $('preview-content').hidden = false;
     $('observations').textContent = String(prepared.rows.length);
-    $('period').textContent = `${String(prepared.rows[0][0]).slice(0, 7)} / ${String(prepared.rows[prepared.rows.length - 1][0]).slice(0, 7)}`;
+    $('period').textContent = `${periodLabel(String(prepared.rows[0][0]), prepared.frequency)} / ${periodLabel(String(prepared.rows[prepared.rows.length - 1][0]), prepared.frequency)}`;
     $('excluded').textContent = String(prepared.excludedMonths.length);
-    $('preview-head').innerHTML = `<tr><th scope="col">Mes</th>${prepared.columns.map(c => `<th scope="col" title="${esc(c.column)}">${esc(c.name.replace('IPC nivel general - ', ''))}<span>${esc(TRANSFORMS[c.transform])}${c.lag ? ` · Rezago ${c.lag}` : ''}</span></th>`).join('')}</tr>`;
-    $('preview-body').innerHTML = prepared.rows.slice(0, 8).map(row => `<tr>${row.map((value, i) => `<td>${i === 0 ? esc(String(value).slice(0, 7)) : value === null ? 'Sin dato' : number.format(value as number)}</td>`).join('')}</tr>`).join('');
-    $('preview-caption').textContent = `Primeras ${Math.min(8, prepared.rows.length)} de ${prepared.rows.length} observaciones. Frecuencia mensual.`;
+    $('preview-head').innerHTML = `<tr><th scope="col">${prepared.frequency === 'Diaria' ? 'Fecha' : prepared.frequency === 'Anual' ? 'Año' : 'Mes'}</th>${prepared.columns.map(c => `<th scope="col" title="${esc(c.column)}">${esc(c.name.replace('IPC nivel general - ', ''))}<span>${esc(transformLabel(c.transform, prepared!.frequency))}${c.lag ? ` · Rezago ${c.lag}` : ''}</span></th>`).join('')}</tr>`;
+    $('preview-body').innerHTML = prepared.rows.slice(0, 8).map(row => `<tr>${row.map((value, i) => `<td>${i === 0 ? esc(periodLabel(String(value), prepared!.frequency)) : value === null ? 'Sin dato' : number.format(value as number)}</td>`).join('')}</tr>`).join('');
+    $('preview-caption').textContent = `Primeras ${Math.min(8, prepared.rows.length)} de ${prepared.rows.length} observaciones. Frecuencia ${prepared.frequency.toLowerCase()}.`;
     $('missing-details').hidden = prepared.incompleteMonths.length === 0;
-    $('missing-summary').textContent = `${prepared.incompleteMonths.length} meses con datos faltantes o transformación no disponible${input('complete').checked ? ' (excluidos)' : ' (conservados)'}`;
-    $('missing-months').textContent = prepared.incompleteMonths.map(month => month.slice(0, 7)).join(', ');
+    $('missing-summary').textContent = `${prepared.incompleteMonths.length} períodos con datos faltantes o transformación no disponible${input('complete').checked ? ' (excluidos)' : ' (conservados)'}`;
+    $('missing-months').textContent = prepared.incompleteMonths.map(month => periodLabel(month, prepared!.frequency)).join(', ');
     $('overlap').hidden = !selection.some(s => s.id === 'ipc_ng_nacional') || !selection.some(s => s.id.startsWith('ipc_ng_') && s.id !== 'ipc_ng_nacional');
     button('csv').disabled = false; button('manifest').disabled = false;
     const completeRows = prepared.rows.filter(r => r.slice(1).every(value => typeof value === 'number' && Number.isFinite(value))).length;
@@ -199,7 +211,7 @@ function metadata(): DatabaseHandoff {
     excludedMonths: prepared.excludedMonths, incompleteMonths: prepared.incompleteMonths,
     series: prepared.columns.map(column => {
       const series = snapshot.series.find(s => s.id === column.id)!;
-      return { ...column, transform: TRANSFORMS[column.transform], source: series.source,
+      return { ...column, frequency: series.frequency, transform: transformLabel(column.transform, prepared!.frequency), source: series.source,
         sourceUrl: series.source_url, originalUrl: series.original?.url ?? null,
         sha256: series.original?.sha256 ?? null, retrievedAt: series.original?.retrieved_at ?? null,
         publishedAt: series.original?.published_at ?? null, normalizationNotes: series.normalization_notes,
@@ -212,7 +224,7 @@ function showDetail(id: string): void {
   const series = snapshot.series.find(s => s.id === id);
   if (!series) return;
   $('detail-title').textContent = series.name;
-  const fields = [['Fuente', series.source], ['Territorio', `${series.territory} (${series.classification})`], ['Frecuencia', series.frequency], ['Unidad', series.unit], ['Base / ajuste', series.basis], ['Estado', series.status], ['Observaciones', String(series.count)], ['Cobertura', series.start ? `${series.start.slice(0, 7)} / ${series.end!.slice(0, 7)}` : 'Pendiente'], ['Pendientes', series.pending]];
+  const fields = [['Fuente', series.source], ['Territorio', `${series.territory} (${series.classification})`], ['Frecuencia', series.frequency], ['Unidad', series.unit], ['Base / ajuste', series.basis], ['Estado', series.status], ['Observaciones', String(series.count)], ['Cobertura', series.start ? `${periodLabel(series.start, series.frequency as Frequency)} / ${periodLabel(series.end!, series.frequency as Frequency)}` : 'Pendiente'], ['Pendientes', series.pending]];
   if (series.release_id) fields.push(['Release', series.release_id]);
   if (series.original) {
     if (series.original.published_at) fields.push(['Publicado por la fuente', series.original.published_at]);
@@ -260,6 +272,7 @@ async function load(): Promise<void> {
     $('release').textContent = snapshot.release_id;
     $('count').textContent = snapshot.paginated ? `${snapshot.catalog_total ?? 0} series publicadas` : `${snapshot.series.length} series · ${snapshot.series.filter(s => s.available).length} cargadas`;
     select('topic').innerHTML = '<option value="">Todos los temas</option>' + (snapshot.topics ?? [...new Set(snapshot.series.map(s => s.topic))].sort()).map(topic => `<option>${esc(topic)}</option>`).join('');
+    select('frequency').innerHTML = '<option value="">Todas las frecuencias</option>' + (snapshot.frequencies ?? [...new Set(snapshot.series.map(s => s.frequency))]).map(f => `<option>${esc(f)}</option>`).join('');
     if (snapshot.paginated) select('level').innerHTML = '<option value="">Todas las coberturas</option>' + (snapshot.levels ?? []).map(level => `<option>${esc(level)}</option>`).join('');
     restore(); renderCatalog(); changed();
     $('content').hidden = false; $('load-status').hidden = true;
@@ -272,7 +285,7 @@ function init(): void {
     if (!snapshot?.paginated) { if (snapshot) renderCatalog(); return; }
     clearTimeout(searchTimer); searchTimer = setTimeout(() => { void requestPage(); }, 250);
   });
-  for (const id of ['topic', 'level', 'ready']) $(id).addEventListener('change', () => {
+  for (const id of ['topic', 'level', 'frequency', 'ready']) $(id).addEventListener('change', () => {
     if (snapshot?.paginated) void requestPage(); else if (snapshot) renderCatalog();
   });
   button('previous').addEventListener('click', () => { void requestPage((snapshot.page ?? 1) - 1); });
@@ -282,6 +295,9 @@ function init(): void {
     const id = checkbox.dataset.series;
     if (!id) return;
     if (checkbox.checked) {
+      const first = snapshot.series.find(s => s.id === selection[0]?.id);
+      const added = snapshot.series.find(s => s.id === id);
+      if (first && first.frequency !== added?.frequency) { checkbox.checked = false; error('Para combinarlas, elegí series de la misma frecuencia. Podés vaciar el conjunto y empezar con otra frecuencia.'); return; }
       if (selection.length >= 12) { checkbox.checked = false; error('El máximo es de 12 series por conjunto.'); return; }
       selection.push({ id, transform: snapshot.paginated ? 'level' : 'monthly', lag: 0 });
     } else selection = selection.filter(s => s.id !== id);
@@ -299,7 +315,7 @@ function init(): void {
     if (field.dataset.transform) choice.transform = field.value as Transform;
     else {
       const lag = field.value === '' ? NaN : Number(field.value);
-      if (!Number.isInteger(lag) || lag < 0 || lag > 12) { field.value = String(choice.lag); error('El rezago debe ser un entero entre 0 y 12 meses.'); return; }
+      if (!Number.isInteger(lag) || lag < 0 || lag > 12) { field.value = String(choice.lag); error('El rezago debe ser un entero entre 0 y 12 períodos.'); return; }
       choice.lag = lag;
     }
     changed(false);

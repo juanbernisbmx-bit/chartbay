@@ -26,7 +26,7 @@ class SelectedCatalogueWebTests(unittest.TestCase):
         with patch('web.app.catalogue_page',return_value=payload) as call:
             response=self.client.get('/api/base-datos/catalogo?q=empleo&topic=Actividad&page=2')
         self.assertEqual(response.status_code,200)
-        self.assertEqual(call.call_args.args[2:],('empleo','Actividad','',2))
+        self.assertEqual(call.call_args.args[2:],('empleo','Actividad','',2,''))
         with patch('web.app.selected_series',return_value=None):
             self.assertEqual(self.client.get('/api/base-datos/serie/privada').status_code,404)
 

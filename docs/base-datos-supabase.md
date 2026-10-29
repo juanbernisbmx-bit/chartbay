@@ -1,5 +1,7 @@
 # Base de datos: todo dentro de Supabase (plan)
 
+Actualización del 29/10/2026: el [catálogo curado](catalogo-curado.md) incorpora frecuencias diaria, mensual y anual y publicación automática autorizada para esa selección. El diseño de revisión humana que sigue documenta el circuito original de IPC.
+
 Los pasos que faltan para ponerlo en marcha, en orden y con cómo comprobar cada uno, están en `docs/puesta-en-marcha-datos.md`.
 
 Estado: plan aprobado; pasos 0 a 3 y 5 a 7 hechos (2026-10-07). Falta el 4 (Codex).

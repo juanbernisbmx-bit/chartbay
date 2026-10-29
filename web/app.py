@@ -396,7 +396,10 @@ def api_economic_database():
             return jsonify(ok=False, error='Filtros o página inválidos.'), 400
         try:
             url, key = _supabase_public_config()
-            return jsonify(ok=True, **catalogue_page(url, key, text, topic, level, page))
+            frequency=request.args.get('frequency','')
+            if frequency not in ('','Diaria','Mensual','Anual'):
+                return jsonify(ok=False,error='Frecuencia inválida.'),400
+            return jsonify(ok=True, **catalogue_page(url, key, text, topic, level, page, frequency))
         except (OSError, ValueError, KeyError, TypeError):
             app.logger.exception('No se pudo consultar el catálogo seleccionado')
             return jsonify(ok=False, error='No se pudo consultar el catálogo. Volvé a intentar.'), 503

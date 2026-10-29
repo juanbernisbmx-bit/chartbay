@@ -30,7 +30,7 @@ export interface DatabaseHandoff {
   excludedMonths: string[];
   incompleteMonths: string[];
   series: Array<{
-    id: string; name: string; column: string; unit: string; transform: string; lag: number;
+    id: string; name: string; column: string; unit: string; transform: string; lag: number; frequency?: string;
     source: string; sourceUrl: string; originalUrl: string | null; sha256: string | null;
     retrievedAt: string | null; publishedAt: string | null; normalizationNotes: string[];
     license?: string | null; licenseUrl?: string | null; attribution?: string | null;
@@ -44,7 +44,7 @@ export function databaseColumnLabels(metadata: DatabaseHandoff): ReadonlyMap<str
     ...series,
     label: [series.name.trim() || series.column,
       ...(series.transform && series.transform !== 'Nivel original' ? [series.transform] : []),
-      ...(series.lag ? [`Rezago ${series.lag} ${series.lag === 1 ? 'mes' : 'meses'}`] : []),
+      ...(series.lag ? [`Rezago ${series.lag} ${series.frequency === 'Diaria' ? (series.lag === 1 ? 'día' : 'días') : series.frequency === 'Anual' ? (series.lag === 1 ? 'año' : 'años') : (series.lag === 1 ? 'mes' : 'meses')}`] : []),
     ].join(' · '),
   }));
   const counts = new Map<string, number>();
